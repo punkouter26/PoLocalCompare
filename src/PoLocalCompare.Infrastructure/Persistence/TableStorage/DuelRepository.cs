@@ -1,0 +1,130 @@
+// GoF: Repository pattern
+using Azure;
+using Azure.Data.Tables;
+using NUlid;
+using PoLocalCompare.Application.Interfaces;
+using PoLocalCompare.Domain.Entities;
+using PoLocalCompare.Domain.Enums;
+
+namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
+
+public sealed class DuelRepository : IDuelRepository
+{
+    private const string TableName = "Duels";
+
+    private readonly TableClient _tableClient;
+
+    public DuelRepository(TableServiceClient tableServiceClient)
+    {
+        _tableClient = tableServiceClient.GetTableClient(TableName);
+    }
+
+    public async Task<Duel?> GetByIdAsync(string duelId)
+    {
+        // PartitionKey is YYYYMM derived from ULID timestamp
+        var partitionKey = GetPartitionKey(duelId);
+        try
+        {
+            var response = await _tableClient.GetEntityAsync<TableEntity>(partitionKey, duelId);
+            return MapToDuel(response.Value);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // If the ULID-derived partition key doesn't work, search all partitions
+            await foreach (var entity in _tableClient.QueryAsync<TableEntity>(e => e.RowKey == duelId))
+            {
+                return MapToDuel(entity);
+            }
+            return null;
+        }
+    }
+
+    public async Task SaveAsync(Duel duel)
+    {
+        var entity = MapToEntity(duel);
+        await _tableClient.AddEntityAsync(entity);
+    }
+
+    public async Task UpdateAsync(Duel duel)
+    {
+        var entity = MapToEntity(duel);
+        await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace);
+    }
+
+    public async Task<IEnumerable<Duel>> ListAsync(int limit, string? beforeMonth)
+    {
+        limit = Math.Clamp(limit, 1, 100);
+        var duels = new List<Duel>();
+
+        // Query partitions from most recent month backward
+        var startMonth = beforeMonth ?? DateTimeOffset.UtcNow.ToString("yyyyMM");
+
+        // Azure Table Storage doesn't support cross-partition ordering, so fetch per-partition
+        // and aggregate in memory for this small-scale tool
+        await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
+            filter: string.IsNullOrEmpty(beforeMonth)
+                ? null
+                : $"PartitionKey le '{beforeMonth}'",
+            maxPerPage: limit))
+        {
+            duels.Add(MapToDuel(entity));
+            if (duels.Count >= limit) break;
+        }
+
+        // Sort newest first (ULID RowKey is lexicographically time-ordered)
+        return duels.OrderByDescending(d => d.DuelId).Take(limit);
+    }
+
+    private static string GetPartitionKey(string duelId)
+    {
+        try
+        {
+            var ulid = Ulid.Parse(duelId);
+            return ulid.Time.ToString("yyyyMM");
+        }
+        catch
+        {
+            return DateTimeOffset.UtcNow.ToString("yyyyMM");
+        }
+    }
+
+    private TableEntity MapToEntity(Duel duel)
+    {
+        var partitionKey = GetPartitionKey(duel.DuelId);
+        var entity = new TableEntity(partitionKey, duel.DuelId)
+        {
+            ["PromptText"] = duel.PromptText,
+            ["PromptFull"] = duel.PromptFull,
+            ["LeftModelId"] = duel.LeftModelId,
+            ["RightModelId"] = duel.RightModelId,
+            ["StartedAt"] = duel.StartedAt,
+            ["CompletedAt"] = duel.CompletedAt,
+            ["Verdict"] = duel.Verdict.ToString(),
+            ["WinnerModelId"] = duel.WinnerModelId,
+            ["LoserModelId"] = duel.LoserModelId,
+            ["EloShiftWinner"] = duel.EloShiftWinner,
+            ["EloShiftLoser"] = duel.EloShiftLoser
+        };
+        return entity;
+    }
+
+    private static Duel MapToDuel(TableEntity entity)
+    {
+        var duel = new Duel
+        {
+            DuelId = entity.RowKey,
+            PromptText = entity.GetString("PromptText") ?? string.Empty,
+            PromptFull = entity.GetString("PromptFull") ?? string.Empty,
+            LeftModelId = entity.GetString("LeftModelId") ?? string.Empty,
+            RightModelId = entity.GetString("RightModelId") ?? string.Empty,
+            StartedAt = entity.GetDateTimeOffset("StartedAt") ?? DateTimeOffset.MinValue,
+            CompletedAt = entity.GetDateTimeOffset("CompletedAt"),
+            Verdict = Enum.Parse<DuelVerdict>(entity.GetString("Verdict") ?? "Pending"),
+            WinnerModelId = entity.GetString("WinnerModelId"),
+            LoserModelId = entity.GetString("LoserModelId"),
+            EloShiftWinner = entity.GetDouble("EloShiftWinner"),
+            EloShiftLoser = entity.GetDouble("EloShiftLoser")
+        };
+        return duel;
+    }
+}

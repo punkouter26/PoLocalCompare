@@ -1,0 +1,161 @@
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using Radzen.Blazor
+
+<div class="telemetry-hud">
+    @if (Result is not null)
+    {
+        @if (Result.IsFailure)
+        {
+            <div class="telemetry-hud__failure-badge">
+                ❌ FAILED — @(Result.FailureReason ?? "Unknown error")
+            </div>
+        }
+
+        <div class="telemetry-hud__grid">
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Token Velocity</span>
+                <span class="telemetry-hud__value">@Result.TokenVelocity.ToString("F1") tok/s</span>
+            </div>
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Total Time</span>
+                <span class="telemetry-hud__value">@FormatMs(Result.TotalDurationMs)</span>
+            </div>
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Warm-up</span>
+                <span class="telemetry-hud__value">@FormatMs(Result.WarmUpDurationMs)</span>
+            </div>
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Tokens</span>
+                <span class="telemetry-hud__value">@Result.TokenCount.ToString("N0")</span>
+            </div>
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Output Size</span>
+                <span class="telemetry-hud__value">@FormatBytes(Result.HtmlOutputSizeBytes)</span>
+            </div>
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Char Density</span>
+                <span class="telemetry-hud__value">@Result.CharacterDensityRatio.ToString("P1")</span>
+            </div>
+
+            @if (Result.EnergyWh.HasValue)
+            {
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">Energy</span>
+                    <span class="telemetry-hud__value telemetry-hud__value--green">@Result.EnergyWh.Value.ToString("F4") Wh</span>
+                </div>
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">Energy Cost</span>
+                    <span class="telemetry-hud__value">$@Result.EnergyCostUsd?.ToString("F6")</span>
+                </div>
+            }
+
+            @if (Result.GreenScore.HasValue)
+            {
+                <div class="telemetry-hud__item telemetry-hud__item--wide">
+                    <span class="telemetry-hud__label">🌿 Green Score</span>
+                    <span class="telemetry-hud__value telemetry-hud__value--green">@Result.GreenScore.Value.ToString("F1") tok/Wh</span>
+                </div>
+            }
+
+            @if (Result.ApiCostUsd.HasValue)
+            {
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">API Cost</span>
+                    <span class="telemetry-hud__value telemetry-hud__value--yellow">$@Result.ApiCostUsd.Value.ToString("F6")</span>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="telemetry-hud__pending">Awaiting results…</div>
+    }
+</div>
+
+@code {
+    [Parameter] public DuelResultDto? Result { get; set; }
+    [Parameter] public bool IsFailure { get; set; }
+
+    private static string FormatMs(long ms)
+    {
+        if (ms >= 60_000)
+            return $"{ms / 60_000}m {(ms % 60_000) / 1000}s";
+        if (ms >= 1_000)
+            return $"{ms / 1000.0:F1}s";
+        return $"{ms}ms";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024 * 1024)
+            return $"{bytes / (1024.0 * 1024):F1} MB";
+        if (bytes >= 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes} B";
+    }
+}
+
+<style>
+    .telemetry-hud {
+        background: rgba(0, 0, 0, 0.85);
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 0.75rem;
+        font-size: 0.78rem;
+        color: #d1d5db;
+        backdrop-filter: blur(4px);
+    }
+
+    .telemetry-hud__failure-badge {
+        background: #ef4444;
+        color: #fff;
+        font-weight: 700;
+        padding: 0.3rem 0.5rem;
+        border-radius: 3px;
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .telemetry-hud__grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.35rem 0.75rem;
+    }
+
+    .telemetry-hud__item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+
+    .telemetry-hud__item--wide {
+        grid-column: span 2;
+    }
+
+    .telemetry-hud__label {
+        color: #6b7280;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .telemetry-hud__value {
+        color: #f9fafb;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .telemetry-hud__value--green {
+        color: #22c55e;
+    }
+
+    .telemetry-hud__value--yellow {
+        color: #eab308;
+    }
+
+    .telemetry-hud__pending {
+        color: #6b7280;
+        font-style: italic;
+    }
+</style>

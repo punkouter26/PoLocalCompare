@@ -1,0 +1,209 @@
+@page "/processing/{DuelId}"
+@using PoLocalCompare.Client.Components
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@inject NavigationManager Nav
+@inject SignalRDuelClient HubClient
+@inject WebLlmService WebLlm
+@inject DuelApiClient ApiClient
+@implements IAsyncDisposable
+
+<MockDataBanner />
+
+<div class="processing-page">
+    <h1 class="processing-page__title">Processing Duel…</h1>
+    <p class="processing-page__duel-id">Duel ID: @DuelId</p>
+
+    <div class="processing-page__panels">
+        <ProcessingPanel
+            ModelName="@_leftModelId"
+            Side="Left"
+            Status="@_leftStatus"
+            ElapsedMs="@_leftElapsedMs"
+            TokenCount="@_leftTokenCount"
+        />
+        <ProcessingPanel
+            ModelName="@_rightModelId"
+            Side="Right"
+            Status="@_rightStatus"
+            ElapsedMs="@_rightElapsedMs"
+            TokenCount="@_rightTokenCount"
+        />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string DuelId { get; set; } = string.Empty;
+
+    private string _leftModelId = "Left Model";
+    private string _rightModelId = "Right Model";
+
+    private DuelStatus _leftStatus = DuelStatus.Initializing;
+    private DuelStatus _rightStatus = DuelStatus.Initializing;
+    private long _leftElapsedMs;
+    private long _rightElapsedMs;
+    private int _leftTokenCount;
+    private int _rightTokenCount;
+
+    // Track in-flight local inference tasks to avoid double-starting
+    private readonly HashSet<string> _runningLocalModels = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        HubClient.OnModelStatusUpdate += HandleStatusUpdate;
+        HubClient.OnDuelComplete += HandleDuelComplete;
+        HubClient.OnStartLocalInference += HandleStartLocalInference;
+
+        var baseUri = Nav.BaseUri.TrimEnd('/');
+        await HubClient.ConnectAsync(baseUri, DuelId);
+    }
+
+    private void HandleStatusUpdate(ModelStatusUpdateDto update)
+    {
+        if (update.DuelId != DuelId) return;
+
+        if (update.Side == "Left")
+        {
+            _leftModelId = update.ModelId;
+            _leftStatus = update.Status;
+            _leftElapsedMs = update.ElapsedMs;
+            _leftTokenCount = update.TokenCount;
+        }
+        else
+        {
+            _rightModelId = update.ModelId;
+            _rightStatus = update.Status;
+            _rightElapsedMs = update.ElapsedMs;
+            _rightTokenCount = update.TokenCount;
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleDuelComplete(DuelDto dto)
+    {
+        if (dto.DuelId != DuelId) return;
+        Nav.NavigateTo($"/arena/{DuelId}");
+    }
+
+    private void HandleStartLocalInference(StartLocalInferencePayload payload)
+    {
+        if (payload.DuelId != DuelId) return;
+        if (_runningLocalModels.Contains(payload.ModelId)) return;
+
+        _runningLocalModels.Add(payload.ModelId);
+
+        // Fire-and-forget; errors are caught inside
+        _ = Task.Run(() => RunLocalInferenceAsync(payload));
+    }
+
+    private async Task RunLocalInferenceAsync(StartLocalInferencePayload payload)
+    {
+        string htmlOutput = string.Empty;
+        int tokenCount = 0;
+        long totalMs = 0;
+        long warmUpMs = 0;
+        bool isFailure = false;
+        string? failureReason = null;
+
+        try
+        {
+            // WebLlmService needs a prompt — retrieve the duel to get it
+            var duel = await ApiClient.GetDuelAsync(payload.DuelId);
+            var prompt = duel?.PromptFull ?? string.Empty;
+
+            // Stream status updates (signals the JS worker to start)
+            await foreach (var update in WebLlm.StartInferenceAsync(payload.ModelId, prompt, payload.DuelId))
+            {
+                if (update.Status == "Done" || update.Status == "Failed")
+                {
+                    isFailure = update.Status == "Failed";
+                    failureReason = update.ErrorReason;
+                    break;
+                }
+            }
+
+            if (!isFailure)
+            {
+                // Collect full result payload (HTML, timing) from the completion source
+                var result = await WebLlm.GetResultAsync(payload.ModelId);
+                if (result is not null)
+                {
+                    htmlOutput = result.HtmlOutput;
+                    tokenCount = result.TokenCount;
+                    totalMs = result.TotalMs;
+                    warmUpMs = result.WarmUpMs;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            isFailure = true;
+            failureReason = ex.Message;
+        }
+        finally
+        {
+            _runningLocalModels.Remove(payload.ModelId);
+        }
+
+        await ApiClient.PostLocalResultAsync(
+            payload.DuelId,
+            payload.ModelId,
+            htmlOutput,
+            tokenCount,
+            totalMs,
+            warmUpMs,
+            isFailure,
+            failureReason);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        HubClient.OnModelStatusUpdate -= HandleStatusUpdate;
+        HubClient.OnDuelComplete -= HandleDuelComplete;
+        HubClient.OnStartLocalInference -= HandleStartLocalInference;
+        await HubClient.DisposeAsync();
+    }
+}
+
+<style>
+    .processing-page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1rem;
+        color: #e5e7eb;
+    }
+
+    .processing-page__title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: #eab308;
+        margin-bottom: 0.25rem;
+    }
+
+    .processing-page__duel-id {
+        color: #6b7280;
+        font-size: 0.8rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .processing-page__panels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+
+    @@media (max-width: 1023px) {
+        .processing-page__panels {
+            grid-template-columns: 1fr;
+            scroll-snap-type: y mandatory;
+            overflow-y: scroll;
+            max-height: calc(100vh - 150px);
+        }
+
+        .processing-page__panels > * {
+            scroll-snap-align: start;
+        }
+    }
+</style>

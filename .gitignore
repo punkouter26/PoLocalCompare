@@ -1,0 +1,45 @@
+## .NET artifacts
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+
+## Secrets and environment-specific config
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+
+## OS artifacts
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+## Logs
+*.log
+logs/
+
+## Build outputs
+dist/
+publish/
+
+## Local LLM model weights (downloaded by download-models.py, ~4.7 GB)
+src/Client/PoLocalCompare.Client/wwwroot/models/
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+
+## Test results
+TestResults/
+coverage/
+*.trx
+*.coveragexml
+
+## Playwright
+test-results/
+playwright-report/
+node_modules/

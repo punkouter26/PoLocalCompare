@@ -1,0 +1,86 @@
+@* SandboxedViewport — renders model-generated HTML in an XSS-safe sandboxed iframe.
+   sandbox="allow-scripts" permits JS execution required by generated HTML apps.
+   allow-same-origin is deliberately omitted so scripts cannot access parent frame, cookies, or localStorage. *@
+
+<div class="sandboxed-viewport @(_isLoser ? "sandboxed-viewport--loser" : "")">
+    <div class="sandboxed-viewport__header">
+        <span class="sandboxed-viewport__model-name">@ModelName</span>
+        @if (_isLoser)
+        {
+            <span class="sandboxed-viewport__badge sandboxed-viewport__badge--loser">LOSER</span>
+        }
+    </div>
+    <iframe
+        srcdoc="@HtmlContent"
+        sandbox="allow-scripts"
+        title="@ModelName output"
+        class="sandboxed-viewport__frame"
+        loading="lazy">
+    </iframe>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string HtmlContent { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ModelName { get; set; } = string.Empty;
+    [Parameter] public bool IsLoser { get; set; }
+
+    private bool _isLoser => IsLoser;
+}
+
+<style>
+    .sandboxed-viewport {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #333;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #0a0a0a;
+        transition: filter 0.4s ease, opacity 0.4s ease;
+        height: 100%;
+    }
+
+    .sandboxed-viewport--loser {
+        filter: grayscale(80%) brightness(0.5);
+        opacity: 0.6;
+    }
+
+    .sandboxed-viewport__header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.75rem;
+        background: #111;
+        border-bottom: 1px solid #333;
+    }
+
+    .sandboxed-viewport__model-name {
+        color: #e5e7eb;
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .sandboxed-viewport__badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.15rem 0.4rem;
+        border-radius: 3px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    .sandboxed-viewport__badge--loser {
+        background: #ef4444;
+        color: #fff;
+    }
+
+    .sandboxed-viewport__frame {
+        width: 100%;
+        flex: 1;
+        border: none;
+        min-height: 500px;
+        background: #fff;
+    }
+</style>

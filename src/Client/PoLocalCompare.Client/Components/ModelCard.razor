@@ -1,0 +1,101 @@
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using Radzen.Blazor
+
+<RadzenCard class="@_cardClass" @onclick="OnCardClick" style="cursor:pointer;">
+    <div class="model-card__header">
+        <span class="model-card__name">@Model.DisplayName</span>
+        <span class="model-card__badge model-card__badge--@(Model.ModelType == ModelType.Local ? "local" : "remote")">
+            @Model.ModelType
+        </span>
+    </div>
+    <div class="model-card__elo">
+        ELO: <strong>@Model.CurrentElo.ToString("F0")</strong>
+        @if (ProjectedEloGain.HasValue)
+        {
+            <span class="model-card__elo-gain @(ProjectedEloGain >= 0 ? "positive" : "negative")">
+                @(ProjectedEloGain >= 0 ? "+" : "")@ProjectedEloGain.Value.ToString("F1")
+            </span>
+        }
+    </div>
+    <div class="model-card__stats">
+        Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Model.DuelCount - Model.WinCount)
+    </div>
+</RadzenCard>
+
+@code {
+    [Parameter, EditorRequired] public ModelDto Model { get; set; } = null!;
+    [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
+    [Parameter] public double? ProjectedEloGain { get; set; }
+
+    private string _cardClass => IsSelected ? "model-card model-card--selected" : "model-card";
+
+    private async Task OnCardClick()
+    {
+        await OnSelected.InvokeAsync(Model);
+    }
+}
+
+<style>
+    .model-card {
+        background: #111111;
+        border: 1px solid #333;
+        transition: border-color 0.15s;
+        margin-bottom: 0.5rem;
+    }
+
+    .model-card--selected {
+        border-color: #22c55e;
+        box-shadow: 0 0 0 2px #22c55e44;
+    }
+
+    .model-card__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.25rem;
+    }
+
+    .model-card__name {
+        color: #ffffff;
+        font-weight: 600;
+    }
+
+    .model-card__badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .model-card__badge--local {
+        background: #1d4ed8;
+        color: #fff;
+    }
+
+    .model-card__badge--remote {
+        background: #7c3aed;
+        color: #fff;
+    }
+
+    .model-card__elo {
+        color: #d1d5db;
+        font-size: 0.9rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .model-card__elo-gain {
+        margin-left: 0.5rem;
+        font-weight: 700;
+    }
+
+    .model-card__elo-gain.positive { color: #22c55e; }
+    .model-card__elo-gain.negative { color: #ef4444; }
+
+    .model-card__stats {
+        color: #9ca3af;
+        font-size: 0.8rem;
+    }
+</style>

@@ -1,0 +1,18 @@
+@baseUrl = https://localhost:5001
+@modelId = 01JXXXXXXXXXXXXXXXXXXXXXXXXX
+
+### Get leaderboard (ELO-ranked)
+GET {{baseUrl}}/api/leaderboard
+Accept: application/json
+
+###
+
+### Get leaderboard sorted by Green Score
+GET {{baseUrl}}/api/leaderboard?sortBy=GreenScore
+Accept: application/json
+
+###
+
+### Get kill list for a model
+GET {{baseUrl}}/api/leaderboard/{{modelId}}/killlist
+Accept: application/json

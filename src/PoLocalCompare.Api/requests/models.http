@@ -1,0 +1,32 @@
+@baseUrl = https://localhost:5001
+
+### List all models
+GET {{baseUrl}}/api/models
+Accept: application/json
+
+###
+
+### Register a local model
+POST {{baseUrl}}/api/models
+Content-Type: application/json
+
+{
+  "displayName": "Phi-4 (Local)",
+  "modelType": "Local",
+  "webLlmModelId": "phi-4-mini-instruct-q4f32_1-MLC",
+  "tdpWatts": 115.0
+}
+
+###
+
+### Register a remote model
+POST {{baseUrl}}/api/models
+Content-Type: application/json
+
+{
+  "displayName": "GPT-4o (Azure Foundry)",
+  "modelType": "Remote",
+  "apiEndpointRef": "gpt-4o-deployment",
+  "inputTokenPricePerMillion": 2.50,
+  "outputTokenPricePerMillion": 10.00
+}

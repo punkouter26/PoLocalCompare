@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PoLocalCompare.Api/PoLocalCompare.Api.csproj" />
+    <Project Path="src/PoLocalCompare.Application/PoLocalCompare.Application.csproj" />
+    <Project Path="src/PoLocalCompare.Domain/PoLocalCompare.Domain.csproj" />
+    <Project Path="src/PoLocalCompare.Infrastructure/PoLocalCompare.Infrastructure.csproj" />
+    <Project Path="src/PoLocalCompare.Shared/PoLocalCompare.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/Client/">
+    <Project Path="src/Client/PoLocalCompare.Client/PoLocalCompare.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/integration/">
+    <Project Path="tests/integration/PoLocalCompare.Integration.Tests/PoLocalCompare.Integration.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/unit/">
+    <Project Path="tests/unit/PoLocalCompare.Unit.Tests/PoLocalCompare.Unit.Tests.csproj" />
+  </Folder>
+</Solution>

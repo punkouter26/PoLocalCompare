@@ -1,0 +1,301 @@
+@page "/arena/{DuelId}"
+@using PoLocalCompare.Client.Components
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using Radzen
+@using Radzen.Blazor
+@inject DuelApiClient ApiClient
+@inject AudioService AudioService
+@inject NavigationManager Nav
+
+<MockDataBanner />
+
+<div class="arena">
+    <h1 class="arena__title">⚔ Arena — Judge the Duel</h1>
+
+    @if (_loading)
+    {
+        <p class="arena__loading">Loading duel results…</p>
+    }
+    else if (_duel is null)
+    {
+        <p class="arena__error">Duel not found.</p>
+    }
+    else
+    {
+        <p class="arena__prompt-label">Prompt: <em>@_duel.PromptText</em></p>
+
+        <div class="arena__viewports">
+            <div class="arena__viewport-panel">
+                <SandboxedViewport
+                    HtmlContent="@_leftResult?.HtmlOutputRaw"
+                    ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
+                    IsLoser="@(_loserModelId == _duel.LeftModelId)"
+                />
+                <div class="arena__hud">
+                    <TelemetryHud Result="_leftResult" />
+                </div>
+                @if (_eloShiftLeft.HasValue)
+                {
+                    <div class="arena__elo-badge @(_eloShiftLeft >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
+                        ELO @(_eloShiftLeft >= 0 ? "+" : "")@_eloShiftLeft.Value.ToString("F1")
+                    </div>
+                }
+            </div>
+
+            <div class="arena__viewport-panel">
+                <SandboxedViewport
+                    HtmlContent="@_rightResult?.HtmlOutputRaw"
+                    ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
+                    IsLoser="@(_loserModelId == _duel.RightModelId)"
+                />
+                <div class="arena__hud">
+                    <TelemetryHud Result="_rightResult" />
+                </div>
+                @if (_eloShiftRight.HasValue)
+                {
+                    <div class="arena__elo-badge @(_eloShiftRight >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
+                        ELO @(_eloShiftRight >= 0 ? "+" : "")@_eloShiftRight.Value.ToString("F1")
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (_verdictRecorded)
+        {
+            <div class="arena__verdict-recorded">
+                Verdict recorded ✓ — Winner: <strong>@_winnerModelId</strong>
+            </div>
+        }
+
+        <div class="arena__actions">
+            <RadzenButton
+                Text="👈 Winner: Left"
+                ButtonStyle="ButtonStyle.Success"
+                Size="ButtonSize.Large"
+                Disabled="@(_verdictRecorded || _submitting)"
+                Click="@(() => RecordVerdictAsync(DuelVerdict.Left))"
+                class="arena__action-btn"
+            />
+            <RadzenButton
+                Text="Re-Challenge"
+                ButtonStyle="ButtonStyle.Secondary"
+                Size="ButtonSize.Medium"
+                Disabled="@_submitting"
+                Click="@ReChallengeAsync"
+                class="arena__action-btn"
+            />
+            <RadzenButton
+                Text="Winner: Right 👉"
+                ButtonStyle="ButtonStyle.Success"
+                Size="ButtonSize.Large"
+                Disabled="@(_verdictRecorded || _submitting)"
+                Click="@(() => RecordVerdictAsync(DuelVerdict.Right))"
+                class="arena__action-btn"
+            />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string DuelId { get; set; } = string.Empty;
+
+    private DuelDto? _duel;
+    private DuelResultDto? _leftResult;
+    private DuelResultDto? _rightResult;
+    private bool _loading = true;
+    private bool _submitting;
+    private bool _verdictRecorded;
+
+    private string? _winnerModelId;
+    private string? _loserModelId;
+    private double? _eloShiftLeft;
+    private double? _eloShiftRight;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _duel = await ApiClient.GetDuelAsync(DuelId);
+            if (_duel is not null)
+            {
+                _leftResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.LeftModelId);
+                _rightResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.RightModelId);
+
+                // If verdict already recorded, restore state
+                if (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null)
+                {
+                    _verdictRecorded = true;
+                    _winnerModelId = _duel.WinnerModelId;
+                    _loserModelId = _duel.LoserModelId;
+                    ApplyEloShifts(_duel);
+                }
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RecordVerdictAsync(DuelVerdict verdict)
+    {
+        if (_verdictRecorded || _submitting || _duel is null) return;
+        _submitting = true;
+
+        try
+        {
+            var response = await ApiClient.RecordVerdictAsync(DuelId, new VerdictRequestDto { Verdict = verdict });
+            if (response is not null)
+            {
+                _verdictRecorded = true;
+                _winnerModelId = response.WinnerModelId;
+                _loserModelId = response.LoserModelId;
+
+                // Apply ELO shifts to display badges
+                _eloShiftLeft = _duel.LeftModelId == response.WinnerModelId
+                    ? response.EloShiftWinner
+                    : response.EloShiftLoser;
+                _eloShiftRight = _duel.RightModelId == response.WinnerModelId
+                    ? response.EloShiftWinner
+                    : response.EloShiftLoser;
+
+                await AudioService.PlaySuccessAsync();
+            }
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task ReChallengeAsync()
+    {
+        if (_duel is null) return;
+
+        // Record verdict if not already done (caller may not have picked a winner before re-challenging)
+        // Navigation only — no forced verdict
+        var prompt = Uri.EscapeDataString(_duel.PromptText);
+        var leftId = Uri.EscapeDataString(_duel.LeftModelId);
+        var rightId = Uri.EscapeDataString(_duel.RightModelId);
+        Nav.NavigateTo($"/war-room?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
+    }
+
+    private void ApplyEloShifts(DuelDto duel)
+    {
+        if (duel.WinnerModelId is null || duel.EloShiftWinner is null || duel.EloShiftLoser is null)
+            return;
+
+        _eloShiftLeft = duel.LeftModelId == duel.WinnerModelId
+            ? duel.EloShiftWinner
+            : duel.EloShiftLoser;
+        _eloShiftRight = duel.RightModelId == duel.WinnerModelId
+            ? duel.EloShiftWinner
+            : duel.EloShiftLoser;
+    }
+}
+
+<style>
+    .arena {
+        padding: 1rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .arena__title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #f9fafb;
+        margin-bottom: 0.5rem;
+    }
+
+    .arena__prompt-label {
+        color: #9ca3af;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    .arena__loading,
+    .arena__error {
+        color: #6b7280;
+        font-style: italic;
+    }
+
+    /* Desktop: 2-column CSS Grid */
+    .arena__viewports {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Mobile: vertical CSS scroll-snap stack */
+    @@media (max-width: 1023px) {
+        .arena__viewports {
+            grid-template-columns: 1fr;
+            scroll-snap-type: y mandatory;
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
+        .arena__viewport-panel {
+            scroll-snap-align: start;
+        }
+    }
+
+    .arena__viewport-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-height: 600px;
+    }
+
+    .arena__hud {
+        flex-shrink: 0;
+    }
+
+    .arena__elo-badge {
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 700;
+        padding: 0.35rem;
+        border-radius: 4px;
+    }
+
+    .arena__elo-badge--positive {
+        background: #052e16;
+        color: #22c55e;
+        border: 1px solid #22c55e44;
+    }
+
+    .arena__elo-badge--negative {
+        background: #450a0a;
+        color: #ef4444;
+        border: 1px solid #ef444444;
+    }
+
+    .arena__actions {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        padding: 1rem 0;
+        flex-wrap: wrap;
+    }
+
+    .arena__action-btn {
+        min-width: 180px;
+    }
+
+    .arena__verdict-recorded {
+        text-align: center;
+        color: #22c55e;
+        font-weight: 600;
+        font-size: 1rem;
+        padding: 0.5rem;
+        background: #052e16;
+        border: 1px solid #22c55e44;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+    }
+</style>

@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PoLocalCompare.Domain\PoLocalCompare.Domain.csproj" />
+    <ProjectReference Include="..\PoLocalCompare.Shared\PoLocalCompare.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUlid" />
+  </ItemGroup>
+
+</Project>

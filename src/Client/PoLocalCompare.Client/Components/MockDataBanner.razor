@@ -1,0 +1,31 @@
+@inject IConfiguration Configuration
+
+@if (_showBanner)
+{
+    <div class="mock-data-banner" role="alert" aria-live="polite">
+        ⚠ MOCK DATA — Features:UseRealAi is disabled. AI responses are simulated.
+    </div>
+}
+
+@code {
+    private bool _showBanner;
+
+    protected override void OnInitialized()
+    {
+        var useRealAi = Configuration["Features:UseRealAi"];
+        _showBanner = !bool.TryParse(useRealAi, out var flag) || !flag;
+    }
+}
+
+<style>
+    .mock-data-banner {
+        background: #ef4444;
+        color: #ffffff;
+        font-weight: 700;
+        text-align: center;
+        padding: 0.5rem 1rem;
+        letter-spacing: 0.05em;
+        font-size: 0.875rem;
+        width: 100%;
+    }
+</style>

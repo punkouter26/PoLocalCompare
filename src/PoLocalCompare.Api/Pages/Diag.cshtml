@@ -1,0 +1,41 @@
+@page
+@model PoLocalCompare.Api.Pages.DiagModel
+
+<h1>Diagnostics</h1>
+
+<section>
+    <h2>Azure Table Storage</h2>
+    <p>Status: <strong>@Model.TableStatus</strong> | Latency: @Model.TableLatencyMs ms</p>
+</section>
+
+<section>
+    <h2>Azure AI Foundry</h2>
+    <p>Endpoint: <code>@Model.MaskValue(Model.FoundryEndpoint)</code></p>
+</section>
+
+<section>
+    <h2>Key Vault</h2>
+    <p>URI: <code>@Model.MaskValue(Model.KeyVaultUri)</code></p>
+</section>
+
+<section>
+    <h2>Configuration Keys</h2>
+    <table>
+        <thead><tr><th>Key</th><th>Value</th></tr></thead>
+        <tbody>
+            @foreach (var item in Model.ConfigItems)
+            {
+                <tr><td>@item.Key</td><td>@item.Value</td></tr>
+            }
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>WebGPU</h2>
+    <p id="webgpu-status">Checking...</p>
+    <script>
+        document.getElementById('webgpu-status').textContent =
+            typeof navigator.gpu !== 'undefined' ? 'Available: Yes' : 'Available: No';
+    </script>
+</section>

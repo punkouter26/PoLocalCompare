@@ -18,12 +18,18 @@ description: "Task list template for feature implementation"
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
 - Include exact file paths in descriptions
 
-## Path Conventions
+## Path Conventions (PoLocalCompare — Constitution § III)
 
-- **Single project**: `src/`, `tests/` at repository root
-- **Web app**: `backend/src/`, `frontend/src/`
-- **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+- **Domain layer**: `src/PoLocalCompare.Domain/`
+- **Application layer**: `src/PoLocalCompare.Application/`
+- **Infrastructure layer**: `src/PoLocalCompare.Infrastructure/`
+- **API/Server host**: `src/PoLocalCompare.Api/`
+- **Shared (client+server DTOs)**: `src/PoLocalCompare.Shared/`
+- **Blazor WASM client**: `src/Client/PoLocalCompare.Client/`
+- **Unit tests**: `tests/unit/PoLocalCompare.Unit.Tests/`
+- **Integration tests**: `tests/integration/PoLocalCompare.Integration.Tests/`
+- **E2E tests (Playwright/TS)**: `tests/e2e/PoLocalCompare.E2E/`
+- **LLM docs**: `/LLMDOCS/`
 
 <!-- 
   ============================================================================

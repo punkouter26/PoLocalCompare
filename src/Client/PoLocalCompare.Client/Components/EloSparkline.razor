@@ -1,0 +1,64 @@
+<svg class="elo-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="ELO trend sparkline">
+    @if (_points.Length > 0)
+    {
+        <polyline points="@_points" class="elo-sparkline__line" />
+    }
+</svg>
+
+@code {
+    [Parameter] public IReadOnlyList<double>? Values { get; set; }
+
+    private string _points = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        _points = BuildPoints(Values);
+    }
+
+    private static string BuildPoints(IReadOnlyList<double>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var trimmed = values.Count <= 20
+            ? values.ToList()
+            : values.Skip(values.Count - 20).ToList();
+        if (trimmed.Count == 1)
+        {
+            return "0,12 100,12";
+        }
+
+        var min = trimmed.Min();
+        var max = trimmed.Max();
+        var range = Math.Max(max - min, 1.0);
+
+        var coords = new List<string>(trimmed.Count);
+        for (var i = 0; i < trimmed.Count; i++)
+        {
+            var x = i * (100.0 / (trimmed.Count - 1));
+            var normalized = (trimmed[i] - min) / range;
+            var y = 22.0 - (normalized * 20.0);
+            coords.Add($"{x:0.##},{y:0.##}");
+        }
+
+        return string.Join(" ", coords);
+    }
+}
+
+<style>
+    .elo-sparkline {
+        width: 140px;
+        height: 28px;
+        display: block;
+    }
+
+    .elo-sparkline__line {
+        fill: none;
+        stroke: #22c55e;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+</style>

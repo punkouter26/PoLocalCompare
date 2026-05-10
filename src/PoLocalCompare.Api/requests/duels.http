@@ -1,0 +1,40 @@
+@baseUrl = https://localhost:5001
+@duelId = 01JXXXXXXXXXXXXXXXXXXXXXXXXX
+
+### Commence a new duel
+POST {{baseUrl}}/api/duels
+Content-Type: application/json
+
+{
+  "leftModelId": "01JXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "rightModelId": "01JXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "promptText": "Build a single-file HTML Pomodoro timer with start/stop and a circular progress ring."
+}
+
+###
+
+### Get duel details
+GET {{baseUrl}}/api/duels/{{duelId}}
+Accept: application/json
+
+###
+
+### List duels (Archive)
+GET {{baseUrl}}/api/duels?pageSize=20&continuationToken=
+Accept: application/json
+
+###
+
+### Record verdict (Left wins)
+POST {{baseUrl}}/api/duels/{{duelId}}/verdict
+Content-Type: application/json
+
+{
+  "verdict": "Left"
+}
+
+###
+
+### Download Lab Report
+GET {{baseUrl}}/api/duels/{{duelId}}/report
+Accept: text/html

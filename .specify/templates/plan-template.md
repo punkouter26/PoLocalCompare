@@ -17,21 +17,34 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: C# 14 / .NET 10 (pinned via global.json)
+**Primary Dependencies**: ASP.NET Core, Blazor WASM (hosted), Radzen UI, Serilog, OpenTelemetry, Testcontainers
+**Storage**: Azure Table Storage (Azurite in Docker for local dev)
+**Testing**: xUnit (unit/integration), Playwright/TypeScript (E2E headed)
+**Target Platform**: Azure App Services (server) + Blazor WASM (client, hosted in server)
+**Project Type**: Client/Server web application — Onion Architecture server, simple Blazor WASM client
+**Performance Goals**: [domain-specific, e.g., sub-200ms p95 API responses or NEEDS CLARIFICATION]
+**Constraints**: HTTP 5000 / HTTPS 5001 local; no secrets in appsettings; TreatWarningsAsErrors; Nullable enabled
+**Scale/Scope**: [domain-specific, e.g., small team internal tool or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify ALL of the following before proceeding:
+
+- [ ] **I. Naming**: Solution/project names carry `Po` prefix; namespaces use `PoLocalCompare.*`; `global.json` pins .NET 10.
+- [ ] **II. Architecture**: Server uses Onion Architecture (Domain → Application → Infrastructure physical separation); client stays simple; Blazor WASM + Radzen confirmed; SOLID/GoF pattern comments planned.
+- [ ] **III. Structure**: `Directory.Packages.props` + `Directory.Build.props` in root; `PoLocalCompare.Shared` planned; `wwwroot` only in client; `src/` + `tests/` layout; `.gitignore` up to date.
+- [ ] **IV. API Standards**: Ports fixed (HTTP 5000 / HTTPS 5001); Scalar/OpenAPI + `.http` files planned; `/diag` and `/health` endpoints included in scope.
+- [ ] **V. Azure/Secrets**: No secrets in `appsettings.json`; Key Vault + Managed Identity planned; App Service Plan references `PoShared` RG; Table Storage in app's own RG.
+- [ ] **VI. Auth/Security**: ANON login button included (if auth used); OWASP Top 10 addressed; Microsoft OAuth in dev and prod.
+- [ ] **VII. Testing**: Unit tests (Domain/Application), Integration tests (Testcontainers/Azurite), E2E Playwright (headed); mock data for AI in test contexts; `MOCK DATA` banner planned.
+- [ ] **VIII. Observability**: Serilog (File + Console + App Insights); OpenTelemetry to PoShared; `UserId`/`SessionId`/`CorrelationId`/`Environment` in log context; dev-mode stack traces in UI.
+- [ ] **IX. Hygiene**: No dead code; feature flags for external integrations; `/LLMDOCS` updated; ambiguity stop-rule applied.
+- [ ] **X. DX**: F5 kills existing processes and opens Edge; Scalar + `.http` maintained; `/diag` current.
+
+*Any unchecked item MUST be addressed or justified in the Complexity Tracking table before implementation begins.*
 
 ## Project Structure
 
@@ -56,43 +69,34 @@ specs/[###-feature]/
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+# PoLocalCompare — standard layout (Constitution § III)
 src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+├── PoLocalCompare.Domain/          # Entities, value objects, domain services (no external deps)
+├── PoLocalCompare.Application/     # Use cases, interfaces, DTOs (depends on Domain only)
+├── PoLocalCompare.Infrastructure/  # EF/Table Storage, Key Vault, external APIs (depends on Application)
+├── PoLocalCompare.Api/             # ASP.NET Core host; serves WASM; ports 5000/5001
+└── PoLocalCompare.Shared/          # DTOs & contracts shared between Api and Client
+
+src/Client/
+└── PoLocalCompare.Client/          # Blazor WASM; wwwroot here only; Radzen components
 
 tests/
-├── contract/
+├── unit/
+│   └── PoLocalCompare.Unit.Tests/
 ├── integration/
-└── unit/
+│   └── PoLocalCompare.Integration.Tests/   # Testcontainers (Azurite, SQL)
+└── e2e/
+    └── PoLocalCompare.E2E/                 # Playwright / TypeScript (headed in Dev)
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+/LLMDOCS/                           # LLM quick-reference docs (kept current)
+global.json                         # Pins .NET 10 SDK
+Directory.Build.props               # TreatWarningsAsErrors, Nullable
+Directory.Packages.props            # Central Package Management
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Onion Architecture server (Domain/Application/Infrastructure/Api) + hosted Blazor WASM client. All source under `src/`, all tests under `tests/`.
+
+[REMOVE IF UNUSED — Options 2 and 3 do not apply to this project]
 
 ## Complexity Tracking
 

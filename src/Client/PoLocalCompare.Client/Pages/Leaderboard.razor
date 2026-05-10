@@ -1,0 +1,207 @@
+@page "/leaderboard"
+@using PoLocalCompare.Client.Components
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using Radzen
+@using Radzen.Blazor
+@inject DuelApiClient ApiClient
+
+<MockDataBanner />
+
+<div class="leaderboard">
+    <h1 class="leaderboard__title">Leaderboard</h1>
+
+    <div class="leaderboard__controls">
+        <RadzenButton
+            Text="@SortButtonText"
+            ButtonStyle="ButtonStyle.Secondary"
+            Click="ToggleSortAsync" />
+    </div>
+
+    @if (_loading)
+    {
+        <p class="leaderboard__status">Loading leaderboard...</p>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="leaderboard__error">@_error</p>
+    }
+    else
+    {
+        <RadzenDataGrid Data="@_entries" TItem="LeaderboardEntryDto" RowSelect="OnRowSelect" Class="leaderboard__grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px" />
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" />
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="CurrentElo" Title="ELO" Width="120px">
+                    <Template Context="entry">
+                        @entry.CurrentElo.ToString("F1")
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DuelCount" Title="Duels" Width="100px" />
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="W/L" Width="110px">
+                    <Template Context="entry">
+                        @entry.WinCount/@Math.Max(entry.DuelCount - entry.WinCount, 0)
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="Green Score Avg" Width="170px">
+                    <Template Context="entry">
+                        @(entry.GreenScoreAvg.HasValue ? entry.GreenScoreAvg.Value.ToString("F1") : "-")
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="Sparkline" Width="170px">
+                    <Template Context="entry">
+                        <EloSparkline Values="entry.EloSparkline" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+
+        @if (_selected is not null)
+        {
+            <RadzenPanel Text="@KillListPanelText" Class="leaderboard__killlist-panel">
+                @if (_killListLoading)
+                {
+                    <p class="leaderboard__status">Loading kill list...</p>
+                }
+                else if (_killListError is not null)
+                {
+                    <p class="leaderboard__error">@_killListError</p>
+                }
+                else if (_killList.Count == 0)
+                {
+                    <p class="leaderboard__status">No head-to-head history yet.</p>
+                }
+                else
+                {
+                    <RadzenDataGrid Data="@_killList" TItem="HeadToHeadDto">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="HeadToHeadDto" Property="OpponentName" Title="Opponent" />
+                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="W/L" Width="120px">
+                                <Template Context="row">@row.Wins/@row.Losses</Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="Last Duel" Width="180px">
+                                <Template Context="row">@row.LastDuelAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                }
+            </RadzenPanel>
+        }
+    }
+</div>
+
+@code {
+    private List<LeaderboardEntryDto> _entries = [];
+    private bool _loading = true;
+    private string? _error;
+
+    private LeaderboardEntryDto? _selected;
+    private readonly List<HeadToHeadDto> _killList = [];
+    private bool _killListLoading;
+    private string? _killListError;
+
+    private string _sortBy = "Elo";
+    private bool IsGreenSort => string.Equals(_sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase);
+    private string SortButtonText => $"Sort: {(IsGreenSort ? "Green Score" : "ELO")}";
+    private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLeaderboardAsync();
+    }
+
+    private async Task ToggleSortAsync()
+    {
+        _sortBy = IsGreenSort ? "Elo" : "GreenScore";
+        await LoadLeaderboardAsync();
+    }
+
+    private async Task LoadLeaderboardAsync()
+    {
+        _loading = true;
+        _error = null;
+        _selected = null;
+        _killList.Clear();
+        _killListError = null;
+
+        try
+        {
+            var rows = await ApiClient.GetLeaderboardAsync(_sortBy);
+            _entries = rows?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load leaderboard: {ex.Message}";
+            _entries = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnRowSelect(LeaderboardEntryDto row)
+    {
+        _selected = row;
+        _killListLoading = true;
+        _killListError = null;
+        _killList.Clear();
+
+        try
+        {
+            var rows = await ApiClient.GetKillListAsync(row.ModelId);
+            if (rows is not null)
+            {
+                _killList.AddRange(rows);
+            }
+        }
+        catch (Exception ex)
+        {
+            _killListError = $"Failed to load kill list: {ex.Message}";
+        }
+        finally
+        {
+            _killListLoading = false;
+        }
+    }
+}
+
+<style>
+    .leaderboard {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1rem;
+        color: #e5e7eb;
+    }
+
+    .leaderboard__title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+        color: #f9fafb;
+    }
+
+    .leaderboard__controls {
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .leaderboard__grid {
+        margin-bottom: 1rem;
+    }
+
+    .leaderboard__killlist-panel {
+        background: #0b0b0b;
+        border: 1px solid #2a2a2a;
+    }
+
+    .leaderboard__status {
+        color: #9ca3af;
+    }
+
+    .leaderboard__error {
+        color: #ef4444;
+        font-weight: 600;
+    }
+</style>

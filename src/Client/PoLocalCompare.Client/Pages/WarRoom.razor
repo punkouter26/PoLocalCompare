@@ -1,0 +1,233 @@
+@page "/war-room"
+@using PoLocalCompare.Client.Components
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using Radzen
+@using Radzen.Blazor
+@inject DuelApiClient ApiClient
+@inject AudioService AudioService
+@inject NavigationManager Nav
+
+<MockDataBanner />
+
+<div class="war-room">
+    <h1 class="war-room__title">⚔ War Room</h1>
+
+    @if (_loading)
+    {
+        <p class="war-room__loading">Loading models…</p>
+    }
+    else
+    {
+        <div class="war-room__columns">
+            <div class="war-room__column">
+                <h2 class="war-room__col-title">Left Model</h2>
+                @if (_allModels.Count == 0)
+                {
+                    <p class="war-room__empty">No models available — register a model first.</p>
+                }
+                else
+                {
+                    @foreach (var model in _allModels)
+                    {
+                        <ModelCard
+                            Model="model"
+                            IsSelected="_leftModel?.ModelId == model.ModelId"
+                            OnSelected="m => SelectLeft(m)"
+                            ProjectedEloGain="@ComputeProjectedGain(_leftModel, _rightModel)"
+                        />
+                    }
+                }
+            </div>
+
+            <div class="war-room__column">
+                <h2 class="war-room__col-title">Right Model</h2>
+                @if (_allModels.Count == 0)
+                {
+                    <p class="war-room__empty">No models available — register a model first.</p>
+                }
+                else
+                {
+                    @foreach (var model in _allModels)
+                    {
+                        <ModelCard
+                            Model="model"
+                            IsSelected="_rightModel?.ModelId == model.ModelId"
+                            OnSelected="m => SelectRight(m)"
+                            ProjectedEloGain="@ComputeProjectedGain(_rightModel, _leftModel)"
+                        />
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="war-room__prompt-section">
+            <label class="war-room__label" for="promptInput">Prompt (5-minute duel, HTML output)</label>
+            <RadzenTextArea
+                id="promptInput"
+                @bind-Value="_promptText"
+                Rows="6"
+                class="war-room__textarea"
+                Placeholder="Describe the HTML app you want both models to build…"
+            />
+        </div>
+
+        <div class="war-room__actions">
+            <RadzenButton
+                Text="Commence Duel"
+                ButtonStyle="ButtonStyle.Danger"
+                Size="ButtonSize.Large"
+                Disabled="@(!CanCommence)"
+                Click="@CommenceDuelAsync"
+                class="war-room__commence-btn"
+            />
+        </div>
+
+        @if (_error is not null)
+        {
+            <p class="war-room__error">@_error</p>
+        }
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? PromptParam { get; set; }
+    [SupplyParameterFromQuery(Name = "leftModelId")] public string? LeftModelIdParam { get; set; }
+    [SupplyParameterFromQuery(Name = "rightModelId")] public string? RightModelIdParam { get; set; }
+
+    private bool _loading = true;
+    private List<ModelDto> _allModels = [];
+    private ModelDto? _leftModel;
+    private ModelDto? _rightModel;
+    private string _promptText = string.Empty;
+    private string? _error;
+
+    private bool CanCommence =>
+        _leftModel is not null && _rightModel is not null && !string.IsNullOrWhiteSpace(_promptText);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var models = await ApiClient.GetModelsAsync();
+            if (models is not null)
+            {
+                _allModels = models.ToList();
+
+                // Pre-fill from query parameters (Re-Challenge flow)
+                if (!string.IsNullOrEmpty(PromptParam))
+                    _promptText = Uri.UnescapeDataString(PromptParam);
+
+                if (!string.IsNullOrEmpty(LeftModelIdParam))
+                    _leftModel = _allModels.FirstOrDefault(m => m.ModelId == LeftModelIdParam);
+
+                if (!string.IsNullOrEmpty(RightModelIdParam))
+                    _rightModel = _allModels.FirstOrDefault(m => m.ModelId == RightModelIdParam);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectLeft(ModelDto model) => _leftModel = model;
+    private void SelectRight(ModelDto model) => _rightModel = model;
+
+    private double? ComputeProjectedGain(ModelDto? challenger, ModelDto? opponent)
+    {
+        if (challenger is null || opponent is null) return null;
+        var expected = 1.0 / (1.0 + Math.Pow(10.0, (opponent.CurrentElo - challenger.CurrentElo) / 400.0));
+        const double k = 32;
+        return Math.Round(k * (1.0 - expected), 1);
+    }
+
+    private async Task CommenceDuelAsync()
+    {
+        if (!CanCommence) return;
+
+        _error = null;
+
+        try
+        {
+            await AudioService.PlaySnareRollAsync();
+
+            var dto = await ApiClient.CommenceDuelAsync(
+                _leftModel!.ModelId,
+                _rightModel!.ModelId,
+                _promptText);
+
+            if (dto is not null)
+                Nav.NavigateTo($"/processing/{dto.DuelId}");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to start duel: {ex.Message}";
+        }
+    }
+}
+
+<style>
+    .war-room {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1rem;
+        color: #e5e7eb;
+    }
+
+    .war-room__title {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #fff;
+        margin-bottom: 1.5rem;
+    }
+
+    .war-room__loading, .war-room__empty {
+        color: #6b7280;
+        font-style: italic;
+    }
+
+    .war-room__columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    @@media (max-width: 1023px) {
+        .war-room__columns {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .war-room__col-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.75rem;
+    }
+
+    .war-room__prompt-section { margin-bottom: 1.5rem; }
+
+    .war-room__label {
+        display: block;
+        color: #9ca3af;
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .war-room__textarea {
+        width: 100%;
+        background: #111;
+        color: #e5e7eb;
+        border: 1px solid #374151;
+        border-radius: 0.375rem;
+    }
+
+    .war-room__actions { display: flex; justify-content: center; margin-bottom: 1rem; }
+    .war-room__commence-btn { min-width: 200px; font-size: 1.1rem; }
+    .war-room__error { color: #ef4444; text-align: center; margin-top: 0.5rem; }
+</style>

@@ -84,11 +84,20 @@
 
 ### Functional Requirements
 
+<!--
+  Constitution reminders when writing FRs for PoLocalCompare:
+  - Note any SOLID or GoF patterns relevant to the requirement (they MUST be code-commented at implementation).
+  - Include auth-related FRs if the feature touches protected resources (ANON login path, Microsoft OAuth).
+  - Include /diag and /health updates if the feature adds new external connections.
+  - Flag any AI calls — specify whether real or mock and under what environment condition.
+  - Feature-flag FR for external integrations or experimental capabilities.
+-->
+
 - **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
 - **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
 - **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-005**: System MUST [behavior, e.g., "log all security events with UserId, SessionId, CorrelationId"]
 
 *Example of marking unclear requirements:*
 
