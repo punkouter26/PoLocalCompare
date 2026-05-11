@@ -1,12 +1,10 @@
 // GoF: Proxy pattern; SOLID: Interface Segregation
-using System.ClientModel;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Azure.Identity;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using OpenAI;
-using OpenAI.Chat;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
 
@@ -40,28 +38,55 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
             var deploymentName = model.ApiEndpointRef
                 ?? throw new InvalidOperationException($"Model {model.ModelId} has no ApiEndpointRef.");
 
-            // Use the OpenAI SDK targeting Azure OpenAI's OpenAI-compatible endpoint (/openai/v1/)
-            // This uses Authorization: Bearer <api-key> which the /openai/v1/ path accepts.
-            // Managed Identity fallback: exchange a token from DefaultAzureCredential.
-            ChatClient chatClient;
+            // Resolve bearer token — API key (dev) or AAD token via Managed Identity (prod).
+            // The /openai/v1/ endpoint accepts Authorization: Bearer <key> (OpenAI-compatible).
+            string bearerToken;
             if (string.IsNullOrEmpty(apiKey))
             {
                 var credential = new DefaultAzureCredential();
                 var ctx = new Azure.Core.TokenRequestContext(["https://cognitiveservices.azure.com/.default"]);
-                var token = await credential.GetTokenAsync(ctx, cancellationToken);
-                var options = new OpenAIClientOptions { Endpoint = new Uri($"{endpoint}/openai/v1/") };
-                chatClient = new OpenAIClient(new ApiKeyCredential(token.Token), options).GetChatClient(deploymentName);
+                var aadToken = await credential.GetTokenAsync(ctx, cancellationToken);
+                bearerToken = aadToken.Token;
             }
             else
             {
-                var options = new OpenAIClientOptions { Endpoint = new Uri($"{endpoint}/openai/v1/") };
-                chatClient = new OpenAIClient(new ApiKeyCredential(apiKey), options).GetChatClient(deploymentName);
+                bearerToken = apiKey;
             }
 
-            // Create an MAF AIAgent backed by the OpenAI-compatible Chat Completions API
-            AIAgent agent = chatClient.AsAIAgent(
-                instructions: "You are an expert web developer. Output only complete, standalone HTML pages with no explanations.",
-                name: $"HtmlGenerator-{deploymentName}");
+            // POST to the OpenAI-compatible /openai/v1/chat/completions endpoint.
+            var requestUrl = $"{endpoint}/openai/v1/chat/completions";
+            var requestPayload = JsonSerializer.Serialize(new
+            {
+                model = deploymentName,
+                messages = new object[]
+                {
+                    new { role = "system", content = "You are an expert web developer. Output only complete, standalone HTML pages with no explanations." },
+                    new { role = "user", content = promptFull }
+                },
+                stream = true,
+                max_tokens = 4096
+            });
+
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(300) };
+            httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", bearerToken);
+
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUrl)
+            {
+                Content = new StringContent(requestPayload, Encoding.UTF8, "application/json")
+            };
+
+            using var httpResponse = await httpClient.SendAsync(
+                httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                var errorBody = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Azure OpenAI HTTP {Status} for {Model}: {Body}",
+                    (int)httpResponse.StatusCode, deploymentName, errorBody);
+                throw new InvalidOperationException(
+                    $"HTTP {(int)httpResponse.StatusCode} ({httpResponse.ReasonPhrase}): {errorBody}");
+            }
 
             var warmUpStart = DateTimeOffset.UtcNow;
             var htmlBuilder = new StringBuilder();
@@ -75,10 +100,35 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
             var inStyleBlock = false;
             var recentChunks = new Queue<string>(50);
 
-            // Stream tokens via MAF RunStreamingAsync
-            await foreach (var update in agent.RunStreamingAsync(promptFull, cancellationToken: cancellationToken))
+            // Parse Server-Sent Events (SSE) stream
+            await using var responseStream = await httpResponse.Content.ReadAsStreamAsync(cancellationToken);
+            using var reader = new StreamReader(responseStream, Encoding.UTF8);
+
+            string? line;
+            while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
-                var content = update.Text;
+                if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
+
+                var data = line[6..]; // strip "data: " prefix
+                if (data == "[DONE]") break;
+
+                string content;
+                try
+                {
+                    using var doc = JsonDocument.Parse(data);
+                    var choices = doc.RootElement.GetProperty("choices");
+                    if (choices.GetArrayLength() == 0) continue;
+                    var delta = choices[0].GetProperty("delta");
+                    if (!delta.TryGetProperty("content", out var contentProp) ||
+                        contentProp.ValueKind == JsonValueKind.Null)
+                        continue;
+                    content = contentProp.GetString() ?? "";
+                }
+                catch (JsonException)
+                {
+                    continue; // skip malformed SSE chunks
+                }
+
                 if (string.IsNullOrEmpty(content)) continue;
 
                 if (firstToken)
