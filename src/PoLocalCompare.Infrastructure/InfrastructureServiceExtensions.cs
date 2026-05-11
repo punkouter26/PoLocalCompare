@@ -38,6 +38,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IDuelResultRepository, DuelResultRepository>();
 
         // Remote inference proxies — keyed by ModelType name so DuelExecutionService can resolve the right one
+        // Note: HttpClient instances are managed via IHttpClientFactory in .NET 10 for proper lifecycle
         services.AddKeyedScoped<IRemoteInferenceProxy, FoundryInferenceProxy>("Remote");
         services.AddKeyedScoped<IRemoteInferenceProxy, OllamaInferenceProxy>("LocalService");
 

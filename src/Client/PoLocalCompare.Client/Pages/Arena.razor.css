@@ -1,0 +1,99 @@
+.arena {
+    padding: 1rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.arena__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f9fafb;
+    margin-bottom: 0.5rem;
+}
+
+.arena__prompt-label {
+    color: #9ca3af;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.arena__loading,
+.arena__error {
+    color: #6b7280;
+    font-style: italic;
+}
+
+.arena__viewports {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 1023px) {
+    .arena__viewports {
+        grid-template-columns: 1fr;
+        scroll-snap-type: y mandatory;
+        overflow-y: auto;
+        max-height: 80vh;
+    }
+
+    .arena__viewport-panel {
+        scroll-snap-align: start;
+    }
+}
+
+.arena__viewport-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 600px;
+}
+
+.arena__hud {
+    flex-shrink: 0;
+}
+
+.arena__elo-badge {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    padding: 0.35rem;
+    border-radius: 4px;
+}
+
+.arena__elo-badge--positive {
+    background: #052e16;
+    color: #22c55e;
+    border: 1px solid #22c55e44;
+}
+
+.arena__elo-badge--negative {
+    background: #450a0a;
+    color: #ef4444;
+    border: 1px solid #ef444444;
+}
+
+.arena__actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem 0;
+    flex-wrap: wrap;
+}
+
+.arena__action-btn {
+    min-width: 180px;
+}
+
+.arena__verdict-recorded {
+    text-align: center;
+    color: #22c55e;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.5rem;
+    background: #052e16;
+    border: 1px solid #22c55e44;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}

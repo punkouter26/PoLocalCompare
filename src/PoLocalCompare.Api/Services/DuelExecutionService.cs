@@ -1,16 +1,17 @@
 // GoF: Strategy — inference execution varies by model type
+using System.Text.RegularExpressions;
+using System.Threading.Channels;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PoLocalCompare.Api.Hubs;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Enums;
 using PoLocalCompare.Domain.Services;
 using PoLocalCompare.Shared.DTOs;
-using System.Text.RegularExpressions;
-using SharedDuelStatus = PoLocalCompare.Shared.Enums.DuelStatus;
-using SharedDuelVerdict = PoLocalCompare.Shared.Enums.DuelVerdict;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Api.Services;
 
@@ -20,37 +21,43 @@ public sealed class DuelExecutionService
     private readonly IHubContext<DuelHub> _hubContext;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DuelExecutionService> _logger;
+    private readonly IBackgroundTaskQueue _taskQueue;
 
     public DuelExecutionService(
         IServiceScopeFactory scopeFactory,
         IHubContext<DuelHub> hubContext,
         IConfiguration configuration,
-        ILogger<DuelExecutionService> logger)
+        ILogger<DuelExecutionService> logger,
+        IBackgroundTaskQueue taskQueue)
     {
         _scopeFactory = scopeFactory;
         _hubContext = hubContext;
         _configuration = configuration;
         _logger = logger;
+        _taskQueue = taskQueue;
     }
 
     public Task EnqueueAsync(string duelId)
     {
-        // Fire-and-forget on a thread pool thread; errors are logged
-        _ = Task.Run(() => ExecuteAsync(duelId));
+        // Queue the execution task for reliable background processing
+        _taskQueue.QueueBackgroundWork(async ct =>
+        {
+            using var scope = _scopeFactory.CreateScope();
+            await ExecuteAsync(scope.ServiceProvider, duelId, ct);
+        });
         return Task.CompletedTask;
     }
 
-    private async Task ExecuteAsync(string duelId)
+    private async Task ExecuteAsync(IServiceProvider services, string duelId, CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var duelRepo = scope.ServiceProvider.GetRequiredService<IDuelRepository>();
-        var modelRepo = scope.ServiceProvider.GetRequiredService<IModelRepository>();
-        var duelResultRepo = scope.ServiceProvider.GetRequiredService<IDuelResultRepository>();
+        var duelRepo = services.GetRequiredService<IDuelRepository>();
+        var modelRepo = services.GetRequiredService<IModelRepository>();
+        var duelResultRepo = services.GetRequiredService<IDuelResultRepository>();
 
         IRemoteInferenceProxy ResolveProxy(Model model) => model.ModelType switch
         {
-            ModelType.LocalService => scope.ServiceProvider.GetRequiredKeyedService<IRemoteInferenceProxy>("LocalService"),
-            _ => scope.ServiceProvider.GetRequiredKeyedService<IRemoteInferenceProxy>("Remote")
+            ModelType.LocalService => services.GetRequiredKeyedService<IRemoteInferenceProxy>("LocalService"),
+            _ => services.GetRequiredKeyedService<IRemoteInferenceProxy>("Remote")
         };
 
         Duel? duel = null;
@@ -95,7 +102,7 @@ public sealed class DuelExecutionService
                     RightModelId = duel.RightModelId,
                     StartedAt = duel.StartedAt,
                     CompletedAt = duel.CompletedAt,
-                    Verdict = SharedDuelVerdict.Pending,
+                    Verdict = DuelVerdict.Pending,
                     TimeLimitSeconds = 900,
                 });
         }
@@ -114,11 +121,11 @@ public sealed class DuelExecutionService
         IDuelResultRepository duelResultRepo,
         CancellationToken cancellationToken)
     {
-        await SendStatusAsync(duelId, model.ModelId, side, SharedDuelStatus.Initializing, 0, 0);
+        await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Initializing, 0, 0);
 
         DuelResult result;
 
-        if (model.ModelType == Domain.Enums.ModelType.Local)
+        if (model.ModelType == ModelType.Local)
         {
             // Local model: client-side inference via SignalR; server waits for client to report results
             result = await WaitForLocalModelResultAsync(duelId, model, side, cancellationToken);
@@ -126,7 +133,7 @@ public sealed class DuelExecutionService
         else
         {
             // Remote model: server-side inference via Foundry proxy
-            await SendStatusAsync(duelId, model.ModelId, side, SharedDuelStatus.Generating, 0, 0);
+            await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Generating, 0, 0);
 
             long? warmUpMs = null;
             double peakVelocity = 0;
@@ -152,7 +159,7 @@ public sealed class DuelExecutionService
                     var isStalled = (DateTimeOffset.UtcNow - lastTokenAt).TotalSeconds > 2;
 
                     await SendStatusAsync(duelId, model.ModelId, side,
-                        SharedDuelStatus.Generating, elapsedMs, tokenCount,
+                        DuelStatus.Generating, elapsedMs, tokenCount,
                         warmUpMs: warmUpMs,
                         peakVelocity: peakVelocity,
                         isStalled: isStalled,
@@ -164,12 +171,12 @@ public sealed class DuelExecutionService
         if (result.IsFailure)
         {
             await SendStatusAsync(duelId, model.ModelId, side,
-                SharedDuelStatus.Failed, result.TotalDurationMs, result.TokenCount);
+                DuelStatus.Failed, result.TotalDurationMs, result.TokenCount);
         }
         else
         {
             await SendStatusAsync(duelId, model.ModelId, side,
-                SharedDuelStatus.Done, result.TotalDurationMs, result.TokenCount);
+                DuelStatus.Done, result.TotalDurationMs, result.TokenCount);
         }
 
         // T065 — character density + GreenStats enrichment
@@ -202,7 +209,7 @@ public sealed class DuelExecutionService
             await Task.Delay(500, cancellationToken);
 
             var elapsed = (long)(DateTimeOffset.UtcNow - started).TotalMilliseconds;
-            await SendStatusAsync(duelId, model.ModelId, side, SharedDuelStatus.Generating, elapsed, 0);
+            await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Generating, elapsed, 0);
 
             // Check if result was posted by client
             using var scope = _scopeFactory.CreateScope();
@@ -223,7 +230,7 @@ public sealed class DuelExecutionService
         string duelId,
         string modelId,
         string side,
-        SharedDuelStatus status,
+        DuelStatus status,
         long elapsedMs,
         int tokenCount,
         string? detail = null,
@@ -285,3 +292,76 @@ public sealed class DuelExecutionService
     }
 }
 
+/// <summary>
+/// Background task queue for reliable duel execution (replaces fire-and-forget Task.Run).
+/// </summary>
+public interface IBackgroundTaskQueue
+{
+    void QueueBackgroundWork(Func<CancellationToken, Task> workItem);
+    Task<Func<CancellationToken, Task>> DequeueAsync(CancellationToken cancellationToken);
+}
+
+public sealed class BackgroundTaskQueue : IBackgroundTaskQueue
+{
+    private readonly Channel<Func<CancellationToken, Task>> _queue;
+
+    public BackgroundTaskQueue(int capacity = 100)
+    {
+        _queue = Channel.CreateBounded<Func<CancellationToken, Task>>(new BoundedChannelOptions(capacity)
+        {
+            FullMode = BoundedChannelFullMode.Wait
+        });
+    }
+
+    public void QueueBackgroundWork(Func<CancellationToken, Task> workItem)
+    {
+        if (!_queue.Writer.TryWrite(workItem))
+        {
+            throw new InvalidOperationException("Background task queue is full.");
+        }
+    }
+
+    public async Task<Func<CancellationToken, Task>> DequeueAsync(CancellationToken cancellationToken)
+    {
+        return await _queue.Reader.ReadAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// Hosted service that processes queued background tasks.
+/// </summary>
+public sealed class BackgroundTaskService : BackgroundService
+{
+    private readonly IBackgroundTaskQueue _taskQueue;
+    private readonly ILogger<BackgroundTaskService> _logger;
+
+    public BackgroundTaskService(IBackgroundTaskQueue taskQueue, ILogger<BackgroundTaskService> logger)
+    {
+        _taskQueue = taskQueue;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("Background task service started.");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var workItem = await _taskQueue.DequeueAsync(stoppingToken);
+                await workItem(stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred executing background task.");
+            }
+        }
+
+        _logger.LogInformation("Background task service stopped.");
+    }
+}

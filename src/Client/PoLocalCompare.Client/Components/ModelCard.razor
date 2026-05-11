@@ -50,15 +50,22 @@
     .model-card {
         background: #111111;
         border: 1px solid #333;
-        transition: border-color 0.15s;
+        transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
         margin-bottom: 0.5rem;
+    }
+
+    .model-card:hover:not(.model-card--selected) {
+        border-color: #4b5563;
+        box-shadow: 0 0 0 1px #4b556340;
+        background: #1a1a1a;
     }
 
     .model-card--selected {
         border-color: #22c55e;
         border-left: 4px solid #22c55e;
-        box-shadow: 0 0 0 2px #22c55e44, inset 0 0 12px #22c55e08;
-        background: #0d1f14;
+        box-shadow: 0 0 0 3px #22c55e66, 0 0 18px #22c55e44;
+        background: #0d2b17;
+        outline: none;
     }
 
     .model-card__checkmark {

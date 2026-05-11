@@ -61,6 +61,7 @@ Endpoints/
  LeaderboardEndpoints.cs
  ModelsEndpoints.cs
 Hubs/DuelHub.cs
+Infrastructure/PrefixKeyVaultSecretManager.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  PoLocalCompare.Api.AssemblyInfo.cs
@@ -388,6 +389,7 @@ Services/DuelExecutionService.cs
  WindowsBase.dll
 <NUGET>/
  azure.ai.inference/1.0.0-beta.5/lib/net8.0/Azure.AI.Inference.dll
+ azure.ai.openai/2.9.0-beta.1/lib/net10.0/Azure.AI.OpenAI.dll
  azure.core/1.54.0/lib/net10.0/Azure.Core.dll
  azure.data.tables/12.9.1/lib/netstandard2.0/Azure.Data.Tables.dll
  azure.extensions.aspnetcore.configuration.secrets/1.5.1/lib/net10.0/Azure.Extensions.AspNetCore.Configuration.Secrets.dll
@@ -420,6 +422,7 @@ Services/DuelExecutionService.cs
  microsoft.openapi/2.0.0/lib/net8.0/Microsoft.OpenApi.dll
  microsoft.win32.systemevents/6.0.0/lib/net6.0/Microsoft.Win32.SystemEvents.dll
  nulid/1.7.3/lib/net6.0/NUlid.dll
+ openai/2.9.1/lib/net10.0/OpenAI.dll
  opentelemetry.api.providerbuilderextensions/1.15.3/lib/net10.0/OpenTelemetry.Api.ProviderBuilderExtensions.dll
  opentelemetry.api/1.15.3/lib/net10.0/OpenTelemetry.Api.dll
  opentelemetry.exporter.opentelemetryprotocol/1.15.3/lib/net10.0/OpenTelemetry.Exporter.OpenTelemetryProtocol.dll

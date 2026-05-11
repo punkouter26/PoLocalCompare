@@ -1,5 +1,5 @@
 // GoF: Entity
-using PoLocalCompare.Domain.Enums;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Domain.Entities;
 

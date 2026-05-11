@@ -553,6 +553,14 @@
     text-overflow: ellipsis;
 }
 
+.lab__download-note {
+    display: block;
+    margin-top: 0.3rem;
+    color: #8a8aa5;
+    font-size: 0.62rem;
+    word-break: break-all;
+}
+
 /* ── Comparison nudge ───────────────────────────────────────── */
 .lab__compare-nudge {
     text-align: center;

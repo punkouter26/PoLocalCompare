@@ -62,6 +62,7 @@ obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  PoLocalCompare.Infrastructure.AssemblyInfo.cs
  PoLocalCompare.Infrastructure.GlobalUsings.g.cs
+Ollama/OllamaInferenceProxy.cs
 Persistence/
  AzuriteSetup.cs
  TableStorage/
@@ -246,6 +247,7 @@ Reporting/HtmlLabReportRenderer.cs
  WindowsBase.dll
 <NUGET>/
  azure.ai.inference/1.0.0-beta.5/lib/net8.0/Azure.AI.Inference.dll
+ azure.ai.openai/2.9.0-beta.1/lib/net10.0/Azure.AI.OpenAI.dll
  azure.core/1.53.0/lib/net10.0/Azure.Core.dll
  azure.data.tables/12.9.1/lib/netstandard2.0/Azure.Data.Tables.dll
  azure.identity/1.21.0/lib/net10.0/Azure.Identity.dll
@@ -265,6 +267,7 @@ Reporting/HtmlLabReportRenderer.cs
  microsoft.identity.client/4.83.1/lib/net8.0/Microsoft.Identity.Client.dll
  microsoft.identitymodel.abstractions/8.14.0/lib/net9.0/Microsoft.IdentityModel.Abstractions.dll
  nulid/1.7.3/lib/net6.0/NUlid.dll
+ openai/2.9.1/lib/net10.0/OpenAI.dll
  system.clientmodel/1.10.0/lib/net10.0/System.ClientModel.dll
  system.io.hashing/8.0.0/lib/net8.0/System.IO.Hashing.dll
  system.memory.data/10.0.3/lib/net10.0/System.Memory.Data.dll

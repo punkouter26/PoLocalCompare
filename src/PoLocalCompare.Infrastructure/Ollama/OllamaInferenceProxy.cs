@@ -16,7 +16,9 @@ namespace PoLocalCompare.Infrastructure.Ollama;
 /// </summary>
 public sealed class OllamaInferenceProxy : IRemoteInferenceProxy
 {
-    private static readonly HttpClient _http = new();
+    // Timeout is controlled by the CancellationToken (watchdog) passed to RunInferenceAsync;
+    // HttpClient.Timeout must not fire before the watchdog does.
+    private static readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
     private readonly IConfiguration _configuration;
     private readonly ILogger<OllamaInferenceProxy> _logger;
 

@@ -2,18 +2,14 @@ using Moq;
 using PoLocalCompare.Application.Duels.RecordVerdict;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Enums;
 using PoLocalCompare.Shared.Enums;
-using DomainDuelVerdict = PoLocalCompare.Domain.Enums.DuelVerdict;
-using SharedDuelVerdict = PoLocalCompare.Shared.Enums.DuelVerdict;
-using DomainModelType = PoLocalCompare.Domain.Enums.ModelType;
 
 namespace PoLocalCompare.Unit.Tests.Application;
 
 public class RecordVerdictTests
 {
     private static Model MakeLocalModel(string id) =>
-        new(id, $"Model {id}", DomainModelType.Local, tdpWatts: 115.0, webLlmModelId: "llm-1");
+        new(id, $"Model {id}", ModelType.Local, tdpWatts: 115.0, webLlmModelId: "llm-1");
 
     private static Duel MakePendingDuel(string duelId, string leftId, string rightId) =>
         new(duelId, "Test prompt", "Test prompt (full)", leftId, rightId);
@@ -37,7 +33,7 @@ public class RecordVerdictTests
         var eloRepo = new Mock<IEloHistoryRepository>();
 
         var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        var cmd = new RecordVerdictCommand("duel-1", SharedDuelVerdict.Left);
+        var cmd = new RecordVerdictCommand("duel-1", DuelVerdict.Left);
 
         var result = await handler.HandleAsync(cmd);
 
@@ -67,7 +63,7 @@ public class RecordVerdictTests
         var eloRepo = new Mock<IEloHistoryRepository>();
 
         var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        var result = await handler.HandleAsync(new RecordVerdictCommand("duel-2", SharedDuelVerdict.Right));
+        var result = await handler.HandleAsync(new RecordVerdictCommand("duel-2", DuelVerdict.Right));
 
         Assert.NotNull(result);
         Assert.Equal("right-2", result.WinnerModelId);
@@ -84,7 +80,7 @@ public class RecordVerdictTests
 
         var duel = MakePendingDuel("duel-3", leftModel.ModelId, rightModel.ModelId);
         // Simulate already-recorded verdict
-        duel.Verdict = DomainDuelVerdict.Left;
+        duel.Verdict = DuelVerdict.Left;
 
         var duelRepo = new Mock<IDuelRepository>();
         duelRepo.Setup(r => r.GetByIdAsync("duel-3")).ReturnsAsync(duel);
@@ -95,7 +91,7 @@ public class RecordVerdictTests
         var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.HandleAsync(new RecordVerdictCommand("duel-3", SharedDuelVerdict.Left)));
+            () => handler.HandleAsync(new RecordVerdictCommand("duel-3", DuelVerdict.Left)));
     }
 
     // ── Pending verdict in command → ArgumentException (caller maps 422) ─
@@ -110,7 +106,7 @@ public class RecordVerdictTests
         var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => handler.HandleAsync(new RecordVerdictCommand("duel-4", SharedDuelVerdict.Pending)));
+            () => handler.HandleAsync(new RecordVerdictCommand("duel-4", DuelVerdict.Pending)));
     }
 
     // ── Duel not found → returns null ────────────────────────────────────
@@ -125,7 +121,7 @@ public class RecordVerdictTests
         var eloRepo = new Mock<IEloHistoryRepository>();
 
         var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object);
-        var result = await handler.HandleAsync(new RecordVerdictCommand("missing", SharedDuelVerdict.Left));
+        var result = await handler.HandleAsync(new RecordVerdictCommand("missing", DuelVerdict.Left));
 
         Assert.Null(result);
     }
@@ -149,7 +145,7 @@ public class RecordVerdictTests
         var eloRepo = new Mock<IEloHistoryRepository>();
 
         var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        await handler.HandleAsync(new RecordVerdictCommand("duel-5", SharedDuelVerdict.Left));
+        await handler.HandleAsync(new RecordVerdictCommand("duel-5", DuelVerdict.Left));
 
         // Verify SaveAsync called twice — once for winner, once for loser
         eloRepo.Verify(r => r.SaveAsync(It.IsAny<EloRecord>()), Times.Exactly(2));
@@ -174,7 +170,7 @@ public class RecordVerdictTests
         var eloRepo = new Mock<IEloHistoryRepository>();
 
         var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        await handler.HandleAsync(new RecordVerdictCommand("duel-6", SharedDuelVerdict.Left));
+        await handler.HandleAsync(new RecordVerdictCommand("duel-6", DuelVerdict.Left));
 
         // Winner (left): DuelCount++ and WinCount++
         Assert.Equal(1, leftModel.DuelCount);

@@ -14,17 +14,31 @@ public sealed class CommenceDuelHandler
 
     private readonly IModelRepository _modelRepository;
     private readonly IDuelRepository _duelRepository;
+    private readonly int _verdictDeadlineHours;
 
-    public CommenceDuelHandler(IModelRepository modelRepository, IDuelRepository duelRepository)
+    public CommenceDuelHandler(
+        IModelRepository modelRepository,
+        IDuelRepository duelRepository,
+        int verdictDeadlineHours = CommenceDuelCommand.DefaultVerdictDeadlineHours)
     {
         _modelRepository = modelRepository;
         _duelRepository = duelRepository;
+        _verdictDeadlineHours = verdictDeadlineHours;
     }
 
     public async Task<DuelDto> HandleAsync(CommenceDuelCommand command)
     {
         if (command.LeftModelId == command.RightModelId)
             throw new ArgumentException("LeftModelId and RightModelId must differ.");
+
+        if (string.IsNullOrWhiteSpace(command.PromptText))
+            throw new ArgumentException("PromptText cannot be empty.", nameof(command.PromptText));
+
+        if (command.PromptText.Length < CommenceDuelCommand.MinPromptLength)
+            throw new ArgumentException($"PromptText must be at least {CommenceDuelCommand.MinPromptLength} characters.", nameof(command.PromptText));
+
+        if (command.PromptText.Length > CommenceDuelCommand.MaxPromptLength)
+            throw new ArgumentException($"PromptText cannot exceed {CommenceDuelCommand.MaxPromptLength} characters.", nameof(command.PromptText));
 
         var leftModel = await _modelRepository.GetByIdAsync(command.LeftModelId)
             ?? throw new KeyNotFoundException($"Model '{command.LeftModelId}' not found.");
@@ -39,7 +53,8 @@ public sealed class CommenceDuelHandler
             command.PromptText,
             promptFull,
             command.LeftModelId,
-            command.RightModelId);
+            command.RightModelId,
+            _verdictDeadlineHours);
 
         await _duelRepository.SaveAsync(duel);
 
@@ -53,6 +68,7 @@ public sealed class CommenceDuelHandler
             StartedAt = duel.StartedAt,
             Verdict = DuelVerdict.Pending,
             TimeLimitSeconds = 300,
+            IsPartial = false,
         };
     }
 }

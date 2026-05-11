@@ -10,17 +10,21 @@
 @implements IAsyncDisposable
 
 <PageTitle>Duel Processing — LLM Duel Arena</PageTitle>
-<MockDataBanner />
 
 <div class="processing-page">
     <h1 class="processing-page__title">Processing Duel…</h1>
     <p class="processing-page__duel-id">Duel ID: @DuelId</p>
+    <div class="processing-page__controls">
+        <button class="processing-page__toggle" @onclick="ToggleAdvanced">
+            @(_showAdvanced ? "Hide Advanced Metrics" : "Show Advanced Metrics")
+        </button>
+    </div>
 
     <div class="processing-page__panels">
         <ProcessingPanel
             ModelName="@_leftModelId"
             DisplayName="@_leftDisplayName"
-            IsLocal="@_leftIsLocal"
+            SourceType="@_leftModelType"
             TdpWatts="@_leftTdpWatts"
             Side="Left"
             Status="@_leftStatus"
@@ -37,11 +41,13 @@
             PrefillSpeedTps="@_leftPrefillSpeedTps"
             CacheHit="@_leftCacheHit"
             Detail="@(_leftDetail ?? _leftDiagDetail)"
+            ShowAdvanced="@_showAdvanced"
+            GpuAccelerated="@_leftGpuAccelerated"
         />
         <ProcessingPanel
             ModelName="@_rightModelId"
             DisplayName="@_rightDisplayName"
-            IsLocal="@_rightIsLocal"
+            SourceType="@_rightModelType"
             TdpWatts="@_rightTdpWatts"
             Side="Right"
             Status="@_rightStatus"
@@ -58,6 +64,8 @@
             PrefillSpeedTps="@_rightPrefillSpeedTps"
             CacheHit="@_rightCacheHit"
             Detail="@(_rightDetail ?? _rightDiagDetail)"
+            ShowAdvanced="@_showAdvanced"
+            GpuAccelerated="@_rightGpuAccelerated"
         />
     </div>
 
@@ -100,6 +108,8 @@
     private string? _rightDisplayName;
     private bool _leftIsLocal;
     private bool _rightIsLocal;
+    private ModelType _leftModelType = ModelType.Remote;
+    private ModelType _rightModelType = ModelType.Remote;
     private double? _leftTdpWatts;
     private double? _rightTdpWatts;
     private Dictionary<string, ModelDto> _models = new();
@@ -118,6 +128,8 @@
     private long? _rightWarmUpMs;
     private bool _leftIsStalled;
     private bool _rightIsStalled;
+    private bool? _leftGpuAccelerated;
+    private bool? _rightGpuAccelerated;
     private DateTimeOffset _leftLastTokenAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _rightLastTokenAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _leftLastUpdateAt = DateTimeOffset.UtcNow;
@@ -145,11 +157,13 @@
     private string? _rightHtmlPreview;
     private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
     private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
+    private bool _showAdvanced;
 
     // Track in-flight local inference tasks to avoid double-starting
     private readonly HashSet<string> _runningLocalModels = [];
     private CancellationTokenSource? _pollCts;
     private PeriodicTimer? _stallTimer;
+    private PeriodicTimer? _gpuPollTimer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -185,6 +199,41 @@
         // Independent stall-detection ticker — fires every 2 s regardless of worker silence
         _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
         _ = RunStallTimerAsync(_stallTimer);
+
+        // GPU placement poll — only useful when at least one side is an Ollama model
+        if (_leftIsLocal || _rightIsLocal)
+        {
+            _gpuPollTimer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+            _ = RunGpuPollAsync(_gpuPollTimer);
+        }
+    }
+
+    private async Task RunGpuPollAsync(PeriodicTimer timer)
+    {
+        while (await timer.WaitForNextTickAsync())
+        {
+            try
+            {
+                var statuses = await ApiClient.GetOllamaGpuStatusAsync();
+                if (statuses.Count == 0) continue;
+
+                // Match by apiEndpointRef (e.g. "gemma4", "qwen3.5") — Ollama names may have ":latest" suffix
+                var leftRef = _models.TryGetValue(_leftModelId, out var lm) ? lm.ApiEndpointRef : null;
+                var rightRef = _models.TryGetValue(_rightModelId, out var rm) ? rm.ApiEndpointRef : null;
+
+                foreach (var s in statuses)
+                {
+                    var shortName = s.ModelName.Split(':')[0]; // strip ":latest"
+                    if (leftRef is not null && shortName.Equals(leftRef, StringComparison.OrdinalIgnoreCase))
+                        _leftGpuAccelerated = s.IsGpu;
+                    if (rightRef is not null && shortName.Equals(rightRef, StringComparison.OrdinalIgnoreCase))
+                        _rightGpuAccelerated = s.IsGpu;
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+            catch { /* non-fatal — badge simply won't appear */ }
+        }
     }
 
     private async Task RunStallTimerAsync(PeriodicTimer timer)
@@ -224,6 +273,7 @@
                     _leftModelId = result.ModelId;
                     _leftDisplayName = meta.DisplayName;
                     _leftIsLocal = meta.ModelType == ModelType.Local;
+                    _leftModelType = meta.ModelType;
                     _leftTdpWatts = meta.TdpWatts;
                     _leftStatus = DuelStatus.Done;
                     _leftTokenCount = result.TokenCount;
@@ -234,6 +284,7 @@
                     _rightModelId = result.ModelId;
                     _rightDisplayName = meta.DisplayName;
                     _rightIsLocal = meta.ModelType == ModelType.Local;
+                    _rightModelType = meta.ModelType;
                     _rightTdpWatts = meta.TdpWatts;
                     _rightStatus = DuelStatus.Done;
                     _rightTokenCount = result.TokenCount;
@@ -269,6 +320,7 @@
             {
                 _leftDisplayName = lm.DisplayName;
                 _leftIsLocal = lm.ModelType == ModelType.Local;
+                _leftModelType = lm.ModelType;
                 _leftTdpWatts = lm.TdpWatts;
             }
             _leftStatus = update.Status;
@@ -295,6 +347,7 @@
             {
                 _rightDisplayName = rm.DisplayName;
                 _rightIsLocal = rm.ModelType == ModelType.Local;
+                _rightModelType = rm.ModelType;
                 _rightTdpWatts = rm.TdpWatts;
             }
             _rightStatus = update.Status;
@@ -410,6 +463,8 @@
         _ = Task.Run(() => RunLocalInferenceAsync(payload));
     }
 
+    private void ToggleAdvanced() => _showAdvanced = !_showAdvanced;
+
     private async Task RunLocalInferenceAsync(StartLocalInferencePayload payload)
     {
         string htmlOutput = string.Empty;
@@ -475,6 +530,7 @@
         _pollCts?.Cancel();
         _pollCts?.Dispose();
         _stallTimer?.Dispose();
+        _gpuPollTimer?.Dispose();
         HubClient.OnModelStatusUpdate -= HandleStatusUpdate;
         HubClient.OnDuelComplete -= HandleDuelComplete;
         HubClient.OnStartLocalInference -= HandleStartLocalInference;
@@ -501,7 +557,28 @@
     .processing-page__duel-id {
         color: #6b7280;
         font-size: 0.8rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .processing-page__controls {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 0.75rem;
+    }
+
+    .processing-page__toggle {
+        border: 1px solid #374151;
+        border-radius: 6px;
+        background: #111;
+        color: #d1d5db;
+        font-size: 0.8rem;
+        padding: 0.35rem 0.6rem;
+        cursor: pointer;
+    }
+
+    .processing-page__toggle:hover {
+        color: #fff;
+        border-color: #4b5563;
     }
 
     .processing-page__panels {

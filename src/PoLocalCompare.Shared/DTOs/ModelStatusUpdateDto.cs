@@ -7,7 +7,8 @@ public sealed class ModelStatusUpdateDto
 {
     public string DuelId { get; init; } = string.Empty;
     public string ModelId { get; init; } = string.Empty;
-    public string Side { get; init; } = string.Empty; // "Left" | "Right"
+    /// <summary>"Left" or "Right" — explicit side assignment, not heuristic.</summary>
+    public string Side { get; init; } = string.Empty;
     public DuelStatus Status { get; init; }
     public long ElapsedMs { get; init; }
     public int TokenCount { get; init; }
@@ -23,9 +24,9 @@ public sealed class ModelStatusUpdateDto
     public int? HtmlTagCount { get; init; }
     /// <summary>Current nesting depth of open/unclosed tags.</summary>
     public int? OpenTagDepth { get; init; }
-    /// <summary>Number of CSS rule blocks ({) seen inside &lt;style&gt; sections.</summary>
+    /// <summary>Number of CSS rule blocks ({) seen inside <style> sections.</summary>
     public int? StyleRuleCount { get; init; }
-    /// <summary>0–1 repetition score; &gt;0.3 = possible looping.</summary>
+    /// <summary>0–1 repetition score; >0.3 = possible looping.</summary>
     public double? RepetitionScore { get; init; }
     // --- Local model only ---
     /// <summary>WebLLM prefill throughput in tok/s (prompt processing speed).</summary>

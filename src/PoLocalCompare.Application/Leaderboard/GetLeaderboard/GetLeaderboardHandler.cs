@@ -31,7 +31,7 @@ public sealed class GetLeaderboardHandler
                 CurrentElo = Math.Round(model.CurrentElo, 1),
                 DuelCount = model.DuelCount,
                 WinCount = model.WinCount,
-                GreenScoreAvg = model.GreenScoreAvg > 0 ? Math.Round(model.GreenScoreAvg, 1) : null,
+                GreenScoreAvg = model.GreenScoreAvg > 0 ? model.GreenScoreAvg : null,
                 EloSparkline = sparkline,
             });
         }

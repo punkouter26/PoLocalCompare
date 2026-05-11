@@ -4,19 +4,11 @@ using Azure.Identity;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using PoLocalCompare.Api;
 using PoLocalCompare.Api.Endpoints;
 using PoLocalCompare.Api.Hubs;
 using PoLocalCompare.Api.Infrastructure;
 using PoLocalCompare.Api.Services;
-using PoLocalCompare.Application.Duels.CommenceDuel;
-using PoLocalCompare.Application.Duels.GetDuel;
-using PoLocalCompare.Application.Duels.ListDuels;
-using PoLocalCompare.Application.Duels.RecordVerdict;
-using PoLocalCompare.Application.Archive.ExportLabReport;
-using PoLocalCompare.Application.Leaderboard.GetKillList;
-using PoLocalCompare.Application.Leaderboard.GetLeaderboard;
-using PoLocalCompare.Application.Models.ListModels;
-using PoLocalCompare.Application.Models.RegisterModel;
 using PoLocalCompare.Infrastructure;
 using PoLocalCompare.Infrastructure.Persistence;
 using Scalar.AspNetCore;
@@ -84,6 +76,11 @@ try
             new PrefixKeyVaultSecretManager("PoLocalCompare"));
     }
 
+    if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(builder.Configuration["AzureAiFoundry:ApiKey"]))
+    {
+        Log.Warning("AzureAiFoundry:ApiKey is empty. Configure AzureAiFoundry__ApiKey via user-secrets or environment variables for remote model duels.");
+    }
+
     // ─── CORS (T040) ─────────────────────────────────────────────────────────
     builder.Services.AddCors(options =>
     {
@@ -100,9 +97,6 @@ try
     // ─── OpenAPI (T020) ───────────────────────────────────────────────────────
     builder.Services.AddOpenApi();
 
-    // ─── Health checks (T038) ────────────────────────────────────────────────
-    builder.Services.AddHealthChecks();
-
     // ─── Razor pages (for /diag) ─────────────────────────────────────────────
     builder.Services.AddRazorPages();
 
@@ -115,28 +109,15 @@ try
     // ─── Infrastructure (Phase 2 — T032–T037) ────────────────────────────────
     builder.Services.AddInfrastructure(builder.Configuration);
 
-    // ─── Application use cases (Phase 3 + 4) ────────────────────────────────
-    builder.Services.AddScoped<RegisterModelHandler>();
-    builder.Services.AddScoped<ListModelsHandler>();
-    builder.Services.AddScoped<CommenceDuelHandler>();
-    builder.Services.AddSingleton<DuelExecutionService>();
-    // Phase 4 (US2)
-    builder.Services.AddScoped<GetDuelHandler>();
-    builder.Services.AddScoped<GetLeaderboardHandler>();
-    builder.Services.AddScoped<GetKillListHandler>();
-    builder.Services.AddScoped<RecordVerdictHandler>(sp =>
-    {
-        var cfg = sp.GetRequiredService<IConfiguration>();
-        var kFactor = cfg.GetValue<double>("Elo:KFactor", 32.0);
-        return new RecordVerdictHandler(
-            sp.GetRequiredService<PoLocalCompare.Application.Interfaces.IDuelRepository>(),
-            sp.GetRequiredService<PoLocalCompare.Application.Interfaces.IModelRepository>(),
-            sp.GetRequiredService<PoLocalCompare.Application.Interfaces.IEloHistoryRepository>(),
-            kFactor);
-    });
-    // Phase 6 (US4)
-    builder.Services.AddScoped<ListDuelsHandler>();
-    builder.Services.AddScoped<ExportLabReportHandler>();
+    // ─── Application use cases (Phase 3 + 4 + 6) ────────────────────────────
+    builder.Services.AddApplicationServices();
+
+    // ─── Background task queue for reliable duel execution ──────────────────
+    builder.Services.AddSingleton<BackgroundTaskQueue>();
+    builder.Services.AddSingleton<IBackgroundTaskQueue>(sp => sp.GetRequiredService<BackgroundTaskQueue>());
+    builder.Services.AddHostedService(sp => new BackgroundTaskService(
+        sp.GetRequiredService<IBackgroundTaskQueue>(),
+        sp.GetRequiredService<ILogger<BackgroundTaskService>>()));
 
     // ─── Build ───────────────────────────────────────────────────────────────
     var app = builder.Build();
@@ -219,7 +200,6 @@ try
     app.MapRazorPages();
 
     // ─── Health endpoint (T038) ──────────────────────────────────────────────
-    app.MapHealthChecks("/health");
     app.MapHealthEndpoints();
 
     // ─── SignalR hub ─────────────────────────────────────────────────────────
@@ -229,6 +209,7 @@ try
     app.MapModelsEndpoints();
     app.MapDuelsEndpoints();
     app.MapLeaderboardEndpoints();
+    app.MapOllamaEndpoints();
 
     // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
     if (app.Environment.IsDevelopment())

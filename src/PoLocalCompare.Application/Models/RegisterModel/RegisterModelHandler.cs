@@ -3,8 +3,7 @@ using NUlid;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
 using PoLocalCompare.Shared.DTOs;
-using SharedModelType = PoLocalCompare.Shared.Enums.ModelType;
-using DomainModelType = PoLocalCompare.Domain.Enums.ModelType;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Application.Models.RegisterModel;
 
@@ -26,17 +25,10 @@ public sealed class RegisterModelHandler
 
         var modelId = Ulid.NewUlid().ToString();
 
-        var domainModelType = command.ModelType switch
-        {
-            SharedModelType.Local => DomainModelType.Local,
-            SharedModelType.LocalService => DomainModelType.LocalService,
-            _ => DomainModelType.Remote
-        };
-
         var model = new Model(
             modelId,
             command.DisplayName,
-            domainModelType,
+            command.ModelType,
             command.TdpWatts,
             command.WebLlmModelId,
             command.ApiEndpointRef,
@@ -52,12 +44,7 @@ public sealed class RegisterModelHandler
     {
         ModelId = model.ModelId,
         DisplayName = model.DisplayName,
-        ModelType = model.ModelType switch
-        {
-            DomainModelType.Local => SharedModelType.Local,
-            DomainModelType.LocalService => SharedModelType.LocalService,
-            _ => SharedModelType.Remote
-        },
+        ModelType = model.ModelType,
         CurrentElo = model.CurrentElo,
         DuelCount = model.DuelCount,
         WinCount = model.WinCount,

@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.WebAssembly.Hosting
+@using PoLocalCompare.Client.Components
 @inject IWebAssemblyHostEnvironment HostEnv
 
 <div class="page">
@@ -8,6 +9,7 @@
     </div>
 
     <main>
+        <MockDataBanner />
         <article class="content px-4">
             <ErrorBoundary @ref="_errorBoundary">
                 <ChildContent>

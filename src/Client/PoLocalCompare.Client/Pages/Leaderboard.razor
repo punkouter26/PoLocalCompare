@@ -4,38 +4,28 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
 @using Radzen
+@using Radzen.Blazor
 
 <PageTitle>Leaderboard — LLM Duel Arena</PageTitle>
 
-@using Radzen.Blazor
 @inject DuelApiClient ApiClient
-
-<MockDataBanner />
 
 <div class="leaderboard">
     <h1 class="leaderboard__title">Leaderboard</h1>
 
     <div class="leaderboard__controls">
         <span class="leaderboard__sort-label">Sort by:</span>
-        <RadzenButton
-            Text="ELO"
-            Click="@(() => SetSortAsync("Elo"))"
+        <RadzenButton Text="ELO" Click="@(() => SetSortAsync("Elo"))"
             ButtonStyle="@(IsGreenSort ? ButtonStyle.Light : ButtonStyle.Primary)"
-            Size="ButtonSize.Small"
-            class="leaderboard__sort-btn" />
-        <RadzenButton
-            Text="Green Score"
-            Click="@(() => SetSortAsync("GreenScore"))"
+            Size="ButtonSize.Small" class="leaderboard__sort-btn" />
+        <RadzenButton Text="Green Score" Click="@(() => SetSortAsync("GreenScore"))"
             ButtonStyle="@(IsGreenSort ? ButtonStyle.Primary : ButtonStyle.Light)"
-            Size="ButtonSize.Small"
-            class="leaderboard__sort-btn" />
+            Size="ButtonSize.Small" class="leaderboard__sort-btn" />
         <span class="leaderboard__divider">|</span>
-        <RadzenButton
-            Text="@(_activeOnly ? "Active Only" : "All Models")"
+        <RadzenButton Text="@(_activeOnly ? "Active Only" : "All Models")"
             Click="@(() => _activeOnly = !_activeOnly)"
             ButtonStyle="@(_activeOnly ? ButtonStyle.Primary : ButtonStyle.Light)"
-            Size="ButtonSize.Small"
-            class="leaderboard__sort-btn" />
+            Size="ButtonSize.Small" class="leaderboard__sort-btn" />
     </div>
     @if (_greenSortWarning)
     {
@@ -59,7 +49,9 @@
                 <a href="/war-room" class="leaderboard__cta">&#x2694;&#xFE0F; Head to the War Room to start one!</a>
             </div>
         }
-        <RadzenDataGrid Data="@(_activeOnly ? _entries.Where(e => e.DuelCount > 0).ToList() : _entries)" TItem="LeaderboardEntryDto" RowSelect="OnRowSelect" Class="leaderboard__grid leaderboard__grid--scrollable">
+        <RadzenDataGrid Data="@(_activeOnly ? _entries.Where(e => e.DuelCount > 0).ToList() : _entries)"
+            TItem="LeaderboardEntryDto" RowSelect="OnRowSelect"
+            Class="leaderboard__grid leaderboard__grid--scrollable">
             <Columns>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px" />
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" Width="200px">
@@ -67,14 +59,14 @@
                         @entry.DisplayName
                         @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
                         {
-                            <span class="lb__type-badge lb__type-badge--@mtype.ToString().ToLower()">@(mtype == ModelType.LocalService ? "SVC" : mtype.ToString().ToUpper())</span>
+                            <span class="lb__type-badge lb__type-badge--@mtype.ToString().ToLower()">
+                                @(mtype == ModelType.LocalService ? "SVC" : mtype.ToString().ToUpper())
+                            </span>
                         }
                     </Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="CurrentElo" Title="ELO" Width="120px">
-                    <Template Context="entry">
-                        @((int)Math.Round(entry.CurrentElo))
-                    </Template>
+                    <Template Context="entry">@((int)Math.Round(entry.CurrentElo))</Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DuelCount" Title="Duels" Width="90px" />
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="W/L (Win %)" Width="140px">
@@ -104,7 +96,7 @@
                 }
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="ELO Trend (last 20)" Width="170px">
                     <Template Context="entry">
-                        @if (entry.EloSparkline.Count > 1)
+                        @if (entry.EloSparkline is not null && entry.EloSparkline.Length > 1)
                         {
                             <EloSparkline Values="entry.EloSparkline" />
                         }
@@ -166,7 +158,9 @@
                                 </Template>
                             </RadzenDataGridColumn>
                             <RadzenDataGridColumn TItem="HeadToHeadDto" Title="Last Duel" Width="170px">
-                                <Template Context="row">@row.LastDuelAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</Template>
+                                <Template Context="row">
+                                    @(row.LastDuelAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")
+                                </Template>
                             </RadzenDataGridColumn>
                         </Columns>
                     </RadzenDataGrid>
@@ -272,102 +266,3 @@
         }
     }
 }
-
-<style>
-    .leaderboard {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 1rem;
-        color: #e5e7eb;
-    }
-
-    .leaderboard__title {
-        font-size: 1.8rem;
-        font-weight: 800;
-        margin-bottom: 1rem;
-        color: #f9fafb;
-    }
-
-    .leaderboard__controls {
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-    }
-    .leaderboard__divider { color: #374151; padding: 0 4px; }
-    .lb__type-badge { display: inline-block; font-size: 0.62rem; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-weight: 700; margin-left: 0.4rem; vertical-align: middle; letter-spacing: 0.04em; }
-    .lb__type-badge--local { background: #1d4ed820; color: #60a5fa; border: 1px solid #1d4ed840; }
-    .lb__type-badge--remote { background: #7c3aed20; color: #a78bfa; border: 1px solid #7c3aed40; }
-    .lb__type-badge--localservice { background: #0d946920; color: #34d399; border: 1px solid #0d946940; }
-
-    .leaderboard__green-warn {
-        font-size: 0.85rem;
-        color: #22c55e;
-        margin: -0.5rem 0 1rem;
-        padding: 6px 10px;
-        background: #22c55e10;
-        border: 1px solid #22c55e30;
-        border-radius: 4px;
-    }
-
-    .leaderboard__grid {
-        margin-bottom: 1rem;
-    }
-
-    .leaderboard__grid--scrollable {
-        overflow-x: auto;
-    }
-
-    .leaderboard__empty-state {
-        background: #111;
-        border: 1px solid #2a2a2a;
-        border-radius: 8px;
-        padding: 20px 24px;
-        margin-bottom: 1.5rem;
-        text-align: center;
-        color: #9ca3af;
-    }
-
-    .leaderboard__cta {
-        display: inline-block;
-        margin-top: 8px;
-        color: #22c55e;
-        font-weight: 600;
-        text-decoration: none;
-    }
-
-    .leaderboard__cta:hover {
-        text-decoration: underline;
-    }
-
-    .leaderboard__killlist-panel {
-        background: #0b0b0b;
-        border: 1px solid #2a2a2a;
-    }
-
-    .leaderboard__summary {
-        display: flex;
-        gap: 2rem;
-        flex-wrap: wrap;
-        padding: 0.65rem 1rem;
-        background: #111;
-        border: 1px solid #1f2937;
-        border-radius: 8px;
-        color: #9ca3af;
-        font-size: 0.8rem;
-        margin-bottom: 1rem;
-    }
-
-    .leaderboard__summary strong { color: #e5e7eb; }
-
-    .leaderboard__status {
-        color: #9ca3af;
-    }
-
-    .leaderboard__error {
-        color: #ef4444;
-        font-weight: 600;
-    }
-</style>

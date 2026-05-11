@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Enums;
 using PoLocalCompare.Shared.DTOs;
 using System.Net;
 using System.Net.Http.Json;

@@ -38,7 +38,9 @@
         <span class="lab__env-sep">·</span>
         <span class="lab__env-item">@_models.Count registered</span>
         <span class="lab__env-sep">·</span>
-        <span class="lab__env-item">@_models.Count(m => m.IsDownloaded == true) downloaded</span>
+        <span class="lab__env-item">@_models.Count(m => m.IsDownloaded == true) ready</span>
+        <span class="lab__env-sep">·</span>
+        <span class="lab__env-item">@_models.Count(m => m.IsDownloaded == false) missing assets</span>
         <span class="lab__env-sep">·</span>
         <span class="lab__env-item lab__env-stat--tested">@_models.Count(m => m.Status == DiagStatus.Complete) tested</span>
     </div>
@@ -151,7 +153,7 @@
                         }
                         else
                         {
-                            <span class="lab__badge lab__badge--missing">○ Not downloaded</span>
+                            <span class="lab__badge lab__badge--missing">⚠ Model assets missing</span>
                         }
                     </div>
                     @if (state.IsDownloaded == false)
@@ -159,6 +161,7 @@
                         <details class="lab__download-hint">
                             <summary class="lab__download-hint-summary">How to download</summary>
                             <code class="lab__download-cmd">python download-models.py</code>
+                            <span class="lab__download-note">Expected asset: /models/@state.Model.WebLlmModelId/mlc-chat-config.json</span>
                         </details>
                     }
 
@@ -461,15 +464,16 @@
         foreach (var s in _models) s.IsDownloaded = null;
         StateHasChanged();
 
-        await Task.WhenAll(_models.Select(async state =>
+        var results = await Task.WhenAll(_models.Select(async state =>
         {
-            var downloaded = await JS.InvokeAsync<bool>("checkModelFile", state.Model.WebLlmModelId);
-            await InvokeAsync(() =>
-            {
-                state.IsDownloaded = downloaded;
-                StateHasChanged();
-            });
+            var downloaded = await ApiClient.IsLocalModelDownloadedAsync(state.Model.WebLlmModelId ?? string.Empty);
+            return (state, downloaded);
         }));
+
+        foreach (var (state, downloaded) in results)
+            state.IsDownloaded = downloaded;
+
+        StateHasChanged();
     }
 
     private async Task RunSingleAsync(ModelDiagState state)

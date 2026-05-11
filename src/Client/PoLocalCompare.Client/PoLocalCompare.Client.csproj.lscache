@@ -324,6 +324,7 @@ Pages/
  Counter.razor
  Home.razor
  Leaderboard.razor
+ LocalModelLab.razor
  NotFound.razor
  Processing.razor
  WarRoom.razor
@@ -348,6 +349,7 @@ Pages/
  Counter.razor
  Home.razor
  Leaderboard.razor
+ LocalModelLab.razor
  NotFound.razor
  Processing.razor
  WarRoom.razor

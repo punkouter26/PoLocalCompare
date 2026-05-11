@@ -12,8 +12,8 @@ public sealed class ModelDto
     public int WinCount { get; init; }
     public double GreenScoreAvg { get; init; }
     public double? TdpWatts { get; init; }
-    public string? ApiEndpointRef { get; init; }
     public string? WebLlmModelId { get; init; }
+    public string? ApiEndpointRef { get; init; }
     public decimal? InputTokenPricePerMillion { get; init; }
     public decimal? OutputTokenPricePerMillion { get; init; }
     public DateTimeOffset CreatedAt { get; init; }

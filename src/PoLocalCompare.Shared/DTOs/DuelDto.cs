@@ -18,4 +18,6 @@ public sealed class DuelDto
     public double? EloShiftLoser { get; init; }
     public int TimeLimitSeconds { get; init; }
     public IReadOnlyList<DuelResultDto> Results { get; init; } = [];
+    /// <summary>True when only one model completed (partial duel).</summary>
+    public bool IsPartial { get; init; }
 }

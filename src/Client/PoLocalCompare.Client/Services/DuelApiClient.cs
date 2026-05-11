@@ -44,6 +44,23 @@ public sealed class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<ModelDto>>("/api/models", JsonOptions);
     }
 
+    public async Task<bool> IsLocalModelDownloadedAsync(string webLlmModelId)
+    {
+        if (string.IsNullOrWhiteSpace(webLlmModelId))
+            return false;
+
+        try
+        {
+            var response = await _http.GetFromJsonAsync<ModelDownloadStatusResponse>(
+                $"/api/models/download-status/{Uri.EscapeDataString(webLlmModelId)}", JsonOptions);
+            return response?.Downloaded == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<IReadOnlyList<LeaderboardEntryDto>?> GetLeaderboardAsync(string sortBy = "Elo")
     {
         return await _http.GetFromJsonAsync<IReadOnlyList<LeaderboardEntryDto>>($"/api/leaderboard?sortBy={Uri.EscapeDataString(sortBy)}", JsonOptions);
@@ -98,5 +115,26 @@ public sealed class DuelApiClient
     {
         var response = await _http.PostAsync("/api/dev/reset", null);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Returns GPU vs CPU placement for all models currently loaded in Ollama.
+    /// Returns an empty list (never null) if Ollama is unreachable.</summary>
+    public async Task<IReadOnlyList<OllamaGpuStatusDto>> GetOllamaGpuStatusAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<IReadOnlyList<OllamaGpuStatusDto>>(
+                "/api/ollama/gpu-status", JsonOptions)
+                ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private sealed class ModelDownloadStatusResponse
+    {
+        public bool Downloaded { get; set; }
     }
 }

@@ -4,7 +4,7 @@ using Azure.Data.Tables;
 using NUlid;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Enums;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
 
@@ -103,7 +103,9 @@ public sealed class DuelRepository : IDuelRepository
             ["WinnerModelId"] = duel.WinnerModelId,
             ["LoserModelId"] = duel.LoserModelId,
             ["EloShiftWinner"] = duel.EloShiftWinner,
-            ["EloShiftLoser"] = duel.EloShiftLoser
+            ["EloShiftLoser"] = duel.EloShiftLoser,
+            ["VerdictDeadline"] = duel.VerdictDeadline,
+            ["IsPartial"] = duel.IsPartial,
         };
         return entity;
     }
@@ -119,11 +121,13 @@ public sealed class DuelRepository : IDuelRepository
             RightModelId = entity.GetString("RightModelId") ?? string.Empty,
             StartedAt = entity.GetDateTimeOffset("StartedAt") ?? DateTimeOffset.MinValue,
             CompletedAt = entity.GetDateTimeOffset("CompletedAt"),
-            Verdict = Enum.Parse<DuelVerdict>(entity.GetString("Verdict") ?? "Pending"),
+            Verdict = Enum.TryParse<DuelVerdict>(entity.GetString("Verdict"), out var v) ? v : DuelVerdict.Pending,
             WinnerModelId = entity.GetString("WinnerModelId"),
             LoserModelId = entity.GetString("LoserModelId"),
             EloShiftWinner = entity.GetDouble("EloShiftWinner"),
-            EloShiftLoser = entity.GetDouble("EloShiftLoser")
+            EloShiftLoser = entity.GetDouble("EloShiftLoser"),
+            VerdictDeadline = entity.GetDateTimeOffset("VerdictDeadline") ?? DateTimeOffset.MinValue,
+            IsPartial = entity.GetBoolean("IsPartial") ?? false,
         };
         return duel;
     }

@@ -66,7 +66,10 @@
 .badge--cache  { background: #1a3a1a; color: #4ade80; border: 1px solid #166534; }
 .badge--stall  { background: #3a1a1a; color: #f87171; border: 1px solid #991b1b; animation: pulse-stall 1.5s ease-in-out infinite; }
 .badge--local  { background: #0f2a1a; color: #34d399; border: 1px solid #065f46; }
+.badge--service { background: #10271f; color: #2dd4bf; border: 1px solid #0f766e; }
 .badge--remote { background: #0d1f3a; color: #60a5fa; border: 1px solid #1d4ed8; }
+.badge--gpu    { background: #0a2a0a; color: #22c55e; border: 1px solid #15803d; }
+.badge--cpu    { background: #1a1a2e; color: #93c5fd; border: 1px solid #1d4ed8; }
 
 @keyframes pulse-stall {
     0%, 100% { opacity: 1; }

@@ -3,7 +3,7 @@ using Azure;
 using Azure.Data.Tables;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Enums;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
 

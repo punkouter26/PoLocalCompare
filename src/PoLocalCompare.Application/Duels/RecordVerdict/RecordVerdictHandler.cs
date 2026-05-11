@@ -4,7 +4,6 @@ using PoLocalCompare.Domain.Entities;
 using PoLocalCompare.Domain.Services;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
-using DomainDuelVerdict = PoLocalCompare.Domain.Enums.DuelVerdict;
 
 namespace PoLocalCompare.Application.Duels.RecordVerdict;
 
@@ -30,18 +29,32 @@ public sealed class RecordVerdictHandler
     /// <summary>
     /// Returns null if duel not found.
     /// Throws <see cref="InvalidOperationException"/> if verdict already recorded (caller maps to 409).
-    /// Throws <see cref="ArgumentException"/> if verdict is Pending (caller maps to 422).
+    /// Throws <see cref="ArgumentException"/> if verdict is Pending or Expired (caller maps to 422).
     /// </summary>
     public async Task<VerdictResponseDto?> HandleAsync(RecordVerdictCommand command)
     {
         if (command.Verdict == DuelVerdict.Pending)
             throw new ArgumentException("Verdict cannot be Pending.", nameof(command));
 
+        if (command.Verdict == DuelVerdict.Expired)
+            throw new ArgumentException("Verdict cannot be Expired — use the expiration workflow instead.", nameof(command));
+
         var duel = await _duelRepository.GetByIdAsync(command.DuelId);
         if (duel is null) return null;
 
-        if (duel.Verdict != DomainDuelVerdict.Pending)
+        if (duel.Verdict == DuelVerdict.Expired)
+            throw new InvalidOperationException("This duel has expired and cannot accept a verdict.");
+
+        if (duel.Verdict != DuelVerdict.Pending)
             throw new InvalidOperationException("Verdict has already been recorded for this duel.");
+
+        // Check deadline
+        if (duel.IsExpired)
+        {
+            duel.Verdict = DuelVerdict.Expired;
+            await _duelRepository.UpdateAsync(duel);
+            throw new InvalidOperationException("This duel has expired and cannot accept a verdict.");
+        }
 
         var leftModel = await _modelRepository.GetByIdAsync(duel.LeftModelId)
             ?? throw new KeyNotFoundException($"Model '{duel.LeftModelId}' not found.");
@@ -88,7 +101,7 @@ public sealed class RecordVerdictHandler
         await _modelRepository.UpdateAsync(loser);
 
         // Persist duel verdict
-        duel.Verdict = (DomainDuelVerdict)command.Verdict;
+        duel.Verdict = command.Verdict;
         duel.WinnerModelId = winner.ModelId;
         duel.LoserModelId = loser.ModelId;
         duel.EloShiftWinner = eloShiftWinner;

@@ -10,7 +10,6 @@
 @inject NavigationManager Nav
 
 <PageTitle>War Room — LLM Duel Arena</PageTitle>
-<MockDataBanner />
 
 <div class="war-room">
     <h1 class="war-room__title">⚔ War Room</h1>
@@ -32,57 +31,25 @@
         </div>
 
         <div class="war-room__columns">
-            <div class="war-room__column">
-                <h2 class="war-room__col-title">Left Model</h2>
-                @if (_allModels.Count == 0)
-                {
-                    <p class="war-room__empty">No models available — register a model first.</p>
-                }
-                else if (!FilteredModels(_typeFilter).Any())
-                {
-                    <p class="war-room__empty">No models match this filter.</p>
-                }
-                else
-                {
-                    @foreach (var model in FilteredModels(_typeFilter))
-                    {
-                        <ModelCard
-                            Model="model"
-                            LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
-                            IsSelected="_leftModel?.ModelId == model.ModelId"
-                            IsDisabled="_rightModel?.ModelId == model.ModelId"
-                            OnSelected="m => SelectLeft(m)"
-                            ProjectedEloGain="@ComputeProjectedGain(_leftModel, _rightModel)"
-                        />
-                    }
-                }
-            </div>
+            <ModelSelectionColumn
+                Title="Left Model"
+                Models="_allModels"
+                FilteredModels="_filteredModels"
+                ModelLabels="_modelLabels"
+                SelectedModelId="_leftModel?.ModelId"
+                OtherSelectedModelId="_rightModel?.ModelId"
+                OnSelected="SelectLeft"
+                ProjectedEloGain="@ComputeProjectedGain(_leftModel, _rightModel)" />
 
-            <div class="war-room__column">
-                <h2 class="war-room__col-title">Right Model</h2>
-                @if (_allModels.Count == 0)
-                {
-                    <p class="war-room__empty">No models available — register a model first.</p>
-                }
-                else if (!FilteredModels(_typeFilter).Any())
-                {
-                    <p class="war-room__empty">No models match this filter.</p>
-                }
-                else
-                {
-                    @foreach (var model in FilteredModels(_typeFilter))
-                    {
-                        <ModelCard
-                            Model="model"
-                            LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
-                            IsSelected="_rightModel?.ModelId == model.ModelId"
-                            IsDisabled="_leftModel?.ModelId == model.ModelId"
-                            OnSelected="m => SelectRight(m)"
-                            ProjectedEloGain="@ComputeProjectedGain(_rightModel, _leftModel)"
-                        />
-                    }
-                }
-            </div>
+            <ModelSelectionColumn
+                Title="Right Model"
+                Models="_allModels"
+                FilteredModels="_filteredModels"
+                ModelLabels="_modelLabels"
+                SelectedModelId="_rightModel?.ModelId"
+                OtherSelectedModelId="_leftModel?.ModelId"
+                OnSelected="SelectRight"
+                ProjectedEloGain="@ComputeProjectedGain(_rightModel, _leftModel)" />
         </div>
 
         @if (_leftModel is not null && _rightModel is not null && _leftModel.ModelId == _rightModel.ModelId)
@@ -153,6 +120,7 @@
     private string? _error;
 
     private string _typeFilter = "All";
+    private IEnumerable<ModelDto> _filteredModels => FilteredModels(_typeFilter);
 
     private IEnumerable<ModelDto> FilteredModels(string filter) => filter switch
     {
@@ -241,74 +209,3 @@
         }
     }
 }
-
-<style>
-    .war-room {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 1rem;
-        color: #e5e7eb;
-    }
-
-    .war-room__title {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #fff;
-        margin-bottom: 1.5rem;
-    }
-
-    .war-room__loading, .war-room__empty {
-        color: #6b7280;
-        font-style: italic;
-    }
-
-    .war-room__columns {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-        margin-bottom: 2rem;
-    }
-
-    @@media (max-width: 1023px) {
-        .war-room__columns {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    .war-room__col-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #9ca3af;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.75rem;
-    }
-
-    .war-room__prompt-section { margin-bottom: 1.5rem; }
-
-    .war-room__label {
-        display: block;
-        color: #9ca3af;
-        font-size: 0.875rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .war-room__textarea {
-        width: 100%;
-        background: #111;
-        color: #e5e7eb;
-        border: 1px solid #374151;
-        border-radius: 0.375rem;
-    }
-
-    .war-room__actions { display: flex; flex-direction: column; align-items: center; margin-bottom: 1rem; gap: 0.5rem; }
-    .war-room__commence-btn { min-width: 200px; font-size: 1.1rem; }
-    .war-room__validation-hint { color: #9ca3af; font-size: 0.8rem; margin: 0; font-style: italic; }
-    .war-room__error { color: #ef4444; text-align: center; margin-top: 0.5rem; }
-    .war-room__clash-warning { color: #f59e0b; background: #f59e0b18; border: 1px solid #f59e0b40; border-radius: 6px; padding: 8px 14px; margin-bottom: 1rem; font-size: 0.9rem; }
-    .war-room__hint { color: #6b7280; font-size: 0.8rem; margin: 4px 0 8px; font-style: italic; }
-    .war-room__type-filter { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-    .war-room__filter-chip { padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid #374151; background: #111; color: #9ca3af; font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
-    .war-room__filter-chip:hover { border-color: #6b7280; color: #e5e7eb; }
-    .war-room__filter-chip--active { border-color: #22c55e; color: #22c55e; background: #22c55e18; font-weight: 700; }
-</style>

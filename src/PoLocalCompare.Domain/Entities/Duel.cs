@@ -1,5 +1,5 @@
 // GoF: Aggregate Root
-using PoLocalCompare.Domain.Enums;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Domain.Entities;
 
@@ -17,13 +17,18 @@ public sealed class Duel
     public string? LoserModelId { get; set; }
     public double? EloShiftWinner { get; set; }
     public double? EloShiftLoser { get; set; }
+    /// <summary>Absolute deadline for verdict submission (VerdictDeadlineHours from config).</summary>
+    public DateTimeOffset VerdictDeadline { get; init; }
+    /// <summary>True when only one model completed (partial duel).</summary>
+    public bool IsPartial { get; set; }
 
     public Duel(
         string duelId,
         string promptText,
         string promptFull,
         string leftModelId,
-        string rightModelId)
+        string rightModelId,
+        int verdictDeadlineHours = 24)
     {
         if (string.IsNullOrWhiteSpace(promptText))
             throw new ArgumentException("PromptText cannot be empty.", nameof(promptText));
@@ -37,6 +42,7 @@ public sealed class Duel
         LeftModelId = leftModelId;
         RightModelId = rightModelId;
         StartedAt = DateTimeOffset.UtcNow;
+        VerdictDeadline = StartedAt.AddHours(verdictDeadlineHours);
         Verdict = DuelVerdict.Pending;
     }
 
@@ -49,4 +55,7 @@ public sealed class Duel
         LeftModelId = string.Empty;
         RightModelId = string.Empty;
     }
+
+    /// <summary>Returns true if the verdict deadline has passed.</summary>
+    public bool IsExpired => Verdict == DuelVerdict.Pending && DateTimeOffset.UtcNow > VerdictDeadline;
 }

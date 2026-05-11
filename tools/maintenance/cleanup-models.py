@@ -1,4 +1,4 @@
-"""Deduplicate Models table in Azurite — keep one per WebLlmModelId"""
+"""Deduplicate Models table in Azurite — keep one per WebLlmModelId."""
 from collections import defaultdict
 from azure.data.tables import TableServiceClient
 

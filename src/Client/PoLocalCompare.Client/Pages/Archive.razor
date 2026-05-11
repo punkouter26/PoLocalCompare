@@ -11,8 +11,6 @@
 
 <PageTitle>Archive — LLM Duel Arena</PageTitle>
 
-<MockDataBanner />
-
 <div class="archive">
     <h1 class="archive__title">&#x1F52C; Lab Archive</h1>
 
@@ -47,8 +45,22 @@
                     <Template Context="d">@d.StartedAt.ToString("yyyy-MM-dd HH:mm")</Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Property="PromptSummary" Title="Prompt" Width="200px" />
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="LeftModelName" Title="Left Model" Width="180px" />
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="RightModelName" Title="Right Model" Width="180px" />
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Left Model" Width="180px">
+                    <Template Context="d">
+                        <span class="archive__model @(IsUnresolvedModelName(d.LeftModelName, d.LeftModelId) ? "archive__model--unresolved" : "")"
+                              title="@d.LeftModelId">
+                            @FormatModelName(d.LeftModelName, d.LeftModelId)
+                        </span>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Right Model" Width="180px">
+                    <Template Context="d">
+                        <span class="archive__model @(IsUnresolvedModelName(d.RightModelName, d.RightModelId) ? "archive__model--unresolved" : "")"
+                              title="@d.RightModelId">
+                            @FormatModelName(d.RightModelName, d.RightModelId)
+                        </span>
+                    </Template>
+                </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Title="" Width="30px">
                     <Template Context="d">
                         @{ var chevron = d.DuelId == _selectedDuel?.DuelId ? "▾" : "›"; }
@@ -81,7 +93,7 @@
 
                 <div class="archive__detail-meta">
                     <p><strong>Prompt:</strong> @_selectedDuel.PromptSummary</p>
-                    <p><strong>Left:</strong> @_selectedDuel.LeftModelName &nbsp;&nbsp; <strong>Right:</strong> @_selectedDuel.RightModelName</p>
+                    <p><strong>Left:</strong> @FormatModelName(_selectedDuel.LeftModelName, _selectedDuel.LeftModelId) &nbsp;&nbsp; <strong>Right:</strong> @FormatModelName(_selectedDuel.RightModelName, _selectedDuel.RightModelId)</p>
                     <p><strong>Started:</strong> @_selectedDuel.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
                     @if (_selectedDuel.CompletedAt.HasValue)
                     {
@@ -127,13 +139,13 @@
                         <div class="archive__viewport-panel">
                             <SandboxedViewport
                                 HtmlContent="@(_reRenderDuel.Results?.FirstOrDefault(r => r.ModelId == _selectedDuel.LeftModelId)?.HtmlOutputRaw ?? string.Empty)"
-                                ModelName="@_selectedDuel.LeftModelName"
+                                ModelName="@FormatModelName(_selectedDuel.LeftModelName, _selectedDuel.LeftModelId)"
                                 IsLoser="@(_selectedDuel.Verdict == DuelVerdict.Right)" />
                         </div>
                         <div class="archive__viewport-panel">
                             <SandboxedViewport
                                 HtmlContent="@(_reRenderDuel.Results?.FirstOrDefault(r => r.ModelId == _selectedDuel.RightModelId)?.HtmlOutputRaw ?? string.Empty)"
-                                ModelName="@_selectedDuel.RightModelName"
+                                ModelName="@FormatModelName(_selectedDuel.RightModelName, _selectedDuel.RightModelId)"
                                 IsLoser="@(_selectedDuel.Verdict == DuelVerdict.Left)" />
                         </div>
                     </div>
@@ -150,43 +162,6 @@
         </div>
     }
 </div>
-
-<style>
-    .archive { max-width: 1400px; margin: 0 auto; padding: 24px; }
-    .archive__title { color: #fff; font-size: 1.75rem; margin-bottom: 24px; }
-    .archive__status, .archive__error, .archive__empty { color: #a3a3a3; }
-    .archive__error { color: #ef4444; }
-    .archive__grid { width: 100%; }
-    ::deep .rz-data-grid { overflow-x: auto; }
-    ::deep tr { cursor: pointer; }
-    ::deep tr:hover td { background: rgba(255,255,255,0.03) !important; }
-    ::deep tr.archive__row--selected td { background: rgba(34,197,94,0.07) !important; }
-    ::deep tr.archive__row--selected { border-left: 3px solid #22c55e; }
-    @@keyframes archive-spin { to { transform: rotate(360deg); } }
-    .archive__spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #22c55e; border-top-color: transparent; border-radius: 50%; animation: archive-spin 0.75s linear infinite; align-self: center; margin-left: 4px; }
-    .archive__verdict { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
-    .archive__verdict--win { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
-    .archive__verdict--pending { background: #6b728020; color: #9ca3af; border: 1px solid #6b728040; }
-    .archive__expand-icon { display: inline-block; font-size: 1rem; color: #6b7280; line-height: 1; }
-    .archive__detail { margin-top: 32px; background: #111; border: 1px solid #333; border-radius: 8px; padding: 24px; }
-    .archive__detail-title { color: #22c55e; margin-bottom: 16px; }
-    .archive__detail-meta p { margin: 4px 0; color: #d4d4d4; }
-    .archive__detail-actions { display: flex; gap: 12px; margin: 16px 0; }
-    .archive__btn { flex-shrink: 0; }
-    .archive__viewports { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; min-height: 600px; }
-    .archive__viewport-panel { min-height: 600px; }
-    .archive__pagination { margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 16px; }
-    .archive__count { color: #a3a3a3; font-size: 0.875rem; }
-    .archive__filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
-    .archive__filter-chip { padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid #374151; background: #111; color: #9ca3af; font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
-    .archive__filter-chip:hover { border-color: #6b7280; color: #e5e7eb; }
-    .archive__filter-chip--active { border-color: #22c55e; color: #22c55e; background: #22c55e18; font-weight: 700; }
-
-    @@media (max-width: 1023px) {
-        .archive__viewports { grid-template-columns: 1fr; scroll-snap-type: y mandatory; overflow-y: auto; }
-        .archive__viewport-panel { scroll-snap-align: start; min-height: 400px; }
-    }
-</style>
 
 @code {
     private List<DuelSummaryDto> _duels = [];
@@ -305,9 +280,30 @@
     private static string GetWinnerName(DuelSummaryDto d)
     {
         if (d.WinnerModelId is null) return "—";
-        if (d.WinnerModelId == d.LeftModelId) return d.LeftModelName;
-        if (d.WinnerModelId == d.RightModelId) return d.RightModelName;
-        return d.WinnerModelId;
+        if (d.WinnerModelId == d.LeftModelId) return FormatModelName(d.LeftModelName, d.LeftModelId);
+        if (d.WinnerModelId == d.RightModelId) return FormatModelName(d.RightModelName, d.RightModelId);
+        return ShortModelId(d.WinnerModelId);
+    }
+
+    private static bool IsUnresolvedModelName(string? modelName, string modelId)
+    {
+        if (string.IsNullOrWhiteSpace(modelName)) return true;
+        var trimmed = modelName.Trim();
+        return string.Equals(trimmed, modelId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatModelName(string? modelName, string modelId)
+    {
+        if (IsUnresolvedModelName(modelName, modelId))
+            return $"Unknown ({ShortModelId(modelId)})";
+
+        return modelName!.Trim();
+    }
+
+    private static string ShortModelId(string? modelId)
+    {
+        if (string.IsNullOrWhiteSpace(modelId)) return "id: n/a";
+        return modelId.Length <= 10 ? $"id: {modelId}" : $"id: {modelId[..4]}…{modelId[^4..]}";
     }
 
     private string GetRowClass(DuelSummaryDto d) =>

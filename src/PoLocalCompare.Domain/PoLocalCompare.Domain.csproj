@@ -4,4 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\PoLocalCompare.Shared\PoLocalCompare.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

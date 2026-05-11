@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileProviders;
 using PoLocalCompare.Application.Models.ListModels;
 using PoLocalCompare.Application.Models.RegisterModel;
 using PoLocalCompare.Shared.DTOs;
@@ -63,6 +64,31 @@ public static class ModelsEndpoints
         .Produces<ModelDto>(StatusCodes.Status201Created)
         .ProducesValidationProblem();
 
+        group.MapGet("/download-status/{webLlmModelId}", (
+            [FromRoute] string webLlmModelId,
+            [FromServices] IWebHostEnvironment env) =>
+        {
+            if (string.IsNullOrWhiteSpace(webLlmModelId))
+            {
+                return Results.BadRequest(new { error = "webLlmModelId is required." });
+            }
+
+            if (webLlmModelId.Contains("..", StringComparison.Ordinal) ||
+                webLlmModelId.Contains('/', StringComparison.Ordinal) ||
+                webLlmModelId.Contains('\\', StringComparison.Ordinal))
+            {
+                return Results.BadRequest(new { error = "Invalid model id." });
+            }
+
+            var relativePath = $"models/{webLlmModelId}/mlc-chat-config.json";
+            var fileInfo = env.WebRootFileProvider.GetFileInfo(relativePath);
+            var downloaded = fileInfo.Exists && fileInfo.Length > 0;
+            return Results.Ok(new ModelDownloadStatusDto(webLlmModelId, downloaded));
+        })
+        .WithName("GetModelDownloadStatus")
+        .WithSummary("Checks whether a local WebLLM model asset has been downloaded.")
+        .Produces<ModelDownloadStatusDto>();
+
         return app;
     }
 }
@@ -75,3 +101,7 @@ public sealed record RegisterModelRequest(
     string? ApiEndpointRef,
     decimal? InputTokenPricePerMillion,
     decimal? OutputTokenPricePerMillion);
+
+public sealed record ModelDownloadStatusDto(
+    string WebLlmModelId,
+    bool Downloaded);
