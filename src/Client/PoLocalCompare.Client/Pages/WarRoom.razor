@@ -7,6 +7,7 @@
 @using Radzen.Blazor
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
+@inject PromptTemplatesService PromptTemplates
 @inject NavigationManager Nav
 
 <PageTitle>War Room — LLM Duel Arena</PageTitle>
@@ -56,6 +57,32 @@
         {
             <p class="war-room__clash-warning">⚠ Left and Right models must differ — select a different model on one side.</p>
         }
+
+        @* ── Prompt Templates Section ────────────────────────────────────────── *@
+        <div class="war-room__templates-section">
+            <div class="war-room__templates-header">
+                <h3 class="war-room__templates-title">
+                    <span>📋</span> Quick Prompts
+                </h3>
+                @if (!string.IsNullOrEmpty(_promptText))
+                {
+                    <button class="war-room__clear-prompt" @onclick="ClearPrompt">
+                        ✕ Clear
+                    </button>
+                }
+            </div>
+            <div class="war-room__templates-grid">
+                @foreach (var template in PromptTemplates.GetAll())
+                {
+                    <button class="war-room__template-card @(IsTemplateSelected(template) ? "war-room__template-card--selected" : "")"
+                            @onclick="() => SelectTemplate(template)">
+                        <span class="war-room__template-icon">@template.Icon</span>
+                        <span class="war-room__template-name">@template.Name</span>
+                        <span class="war-room__template-category">@template.Category</span>
+                    </button>
+                }
+            </div>
+        </div>
 
         <div class="war-room__prompt-section">
             <label class="war-room__label" for="promptInput">Prompt (5-minute duel, HTML output)</label>
@@ -208,4 +235,228 @@
             _error = $"Failed to start duel: {ex.Message}";
         }
     }
+
+    // ── Prompt Templates ──────────────────────────────────────────────────
+    private PromptTemplate? _selectedTemplate;
+
+    private void SelectTemplate(PromptTemplate template)
+    {
+        _selectedTemplate = template;
+        _promptText = template.Prompt;
+    }
+
+    private void ClearPrompt()
+    {
+        _selectedTemplate = null;
+        _promptText = string.Empty;
+    }
+
+    private bool IsTemplateSelected(PromptTemplate template) =>
+        _selectedTemplate?.Id == template.Id;
 }
+
+<style>
+    .war-room { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+    .war-room__title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        color: var(--oled-text);
+    }
+
+    /* Filter chips */
+    .war-room__type-filter {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .war-room__filter-chip {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--oled-border);
+        border-radius: var(--radius-full);
+        background: var(--oled-surface);
+        color: var(--oled-text-muted);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-size: 0.875rem;
+    }
+
+    .war-room__filter-chip:hover {
+        border-color: var(--oled-green);
+        color: var(--oled-text);
+    }
+
+    .war-room__filter-chip--active {
+        background: var(--oled-green);
+        color: #000;
+        border-color: var(--oled-green);
+    }
+
+    /* Columns */
+    .war-room__columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    @@media (max-width: 768px) {
+        .war-room__columns { grid-template-columns: 1fr; }
+    }
+
+    /* Prompt Templates */
+    .war-room__templates-section {
+        background: var(--oled-surface);
+        border: 1px solid var(--oled-border);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .war-room__templates-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .war-room__templates-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--oled-text);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+    }
+
+    .war-room__clear-prompt {
+        background: none;
+        border: 1px solid var(--oled-border);
+        color: var(--oled-text-muted);
+        padding: 0.25rem 0.75rem;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: all var(--transition-fast);
+    }
+
+    .war-room__clear-prompt:hover {
+        border-color: var(--oled-red);
+        color: var(--oled-red);
+    }
+
+    .war-room__templates-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .war-room__template-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 1rem 0.75rem;
+        background: var(--oled-surface-elevated);
+        border: 1px solid var(--oled-border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-align: center;
+    }
+
+    .war-room__template-card:hover {
+        border-color: var(--oled-cyan);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+    }
+
+    .war-room__template-card--selected {
+        border-color: var(--oled-green);
+        background: rgba(34, 197, 94, 0.1);
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+    }
+
+    .war-room__template-icon {
+        font-size: 1.5rem;
+    }
+
+    .war-room__template-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--oled-text);
+    }
+
+    .war-room__template-category {
+        font-size: 0.7rem;
+        color: var(--oled-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* Prompt section */
+    .war-room__prompt-section { margin-bottom: 1.5rem; }
+
+    .war-room__label {
+        display: block;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--oled-text);
+        margin-bottom: 0.5rem;
+    }
+
+    .war-room__hint {
+        font-size: 0.8rem;
+        color: var(--oled-text-muted);
+        margin-bottom: 0.75rem;
+    }
+
+    .war-room__textarea {
+        width: 100%;
+        background: var(--oled-surface) !important;
+        border: 1px solid var(--oled-border) !important;
+        color: var(--oled-text) !important;
+        border-radius: var(--radius-md) !important;
+        padding: 1rem !important;
+    }
+
+    .war-room__textarea:focus {
+        border-color: var(--oled-blue) !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+    }
+
+    /* Actions */
+    .war-room__actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .war-room__commence-btn {
+        min-width: 200px;
+    }
+
+    .war-room__validation-hint {
+        font-size: 0.85rem;
+        color: var(--oled-text-muted);
+        margin: 0;
+    }
+
+    .war-room__error {
+        color: var(--oled-red);
+        font-size: 0.9rem;
+        margin-top: 1rem;
+    }
+
+    .war-room__loading,
+    .war-room__clash-warning {
+        color: var(--oled-yellow);
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+</style>

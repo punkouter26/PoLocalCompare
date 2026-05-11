@@ -94,30 +94,239 @@
 
 <style>
     .home { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
-    .home__hero { text-align: center; padding: 2.5rem 1rem; }
-    .home__title { font-size: 2.25rem; font-weight: 700; margin-bottom: 0.75rem; }
-    .home__subtitle { font-size: 1.1rem; color: var(--rz-text-secondary-color, #6b7280); max-width: 560px; margin: 0 auto 1.75rem; }
-    .home__cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-    .home__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-top: 2rem; }
-    .home__card { display: block; text-decoration: none; color: inherit; border: 1px solid var(--rz-border-color, #e5e7eb); border-radius: 0.75rem; padding: 1.5rem; background: var(--rz-base-background-color, #fff); transition: border-color 0.15s, box-shadow 0.15s; }
-    .home__card:hover { border-color: #22c55e; box-shadow: 0 0 0 1px #22c55e40; }
-    .home__card-icon { font-size: 2rem; display: block; margin-bottom: 0.5rem; }
-    .home__card h3 { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600; }
-    .home__card p { margin: 0; font-size: 0.875rem; color: var(--rz-text-secondary-color, #6b7280); line-height: 1.5; }
-    .home__recent { margin-top: 2.5rem; }
-    .home__recent-title { font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
-    .home__recent-list { display: flex; flex-direction: column; gap: 0.4rem; }
-    .home__recent-item { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; border: 1px solid #1f2937; border-radius: 6px; text-decoration: none; color: inherit; transition: border-color 0.15s; }
-    .home__recent-item:hover { border-color: #22c55e40; }
-    .home__recent-prompt { font-size: 0.8rem; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .home__recent-vs { font-size: 0.75rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .home__recent-winner { font-size: 0.75rem; color: #22c55e; font-weight: 600; white-space: nowrap; }
-    .home__recent-unrated { font-size: 0.75rem; color: #6b7280; font-style: italic; }
-    .home__recent-date { font-size: 0.7rem; color: #4b5563; white-space: nowrap; }
-    .home__danger-zone { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 2.5rem; padding: 0.75rem 1rem; border: 1px solid #1f2937; border-radius: 8px; }
-    .home__danger-msg { font-size: 0.8rem; color: #f87171; flex: 1; min-width: 200px; }
-    .home__danger-ok { font-size: 0.8rem; color: #22c55e; }
-    .home__danger-btn { flex-shrink: 0; }
+    
+    /* ── Modern Hero Section with Glassmorphism ─────────────────────────── */
+    .home__hero { 
+        text-align: center; 
+        padding: 3rem 1rem; 
+        animation: fadeIn 0.6s ease-out;
+        position: relative;
+    }
+    
+    .home__hero::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(34, 197, 94, 0.08) 0%, transparent 70%);
+        pointer-events: none;
+        z-index: -1;
+    }
+    
+    .home__title { 
+        font-size: 2.5rem; 
+        font-weight: 800; 
+        margin-bottom: 0.75rem;
+        background: linear-gradient(135deg, #f0f0f0 0%, #a0a0a0 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: -0.02em;
+    }
+    
+    .home__subtitle { 
+        font-size: 1.15rem; 
+        color: var(--oled-text-muted); 
+        max-width: 560px; 
+        margin: 0 auto 2rem; 
+        line-height: 1.7;
+    }
+    
+    .home__cta { 
+        display: flex; 
+        gap: 1rem; 
+        justify-content: center; 
+        flex-wrap: wrap;
+        animation: slideUp 0.6s ease-out 0.2s both;
+    }
+    
+    /* ── Modern Feature Cards ─────────────────────────────────────────────── */
+    .home__cards { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
+        gap: 1.25rem; 
+        margin-top: 2.5rem;
+        animation: fadeIn 0.6s ease-out 0.4s both;
+    }
+    
+    .home__card { 
+        display: block; 
+        text-decoration: none; 
+        color: inherit; 
+        border: 1px solid var(--oled-border); 
+        border-radius: var(--radius-lg); 
+        padding: 1.75rem; 
+        background: var(--oled-surface);
+        backdrop-filter: blur(10px);
+        transition: all var(--transition-medium);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .home__card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--oled-green), transparent);
+        opacity: 0;
+        transition: opacity var(--transition-medium);
+    }
+    
+    .home__card:hover { 
+        border-color: var(--oled-green);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(34, 197, 94, 0.15);
+    }
+    
+    .home__card:hover::before {
+        opacity: 1;
+    }
+    
+    .home__card-icon { 
+        font-size: 2.25rem; 
+        display: block; 
+        margin-bottom: 0.75rem;
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+    }
+    
+    .home__card h3 { 
+        margin: 0 0 0.5rem; 
+        font-size: 1.05rem; 
+        font-weight: 600; 
+        color: var(--oled-text);
+    }
+    
+    .home__card p { 
+        margin: 0; 
+        font-size: 0.875rem; 
+        color: var(--oled-text-muted); 
+        line-height: 1.6; 
+    }
+    
+    /* ── Recent Duels ─────────────────────────────────────────────────────── */
+    .home__recent { 
+        margin-top: 3rem;
+        animation: fadeIn 0.6s ease-out 0.6s both;
+    }
+    
+    .home__recent-title { 
+        font-size: 0.75rem; 
+        font-weight: 700; 
+        color: var(--oled-text-muted); 
+        text-transform: uppercase; 
+        letter-spacing: 0.1em; 
+        margin-bottom: 1rem; 
+    }
+    
+    .home__recent-list { 
+        display: flex; 
+        flex-direction: column; 
+        gap: 0.5rem; 
+    }
+    
+    .home__recent-item { 
+        display: grid; 
+        grid-template-columns: 1fr 1fr auto auto; 
+        align-items: center; 
+        gap: 0.75rem; 
+        padding: 0.75rem 1rem; 
+        border: 1px solid var(--oled-border); 
+        border-radius: var(--radius-md); 
+        text-decoration: none; 
+        color: inherit; 
+        transition: all var(--transition-fast);
+        background: var(--oled-surface);
+    }
+    
+    .home__recent-item:hover { 
+        border-color: var(--oled-green);
+        transform: translateX(4px);
+        box-shadow: 0 4px 20px rgba(34, 197, 94, 0.1);
+    }
+    
+    .home__recent-prompt { 
+        font-size: 0.85rem; 
+        color: var(--oled-text); 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+    }
+    
+    .home__recent-vs { 
+        font-size: 0.75rem; 
+        color: var(--oled-text-muted); 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+    }
+    
+    .home__recent-winner { 
+        font-size: 0.8rem; 
+        color: var(--oled-green); 
+        font-weight: 600; 
+        white-space: nowrap; 
+    }
+    
+    .home__recent-unrated { 
+        font-size: 0.75rem; 
+        color: var(--oled-text-muted); 
+        font-style: italic; 
+    }
+    
+    .home__recent-date { 
+        font-size: 0.7rem; 
+        color: var(--oled-text-muted); 
+        white-space: nowrap; 
+    }
+    
+    /* ── Danger Zone ─────────────────────────────────────────────────────── */
+    .home__danger-zone { 
+        display: flex; 
+        align-items: center; 
+        gap: 0.75rem; 
+        flex-wrap: wrap; 
+        margin-top: 2.5rem; 
+        padding: 1rem 1.25rem; 
+        border: 1px solid var(--oled-border); 
+        border-radius: var(--radius-md);
+        background: var(--oled-surface);
+        animation: fadeIn 0.6s ease-out 0.8s both;
+    }
+    
+    .home__danger-msg { 
+        font-size: 0.85rem; 
+        color: var(--oled-red); 
+        flex: 1; 
+        min-width: 200px; 
+    }
+    
+    .home__danger-ok { 
+        font-size: 0.85rem; 
+        color: var(--oled-green); 
+    }
+    
+    .home__danger-btn { 
+        flex-shrink: 0; 
+    }
+    
+    /* ── Responsive Adjustments ──────────────────────────────────────────── */
+    @@media (max-width: 640px) {
+        .home__title { font-size: 1.75rem; }
+        .home__subtitle { font-size: 1rem; }
+        .home__hero { padding: 2rem 1rem; }
+        .home__recent-item { 
+            grid-template-columns: 1fr auto; 
+            gap: 0.5rem;
+        }
+        .home__recent-vs,
+        .home__recent-date { display: none; }
+    }
 </style>
 
 @code {

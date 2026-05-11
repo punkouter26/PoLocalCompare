@@ -48,83 +48,142 @@
 
 <style>
     .model-card {
-        background: #111111;
-        border: 1px solid #333;
-        transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+        background: var(--oled-surface);
+        border: 1px solid var(--oled-border);
+        transition: all var(--transition-medium);
         margin-bottom: 0.5rem;
+        border-radius: var(--radius-md);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .model-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(180deg, var(--oled-green), var(--oled-cyan));
+        transform: scaleY(0);
+        transition: transform var(--transition-medium);
     }
 
     .model-card:hover:not(.model-card--selected) {
-        border-color: #4b5563;
-        box-shadow: 0 0 0 1px #4b556340;
-        background: #1a1a1a;
+        border-color: var(--oled-border-light);
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        background: var(--oled-surface-elevated);
+    }
+
+    .model-card:hover:not(.model-card--selected)::before {
+        transform: scaleY(0.3);
     }
 
     .model-card--selected {
-        border-color: #22c55e;
-        border-left: 4px solid #22c55e;
-        box-shadow: 0 0 0 3px #22c55e66, 0 0 18px #22c55e44;
-        background: #0d2b17;
-        outline: none;
+        border-color: var(--oled-green);
+        border-left: none;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4), 0 0 24px rgba(34, 197, 94, 0.2);
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--oled-surface) 100%);
+        animation: borderGlow 3s ease-in-out infinite;
+    }
+
+    .model-card--selected::before {
+        transform: scaleY(1);
     }
 
     .model-card__checkmark {
-        color: #22c55e;
-        font-size: 0.85rem;
+        color: var(--oled-green);
+        font-size: 1rem;
         font-weight: 700;
+        animation: scaleIn 0.3s var(--spring-bounce);
     }
 
     .model-card__header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.35rem;
     }
 
     .model-card__name {
-        color: #ffffff;
+        color: var(--oled-text);
         font-weight: 600;
+        font-size: 1rem;
     }
 
     .model-card__badge {
-        font-size: 0.7rem;
-        padding: 0.15rem 0.4rem;
-        border-radius: 0.25rem;
+        font-size: 0.65rem;
+        padding: 0.2rem 0.45rem;
+        border-radius: var(--radius-sm);
         font-weight: 700;
         text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 
     .model-card__badge--local {
-        background: #1d4ed8;
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
         color: #fff;
+        box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
     }
 
     .model-card__badge--remote {
-        background: #7c3aed;
+        background: linear-gradient(135deg, #7c3aed, #a855f7);
         color: #fff;
+        box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
     }
 
     .model-card__badge--localservice {
-        background: #0d9469;
+        background: linear-gradient(135deg, #0d9469, #06b6d4);
         color: #fff;
+        box-shadow: 0 2px 8px rgba(13, 148, 105, 0.3);
     }
 
     .model-card__elo {
-        color: #d1d5db;
+        color: var(--oled-text);
         font-size: 0.9rem;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
 
     .model-card__elo-gain {
-        margin-left: 0.5rem;
         font-weight: 700;
+        transition: all var(--transition-fast);
     }
 
-    .model-card__elo-gain.positive { color: #22c55e; }
-    .model-card__elo-gain.negative { color: #ef4444; }
+    .model-card__elo-gain.positive { 
+        color: var(--oled-green);
+        text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+    }
+    
+    .model-card__elo-gain.negative { 
+        color: var(--oled-red);
+        text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+    }
 
     .model-card__stats {
-        color: #9ca3af;
+        color: var(--oled-text-muted);
         font-size: 0.8rem;
+    }
+    
+    /* Ripple effect on click */
+    .model-card::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: radial-gradient(circle, rgba(34, 197, 94, 0.3) 0%, transparent 70%);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        transition: width 0.5s, height 0.5s;
+    }
+    
+    .model-card:active::after {
+        width: 300px;
+        height: 300px;
     }
 </style>

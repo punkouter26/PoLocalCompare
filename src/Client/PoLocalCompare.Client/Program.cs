@@ -15,6 +15,7 @@ builder.Services.AddScoped<DuelApiClient>();
 // ─── Phase 3 client services ─────────────────────────────────────────────────
 builder.Services.AddScoped<AudioService>();
 builder.Services.AddScoped<WebLlmService>();
+builder.Services.AddScoped<PromptTemplatesService>();
 builder.Services.AddTransient<SignalRDuelClient>();
 
 await builder.Build().RunAsync();
