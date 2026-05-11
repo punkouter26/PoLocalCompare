@@ -44,7 +44,7 @@ public sealed class LeaderboardTests : IAsyncLifetime
                             It.IsAny<Model>(),
                             It.IsAny<string>(),
                             It.IsAny<string>(),
-                            It.IsAny<Func<int, long, Task>>(),
+                            It.IsAny<Func<int, long, HtmlStreamStats?, Task>>(),
                             It.IsAny<CancellationToken>()))
                         .ReturnsAsync(new DuelResult("id", "model")
                         {

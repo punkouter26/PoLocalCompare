@@ -23,7 +23,15 @@ window.startWebLlmInference = function (dotnetRef, modelId, prompt) {
     worker.onmessage = (event) => {
         const msg = event.data;
         if (msg.type === 'status') {
-            dotnetRef.invokeMethodAsync('ReceiveStatusUpdate', modelId, msg.status, msg.tokenCount, msg.elapsedMs);
+            dotnetRef.invokeMethodAsync('ReceiveStatusUpdate', modelId, msg.status, msg.tokenCount, msg.elapsedMs,
+                msg.detail ?? null,
+                msg.htmlTagCount ?? 0,
+                msg.openTagDepth ?? 0,
+                msg.styleRuleCount ?? 0,
+                msg.repetitionScore ?? 0,
+                msg.prefillSpeedTps ?? 0,
+                msg.cacheHit ?? false,
+                msg.htmlPreview ?? null);
         } else if (msg.type === 'complete') {
             dotnetRef.invokeMethodAsync('ReceiveComplete', modelId, msg.htmlOutput, msg.tokenCount, msg.totalMs, msg.warmUpMs);
             delete workers[modelId];

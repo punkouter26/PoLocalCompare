@@ -123,14 +123,35 @@ public sealed class DuelExecutionService
             // Remote model: server-side inference via Foundry proxy
             await SendStatusAsync(duelId, model.ModelId, side, SharedDuelStatus.Generating, 0, 0);
 
+            long? warmUpMs = null;
+            double peakVelocity = 0;
+            DateTimeOffset lastTokenAt = DateTimeOffset.UtcNow;
+
             result = await inferenceProxy.RunInferenceAsync(
                 model,
                 duelId,
                 promptFull,
-                async (tokenCount, elapsedMs) =>
+                async (tokenCount, elapsedMs, htmlStats) =>
                 {
+                    // First token arrival = warm-up latency known
+                    if (warmUpMs is null && tokenCount >= 1)
+                        warmUpMs = elapsedMs;
+
+                    lastTokenAt = DateTimeOffset.UtcNow;
+
+                    // Peak velocity (generation-phase only, excluding warm-up)
+                    var genMs = warmUpMs.HasValue ? elapsedMs - warmUpMs.Value : elapsedMs;
+                    var currentVelocity = genMs > 0 ? Math.Round(tokenCount / (genMs / 1000.0), 1) : 0;
+                    if (currentVelocity > peakVelocity) peakVelocity = currentVelocity;
+
+                    var isStalled = (DateTimeOffset.UtcNow - lastTokenAt).TotalSeconds > 2;
+
                     await SendStatusAsync(duelId, model.ModelId, side,
-                        SharedDuelStatus.Generating, elapsedMs, tokenCount);
+                        SharedDuelStatus.Generating, elapsedMs, tokenCount,
+                        warmUpMs: warmUpMs,
+                        peakVelocity: peakVelocity,
+                        isStalled: isStalled,
+                        htmlStats: htmlStats);
                 },
                 cancellationToken);
         }
@@ -199,7 +220,12 @@ public sealed class DuelExecutionService
         string side,
         SharedDuelStatus status,
         long elapsedMs,
-        int tokenCount) =>
+        int tokenCount,
+        string? detail = null,
+        long? warmUpMs = null,
+        double? peakVelocity = null,
+        bool isStalled = false,
+        HtmlStreamStats? htmlStats = null) =>
         _hubContext.Clients
             .Group($"duel:{duelId}")
             .SendAsync("ModelStatusUpdate", new ModelStatusUpdateDto
@@ -210,6 +236,18 @@ public sealed class DuelExecutionService
                 Status = status,
                 ElapsedMs = elapsedMs,
                 TokenCount = tokenCount,
+                WarmUpMs = warmUpMs,
+                TokenVelocity = warmUpMs.HasValue && elapsedMs > warmUpMs
+                    ? Math.Round(tokenCount / ((elapsedMs - warmUpMs.Value) / 1000.0), 1)
+                    : (elapsedMs > 0 ? Math.Round(tokenCount / (elapsedMs / 1000.0), 1) : null),
+                PeakTokenVelocity = peakVelocity,
+                IsStalled = isStalled,
+                HtmlTagCount = htmlStats?.TagCount,
+                OpenTagDepth = htmlStats?.OpenDepth,
+                StyleRuleCount = htmlStats?.StyleRules,
+                RepetitionScore = htmlStats?.RepetitionScore,
+                Detail = detail,
+                HtmlPreview = htmlStats?.HtmlPreview,
             });
 
     /// <summary>

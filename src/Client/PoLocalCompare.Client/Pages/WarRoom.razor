@@ -35,6 +35,7 @@
                             Model="model"
                             LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
                             IsSelected="_leftModel?.ModelId == model.ModelId"
+                            IsDisabled="_rightModel?.ModelId == model.ModelId"
                             OnSelected="m => SelectLeft(m)"
                             ProjectedEloGain="@ComputeProjectedGain(_leftModel, _rightModel)"
                         />
@@ -56,6 +57,7 @@
                             Model="model"
                             LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
                             IsSelected="_rightModel?.ModelId == model.ModelId"
+                            IsDisabled="_leftModel?.ModelId == model.ModelId"
                             OnSelected="m => SelectRight(m)"
                             ProjectedEloGain="@ComputeProjectedGain(_rightModel, _leftModel)"
                         />
@@ -64,11 +66,18 @@
             </div>
         </div>
 
+        @if (_leftModel is not null && _rightModel is not null && _leftModel.ModelId == _rightModel.ModelId)
+        {
+            <p class="war-room__clash-warning">⚠ Left and Right models must differ — select a different model on one side.</p>
+        }
+
         <div class="war-room__prompt-section">
             <label class="war-room__label" for="promptInput">Prompt (5-minute duel, HTML output)</label>
+            <p class="war-room__hint">💡 Local models may take 5–10 min to load on first use. Remote models respond immediately.</p>
             <RadzenTextArea
                 id="promptInput"
                 @bind-Value="_promptText"
+                @oninput="@((ChangeEventArgs e) => { _promptText = e.Value?.ToString() ?? string.Empty; })"
                 Rows="6"
                 class="war-room__textarea"
                 Placeholder="Describe the HTML app you want both models to build…"
@@ -107,7 +116,10 @@
     private string? _error;
 
     private bool CanCommence =>
-        _leftModel is not null && _rightModel is not null && !string.IsNullOrWhiteSpace(_promptText);
+        _leftModel is not null && _rightModel is not null &&
+        _leftModel.ModelId != _rightModel.ModelId &&
+        !string.IsNullOrWhiteSpace(_promptText);
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -245,4 +257,6 @@
     .war-room__actions { display: flex; justify-content: center; margin-bottom: 1rem; }
     .war-room__commence-btn { min-width: 200px; font-size: 1.1rem; }
     .war-room__error { color: #ef4444; text-align: center; margin-top: 0.5rem; }
+    .war-room__clash-warning { color: #f59e0b; background: #f59e0b18; border: 1px solid #f59e0b40; border-radius: 6px; padding: 8px 14px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .war-room__hint { color: #6b7280; font-size: 0.8rem; margin: 4px 0 8px; font-style: italic; }
 </style>

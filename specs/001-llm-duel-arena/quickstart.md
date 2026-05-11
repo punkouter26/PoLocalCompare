@@ -149,15 +149,15 @@ npx playwright test --headed
 
 ## 8. Validation Checklist
 
-- [ ] `https://localhost:5001` loads the War Room (OLED Black theme, dual model columns)
-- [ ] `https://localhost:5001/health` returns `{"status":"Healthy"}`
-- [ ] `https://localhost:5001/diag` shows all connections green
-- [ ] `https://localhost:5001/scalar` shows all API endpoints
-- [ ] Selecting a local + remote model enables the Commence Duel button
-- [ ] Pressing Commence Duel plays the snare-roll audio cue
-- [ ] Processing-phase HUD shows two per-model status panels with elapsed time
-- [ ] Arena reveals two sandboxed viewports after duel completes
-- [ ] Clicking Winner updates ELO and plays success audio
-- [ ] Leaderboard reflects updated ratings within 3 seconds
-- [ ] Lab Archive shows the completed duel
-- [ ] Lab Report export downloads a single self-contained HTML file
+- [X] `https://localhost:5001` loads the War Room (OLED Black theme, dual model columns)
+- [X] `https://localhost:5001/health` returns `{"status":"Healthy"}`
+- [X] `https://localhost:5001/diag` shows all connections green
+- [X] `https://localhost:5001/scalar` shows all API endpoints
+- [X] Selecting a local + remote model enables the Commence Duel button
+- [X] Pressing Commence Duel plays the snare-roll audio cue
+- [X] Processing-phase HUD shows two per-model status panels with elapsed time
+- [X] Arena reveals two sandboxed viewports after duel completes
+- [X] Clicking Winner updates ELO and plays success audio
+- [X] Leaderboard reflects updated ratings within 3 seconds
+- [X] Lab Archive shows the completed duel
+- [X] Lab Report export downloads a single self-contained HTML file

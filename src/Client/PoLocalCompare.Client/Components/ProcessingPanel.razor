@@ -4,21 +4,166 @@
 <div class="processing-panel processing-panel--@Status.ToString().ToLower()">
     <div class="processing-panel__header">
         <span class="processing-panel__name">@ModelName</span>
-        <span class="processing-panel__side">@Side</span>
+        <div class="processing-panel__badges">
+            @if (CacheHit == true)
+            {
+                <span class="badge badge--cache">⚡ cached</span>
+            }
+            @if (IsStalled && Status == DuelStatus.Generating)
+            {
+                <span class="badge badge--stall">⚠ stalled</span>
+            }
+            <span class="processing-panel__side">@Side</span>
+        </div>
     </div>
+
     <div class="processing-panel__status">
-        <span class="processing-panel__status-label">@Status</span>
+        <span class="processing-panel__status-label">
+            @if (Status == DuelStatus.Generating)
+            {
+                <span class="processing-panel__pulse"></span>
+            }
+            @Status
+        </span>
         @if (Status == DuelStatus.Generating || Status == DuelStatus.Done)
         {
-            <span class="processing-panel__tokens">@TokenCount tokens</span>
+            <span class="processing-panel__tokens">@TokenCount.ToString("N0") tokens</span>
         }
     </div>
-    <div class="processing-panel__timer">
-        Elapsed: <strong>@FormatElapsed(ElapsedMs)</strong>
-        @if (EstimatedRemainingMs.HasValue && Status == DuelStatus.Generating)
+
+    @* Sub-phase detail (e.g. WebLLM "Loading weights 42%") *@
+    @if (!string.IsNullOrEmpty(Detail))
+    {
+        <div class="processing-panel__detail">@Detail</div>
+    }
+
+    @* Repetition warning *@
+    @if (RepetitionScore.HasValue && RepetitionScore.Value > 0.3 && Status == DuelStatus.Generating)
+    {
+        <div class="processing-panel__rep-warning">
+            ⟳ Possible loop detected (@(RepetitionScore.Value.ToString("P0")) repeated n-grams)
+        </div>
+    }
+
+    @* Time progress bar against 5-minute limit *@
+    <div class="processing-panel__progress-track">
+        <div class="processing-panel__progress-fill processing-panel__progress-fill--@Status.ToString().ToLower()"
+             style="width: @Math.Min(100, ElapsedMs / 3000.0).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%">
+        </div>
+    </div>
+
+    <div class="processing-panel__metrics">
+
+        @* --- Timing (stats 1, 2, 3) --- *@
+        <div class="processing-panel__metric">
+            <span class="processing-panel__metric-label">Elapsed</span>
+            <span class="processing-panel__metric-value">@FormatElapsed(ElapsedMs)</span>
+        </div>
+
+        @if (WarmUpMs.HasValue)
         {
-            <span class="processing-panel__eta"> · ETA: @FormatElapsed(EstimatedRemainingMs.Value)</span>
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">Warm-up</span>
+                <span class="processing-panel__metric-value">@FormatElapsed(WarmUpMs.Value)</span>
+            </div>
         }
+
+        @if (Status == DuelStatus.Generating && TokenVelocity.HasValue && TokenVelocity.Value > 0)
+        {
+            var remainingTokens = 8000 - TokenCount;
+            var etaMs = (long)(remainingTokens / TokenVelocity.Value * 1000);
+            var finishAt = DateTime.Now.AddMilliseconds(etaMs);
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">~Done at</span>
+                <span class="processing-panel__metric-value">@finishAt.ToString("h:mm tt")</span>
+            </div>
+        }
+
+        @* --- Speed (stats 1, 2) --- *@
+        @if (TokenVelocity.HasValue && TokenVelocity.Value > 0)
+        {
+            <div class="processing-panel__metric processing-panel__metric--highlight">
+                <span class="processing-panel__metric-label">Gen speed</span>
+                <span class="processing-panel__metric-value">@TokenVelocity.Value.ToString("F1") tok/s</span>
+            </div>
+        }
+
+        @if (PeakTokenVelocity.HasValue && PeakTokenVelocity.Value > 0)
+        {
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">Peak speed</span>
+                <span class="processing-panel__metric-value">@PeakTokenVelocity.Value.ToString("F1") tok/s</span>
+            </div>
+        }
+
+        @if (PrefillSpeedTps.HasValue && PrefillSpeedTps.Value > 0)
+        {
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">Prefill</span>
+                <span class="processing-panel__metric-value">@PrefillSpeedTps.Value.ToString("F0") tok/s</span>
+            </div>
+        }
+
+        @* --- Output size + rate --- *@
+        @if (TokenCount > 0)
+        {
+            var outputBytes = (long)(TokenCount * 4.5);
+            var genElapsedMs = WarmUpMs.HasValue ? Math.Max(1, ElapsedMs - WarmUpMs.Value) : Math.Max(1, ElapsedMs);
+
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">~Output</span>
+                <span class="processing-panel__metric-value">@FormatBytes(outputBytes)</span>
+            </div>
+
+            @if (Status == DuelStatus.Generating && genElapsedMs > 0)
+            {
+                var kbPerSec = outputBytes / 1024.0 / (genElapsedMs / 1000.0);
+                <div class="processing-panel__metric">
+                    <span class="processing-panel__metric-label">Rate</span>
+                    <span class="processing-panel__metric-value">@kbPerSec.ToString("F2") KB/s</span>
+                </div>
+            }
+
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">~Progress</span>
+                <span class="processing-panel__metric-value">@((TokenCount * 100 / 8000).ToString())%</span>
+            </div>
+        }
+
+        @* --- HTML structure (stats 5, 6, 7) --- *@
+        @if (HtmlTagCount.HasValue && HtmlTagCount.Value > 0)
+        {
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">HTML tags</span>
+                <span class="processing-panel__metric-value">@HtmlTagCount.Value.ToString("N0")</span>
+            </div>
+        }
+
+        @if (OpenTagDepth.HasValue)
+        {
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">Tag depth</span>
+                <span class="processing-panel__metric-value">@OpenTagDepth.Value</span>
+            </div>
+        }
+
+        @if (StyleRuleCount.HasValue && StyleRuleCount.Value > 0)
+        {
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">CSS rules</span>
+                <span class="processing-panel__metric-value">@StyleRuleCount.Value.ToString("N0")</span>
+            </div>
+        }
+
+        @* --- Repetition score (stat 8) — only show when non-trivial --- *@
+        @if (RepetitionScore.HasValue && RepetitionScore.Value > 0.05)
+        {
+            <div class="processing-panel__metric @(RepetitionScore.Value > 0.3 ? "processing-panel__metric--danger" : "")">
+                <span class="processing-panel__metric-label">Loop risk</span>
+                <span class="processing-panel__metric-value">@RepetitionScore.Value.ToString("P0")</span>
+            </div>
+        }
+
     </div>
 </div>
 
@@ -28,14 +173,31 @@
     [Parameter] public DuelStatus Status { get; set; } = DuelStatus.Initializing;
     [Parameter] public long ElapsedMs { get; set; }
     [Parameter] public int TokenCount { get; set; }
-    [Parameter] public long? EstimatedRemainingMs { get; set; }
+    [Parameter] public double? TokenVelocity { get; set; }
+    [Parameter] public double? PeakTokenVelocity { get; set; }
+    [Parameter] public long? WarmUpMs { get; set; }
+    [Parameter] public bool IsStalled { get; set; }
+    [Parameter] public int? HtmlTagCount { get; set; }
+    [Parameter] public int? OpenTagDepth { get; set; }
+    [Parameter] public int? StyleRuleCount { get; set; }
+    [Parameter] public double? RepetitionScore { get; set; }
+    [Parameter] public double? PrefillSpeedTps { get; set; }
+    [Parameter] public bool? CacheHit { get; set; }
+    [Parameter] public string? Detail { get; set; }
 
     private static string FormatElapsed(long ms)
     {
+        if (ms <= 0) return "0s";
         var ts = TimeSpan.FromMilliseconds(ms);
         return ts.TotalMinutes >= 1
             ? $"{(int)ts.TotalMinutes}m {ts.Seconds:D2}s"
             : $"{ts.TotalSeconds:F1}s";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes} B";
     }
 }
 
@@ -45,41 +207,242 @@
         border: 1px solid #333;
         border-radius: 0.5rem;
         padding: 1rem;
-        min-height: 120px;
+        min-height: 160px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
     }
 
     .processing-panel--generating { border-color: #eab308; }
-    .processing-panel--done { border-color: #22c55e; }
-    .processing-panel--failed { border-color: #ef4444; }
+    .processing-panel--done       { border-color: #22c55e; }
+    .processing-panel--failed     { border-color: #ef4444; }
 
     .processing-panel__header {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.4rem;
     }
 
-    .processing-panel__name { color: #fff; font-weight: 700; font-size: 1rem; }
+    .processing-panel__name  { color: #fff; font-weight: 700; font-size: 1rem; }
 
-    .processing-panel__side {
-        color: #9ca3af;
-        font-size: 0.8rem;
+    .processing-panel__badges {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .processing-panel__side  { color: #9ca3af; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .badge {
+        font-size: 0.68rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .badge--cache { background: #1a3a1a; color: #4ade80; border: 1px solid #166534; }
+    .badge--stall { background: #3a1a1a; color: #f87171; border: 1px solid #991b1b; animation: pulse-stall 1.5s ease-in-out infinite; }
+
+    @@keyframes pulse-stall {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .processing-panel__status {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .processing-panel__status-label {
+        font-weight: 600;
+        font-size: 1.05rem;
+        color: #e5e7eb;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .processing-panel--generating .processing-panel__status-label { color: #eab308; }
+    .processing-panel--done       .processing-panel__status-label { color: #22c55e; }
+    .processing-panel--failed     .processing-panel__status-label { color: #ef4444; }
+
+    .processing-panel__pulse {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #eab308;
+        animation: pulse-dot 1s ease-in-out infinite;
+    }
+
+    @@keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%       { opacity: 0.3; transform: scale(0.6); }
+    }
+
+    .processing-panel__tokens { color: #9ca3af; font-size: 0.88rem; }
+
+    .processing-panel__detail {
+        color: #6b7280;
+        font-size: 0.78rem;
+        font-style: italic;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .processing-panel__rep-warning {
+        color: #f87171;
+        font-size: 0.78rem;
+        font-weight: 600;
+        background: #1f0808;
+        border: 1px solid #7f1d1d;
+        border-radius: 0.25rem;
+        padding: 0.2rem 0.5rem;
+    }
+
+    .processing-panel__progress-track {
+        height: 4px;
+        background: #1f2937;
+        border-radius: 2px;
+        overflow: hidden;
+    }
+
+    .processing-panel__progress-fill {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.5s linear;
+        background: #374151;
+    }
+
+    .processing-panel__progress-fill--generating { background: #eab308; }
+    .processing-panel__progress-fill--done       { background: #22c55e; }
+    .processing-panel__progress-fill--failed     { background: #ef4444; }
+
+    .processing-panel__metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+        gap: 0.4rem 0.75rem;
+    }
+
+    .processing-panel__metric {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+
+    .processing-panel__metric--highlight .processing-panel__metric-value { color: #eab308; }
+    .processing-panel__metric--danger    .processing-panel__metric-value { color: #f87171; }
+
+    .processing-panel__metric-label {
+        color: #4b5563;
+        font-size: 0.68rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
 
-    .processing-panel__status { display: flex; gap: 1rem; align-items: center; margin-bottom: 0.5rem; }
-
-    .processing-panel__status-label {
+    .processing-panel__metric-value {
+        color: #d1d5db;
+        font-size: 0.88rem;
         font-weight: 600;
-        color: #e5e7eb;
-        font-size: 1.1rem;
+        font-variant-numeric: tabular-nums;
+    }
+</style>
+
+
+<div class="processing-panel processing-panel--@Status.ToString().ToLower()">
+    <div class="processing-panel__header">
+        <span class="processing-panel__name">@ModelName</span>
+        <span class="processing-panel__side">@Side</span>
+    </div>
+
+    <div class="processing-panel__status">
+        <span class="processing-panel__status-label">
+            @if (Status == DuelStatus.Generating)
+            {
+                <span class="processing-panel__pulse"></span>
+            }
+            @Status
+        </span>
+        @if (Status == DuelStatus.Generating || Status == DuelStatus.Done)
+        {
+            <span class="processing-panel__tokens">@TokenCount.ToString("N0") tokens</span>
+        }
+    </div>
+
+    @* Detail / sub-phase (e.g. WebLLM: "Loading weights 42%") *@
+    @if (!string.IsNullOrEmpty(Detail))
+    {
+        <div class="processing-panel__detail">@Detail</div>
     }
 
-    .processing-panel--generating .processing-panel__status-label { color: #eab308; }
-    .processing-panel--done .processing-panel__status-label { color: #22c55e; }
-    .processing-panel--failed .processing-panel__status-label { color: #ef4444; }
+    @* Time progress bar against 5-minute limit *@
+    <div class="processing-panel__progress-track">
+        <div class="processing-panel__progress-fill processing-panel__progress-fill--@Status.ToString().ToLower()"
+             style="width: @Math.Min(100, ElapsedMs / 3000.0).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%">
+        </div>
+    </div>
 
-    .processing-panel__tokens { color: #9ca3af; font-size: 0.9rem; }
-    .processing-panel__timer { color: #6b7280; font-size: 0.85rem; }
-    .processing-panel__eta { color: #9ca3af; }
-</style>
+    <div class="processing-panel__metrics">
+        <div class="processing-panel__metric">
+            <span class="processing-panel__metric-label">Elapsed</span>
+            <span class="processing-panel__metric-value">@FormatElapsed(ElapsedMs)</span>
+        </div>
+
+        @if (WarmUpMs.HasValue)
+        {
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">Warm-up</span>
+                <span class="processing-panel__metric-value">@FormatElapsed(WarmUpMs.Value)</span>
+            </div>
+        }
+
+        @if (Status == DuelStatus.Generating && ElapsedMs > 0)
+        {
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">Remaining</span>
+                <span class="processing-panel__metric-value">@FormatElapsed(Math.Max(0, 300_000 - ElapsedMs))</span>
+            </div>
+        }
+
+        @if (TokenVelocity.HasValue && TokenVelocity.Value > 0)
+        {
+            <div class="processing-panel__metric processing-panel__metric--highlight">
+                <span class="processing-panel__metric-label">Gen speed</span>
+                <span class="processing-panel__metric-value">@TokenVelocity.Value.ToString("F1") tok/s</span>
+            </div>
+        }
+
+        @if (TokenCount > 0)
+        {
+            var outputBytes = (long)(TokenCount * 4.5);
+            var genElapsedMs = WarmUpMs.HasValue ? Math.Max(1, ElapsedMs - WarmUpMs.Value) : Math.Max(1, ElapsedMs);
+            var kbPerSec = outputBytes / 1024.0 / (genElapsedMs / 1000.0);
+
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">~Output</span>
+                <span class="processing-panel__metric-value">@FormatBytes(outputBytes)</span>
+            </div>
+
+            @if (Status == DuelStatus.Generating && kbPerSec > 0)
+            {
+                <div class="processing-panel__metric">
+                    <span class="processing-panel__metric-label">Rate</span>
+                    <span class="processing-panel__metric-value">@kbPerSec.ToString("F2") KB/s</span>
+                </div>
+            }
+
+            <div class="processing-panel__metric">
+                <span class="processing-panel__metric-label">~Progress</span>
+                <span class="processing-panel__metric-value">@((TokenCount * 100 / 8000).ToString())%</span>
+            </div>
+        }
+    </div>
+</div>
+
+

@@ -1,8 +1,12 @@
 // GoF: Proxy pattern; SOLID: Interface Segregation
-using Azure.AI.Inference;
-using Azure;
+using System.ClientModel;
+using System.Text;
+using Azure.Identity;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using OpenAI;
+using OpenAI.Chat;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
 
@@ -23,86 +27,85 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         Model model,
         string duelId,
         string promptFull,
-        Func<int, long, Task> onTokenUpdate,
+        Func<int, long, HtmlStreamStats?, Task> onTokenUpdate,
         CancellationToken cancellationToken)
     {
         var result = new DuelResult(duelId, model.ModelId);
         var startTime = DateTimeOffset.UtcNow;
 
-        var useRealAi = bool.TryParse(_configuration["Features:UseRealAi"], out var flag) && flag;
-
-        if (!useRealAi)
-        {
-            // Mock response for development/testing
-            await Task.Delay(2000, cancellationToken);
-            var mockHtml = "<html><body><h1>Mock Response</h1><p>Features:UseRealAi is false.</p></body></html>";
-            var totalMs = (long)(DateTimeOffset.UtcNow - startTime).TotalMilliseconds;
-
-            result.WarmUpDurationMs = 100;
-            result.GenerationDurationMs = totalMs - 100;
-            result.TotalDurationMs = totalMs;
-            result.TokenCount = 50;
-            result.TokenVelocity = 25.0;
-            result.HtmlOutputRaw = mockHtml;
-            result.HtmlOutputSizeBytes = System.Text.Encoding.UTF8.GetByteCount(mockHtml);
-            result.CharacterDensityRatio = 0.8;
-            result.IsFailure = false;
-
-            return result;
-        }
-
         try
         {
-            var endpoint = _configuration["AzureAiFoundry:Endpoint"]
-                ?? throw new InvalidOperationException("AzureAiFoundry:Endpoint is not configured.");
+            var endpoint = (_configuration["AzureAiFoundry:Endpoint"] ?? throw new InvalidOperationException("AzureAiFoundry:Endpoint is not configured.")).TrimEnd('/');
             var apiKey = _configuration["AzureAiFoundry:ApiKey"];
             var deploymentName = model.ApiEndpointRef
                 ?? throw new InvalidOperationException($"Model {model.ModelId} has no ApiEndpointRef.");
 
-            ChatCompletionsClient client;
-            if (!string.IsNullOrEmpty(apiKey))
+            // Use the OpenAI SDK targeting Azure OpenAI's OpenAI-compatible endpoint (/openai/v1/)
+            // This uses Authorization: Bearer <api-key> which the /openai/v1/ path accepts.
+            // Managed Identity fallback: exchange a token from DefaultAzureCredential.
+            ChatClient chatClient;
+            if (string.IsNullOrEmpty(apiKey))
             {
-                client = new ChatCompletionsClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
+                var credential = new DefaultAzureCredential();
+                var ctx = new Azure.Core.TokenRequestContext(["https://cognitiveservices.azure.com/.default"]);
+                var token = await credential.GetTokenAsync(ctx, cancellationToken);
+                var options = new OpenAIClientOptions { Endpoint = new Uri($"{endpoint}/openai/v1/") };
+                chatClient = new OpenAIClient(new ApiKeyCredential(token.Token), options).GetChatClient(deploymentName);
             }
             else
             {
-                // Managed Identity (production)
-                client = new ChatCompletionsClient(
-                    new Uri(endpoint),
-                    new Azure.Identity.DefaultAzureCredential());
+                var options = new OpenAIClientOptions { Endpoint = new Uri($"{endpoint}/openai/v1/") };
+                chatClient = new OpenAIClient(new ApiKeyCredential(apiKey), options).GetChatClient(deploymentName);
             }
 
+            // Create an MAF AIAgent backed by the OpenAI-compatible Chat Completions API
+            AIAgent agent = chatClient.AsAIAgent(
+                instructions: "You are an expert web developer. Output only complete, standalone HTML pages with no explanations.",
+                name: $"HtmlGenerator-{deploymentName}");
+
             var warmUpStart = DateTimeOffset.UtcNow;
-            var htmlBuilder = new System.Text.StringBuilder();
+            var htmlBuilder = new StringBuilder();
             var firstToken = true;
             var tokenCount = 0;
 
-            var streamingResponse = await client.CompleteStreamingAsync(
-                new ChatCompletionsOptions
-                {
-                    Messages = { new ChatRequestUserMessage(promptFull) },
-                    Model = deploymentName,
-                    MaxTokens = 8000
-                },
-                cancellationToken);
+            // HTML stats tracking
+            var htmlTagCount = 0;
+            var openTagDepth = 0;
+            var styleRuleCount = 0;
+            var inStyleBlock = false;
+            var recentChunks = new Queue<string>(50);
 
-            await foreach (var chunk in streamingResponse.WithCancellation(cancellationToken))
+            // Stream tokens via MAF RunStreamingAsync
+            await foreach (var update in agent.RunStreamingAsync(promptFull, cancellationToken: cancellationToken))
             {
-                foreach (var choice in chunk.Choices)
+                var content = update.Text;
+                if (string.IsNullOrEmpty(content)) continue;
+
+                if (firstToken)
                 {
-                    if (choice.Delta?.Content is { } content)
-                    {
-                        if (firstToken)
-                        {
-                            result.WarmUpDurationMs = (long)(DateTimeOffset.UtcNow - warmUpStart).TotalMilliseconds;
-                            firstToken = false;
-                        }
-                        htmlBuilder.Append(content);
-                        tokenCount++;
-                        var elapsedMs = (long)(DateTimeOffset.UtcNow - startTime).TotalMilliseconds;
-                        await onTokenUpdate(tokenCount, elapsedMs);
-                    }
+                    result.WarmUpDurationMs = (long)(DateTimeOffset.UtcNow - warmUpStart).TotalMilliseconds;
+                    firstToken = false;
                 }
+
+                htmlBuilder.Append(content);
+                tokenCount++;
+
+                UpdateHtmlStats(content, ref htmlTagCount, ref openTagDepth, ref styleRuleCount, ref inStyleBlock);
+
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    if (recentChunks.Count >= 50) recentChunks.Dequeue();
+                    recentChunks.Enqueue(content);
+                }
+                var repScore = ComputeRepetitionScore(recentChunks);
+
+                // Include partial HTML preview every 25 tokens to show live progress
+                var preview = tokenCount % 25 == 0 ? htmlBuilder.ToString() : null;
+                var htmlStats = new HtmlStreamStats(htmlTagCount, Math.Max(0, openTagDepth),
+                    styleRuleCount, repScore, preview);
+
+                var elapsedMs = (long)(DateTimeOffset.UtcNow - startTime).TotalMilliseconds;
+                await onTokenUpdate(tokenCount, elapsedMs, htmlStats);
             }
 
             var completedAt = DateTimeOffset.UtcNow;
@@ -146,5 +149,61 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         }
 
         return result;
+    }
+
+    /// <summary>Incrementally updates HTML structure stats from a new content chunk.</summary>
+    private static void UpdateHtmlStats(string chunk,
+        ref int tagCount, ref int depth, ref int styleRules, ref bool inStyle)
+    {
+        for (var i = 0; i < chunk.Length; i++)
+        {
+            if (chunk[i] == '<')
+            {
+                // Peek ahead for closing tag or style tag
+                var rest = chunk.AsSpan(i + 1);
+                if (rest.StartsWith("/", StringComparison.Ordinal))
+                {
+                    depth--;
+                }
+                else if (!rest.StartsWith("!", StringComparison.Ordinal)) // skip comments/doctype
+                {
+                    tagCount++;
+                    depth++;
+                    // Detect <style
+                    if (rest.StartsWith("style", StringComparison.OrdinalIgnoreCase))
+                        inStyle = true;
+                }
+                // Detect </style
+                if (rest.StartsWith("/style", StringComparison.OrdinalIgnoreCase))
+                    inStyle = false;
+            }
+            else if (inStyle && chunk[i] == '{')
+            {
+                styleRules++;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Computes a 0–1 repetition score on the rolling chunk window.
+    /// Joins all chunks, splits into 5-grams of words, checks for duplicates.
+    /// </summary>
+    private static double ComputeRepetitionScore(Queue<string> recentChunks)
+    {
+        if (recentChunks.Count < 10) return 0;
+        var text = string.Concat(recentChunks);
+        var words = text.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length < 10) return 0;
+
+        var ngrams = new HashSet<string>();
+        var duplicates = 0;
+        const int n = 5;
+        for (var i = 0; i <= words.Length - n; i++)
+        {
+            var gram = string.Join(' ', words, i, n);
+            if (!ngrams.Add(gram)) duplicates++;
+        }
+        var total = words.Length - n + 1;
+        return total > 0 ? Math.Round((double)duplicates / total, 2) : 0;
     }
 }

@@ -40,10 +40,17 @@
     }
     else
     {
-        <RadzenDataGrid Data="@_entries" TItem="LeaderboardEntryDto" RowSelect="OnRowSelect" Class="leaderboard__grid">
+        @if (_entries.Count > 0 && _entries.All(e => e.DuelCount == 0))
+        {
+            <div class="leaderboard__empty-state">
+                <p>&#x1F3C6; No duels have been fought yet.</p>
+                <a href="/war-room" class="leaderboard__cta">&#x2694;&#xFE0F; Head to the War Room to start one!</a>
+            </div>
+        }
+        <RadzenDataGrid Data="@_entries" TItem="LeaderboardEntryDto" RowSelect="OnRowSelect" Class="leaderboard__grid leaderboard__grid--scrollable">
             <Columns>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px" />
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" />
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" Width="200px" />
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="CurrentElo" Title="ELO" Width="120px">
                     <Template Context="entry">
                         @((int)Math.Round(entry.CurrentElo))
@@ -60,18 +67,21 @@
                         @($"{entry.WinCount}/{losses}{pctStr}")
                     </Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="Green Score" Width="140px">
-                    <Template Context="entry">
-                        @if (entry.GreenScoreAvg.HasValue)
-                        {
-                            @entry.GreenScoreAvg.Value.ToString("F1")
-                        }
-                        else
-                        {
-                            <span title="Available after real AI duels are completed" style="color: var(--rz-text-secondary-color); font-style: italic;">N/A</span>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
+                @if (_entries.Any(e => e.GreenScoreAvg.HasValue))
+                {
+                    <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="Green Score" Width="140px">
+                        <Template Context="entry">
+                            @if (entry.GreenScoreAvg.HasValue)
+                            {
+                                @entry.GreenScoreAvg.Value.ToString("F1")
+                            }
+                            else
+                            {
+                                <span style="color: var(--rz-text-secondary-color);">—</span>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                }
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="ELO Trend (last 20)" Width="170px">
                     <Template Context="entry">
                         @if (entry.EloSparkline.Count > 1)
@@ -242,6 +252,32 @@
 
     .leaderboard__grid {
         margin-bottom: 1rem;
+    }
+
+    .leaderboard__grid--scrollable {
+        overflow-x: auto;
+    }
+
+    .leaderboard__empty-state {
+        background: #111;
+        border: 1px solid #2a2a2a;
+        border-radius: 8px;
+        padding: 20px 24px;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        color: #9ca3af;
+    }
+
+    .leaderboard__cta {
+        display: inline-block;
+        margin-top: 8px;
+        color: #22c55e;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .leaderboard__cta:hover {
+        text-decoration: underline;
     }
 
     .leaderboard__killlist-panel {

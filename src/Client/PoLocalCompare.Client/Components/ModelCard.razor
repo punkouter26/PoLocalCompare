@@ -2,7 +2,7 @@
 @using PoLocalCompare.Shared.Enums
 @using Radzen.Blazor
 
-<RadzenCard class="@_cardClass" @onclick="OnCardClick" style="cursor:pointer;">
+<RadzenCard class="@_cardClass" @onclick="OnCardClick" style="@(IsDisabled ? "cursor:not-allowed;opacity:0.45;" : "cursor:pointer;")">
     <div class="model-card__header">
         <span class="model-card__name">@(LabelOverride ?? Model.DisplayName)</span>
         <span class="model-card__badge model-card__badge--@(Model.ModelType == ModelType.Local ? "local" : "remote")">
@@ -27,6 +27,7 @@
     [Parameter, EditorRequired] public ModelDto Model { get; set; } = null!;
     [Parameter] public string? LabelOverride { get; set; }
     [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
     [Parameter] public double? ProjectedEloGain { get; set; }
 
@@ -34,7 +35,8 @@
 
     private async Task OnCardClick()
     {
-        await OnSelected.InvokeAsync(Model);
+        if (!IsDisabled)
+            await OnSelected.InvokeAsync(Model);
     }
 }
 

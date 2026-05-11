@@ -22,6 +22,17 @@
             Status="@_leftStatus"
             ElapsedMs="@_leftElapsedMs"
             TokenCount="@_leftTokenCount"
+            TokenVelocity="@_leftTokenVelocity"
+            PeakTokenVelocity="@_leftPeakVelocity"
+            WarmUpMs="@_leftWarmUpMs"
+            IsStalled="@_leftIsStalled"
+            HtmlTagCount="@_leftHtmlTagCount"
+            OpenTagDepth="@_leftOpenTagDepth"
+            StyleRuleCount="@_leftStyleRuleCount"
+            RepetitionScore="@_leftRepetitionScore"
+            PrefillSpeedTps="@_leftPrefillSpeedTps"
+            CacheHit="@_leftCacheHit"
+            Detail="@_leftDetail"
         />
         <ProcessingPanel
             ModelName="@_rightModelId"
@@ -29,8 +40,48 @@
             Status="@_rightStatus"
             ElapsedMs="@_rightElapsedMs"
             TokenCount="@_rightTokenCount"
+            TokenVelocity="@_rightTokenVelocity"
+            PeakTokenVelocity="@_rightPeakVelocity"
+            WarmUpMs="@_rightWarmUpMs"
+            IsStalled="@_rightIsStalled"
+            HtmlTagCount="@_rightHtmlTagCount"
+            OpenTagDepth="@_rightOpenTagDepth"
+            StyleRuleCount="@_rightStyleRuleCount"
+            RepetitionScore="@_rightRepetitionScore"
+            PrefillSpeedTps="@_rightPrefillSpeedTps"
+            CacheHit="@_rightCacheHit"
+            Detail="@_rightDetail"
         />
     </div>
+
+    @if (_leftHtmlPreview is not null || _rightHtmlPreview is not null)
+    {
+        <div class="processing-page__preview-heading">
+            <span class="processing-page__preview-label">&#x1F4FA; Live Preview — rendering in real time</span>
+        </div>
+        <div class="processing-page__previews">
+            <div class="processing-page__preview-panel">
+                @if (_leftHtmlPreview is not null)
+                {
+                    <SandboxedViewport HtmlContent="@_leftHtmlPreview" ModelName="@_leftModelId" IsLoser="false" />
+                }
+                else
+                {
+                    <div class="processing-page__preview-waiting">@_leftModelId — waiting for first output…</div>
+                }
+            </div>
+            <div class="processing-page__preview-panel">
+                @if (_rightHtmlPreview is not null)
+                {
+                    <SandboxedViewport HtmlContent="@_rightHtmlPreview" ModelName="@_rightModelId" IsLoser="false" />
+                }
+                else
+                {
+                    <div class="processing-page__preview-waiting">@_rightModelId — waiting for first output…</div>
+                }
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -45,6 +96,37 @@
     private long _rightElapsedMs;
     private int _leftTokenCount;
     private int _rightTokenCount;
+    private double? _leftTokenVelocity;
+    private double? _rightTokenVelocity;
+    private double? _leftPeakVelocity;
+    private double? _rightPeakVelocity;
+    private long? _leftWarmUpMs;
+    private long? _rightWarmUpMs;
+    private bool _leftIsStalled;
+    private bool _rightIsStalled;
+    private DateTimeOffset _leftLastTokenAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _rightLastTokenAt = DateTimeOffset.UtcNow;
+    // HTML content stats
+    private int? _leftHtmlTagCount;
+    private int? _rightHtmlTagCount;
+    private int? _leftOpenTagDepth;
+    private int? _rightOpenTagDepth;
+    private int? _leftStyleRuleCount;
+    private int? _rightStyleRuleCount;
+    private double? _leftRepetitionScore;
+    private double? _rightRepetitionScore;
+    // Local-model-only stats
+    private double? _leftPrefillSpeedTps;
+    private double? _rightPrefillSpeedTps;
+    private bool? _leftCacheHit;
+    private bool? _rightCacheHit;
+    private string? _leftDetail;
+    private string? _rightDetail;
+    // Live HTML preview (partial HTML accumulated during generation)
+    private string? _leftHtmlPreview;
+    private string? _rightHtmlPreview;
+    private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
+    private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
 
     // Track in-flight local inference tasks to avoid double-starting
     private readonly HashSet<string> _runningLocalModels = [];
@@ -54,6 +136,7 @@
         HubClient.OnModelStatusUpdate += HandleStatusUpdate;
         HubClient.OnDuelComplete += HandleDuelComplete;
         HubClient.OnStartLocalInference += HandleStartLocalInference;
+        WebLlm.OnStatusUpdate += HandleLocalStatusUpdate;
 
         var baseUri = Nav.BaseUri.TrimEnd('/');
         await HubClient.ConnectAsync(baseUri, DuelId);
@@ -69,6 +152,19 @@
             _leftStatus = update.Status;
             _leftElapsedMs = update.ElapsedMs;
             _leftTokenCount = update.TokenCount;
+            if (update.TokenVelocity.HasValue) _leftTokenVelocity = update.TokenVelocity;
+            if (update.WarmUpMs.HasValue) _leftWarmUpMs = update.WarmUpMs;
+            if (update.PeakTokenVelocity.HasValue) _leftPeakVelocity = update.PeakTokenVelocity;
+            _leftIsStalled = update.IsStalled;
+            if (update.HtmlTagCount.HasValue) _leftHtmlTagCount = update.HtmlTagCount;
+            if (update.OpenTagDepth.HasValue) _leftOpenTagDepth = update.OpenTagDepth;
+            if (update.StyleRuleCount.HasValue) _leftStyleRuleCount = update.StyleRuleCount;
+            if (update.RepetitionScore.HasValue) _leftRepetitionScore = update.RepetitionScore;
+            if (update.PrefillSpeedTps.HasValue) _leftPrefillSpeedTps = update.PrefillSpeedTps;
+            if (update.CacheHit.HasValue) _leftCacheHit = update.CacheHit;
+            if (update.Detail is not null) _leftDetail = update.Detail;
+            if (update.HtmlPreview is not null) _leftHtmlPreview = update.HtmlPreview;
+            _leftLastTokenAt = DateTimeOffset.UtcNow;
         }
         else
         {
@@ -76,8 +172,93 @@
             _rightStatus = update.Status;
             _rightElapsedMs = update.ElapsedMs;
             _rightTokenCount = update.TokenCount;
+            if (update.TokenVelocity.HasValue) _rightTokenVelocity = update.TokenVelocity;
+            if (update.WarmUpMs.HasValue) _rightWarmUpMs = update.WarmUpMs;
+            if (update.PeakTokenVelocity.HasValue) _rightPeakVelocity = update.PeakTokenVelocity;
+            _rightIsStalled = update.IsStalled;
+            if (update.HtmlTagCount.HasValue) _rightHtmlTagCount = update.HtmlTagCount;
+            if (update.OpenTagDepth.HasValue) _rightOpenTagDepth = update.OpenTagDepth;
+            if (update.StyleRuleCount.HasValue) _rightStyleRuleCount = update.StyleRuleCount;
+            if (update.RepetitionScore.HasValue) _rightRepetitionScore = update.RepetitionScore;
+            if (update.PrefillSpeedTps.HasValue) _rightPrefillSpeedTps = update.PrefillSpeedTps;
+            if (update.CacheHit.HasValue) _rightCacheHit = update.CacheHit;
+            if (update.Detail is not null) _rightDetail = update.Detail;
+            if (update.HtmlPreview is not null) _rightHtmlPreview = update.HtmlPreview;
+            _rightLastTokenAt = DateTimeOffset.UtcNow;
         }
 
+        InvokeAsync(StateHasChanged);
+    }
+
+    // Local model status updates come directly from the JS worker (bypassing server SignalR)
+    private void HandleLocalStatusUpdate(string modelId, WebLlmStatusUpdate update)
+    {
+        var isLeft = _leftModelId == modelId || (_leftStatus == DuelStatus.Initializing && _rightModelId != modelId);
+
+        if (isLeft)
+        {
+            // Capture warm-up: elapsed at the moment Initializing → Generating transitions
+            if (_leftPrevStatus == DuelStatus.Initializing && update.Status == "Generating")
+                _leftWarmUpMs = update.ElapsedMs;
+            _leftPrevStatus = update.Status switch {
+                "Generating" => DuelStatus.Generating,
+                "Done"       => DuelStatus.Done,
+                "Failed"     => DuelStatus.Failed,
+                _            => DuelStatus.Initializing,
+            };
+
+            _leftTokenCount = update.TokenCount;
+            _leftElapsedMs = update.ElapsedMs;
+            // Generation-only velocity (exclude warm-up)
+            var genMs = _leftWarmUpMs.HasValue ? update.ElapsedMs - _leftWarmUpMs.Value : update.ElapsedMs;
+            var vel = genMs > 0 && update.TokenCount > 0
+                ? Math.Round(update.TokenCount / (genMs / 1000.0), 1) : (double?)null;
+            _leftTokenVelocity = vel;
+            if (vel.HasValue && vel.Value > (_leftPeakVelocity ?? 0)) _leftPeakVelocity = vel;
+            _leftIsStalled = update.Status == "Generating" &&
+                (DateTimeOffset.UtcNow - _leftLastTokenAt).TotalSeconds > 2;
+            if (update.TokenCount > 0) _leftLastTokenAt = DateTimeOffset.UtcNow;
+            if (update.HtmlTagCount > 0) _leftHtmlTagCount = update.HtmlTagCount;
+            if (update.OpenTagDepth > 0) _leftOpenTagDepth = update.OpenTagDepth;
+            if (update.StyleRuleCount > 0) _leftStyleRuleCount = update.StyleRuleCount;
+            if (update.RepetitionScore > 0) _leftRepetitionScore = update.RepetitionScore;
+            if (update.PrefillSpeedTps.HasValue) _leftPrefillSpeedTps = update.PrefillSpeedTps;
+            _leftCacheHit = update.CacheHit;
+            if (update.Detail is not null) _leftDetail = update.Detail;
+            else if (update.Status == "Generating") _leftDetail = null;
+            if (update.HtmlPreview is not null) _leftHtmlPreview = update.HtmlPreview;
+        }
+        else
+        {
+            if (_rightPrevStatus == DuelStatus.Initializing && update.Status == "Generating")
+                _rightWarmUpMs = update.ElapsedMs;
+            _rightPrevStatus = update.Status switch {
+                "Generating" => DuelStatus.Generating,
+                "Done"       => DuelStatus.Done,
+                "Failed"     => DuelStatus.Failed,
+                _            => DuelStatus.Initializing,
+            };
+
+            _rightTokenCount = update.TokenCount;
+            _rightElapsedMs = update.ElapsedMs;
+            var genMs = _rightWarmUpMs.HasValue ? update.ElapsedMs - _rightWarmUpMs.Value : update.ElapsedMs;
+            var vel = genMs > 0 && update.TokenCount > 0
+                ? Math.Round(update.TokenCount / (genMs / 1000.0), 1) : (double?)null;
+            _rightTokenVelocity = vel;
+            if (vel.HasValue && vel.Value > (_rightPeakVelocity ?? 0)) _rightPeakVelocity = vel;
+            _rightIsStalled = update.Status == "Generating" &&
+                (DateTimeOffset.UtcNow - _rightLastTokenAt).TotalSeconds > 2;
+            if (update.TokenCount > 0) _rightLastTokenAt = DateTimeOffset.UtcNow;
+            if (update.HtmlTagCount > 0) _rightHtmlTagCount = update.HtmlTagCount;
+            if (update.OpenTagDepth > 0) _rightOpenTagDepth = update.OpenTagDepth;
+            if (update.StyleRuleCount > 0) _rightStyleRuleCount = update.StyleRuleCount;
+            if (update.RepetitionScore > 0) _rightRepetitionScore = update.RepetitionScore;
+            if (update.PrefillSpeedTps.HasValue) _rightPrefillSpeedTps = update.PrefillSpeedTps;
+            _rightCacheHit = update.CacheHit;
+            if (update.Detail is not null) _rightDetail = update.Detail;
+            else if (update.Status == "Generating") _rightDetail = null;
+            if (update.HtmlPreview is not null) _rightHtmlPreview = update.HtmlPreview;
+        }
         InvokeAsync(StateHasChanged);
     }
 
@@ -163,6 +344,7 @@
         HubClient.OnModelStatusUpdate -= HandleStatusUpdate;
         HubClient.OnDuelComplete -= HandleDuelComplete;
         HubClient.OnStartLocalInference -= HandleStartLocalInference;
+        WebLlm.OnStatusUpdate -= HandleLocalStatusUpdate;
         await HubClient.DisposeAsync();
     }
 }
@@ -204,6 +386,66 @@
 
         .processing-page__panels > * {
             scroll-snap-align: start;
+        }
+    }
+
+    .processing-page__preview-heading {
+        margin-top: 2.5rem;
+        margin-bottom: 0.5rem;
+        text-align: center;
+    }
+
+    .processing-page__preview-label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .processing-page__previews {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .processing-page__preview-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .processing-page__preview-model {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #9ca3af;
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .processing-page__preview-waiting {
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px dashed #374151;
+        border-radius: 6px;
+        color: #4b5563;
+        font-size: 0.85rem;
+        font-style: italic;
+    }
+
+    /* Shrink the iframe height in preview context (default 500px is too tall during generation) */
+    .processing-page__preview-panel ::deep .sandboxed-viewport__frame {
+        min-height: 350px;
+        max-height: 450px;
+    }
+
+    @@media (max-width: 1023px) {
+        .processing-page__previews {
+            grid-template-columns: 1fr;
         }
     }
 </style>

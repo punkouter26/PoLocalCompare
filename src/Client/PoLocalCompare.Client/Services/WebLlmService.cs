@@ -59,11 +59,22 @@ public sealed class WebLlmService : IAsyncDisposable
         return Task.FromResult<DuelResultPayload?>(null);
     }
 
+    /// <summary>Fired on every JS status tick so Processing.razor can update UI directly for local models.</summary>
+    public event Action<string, WebLlmStatusUpdate>? OnStatusUpdate;
+
     [JSInvokable]
-    public void ReceiveStatusUpdate(string modelId, string status, int tokenCount, long elapsedMs)
+    public void ReceiveStatusUpdate(string modelId, string status, int tokenCount, long elapsedMs,
+        string? detail = null,
+        int htmlTagCount = 0, int openTagDepth = 0, int styleRuleCount = 0,
+        double repetitionScore = 0, double prefillSpeedTps = 0, bool cacheHit = false,
+        string? htmlPreview = null)
     {
+        var update = new WebLlmStatusUpdate(status, tokenCount, elapsedMs, null, detail,
+            htmlTagCount, openTagDepth, styleRuleCount, repetitionScore,
+            prefillSpeedTps > 0 ? prefillSpeedTps : null, cacheHit, htmlPreview);
         if (_sessions.TryGetValue(modelId, out var session))
-            session.Channel.Writer.TryWrite(new WebLlmStatusUpdate(status, tokenCount, elapsedMs, null));
+            session.Channel.Writer.TryWrite(update);
+        OnStatusUpdate?.Invoke(modelId, update);
     }
 
     [JSInvokable]
@@ -103,5 +114,17 @@ public sealed class WebLlmService : IAsyncDisposable
     }
 }
 
-public sealed record WebLlmStatusUpdate(string Status, int TokenCount, long ElapsedMs, string? ErrorReason);
+public sealed record WebLlmStatusUpdate(
+    string Status,
+    int TokenCount,
+    long ElapsedMs,
+    string? ErrorReason,
+    string? Detail = null,
+    int HtmlTagCount = 0,
+    int OpenTagDepth = 0,
+    int StyleRuleCount = 0,
+    double RepetitionScore = 0,
+    double? PrefillSpeedTps = null,
+    bool CacheHit = false,
+    string? HtmlPreview = null);
 public sealed record DuelResultPayload(string HtmlOutput, int TokenCount, long TotalMs, long WarmUpMs);

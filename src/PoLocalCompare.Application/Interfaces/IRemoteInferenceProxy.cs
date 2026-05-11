@@ -3,6 +3,15 @@ using PoLocalCompare.Domain.Entities;
 
 namespace PoLocalCompare.Application.Interfaces;
 
+/// <summary>Stats derived from scanning the HTML content stream during generation.</summary>
+public sealed record HtmlStreamStats(
+    int TagCount,
+    int OpenDepth,
+    int StyleRules,
+    double RepetitionScore,
+    /// <summary>Partial HTML built so far; only populated every 25 tokens to limit bandwidth.</summary>
+    string? HtmlPreview = null);
+
 /// <summary>
 /// Proxy interface for calling remote inference models (Azure AI Foundry).
 /// </summary>
@@ -16,6 +25,6 @@ public interface IRemoteInferenceProxy
         Model model,
         string duelId,
         string promptFull,
-        Func<int, long, Task> onTokenUpdate,
+        Func<int, long, HtmlStreamStats?, Task> onTokenUpdate,
         CancellationToken cancellationToken);
 }
