@@ -142,7 +142,7 @@
         }
 
         <div class="archive__pagination">
-            <span class="archive__count">Showing @FilteredDuels().Count of @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span></span>
+            <span class="archive__count">Showing @FilteredDuels().Count of @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span>
             @if (_hasMore)
             {
                 <RadzenButton Text="Load More" ButtonStyle="ButtonStyle.Light" Click="LoadMoreAsync" />

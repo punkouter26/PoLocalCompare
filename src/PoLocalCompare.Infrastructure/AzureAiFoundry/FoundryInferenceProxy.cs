@@ -63,21 +63,43 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
 
         var json = JsonSerializer.Serialize(requestBody);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("api-key", apiKey);
-        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-
         HttpResponseMessage response;
-        try
+        const int maxAttempts = 3;
+        int attempt = 0;
+        while (true)
         {
-            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            result.IsFailure = true;
-            result.FailureReason = $"HTTP request failed: {ex.Message}";
-            _logger.LogError(ex, "HTTP request failed for model {Model}", deploymentName);
-            return result;
+            attempt++;
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("api-key", apiKey);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            try
+            {
+                response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                result.IsFailure = true;
+                result.FailureReason = $"HTTP request failed: {ex.Message}";
+                _logger.LogError(ex, "HTTP request failed for model {Model}", deploymentName);
+                return result;
+            }
+
+            // Retry on transient server errors (503, 502, 429) up to maxAttempts
+            var isTransient = response.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable
+                                                    or System.Net.HttpStatusCode.BadGateway
+                                                    or System.Net.HttpStatusCode.TooManyRequests;
+            if (isTransient && attempt < maxAttempts)
+            {
+                response.Dispose();
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s
+                _logger.LogWarning("Azure OpenAI transient {StatusCode} for {Model}, retry {Attempt}/{Max} in {Delay}s",
+                    (int)response.StatusCode, deploymentName, attempt, maxAttempts, delay.TotalSeconds);
+                await Task.Delay(delay, cancellationToken);
+                continue;
+            }
+
+            break;
         }
 
         if (!response.IsSuccessStatusCode)

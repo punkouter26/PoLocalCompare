@@ -24,7 +24,7 @@
         <div class="war-room__type-filter">
             @foreach (var label in new[] { "All", "Local", "Remote", "Service" })
             {
-                <button class="war-room__filter-chip @(_typeFilter == label ? \"war-room__filter-chip--active\" : \"\")"
+                <button class="war-room__filter-chip @(_typeFilter == label ? "war-room__filter-chip--active" : "")"
                         @onclick="() => _typeFilter = label">
                     @label
                 </button>
