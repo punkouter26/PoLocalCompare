@@ -1,0 +1,268 @@
+@page "/archive"
+@using PoLocalCompare.Client.Components
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using Radzen
+@using Radzen.Blazor
+@inject DuelApiClient ApiClient
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Archive — LLM Duel Arena</PageTitle>
+
+<MockDataBanner />
+
+<div class="archive">
+    <h1 class="archive__title">� Lab Archive</h1>
+
+    @if (_loading)
+    {
+        <p class="archive__status">Loading archive...</p>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="archive__error">@_error</p>
+    }
+    else if (_duels.Count == 0)
+    {
+        <p class="archive__empty">No duels recorded yet. <a href="/war-room">Start one!</a></p>
+    }
+    else
+    {
+        <RadzenDataGrid Data="@_duels" TItem="DuelSummaryDto" RowSelect="OnRowSelect"
+            RowClass="@_rowClassFn"
+            Class="archive__grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="StartedAt" Title="Date" Width="170px">
+                    <Template Context="d">@d.StartedAt.ToString("yyyy-MM-dd HH:mm")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="PromptSummary" Title="Prompt" />
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="LeftModelName" Title="Left Model" Width="180px" />
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="RightModelName" Title="Right Model" Width="180px" />
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Verdict" Width="120px">
+                    <Template Context="d">
+                        @switch (d.Verdict)
+                        {
+                            case DuelVerdict.Left:
+                                <span class="archive__verdict archive__verdict--win">⬅ Left</span>
+                                break;
+                            case DuelVerdict.Right:
+                                <span class="archive__verdict archive__verdict--win">Right ➡</span>
+                                break;
+                            default:
+                                <span class="archive__verdict archive__verdict--pending">Pending</span>
+                                break;
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+
+        @if (_selectedDuel is not null)
+        {
+            <div class="archive__detail">
+                <h2 class="archive__detail-title">Duel Details — <code>@_selectedDuel.DuelId</code></h2>
+
+                <div class="archive__detail-meta">
+                    <p><strong>Prompt:</strong> @_selectedDuel.PromptSummary</p>
+                    <p><strong>Left:</strong> @_selectedDuel.LeftModelName &nbsp;&nbsp; <strong>Right:</strong> @_selectedDuel.RightModelName</p>
+                    <p><strong>Started:</strong> @_selectedDuel.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+                    @if (_selectedDuel.CompletedAt.HasValue)
+                    {
+                        <p><strong>Completed:</strong> @_selectedDuel.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+                    }
+                    <p><strong>Winner:</strong> @(GetWinnerName(_selectedDuel))</p>
+                </div>
+
+                <div class="archive__detail-actions">
+                    <RadzenButton
+                        Text="🔁 Re-render"
+                        ButtonStyle="ButtonStyle.Secondary"
+                        Click="OnReRender"
+                        class="archive__btn" />
+                    <RadzenButton
+                        Text="⬇ Export Lab Report"
+                        ButtonStyle="ButtonStyle.Success"
+                        Click="OnExportReport"
+                        Disabled="@_exportBusy"
+                        class="archive__btn" />
+                    @if (_exportBusy)
+                    {
+                        <span class="archive__spinner" aria-label="Exporting…" title="Exporting…" />
+                    }
+                </div>
+
+                @if (_reRenderDuel is not null)
+                {
+                    <div class="archive__viewports">
+                        <div class="archive__viewport-panel">
+                            <SandboxedViewport
+                                HtmlContent="@(_reRenderDuel.Results?.FirstOrDefault(r => r.ModelId == _selectedDuel.LeftModelId)?.HtmlOutputRaw ?? string.Empty)"
+                                ModelName="@_selectedDuel.LeftModelName"
+                                IsLoser="@(_selectedDuel.Verdict == DuelVerdict.Right)" />
+                        </div>
+                        <div class="archive__viewport-panel">
+                            <SandboxedViewport
+                                HtmlContent="@(_reRenderDuel.Results?.FirstOrDefault(r => r.ModelId == _selectedDuel.RightModelId)?.HtmlOutputRaw ?? string.Empty)"
+                                ModelName="@_selectedDuel.RightModelName"
+                                IsLoser="@(_selectedDuel.Verdict == DuelVerdict.Left)" />
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="archive__pagination">
+            <span class="archive__count">Showing @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span>
+            @if (_hasMore)
+            {
+                <RadzenButton Text="Load More" ButtonStyle="ButtonStyle.Light" Click="LoadMoreAsync" />
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .archive { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .archive__title { color: #fff; font-size: 1.75rem; margin-bottom: 24px; }
+    .archive__status, .archive__error, .archive__empty { color: #a3a3a3; }
+    .archive__error { color: #ef4444; }
+    .archive__grid { width: 100%; }
+    ::deep tr.archive__row--selected td { background: rgba(34,197,94,0.07) !important; }
+    ::deep tr.archive__row--selected { border-left: 3px solid #22c55e; }
+    @@keyframes archive-spin { to { transform: rotate(360deg); } }
+    .archive__spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #22c55e; border-top-color: transparent; border-radius: 50%; animation: archive-spin 0.75s linear infinite; align-self: center; margin-left: 4px; }
+    .archive__verdict { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+    .archive__verdict--win { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
+    .archive__verdict--pending { background: #eab30820; color: #eab308; border: 1px solid #eab30840; }
+    .archive__detail { margin-top: 32px; background: #111; border: 1px solid #333; border-radius: 8px; padding: 24px; }
+    .archive__detail-title { color: #22c55e; margin-bottom: 16px; }
+    .archive__detail-meta p { margin: 4px 0; color: #d4d4d4; }
+    .archive__detail-actions { display: flex; gap: 12px; margin: 16px 0; }
+    .archive__btn { flex-shrink: 0; }
+    .archive__viewports { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; min-height: 600px; }
+    .archive__viewport-panel { min-height: 600px; }
+    .archive__pagination { margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 16px; }
+    .archive__count { color: #a3a3a3; font-size: 0.875rem; }
+
+    @@media (max-width: 1023px) {
+        .archive__viewports { grid-template-columns: 1fr; scroll-snap-type: y mandatory; overflow-y: auto; }
+        .archive__viewport-panel { scroll-snap-align: start; min-height: 400px; }
+    }
+</style>
+
+@code {
+    private List<DuelSummaryDto> _duels = [];
+    private DuelSummaryDto? _selectedDuel;
+    private DuelDto? _reRenderDuel;
+    private bool _loading = true;
+    private bool _exportBusy;
+    private string? _error;
+    private bool _hasMore;
+    private const int PageSize = 20;
+
+    private Func<DuelSummaryDto, string> _rowClassFn => GetRowClass;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var results = await ApiClient.ListDuelsAsync(PageSize + 1);
+            if (results is not null)
+            {
+                _hasMore = results.Count > PageSize;
+                _duels = results.Take(PageSize).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load archive: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_duels.Count == 0) return;
+        var oldest = _duels.Last();
+        var before = oldest.StartedAt.ToString("yyyyMM");
+        try
+        {
+            var more = await ApiClient.ListDuelsAsync(PageSize + 1, before);
+            if (more is not null)
+            {
+                _hasMore = more.Count > PageSize;
+                _duels.AddRange(more.Take(PageSize));
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load more: {ex.Message}";
+        }
+    }
+
+    private void OnRowSelect(DuelSummaryDto duel)
+    {
+        _selectedDuel = duel;
+        _reRenderDuel = null;
+    }
+
+    private async Task OnReRender()
+    {
+        if (_selectedDuel is null) return;
+        try
+        {
+            _reRenderDuel = await ApiClient.GetDuelAsync(_selectedDuel.DuelId);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load duel: {ex.Message}";
+        }
+    }
+
+    private async Task OnExportReport()
+    {
+        if (_selectedDuel is null) return;
+        _exportBusy = true;
+        try
+        {
+            var bytes = await ApiClient.DownloadReportAsync(_selectedDuel.DuelId);
+            if (bytes is not null)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                var fileName = $"lab-report-{_selectedDuel.DuelId}.html";
+                await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, "text/html", base64);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Export failed: {ex.Message}";
+        }
+        finally
+        {
+            _exportBusy = false;
+        }
+    }
+
+    private static string GetWinnerName(DuelSummaryDto d)
+    {
+        if (d.WinnerModelId is null) return "—";
+        if (d.WinnerModelId == d.LeftModelId) return d.LeftModelName;
+        if (d.WinnerModelId == d.RightModelId) return d.RightModelName;
+        return d.WinnerModelId;
+    }
+
+    private string GetRowClass(DuelSummaryDto d) =>
+        d.DuelId == _selectedDuel?.DuelId ? "archive__row--selected" : string.Empty;
+}

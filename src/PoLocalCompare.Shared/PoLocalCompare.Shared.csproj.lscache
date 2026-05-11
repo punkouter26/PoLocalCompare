@@ -59,6 +59,7 @@ DTOs/
  DuelDto.cs
  DuelResultDto.cs
  DuelSummaryDto.cs
+ HeadToHeadDto.cs
  LeaderboardEntryDto.cs
  ModelDto.cs
  ModelStatusUpdateDto.cs

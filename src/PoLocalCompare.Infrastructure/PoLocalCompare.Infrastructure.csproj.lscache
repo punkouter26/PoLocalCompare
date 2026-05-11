@@ -69,6 +69,7 @@ Persistence/
   DuelResultRepository.cs
   EloHistoryRepository.cs
   ModelRepository.cs
+Reporting/HtmlLabReportRenderer.cs
 
 [metadataReferences]
 ../

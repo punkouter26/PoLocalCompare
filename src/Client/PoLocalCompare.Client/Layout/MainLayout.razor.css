@@ -6,6 +6,13 @@
 
 main {
     flex: 1;
+    background-color: #000000;
+    color: #f0f0f0;
+}
+
+article.content {
+    background-color: #000000;
+    color: #f0f0f0;
 }
 
 .sidebar {

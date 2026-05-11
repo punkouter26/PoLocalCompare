@@ -3,6 +3,9 @@
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
 @using Radzen
+
+<PageTitle>Leaderboard — LLM Duel Arena</PageTitle>
+
 @using Radzen.Blazor
 @inject DuelApiClient ApiClient
 
@@ -12,10 +15,19 @@
     <h1 class="leaderboard__title">Leaderboard</h1>
 
     <div class="leaderboard__controls">
+        <span class="leaderboard__sort-label">Sort by:</span>
         <RadzenButton
-            Text="@SortButtonText"
-            ButtonStyle="ButtonStyle.Secondary"
-            Click="ToggleSortAsync" />
+            Text="ELO"
+            Click="@(() => SetSortAsync("Elo"))"
+            ButtonStyle="@(IsGreenSort ? ButtonStyle.Light : ButtonStyle.Primary)"
+            Size="ButtonSize.Small"
+            class="leaderboard__sort-btn" />
+        <RadzenButton
+            Text="Green Score"
+            Click="@(() => SetSortAsync("GreenScore"))"
+            ButtonStyle="@(IsGreenSort ? ButtonStyle.Primary : ButtonStyle.Light)"
+            Size="ButtonSize.Small"
+            class="leaderboard__sort-btn" />
     </div>
 
     @if (_loading)
@@ -34,23 +46,42 @@
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" />
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="CurrentElo" Title="ELO" Width="120px">
                     <Template Context="entry">
-                        @entry.CurrentElo.ToString("F1")
+                        @((int)Math.Round(entry.CurrentElo))
                     </Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DuelCount" Title="Duels" Width="100px" />
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="W/L" Width="110px">
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DuelCount" Title="Duels" Width="90px" />
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="W/L (Win %)" Width="140px">
                     <Template Context="entry">
-                        @entry.WinCount/@Math.Max(entry.DuelCount - entry.WinCount, 0)
+                        @{
+                            var losses = Math.Max(entry.DuelCount - entry.WinCount, 0);
+                            var winPct = entry.DuelCount > 0 ? (entry.WinCount * 100.0 / entry.DuelCount) : 0;
+                            var pctStr = entry.DuelCount > 0 ? $" ({winPct:F0}%)" : "";
+                        }
+                        @($"{entry.WinCount}/{losses}{pctStr}")
                     </Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="Green Score Avg" Width="170px">
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="Green Score" Width="140px">
                     <Template Context="entry">
-                        @(entry.GreenScoreAvg.HasValue ? entry.GreenScoreAvg.Value.ToString("F1") : "-")
+                        @if (entry.GreenScoreAvg.HasValue)
+                        {
+                            @entry.GreenScoreAvg.Value.ToString("F1")
+                        }
+                        else
+                        {
+                            <span title="Available after real AI duels are completed" style="color: var(--rz-text-secondary-color); font-style: italic;">N/A</span>
+                        }
                     </Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="Sparkline" Width="170px">
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="ELO Trend (last 20)" Width="170px">
                     <Template Context="entry">
-                        <EloSparkline Values="entry.EloSparkline" />
+                        @if (entry.EloSparkline.Count > 1)
+                        {
+                            <EloSparkline Values="entry.EloSparkline" />
+                        }
+                        else
+                        {
+                            <span title="No duel history yet" style="color: var(--rz-text-secondary-color); font-style: italic;">No duels yet</span>
+                        }
                     </Template>
                 </RadzenDataGridColumn>
             </Columns>
@@ -58,7 +89,12 @@
 
         @if (_selected is not null)
         {
-            <RadzenPanel Text="@KillListPanelText" Class="leaderboard__killlist-panel">
+            <div class="leaderboard__killlist-panel">
+                <div class="leaderboard__killlist-header">
+                    <span class="leaderboard__killlist-title">@KillListPanelText</span>
+                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                        Click="CloseKillList" class="leaderboard__killlist-close" />
+                </div>
                 @if (_killListLoading)
                 {
                     <p class="leaderboard__status">Loading kill list...</p>
@@ -76,16 +112,25 @@
                     <RadzenDataGrid Data="@_killList" TItem="HeadToHeadDto">
                         <Columns>
                             <RadzenDataGridColumn TItem="HeadToHeadDto" Property="OpponentName" Title="Opponent" />
-                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="W/L" Width="120px">
+                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="W/L" Width="100px">
                                 <Template Context="row">@row.Wins/@row.Losses</Template>
                             </RadzenDataGridColumn>
-                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="Last Duel" Width="180px">
+                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="Win %" Width="90px">
+                                <Template Context="row">
+                                    @{
+                                        var total = row.Wins + row.Losses;
+                                        var pct = total > 0 ? (row.Wins * 100.0 / total) : 0;
+                                    }
+                                    @(total > 0 ? $"{pct:F0}%" : "-")
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="Last Duel" Width="170px">
                                 <Template Context="row">@row.LastDuelAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</Template>
                             </RadzenDataGridColumn>
                         </Columns>
                     </RadzenDataGrid>
                 }
-            </RadzenPanel>
+            </div>
         }
     }
 </div>
@@ -102,7 +147,6 @@
 
     private string _sortBy = "Elo";
     private bool IsGreenSort => string.Equals(_sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase);
-    private string SortButtonText => $"Sort: {(IsGreenSort ? "Green Score" : "ELO")}";
     private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
 
     protected override async Task OnInitializedAsync()
@@ -110,10 +154,19 @@
         await LoadLeaderboardAsync();
     }
 
-    private async Task ToggleSortAsync()
+    private async Task SetSortAsync(string sortBy)
     {
-        _sortBy = IsGreenSort ? "Elo" : "GreenScore";
+        if (string.Equals(_sortBy, sortBy, StringComparison.OrdinalIgnoreCase))
+            return;
+        _sortBy = sortBy;
         await LoadLeaderboardAsync();
+    }
+
+    private void CloseKillList()
+    {
+        _selected = null;
+        _killList.Clear();
+        _killListError = null;
     }
 
     private async Task LoadLeaderboardAsync()

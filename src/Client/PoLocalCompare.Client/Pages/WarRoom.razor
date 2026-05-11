@@ -33,6 +33,7 @@
                     {
                         <ModelCard
                             Model="model"
+                            LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
                             IsSelected="_leftModel?.ModelId == model.ModelId"
                             OnSelected="m => SelectLeft(m)"
                             ProjectedEloGain="@ComputeProjectedGain(_leftModel, _rightModel)"
@@ -53,6 +54,7 @@
                     {
                         <ModelCard
                             Model="model"
+                            LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
                             IsSelected="_rightModel?.ModelId == model.ModelId"
                             OnSelected="m => SelectRight(m)"
                             ProjectedEloGain="@ComputeProjectedGain(_rightModel, _leftModel)"
@@ -98,6 +100,7 @@
 
     private bool _loading = true;
     private List<ModelDto> _allModels = [];
+    private Dictionary<string, string> _modelLabels = [];
     private ModelDto? _leftModel;
     private ModelDto? _rightModel;
     private string _promptText = string.Empty;
@@ -114,6 +117,18 @@
             if (models is not null)
             {
                 _allModels = models.ToList();
+
+                // Build disambiguated labels for models sharing the same display name
+                _modelLabels = _allModels
+                    .GroupBy(m => m.DisplayName)
+                    .SelectMany(g =>
+                    {
+                        bool dup = g.Count() > 1;
+                        return g.Select(m => KeyValuePair.Create(
+                            m.ModelId,
+                            dup ? $"{m.DisplayName} (…{(m.ModelId.Length > 6 ? m.ModelId[^6..] : m.ModelId)})" : m.DisplayName));
+                    })
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                 // Pre-fill from query parameters (Re-Challenge flow)
                 if (!string.IsNullOrEmpty(PromptParam))

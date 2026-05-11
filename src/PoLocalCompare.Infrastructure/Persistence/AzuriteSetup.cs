@@ -12,6 +12,8 @@ namespace PoLocalCompare.Infrastructure.Persistence;
 public static class AzuriteSetup
 {
     private static readonly string[] RequiredTables = ["Models", "Duels", "DuelResults", "EloHistory"];
+    private const int MaxRetries = 5;
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
 
     public static async Task EnsureTablesExistAsync(IServiceProvider services)
     {
@@ -24,15 +26,33 @@ public static class AzuriteSetup
 
         foreach (var tableName in RequiredTables)
         {
-            try
+            var created = false;
+            for (var attempt = 1; attempt <= MaxRetries; attempt++)
             {
-                await tableServiceClient.CreateTableIfNotExistsAsync(tableName);
-                logger.LogInformation("Ensured Azure Table Storage table exists: {TableName}", tableName);
+                try
+                {
+                    await tableServiceClient.CreateTableIfNotExistsAsync(tableName);
+                    logger.LogInformation("Ensured Azure Table Storage table exists: {TableName}", tableName);
+                    created = true;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (attempt < MaxRetries)
+                    {
+                        logger.LogWarning("Attempt {Attempt}/{Max} — Failed to create table {TableName}. Retrying in {Delay}s. ({Error})",
+                            attempt, MaxRetries, tableName, RetryDelay.TotalSeconds, ex.Message);
+                        await Task.Delay(RetryDelay);
+                    }
+                    else
+                    {
+                        logger.LogError(ex, "Failed to create table {TableName} after {Max} attempts — Azurite may not be running", tableName, MaxRetries);
+                    }
+                }
             }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to create table {TableName} — Azurite may not be running", tableName);
-            }
+
+            if (!created)
+                logger.LogWarning("Table {TableName} could not be created. Start Azurite before the API to avoid storage errors.", tableName);
         }
     }
 }

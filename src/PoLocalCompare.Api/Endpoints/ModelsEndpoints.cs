@@ -46,6 +46,10 @@ public static class ModelsEndpoints
                 var dto = await handler.HandleAsync(command);
                 return Results.Created($"/api/models/{dto.ModelId}", dto);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Conflict(new { error = ex.Message });
+            }
             catch (ArgumentException ex)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>

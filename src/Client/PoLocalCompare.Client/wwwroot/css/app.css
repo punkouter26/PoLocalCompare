@@ -1,5 +1,39 @@
+/* ── OLED Black Theme (T085) ──────────────────────────────────────────────── */
+
+/* Colour palette:
+   Background:   #000000  (true OLED black)
+   Surface:      #0a0a0a  (elevated surfaces)
+   Border:       #1a1a1a
+   Text primary: #f0f0f0
+   Text muted:   #a0a0a0
+   Green:        #22c55e  (success / high-perf)
+   Yellow:       #eab308  (warning / average)
+   Red:          #ef4444  (failure / high-cost)
+   Accent blue:  #3b82f6
+*/
+
+:root {
+    --oled-bg: #000000;
+    --oled-surface: #0a0a0a;
+    --oled-border: #1a1a1a;
+    --oled-text: #f0f0f0;
+    --oled-text-muted: #a0a0a0;
+    --oled-green: #22c55e;
+    --oled-yellow: #eab308;
+    --oled-red: #ef4444;
+    --oled-blue: #3b82f6;
+}
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: var(--oled-bg);
+    color: var(--oled-text);
+    margin: 0;
+    padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--oled-text);
 }
 
 h1:focus {
@@ -7,40 +41,128 @@ h1:focus {
 }
 
 a, .btn-link {
-    color: #0071c1;
+    color: var(--oled-blue);
+}
+
+a:hover {
+    color: #60a5fa;
 }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: var(--oled-blue);
+    border-color: var(--oled-blue);
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
+
+.btn-success {
+    background-color: var(--oled-green);
+    border-color: var(--oled-green);
+    color: #000;
+}
+
+.btn-danger {
+    background-color: var(--oled-red);
+    border-color: var(--oled-red);
+    color: #fff;
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+  box-shadow: 0 0 0 0.1rem #000, 0 0 0 0.25rem var(--oled-blue);
 }
+
+/* Status colours */
+.text-success   { color: var(--oled-green) !important; }
+.text-warning   { color: var(--oled-yellow) !important; }
+.text-danger    { color: var(--oled-red) !important; }
+.text-muted     { color: var(--oled-text-muted) !important; }
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
 
 .content {
     padding-top: 1.1rem;
+    background-color: var(--oled-bg);
+    color: var(--oled-text);
+    min-height: 100vh;
 }
 
+/* ── Duel grid: 2-column desktop, scroll-snap mobile ─────────────────────── */
+
+.duel-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+    .duel-grid {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+    }
+}
+
+@media (max-width: 1023px) {
+    .duel-grid {
+        grid-template-columns: 1fr;
+        scroll-snap-type: y mandatory;
+        overflow-y: auto;
+        max-height: 100dvh;
+    }
+
+    .duel-grid > * {
+        scroll-snap-align: start;
+        min-height: 50dvh;
+    }
+}
+
+/* ── Surface / card ───────────────────────────────────────────────────────── */
+
+.oled-card {
+    background-color: var(--oled-surface);
+    border: 1px solid var(--oled-border);
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+/* ── Form controls ────────────────────────────────────────────────────────── */
+
+.form-control, .form-select {
+    background-color: var(--oled-surface);
+    color: var(--oled-text);
+    border-color: var(--oled-border);
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: var(--oled-surface);
+    color: var(--oled-text);
+    border-color: var(--oled-blue);
+}
+
+/* ── Validation ───────────────────────────────────────────────────────────── */
+
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+    outline: 1px solid var(--oled-green);
 }
 
 .invalid {
-    outline: 1px solid red;
+    outline: 1px solid var(--oled-red);
 }
 
 .validation-message {
-    color: red;
+    color: var(--oled-red);
 }
 
+/* ── Blazor error UI ──────────────────────────────────────────────────────── */
+
 #blazor-error-ui {
-    color-scheme: light only;
-    background: lightyellow;
+    background: #1a0000;
+    border-top: 1px solid var(--oled-red);
+    color: var(--oled-red);
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 -1px 2px rgba(239, 68, 68, 0.3);
     box-sizing: border-box;
     display: none;
     left: 0;
@@ -85,7 +207,7 @@ a, .btn-link {
     }
 
         .loading-progress circle:last-child {
-            stroke: #1b6ec2;
+            stroke: var(--oled-blue);
             stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
             transition: stroke-dasharray 0.05s ease-in-out;
         }
@@ -102,7 +224,58 @@ a, .btn-link {
     }
 
 code {
-    color: #c02d76;
+    color: var(--oled-yellow);
+}
+
+/* ── Dev-mode error panel (T087) ──────────────────────────────────────────── */
+
+.dev-error-panel {
+    background-color: #1a0000;
+    border: 2px solid var(--oled-red);
+    border-radius: 0.5rem;
+    color: var(--oled-red);
+    margin-top: 2rem;
+    padding: 1.5rem;
+}
+
+.dev-error-panel h4 {
+    color: var(--oled-red);
+    margin-bottom: 0.75rem;
+}
+
+.dev-error-panel pre {
+    background-color: #0d0000;
+    border-radius: 0.25rem;
+    color: #ff9999;
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    overflow-x: auto;
+    padding: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.prod-error-panel {
+    background-color: var(--oled-surface);
+    border: 1px solid var(--oled-border);
+    border-radius: 0.5rem;
+    color: var(--oled-text-muted);
+    margin-top: 2rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+/* ── Mock data banner ─────────────────────────────────────────────────────── */
+
+.mock-data-banner {
+    background-color: var(--oled-red);
+    color: #fff;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+    padding: 0.4rem 1rem;
+    text-align: center;
+    text-transform: uppercase;
+    width: 100%;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {

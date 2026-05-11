@@ -1,16 +1,50 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.WebAssembly.Hosting
+@inject IWebAssemblyHostEnvironment HostEnv
+
 <div class="page">
     <div class="sidebar">
         <NavMenu />
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
         <article class="content px-4">
-            @Body
+            <ErrorBoundary @ref="_errorBoundary">
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent Context="ex">
+                    @if (HostEnv.IsDevelopment())
+                    {
+                        <div class="dev-error-panel">
+                            <h4>⚠ Unhandled Exception (Development)</h4>
+                            <p><strong>@ex.GetType().FullName</strong>: @ex.Message</p>
+                            <pre>@ex.StackTrace</pre>
+                            @if (ex.InnerException is not null)
+                            {
+                                <p><strong>Inner:</strong> @ex.InnerException.Message</p>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="prod-error-panel">
+                            <p>An unexpected error occurred. Please refresh the page or try again later.</p>
+                        </div>
+                    }
+                </ErrorContent>
+            </ErrorBoundary>
         </article>
     </main>
 </div>
+
+@code {
+    private ErrorBoundary? _errorBoundary;
+
+    protected override void OnParametersSet()
+    {
+        // Reset the error boundary on each navigation so the error
+        // doesn't persist across pages.
+        _errorBoundary?.Recover();
+    }
+}

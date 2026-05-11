@@ -309,6 +309,7 @@ obj/Debug/net10.0/PoLocalCompare.Client.GeneratedMSBuildEditorConfig.editorconfi
 [additionalFiles]
 App.razor
 Components/
+ EloSparkline.razor
  MockDataBanner.razor
  ModelCard.razor
  ProcessingPanel.razor
@@ -318,9 +319,11 @@ Layout/
  MainLayout.razor
  NavMenu.razor
 Pages/
+ Archive.razor
  Arena.razor
  Counter.razor
  Home.razor
+ Leaderboard.razor
  NotFound.razor
  Processing.razor
  WarRoom.razor
@@ -330,6 +333,7 @@ _Imports.razor
 [dynamicFiles]
 App.razor
 Components/
+ EloSparkline.razor
  MockDataBanner.razor
  ModelCard.razor
  ProcessingPanel.razor
@@ -339,9 +343,11 @@ Layout/
  MainLayout.razor
  NavMenu.razor
 Pages/
+ Archive.razor
  Arena.razor
  Counter.razor
  Home.razor
+ Leaderboard.razor
  NotFound.razor
  Processing.razor
  WarRoom.razor

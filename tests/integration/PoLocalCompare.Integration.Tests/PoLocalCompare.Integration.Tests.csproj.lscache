@@ -55,6 +55,8 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 
 [sourceFiles]
 <NUGET>/microsoft.net.test.sdk/17.14.1/build/net8.0/Microsoft.NET.Test.Sdk.Program.cs
+DuelsEndpointTests.cs
+LeaderboardTests.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  PoLocalCompare.Integration.Tests.AssemblyInfo.cs

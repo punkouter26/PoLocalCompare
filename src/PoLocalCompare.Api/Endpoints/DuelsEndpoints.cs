@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using PoLocalCompare.Application.Archive.ExportLabReport;
 using PoLocalCompare.Application.Duels.CommenceDuel;
 using PoLocalCompare.Application.Duels.GetDuel;
+using PoLocalCompare.Application.Duels.ListDuels;
 using PoLocalCompare.Application.Duels.RecordVerdict;
 using PoLocalCompare.Api.Services;
 using PoLocalCompare.Application.Interfaces;
@@ -138,6 +140,42 @@ public static class DuelsEndpoints
         .Produces(StatusCodes.Status404NotFound)
         .Produces(StatusCodes.Status409Conflict)
         .Produces(StatusCodes.Status422UnprocessableEntity);
+
+        // T077 — GET /api/duels (archive listing with pagination)
+        group.MapGet("/", async (
+            [FromQuery] int limit,
+            [FromQuery] string? before,
+            [FromServices] ListDuelsHandler handler) =>
+        {
+            var clampedLimit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
+            var results = await handler.HandleAsync(new ListDuelsQuery(clampedLimit, before));
+            return Results.Ok(results);
+        })
+        .WithName("ListDuels")
+        .WithSummary("Lists duel summaries in reverse chronological order.")
+        .Produces<IReadOnlyList<DuelSummaryDto>>(StatusCodes.Status200OK);
+
+        // T081 — GET /api/duels/{duelId}/report (Lab Report export)
+        group.MapGet("/{duelId}/report", async (
+            string duelId,
+            HttpContext httpContext,
+            [FromServices] ExportLabReportHandler handler) =>
+        {
+            var html = await handler.HandleAsync(new ExportLabReportCommand(duelId));
+            if (html is null)
+                return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
+
+            httpContext.Response.Headers["Content-Disposition"] = $"attachment; filename=\"lab-report-{duelId}.html\"";
+            return Results.Content(
+                html,
+                contentType: "text/html",
+                contentEncoding: System.Text.Encoding.UTF8,
+                statusCode: StatusCodes.Status200OK);
+        })
+        .WithName("ExportLabReport")
+        .WithSummary("Exports a self-contained HTML Lab Report for the specified duel.")
+        .Produces<string>(StatusCodes.Status200OK, contentType: "text/html")
+        .Produces(StatusCodes.Status404NotFound);
 
         return app;
     }

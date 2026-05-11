@@ -58,6 +58,7 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 Endpoints/
  DuelsEndpoints.cs
  HealthEndpoints.cs
+ LeaderboardEndpoints.cs
  ModelsEndpoints.cs
 Hubs/DuelHub.cs
 obj/Debug/net10.0/

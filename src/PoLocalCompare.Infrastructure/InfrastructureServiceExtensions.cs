@@ -6,6 +6,7 @@ using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Infrastructure.AzureAiFoundry;
 using PoLocalCompare.Infrastructure.KeyVault;
 using PoLocalCompare.Infrastructure.Persistence.TableStorage;
+using PoLocalCompare.Infrastructure.Reporting;
 
 namespace PoLocalCompare.Infrastructure;
 
@@ -37,6 +38,9 @@ public static class InfrastructureServiceExtensions
 
         // Remote inference proxy
         services.AddScoped<IRemoteInferenceProxy, FoundryInferenceProxy>();
+
+        // Lab report renderer
+        services.AddScoped<ILabReportRenderer, HtmlLabReportRenderer>();
 
         // Key Vault
         services.AddKeyVaultSecrets(configuration);

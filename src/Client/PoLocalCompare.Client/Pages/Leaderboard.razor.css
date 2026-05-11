@@ -1,0 +1,75 @@
+/* ── Controls ───────────────────────────────────────────────── */
+.leaderboard__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.leaderboard__sort-label {
+    font-size: 0.875rem;
+    color: var(--rz-text-secondary-color, #666);
+    font-weight: 500;
+}
+
+.leaderboard__sort-btn {
+    min-width: 6rem;
+}
+
+/* ── Grid rows — clickable cursor & hover highlight ─────────── */
+::deep .leaderboard__grid .rz-data-row {
+    cursor: pointer;
+}
+
+::deep .leaderboard__grid .rz-data-row:hover td {
+    background-color: var(--rz-datalist-item-hover-background-color, rgba(var(--rz-primary-rgb, 59,130,246), 0.06));
+}
+
+/* Remove aggressive opacity dim on non-selected rows */
+::deep .leaderboard__grid .rz-data-row {
+    opacity: 1 !important;
+}
+
+/* ── Kill list panel ────────────────────────────────────────── */
+.leaderboard__killlist-panel {
+    margin-top: 1.5rem;
+    border: 1px solid var(--rz-border-color, #e5e7eb);
+    border-radius: 0.5rem;
+    background: var(--rz-base-background-color, #fff);
+    padding: 0;
+    overflow: hidden;
+}
+
+.leaderboard__killlist-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--rz-secondary-lighter, #f3f4f6);
+    border-bottom: 1px solid var(--rz-border-color, #e5e7eb);
+}
+
+.leaderboard__killlist-title {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.leaderboard__killlist-close {
+    margin-left: auto;
+}
+
+::deep .leaderboard__killlist-panel .rz-datatable-scrollable-wrapper {
+    border: none;
+}
+
+/* ── Status / error text ────────────────────────────────────── */
+.leaderboard__status {
+    color: var(--rz-text-secondary-color, #6b7280);
+    font-style: italic;
+    padding: 0.75rem 1rem;
+}
+
+.leaderboard__error {
+    color: var(--rz-danger, #ef4444);
+    padding: 0.75rem 1rem;
+}

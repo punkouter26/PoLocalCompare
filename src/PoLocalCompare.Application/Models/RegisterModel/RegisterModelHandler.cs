@@ -19,6 +19,11 @@ public sealed class RegisterModelHandler
 
     public async Task<ModelDto> HandleAsync(RegisterModelCommand command)
     {
+        // Prevent duplicate registrations by DisplayName
+        var existing = await _modelRepository.GetAllAsync();
+        if (existing.Any(m => string.Equals(m.DisplayName, command.DisplayName, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"A model named '{command.DisplayName}' is already registered.");
+
         var modelId = Ulid.NewUlid().ToString();
 
         var domainModelType = command.ModelType == SharedModelType.Local

@@ -8,7 +8,9 @@ using PoLocalCompare.Api.Hubs;
 using PoLocalCompare.Api.Services;
 using PoLocalCompare.Application.Duels.CommenceDuel;
 using PoLocalCompare.Application.Duels.GetDuel;
+using PoLocalCompare.Application.Duels.ListDuels;
 using PoLocalCompare.Application.Duels.RecordVerdict;
+using PoLocalCompare.Application.Archive.ExportLabReport;
 using PoLocalCompare.Application.Leaderboard.GetKillList;
 using PoLocalCompare.Application.Leaderboard.GetLeaderboard;
 using PoLocalCompare.Application.Models.ListModels;
@@ -99,6 +101,12 @@ try
     // ─── Razor pages (for /diag) ─────────────────────────────────────────────
     builder.Services.AddRazorPages();
 
+    // ─── JSON serialization — string enum values for API consumers ───────────
+    builder.Services.ConfigureHttpJsonOptions(opts =>
+    {
+        opts.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
+
     // ─── Infrastructure (Phase 2 — T032–T037) ────────────────────────────────
     builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -121,6 +129,9 @@ try
             sp.GetRequiredService<PoLocalCompare.Application.Interfaces.IEloHistoryRepository>(),
             kFactor);
     });
+    // Phase 6 (US4)
+    builder.Services.AddScoped<ListDuelsHandler>();
+    builder.Services.AddScoped<ExportLabReportHandler>();
 
     // ─── Build ───────────────────────────────────────────────────────────────
     var app = builder.Build();
@@ -141,6 +152,45 @@ try
         };
     });
 
+    // ─── Global exception handler (T088) — RFC 7807 problem+json ────────────
+    app.UseExceptionHandler(exceptionApp =>
+    {
+        exceptionApp.Run(async ctx =>
+        {
+            ctx.Response.ContentType = "application/problem+json";
+            var feature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+            var ex = feature?.Error;
+            var env = ctx.RequestServices.GetRequiredService<IWebHostEnvironment>();
+            var logger = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
+            var correlationId = ctx.TraceIdentifier;
+
+            logger.LogError(ex,
+                "Unhandled exception. CorrelationId: {CorrelationId}, Environment: {Environment}, UserId: anonymous",
+                correlationId, env.EnvironmentName);
+
+            ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+
+            var problem = new
+            {
+                type = "https://tools.ietf.org/html/rfc7807",
+                title = "An unexpected error occurred.",
+                status = StatusCodes.Status500InternalServerError,
+                detail = env.IsDevelopment() ? ex?.Message : "An internal server error occurred.",
+                correlationId,
+                stackTrace = env.IsDevelopment() ? ex?.StackTrace : null,
+            };
+
+            await ctx.Response.WriteAsJsonAsync(problem);
+        });
+    });
+
+    // ─── Content-Security-Policy: frame-ancestors 'self' (T089) ─────────────
+    app.Use(async (ctx, next) =>
+    {
+        ctx.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
+        await next(ctx);
+    });
+
     app.UseCors();
 
     if (app.Environment.IsDevelopment())
@@ -148,6 +198,14 @@ try
         app.MapOpenApi();
         app.MapScalarApiReference("/scalar");
     }
+
+    // Force browsers to revalidate WASM framework assets on every load (UX #9)
+    app.Use(async (ctx, next) =>
+    {
+        if (ctx.Request.Path.StartsWithSegments("/_framework"))
+            ctx.Response.Headers.CacheControl = "no-cache, must-revalidate";
+        await next();
+    });
 
     app.UseStaticFiles();
 
@@ -182,3 +240,6 @@ finally
 {
     Log.CloseAndFlush();
 }
+
+// Expose Program class for WebApplicationFactory in integration tests
+public partial class Program { }

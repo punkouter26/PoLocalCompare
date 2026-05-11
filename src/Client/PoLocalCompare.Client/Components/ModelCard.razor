@@ -4,7 +4,7 @@
 
 <RadzenCard class="@_cardClass" @onclick="OnCardClick" style="cursor:pointer;">
     <div class="model-card__header">
-        <span class="model-card__name">@Model.DisplayName</span>
+        <span class="model-card__name">@(LabelOverride ?? Model.DisplayName)</span>
         <span class="model-card__badge model-card__badge--@(Model.ModelType == ModelType.Local ? "local" : "remote")">
             @Model.ModelType
         </span>
@@ -25,6 +25,7 @@
 
 @code {
     [Parameter, EditorRequired] public ModelDto Model { get; set; } = null!;
+    [Parameter] public string? LabelOverride { get; set; }
     [Parameter] public bool IsSelected { get; set; }
     [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
     [Parameter] public double? ProjectedEloGain { get; set; }
