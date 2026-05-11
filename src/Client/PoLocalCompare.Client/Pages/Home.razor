@@ -1,6 +1,11 @@
 ﻿@page "/"
 @using PoLocalCompare.Client.Components
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using Radzen
 @using Radzen.Blazor
+@inject DuelApiClient ApiClient
 
 <PageTitle>LLM Duel Arena</PageTitle>
 
@@ -20,22 +25,73 @@
     </div>
 
     <div class="home__cards">
-        <div class="home__card">
+        <a href="/war-room" class="home__card">
             <span class="home__card-icon">⚔️</span>
             <h3>Head-to-Head Duels</h3>
             <p>Send the same prompt to two models simultaneously and judge which response wins.</p>
-        </div>
-        <div class="home__card">
+        </a>
+        <a href="/leaderboard" class="home__card">
             <span class="home__card-icon">📈</span>
             <h3>ELO Rankings</h3>
             <p>Every verdict shifts ELO scores using the same algorithm chess grandmasters use. The leaderboard updates live.</p>
-        </div>
-        <div class="home__card">
+        </a>
+        <a href="/leaderboard" class="home__card">
             <span class="home__card-icon">🌱</span>
             <h3>Green Score</h3>
             <p>Measures energy cost per duel (watts × time). Compare accuracy <em>and</em> environmental impact.</p>
-        </div>
+        </a>
     </div>
+
+    <div class="home__danger-zone">
+        @if (_resetConfirm)
+        {
+            <span class="home__danger-msg">⚠ This will delete all duels, results and ELO history and reset model ratings. Are you sure?</span>
+            <RadzenButton Text="Yes, clear everything" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                Disabled="@_resetBusy" Click="@DoResetAsync" class="home__danger-btn" />
+            <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                Click="@(() => _resetConfirm = false)" class="home__danger-btn" />
+        }
+        else if (_resetDone)
+        {
+            <span class="home__danger-ok">✓ All data cleared.</span>
+            <RadzenButton Text="Clear again" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                Click="@(() => { _resetDone = false; _resetConfirm = true; })" class="home__danger-btn" />
+        }
+        else
+        {
+            <RadzenButton Text="🗑 Clear All Duel Data" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                Click="@(() => _resetConfirm = true)" class="home__danger-btn" />
+        }
+    </div>
+
+    @if (_recentDuels.Count > 0)
+    {
+        <div class="home__recent">
+            <h2 class="home__recent-title">Recent Duels</h2>
+            <div class="home__recent-list">
+                @foreach (var d in _recentDuels)
+                {
+                    <a href="/archive" class="home__recent-item">
+                        <span class="home__recent-prompt">@d.PromptSummary</span>
+                        <span class="home__recent-vs">@d.LeftModelName <em>vs</em> @d.RightModelName</span>
+                        @if (d.Verdict == DuelVerdict.Left)
+                        {
+                            <span class="home__recent-winner">🏆 @d.LeftModelName</span>
+                        }
+                        else if (d.Verdict == DuelVerdict.Right)
+                        {
+                            <span class="home__recent-winner">🏆 @d.RightModelName</span>
+                        }
+                        else
+                        {
+                            <span class="home__recent-unrated">Unrated</span>
+                        }
+                        <span class="home__recent-date">@d.StartedAt.ToString("MMM d")</span>
+                    </a>
+                }
+            </div>
+        </div>
+    }
 </div>
 
 <style>
@@ -45,8 +101,51 @@
     .home__subtitle { font-size: 1.1rem; color: var(--rz-text-secondary-color, #6b7280); max-width: 560px; margin: 0 auto 1.75rem; }
     .home__cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
     .home__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-top: 2rem; }
-    .home__card { border: 1px solid var(--rz-border-color, #e5e7eb); border-radius: 0.75rem; padding: 1.5rem; background: var(--rz-base-background-color, #fff); }
+    .home__card { display: block; text-decoration: none; color: inherit; border: 1px solid var(--rz-border-color, #e5e7eb); border-radius: 0.75rem; padding: 1.5rem; background: var(--rz-base-background-color, #fff); transition: border-color 0.15s, box-shadow 0.15s; }
+    .home__card:hover { border-color: #22c55e; box-shadow: 0 0 0 1px #22c55e40; }
     .home__card-icon { font-size: 2rem; display: block; margin-bottom: 0.5rem; }
     .home__card h3 { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600; }
     .home__card p { margin: 0; font-size: 0.875rem; color: var(--rz-text-secondary-color, #6b7280); line-height: 1.5; }
+    .home__recent { margin-top: 2.5rem; }
+    .home__recent-title { font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+    .home__recent-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .home__recent-item { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; border: 1px solid #1f2937; border-radius: 6px; text-decoration: none; color: inherit; transition: border-color 0.15s; }
+    .home__recent-item:hover { border-color: #22c55e40; }
+    .home__recent-prompt { font-size: 0.8rem; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .home__recent-vs { font-size: 0.75rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .home__recent-winner { font-size: 0.75rem; color: #22c55e; font-weight: 600; white-space: nowrap; }
+    .home__recent-unrated { font-size: 0.75rem; color: #6b7280; font-style: italic; }
+    .home__recent-date { font-size: 0.7rem; color: #4b5563; white-space: nowrap; }
+    .home__danger-zone { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 2.5rem; padding: 0.75rem 1rem; border: 1px solid #1f2937; border-radius: 8px; }
+    .home__danger-msg { font-size: 0.8rem; color: #f87171; flex: 1; min-width: 200px; }
+    .home__danger-ok { font-size: 0.8rem; color: #22c55e; }
+    .home__danger-btn { flex-shrink: 0; }
 </style>
+
+@code {
+    private IReadOnlyList<DuelSummaryDto> _recentDuels = [];
+
+    private bool _resetConfirm;
+    private bool _resetBusy;
+    private bool _resetDone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _recentDuels = await ApiClient.ListDuelsAsync(3) ?? []; }
+        catch { _recentDuels = []; }
+    }
+
+    private async Task DoResetAsync()
+    {
+        _resetBusy = true;
+        try
+        {
+            await ApiClient.DevResetAsync();
+            _recentDuels = [];
+            _resetDone = true;
+            _resetConfirm = false;
+        }
+        catch { /* swallow — server may not be in dev mode */ }
+        finally { _resetBusy = false; }
+    }
+}

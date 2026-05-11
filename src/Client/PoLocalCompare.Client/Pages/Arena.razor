@@ -8,6 +8,7 @@
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <MockDataBanner />
 
@@ -36,6 +37,14 @@
                 <div class="arena__hud">
                     <TelemetryHud Result="_leftResult" />
                 </div>
+                @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
+                {
+                    <div class="arena__source-link">
+                        <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
+                            &lt;/&gt; View Source
+                        </button>
+                    </div>
+                }
                 @if (_eloShiftLeft.HasValue)
                 {
                     <div class="arena__elo-badge @(_eloShiftLeft >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
@@ -53,6 +62,14 @@
                 <div class="arena__hud">
                     <TelemetryHud Result="_rightResult" />
                 </div>
+                @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
+                {
+                    <div class="arena__source-link">
+                        <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
+                            &lt;/&gt; View Source
+                        </button>
+                    </div>
+                }
                 @if (_eloShiftRight.HasValue)
                 {
                     <div class="arena__elo-badge @(_eloShiftRight >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
@@ -65,7 +82,7 @@
         @if (_verdictRecorded)
         {
             <div class="arena__verdict-recorded">
-                Verdict recorded ✓ — Winner: <strong>@_winnerModelId</strong>
+                Verdict recorded ✓ — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
             </div>
         }
 
@@ -109,6 +126,7 @@
     private bool _verdictRecorded;
 
     private string? _winnerModelId;
+    private string? _winnerDisplayName;
     private string? _loserModelId;
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
@@ -128,6 +146,7 @@
                 {
                     _verdictRecorded = true;
                     _winnerModelId = _duel.WinnerModelId;
+                    _winnerDisplayName = ResolveDisplayName(_duel.WinnerModelId);
                     _loserModelId = _duel.LoserModelId;
                     ApplyEloShifts(_duel);
                 }
@@ -151,6 +170,7 @@
             {
                 _verdictRecorded = true;
                 _winnerModelId = response.WinnerModelId;
+                _winnerDisplayName = ResolveDisplayName(response.WinnerModelId);
                 _loserModelId = response.LoserModelId;
 
                 // Apply ELO shifts to display badges
@@ -193,6 +213,22 @@
         _eloShiftRight = duel.RightModelId == duel.WinnerModelId
             ? duel.EloShiftWinner
             : duel.EloShiftLoser;
+    }
+
+    private string ResolveDisplayName(string? modelId)
+    {
+        if (modelId is null || _duel is null) return modelId ?? string.Empty;
+        if (modelId == _duel.LeftModelId)
+            return _leftResult?.ModelName ?? _duel.LeftModelId;
+        if (modelId == _duel.RightModelId)
+            return _rightResult?.ModelName ?? _duel.RightModelId;
+        return modelId;
+    }
+
+    private async Task OpenSourceAsync(string htmlContent, string modelName)
+    {
+        // Open the raw HTML source in a new browser tab so the user can inspect it
+        await JS.InvokeVoidAsync("openHtmlSource", htmlContent, modelName);
     }
 }
 

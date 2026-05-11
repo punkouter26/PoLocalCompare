@@ -27,6 +27,7 @@ public sealed class WebLlmService : IAsyncDisposable
     /// Multiple modelIds can run concurrently.</summary>
     public async IAsyncEnumerable<WebLlmStatusUpdate> StartInferenceAsync(
         string modelId,
+        string webLlmModelId,
         string prompt,
         string duelId,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -36,7 +37,7 @@ public sealed class WebLlmService : IAsyncDisposable
         var session = new InferenceSession();
         _sessions[modelId] = session;
 
-        await _js.InvokeVoidAsync("startWebLlmInference", _selfRef, modelId, prompt, cancellationToken);
+        await _js.InvokeVoidAsync("startWebLlmInference", _selfRef, modelId, webLlmModelId, prompt, cancellationToken);
 
         await foreach (var update in session.Channel.Reader.ReadAllAsync(cancellationToken))
         {

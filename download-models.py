@@ -12,10 +12,27 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 MODELS = [
+    # Already registered
     "mlc-ai/Qwen2.5-0.5B-Instruct-q4f32_1-MLC",
     "mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC",
     "mlc-ai/Phi-3.5-mini-instruct-q4f32_1-MLC",
     "mlc-ai/Llama-3.2-3B-Instruct-q4f16_1-MLC",
+    # Llama 3.1
+    "mlc-ai/Llama-3.1-8B-Instruct-q4f16_1-MLC",
+    # Gemma 2
+    "mlc-ai/gemma-2-2b-it-q4f16_1-MLC",
+    # Phi-4
+    "mlc-ai/Phi-4-mini-instruct-q4f16_1-MLC",
+    # Mistral
+    "mlc-ai/Mistral-7B-Instruct-v0.3-q4f16_1-MLC",
+    # Qwen 2.5 7B
+    "mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC",
+    # SmolLM2 family (tiny → small → mid)
+    "mlc-ai/SmolLM2-135M-Instruct-q0f32-MLC",
+    "mlc-ai/SmolLM2-360M-Instruct-q4f32_1-MLC",
+    "mlc-ai/SmolLM2-1.7B-Instruct-q4f16_1-MLC",
+    # Qwen 3
+    "mlc-ai/Qwen3-1.7B-q4f16_1-MLC",
 ]
 
 # Files not needed by WebLLM inference

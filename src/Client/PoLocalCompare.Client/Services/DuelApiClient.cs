@@ -93,4 +93,10 @@ public sealed class DuelApiClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsByteArrayAsync();
     }
+
+    public async Task DevResetAsync()
+    {
+        var response = await _http.PostAsync("/api/dev/reset", null);
+        response.EnsureSuccessStatusCode();
+    }
 }

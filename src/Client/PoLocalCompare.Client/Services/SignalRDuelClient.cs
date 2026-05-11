@@ -42,4 +42,4 @@ public sealed class SignalRDuelClient : IAsyncDisposable
     }
 }
 
-public sealed record StartLocalInferencePayload(string DuelId, string ModelId, string Side);
+public sealed record StartLocalInferencePayload(string DuelId, string ModelId, string Side, string? WebLlmModelId = null);

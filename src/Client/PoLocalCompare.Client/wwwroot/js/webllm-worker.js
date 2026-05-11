@@ -52,34 +52,48 @@ function computeRepetitionScore(text) {
 // Main message handler
 // ---------------------------------------------------------------------------
 self.onmessage = async (event) => {
-    const { modelId, prompt, localModelBaseUrl } = event.data;
+    const { modelId, webLlmModelId: wlmId, prompt, localModelBaseUrl } = event.data;
+    // wlmId is the actual WebLLM model identifier (e.g. "Phi-3.5-mini-instruct-q4f32_1-MLC");
+    // modelId is the internal ULID used only for routing status callbacks back to Blazor.
+    const effectiveModelId = wlmId || modelId;
+
+    console.log(`[WebLLM Worker] ▶ Start inference — modelId="${modelId}" effectiveModelId="${effectiveModelId}" localModelBaseUrl="${localModelBaseUrl}"`);
 
     const startMs = performance.now();
 
     try {
-        self.postMessage({ type: 'status', status: 'Initializing', tokenCount: 0, elapsedMs: 0 });
+        self.postMessage({ type: 'status', status: 'Initializing', tokenCount: 0, elapsedMs: 0, loadProgress: 0 });
 
-        const isAlreadyCached = cachedModelId === modelId;
+        const isAlreadyCached = cachedModelId === effectiveModelId;
+        console.log(`[WebLLM Worker] Cache check — cachedModelId="${cachedModelId}" isAlreadyCached=${isAlreadyCached}`);
 
         if (!engine || !isAlreadyCached) {
             const appConfig = localModelBaseUrl
-                ? { model_list: [{ model: localModelBaseUrl + modelId + '/', model_id: modelId }] }
+                ? { model_list: [{ model: localModelBaseUrl + effectiveModelId + '/', model_id: effectiveModelId }] }
                 : undefined;
 
-            engine = await webllm.CreateMLCEngine(modelId, {
+            console.log(`[WebLLM Worker] Creating MLCEngine — effectiveModelId="${effectiveModelId}" appConfig=`, appConfig ?? '(none, using CDN)');
+
+            engine = await webllm.CreateMLCEngine(effectiveModelId, {
                 ...(appConfig ? { appConfig } : {}),
                 initProgressCallback: (progress) => {
                     const elapsedMs = Math.round(performance.now() - startMs);
+                    const loadProgress = Math.round((progress.progress ?? 0) * 100);
+                    console.log(`[WebLLM Worker] Load progress ${loadProgress}% (${elapsedMs}ms) — ${progress.text}`);
                     self.postMessage({
                         type: 'status',
                         status: 'Initializing',
                         tokenCount: 0,
                         elapsedMs,
                         detail: progress.text,
+                        loadProgress,
                     });
                 },
             });
-            cachedModelId = modelId;
+            cachedModelId = effectiveModelId;
+            console.log(`[WebLLM Worker] ✅ Engine ready — model="${effectiveModelId}" warmUpMs=${Math.round(performance.now() - startMs)}`);
+        } else {
+            console.log(`[WebLLM Worker] ⚡ Using cached engine for "${effectiveModelId}"`);
         }
 
         const warmUpMs = Math.round(performance.now() - startMs);
@@ -94,6 +108,7 @@ self.onmessage = async (event) => {
             if (prefillMatch) prefillSpeedTps = parseFloat(prefillMatch[1]);
         } catch (_) { /* runtimeStatsText not always available pre-generation */ }
 
+        console.log(`[WebLLM Worker] 🚀 Generating — warmUpMs=${warmUpMs} cacheHit=${cacheHit} prefillSpeedTps=${prefillSpeedTps}`);
         self.postMessage({
             type: 'status', status: 'Generating', tokenCount: 0, elapsedMs: warmUpMs,
             cacheHit, prefillSpeedTps,
@@ -153,6 +168,7 @@ self.onmessage = async (event) => {
         } catch (_) { }
 
         const totalMs = Math.round(performance.now() - startMs);
+        console.log(`[WebLLM Worker] ✅ Complete — tokenCount=${tokenCount} totalMs=${totalMs} warmUpMs=${warmUpMs} prefillSpeedTps=${prefillSpeedTps}`);
         self.postMessage({
             type: 'complete',
             htmlOutput: generatedContent,
@@ -163,6 +179,7 @@ self.onmessage = async (event) => {
             cacheHit,
         });
     } catch (err) {
+        console.error(`[WebLLM Worker] ❌ Error — ${err?.message ?? String(err)}`, err);
         self.postMessage({ type: 'error', reason: err?.message ?? String(err) });
     }
 };

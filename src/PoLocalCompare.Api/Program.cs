@@ -1,3 +1,4 @@
+using Azure.Data.Tables;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using OpenTelemetry.Metrics;
@@ -5,6 +6,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using PoLocalCompare.Api.Endpoints;
 using PoLocalCompare.Api.Hubs;
+using PoLocalCompare.Api.Infrastructure;
 using PoLocalCompare.Api.Services;
 using PoLocalCompare.Application.Duels.CommenceDuel;
 using PoLocalCompare.Application.Duels.GetDuel;
@@ -76,7 +78,10 @@ try
     if (!string.IsNullOrEmpty(keyVaultUri))
     {
         var credential = new DefaultAzureCredential();
-        builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), credential);
+        builder.Configuration.AddAzureKeyVault(
+            new Uri(keyVaultUri),
+            credential,
+            new PrefixKeyVaultSecretManager("PoLocalCompare"));
     }
 
     // ─── CORS (T040) ─────────────────────────────────────────────────────────
@@ -224,6 +229,30 @@ try
     app.MapModelsEndpoints();
     app.MapDuelsEndpoints();
     app.MapLeaderboardEndpoints();
+
+    // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
+    if (app.Environment.IsDevelopment())
+    {
+        app.MapPost("/api/dev/reset", async (TableServiceClient tsc) =>
+        {
+            foreach (var t in new[] { "Duels", "DuelResults", "EloHistory" })
+            {
+                await tsc.DeleteTableAsync(t);
+                await Task.Delay(300);
+                await tsc.CreateTableAsync(t);
+            }
+            var mc = tsc.GetTableClient("Models");
+            await foreach (var e in mc.QueryAsync<TableEntity>(x => x.PartitionKey == "model"))
+            {
+                e["CurrentElo"] = 1200.0;
+                e["DuelCount"] = 0;
+                e["WinCount"] = 0;
+                e["GreenScoreAvg"] = 0.0;
+                await mc.UpsertEntityAsync(e, TableUpdateMode.Replace);
+            }
+            return Results.Ok(new { reset = true, message = "Duels/results/elo cleared; model ELO reset to 1200" });
+        });
+    }
 
     // ─── Blazor WASM static assets + fallback (T014) ─────────────────────────
     app.MapStaticAssets();

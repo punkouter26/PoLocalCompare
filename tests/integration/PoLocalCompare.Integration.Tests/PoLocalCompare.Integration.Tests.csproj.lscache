@@ -388,8 +388,8 @@ UnitTest1.cs
  azure.identity/1.21.0/lib/net10.0/Azure.Identity.dll
  azure.monitor.opentelemetry.exporter/1.8.0/lib/net10.0/Azure.Monitor.OpenTelemetry.Exporter.dll
  azure.security.keyvault.secrets/4.10.0/lib/net10.0/Azure.Security.KeyVault.Secrets.dll
- azure.storage.blobs/12.23.0/lib/net6.0/Azure.Storage.Blobs.dll
- azure.storage.common/12.22.0/lib/net6.0/Azure.Storage.Common.dll
+ azure.storage.blobs/12.26.0/lib/net8.0/Azure.Storage.Blobs.dll
+ azure.storage.common/12.25.0/lib/net8.0/Azure.Storage.Common.dll
  bouncycastle.cryptography/2.4.0/lib/net6.0/BouncyCastle.Cryptography.dll
  castle.core/5.1.1/lib/net6.0/Castle.Core.dll
  docker.dotnet.enhanced.x509/3.126.1/lib/net9.0/Docker.DotNet.X509.dll
@@ -459,7 +459,7 @@ UnitTest1.cs
  system.configuration.configurationmanager/6.0.0/lib/net6.0/System.Configuration.ConfigurationManager.dll
  system.diagnostics.performancecounter/6.0.0/lib/net6.0/System.Diagnostics.PerformanceCounter.dll
  system.drawing.common/6.0.0/lib/net6.0/System.Drawing.Common.dll
- system.io.hashing/6.0.0/lib/net6.0/System.IO.Hashing.dll
+ system.io.hashing/8.0.0/lib/net8.0/System.IO.Hashing.dll
  system.linq.dynamic.core/1.7.2/lib/net10.0/System.Linq.Dynamic.Core.dll
  system.memory.data/10.0.3/lib/net10.0/System.Memory.Data.dll
  system.security.cryptography.protecteddata/6.0.0/lib/net6.0/System.Security.Cryptography.ProtectedData.dll

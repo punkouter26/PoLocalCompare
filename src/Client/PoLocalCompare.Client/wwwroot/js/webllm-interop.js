@@ -8,9 +8,9 @@
 const workers = {};
 
 /**
- * Called from Blazor WebLlmService via IJSRuntime.InvokeVoidAsync("startWebLlmInference", dotnetRef, modelId, prompt)
+ * Called from Blazor WebLlmService via IJSRuntime.InvokeVoidAsync("startWebLlmInference", dotnetRef, modelId, webLlmModelId, prompt)
  */
-window.startWebLlmInference = function (dotnetRef, modelId, prompt) {
+window.startWebLlmInference = function (dotnetRef, modelId, webLlmModelId, prompt) {
     // Terminate any previous worker for this modelId
     if (workers[modelId]) {
         workers[modelId].terminate();
@@ -48,5 +48,5 @@ window.startWebLlmInference = function (dotnetRef, modelId, prompt) {
 
     // Pass the origin-relative models base so the worker can self-host models
     const localModelBaseUrl = window.location.origin + '/models/';
-    worker.postMessage({ modelId, prompt, localModelBaseUrl });
+    worker.postMessage({ modelId, webLlmModelId, prompt, localModelBaseUrl });
 };

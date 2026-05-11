@@ -51,6 +51,12 @@ public sealed class Model
                 throw new ArgumentException("ApiEndpointRef is required for Remote models.", nameof(apiEndpointRef));
         }
 
+        if (modelType == ModelType.LocalService)
+        {
+            if (string.IsNullOrWhiteSpace(apiEndpointRef))
+                throw new ArgumentException("ApiEndpointRef (Ollama model name, e.g. 'llama3.2') is required for LocalService models.", nameof(apiEndpointRef));
+        }
+
         ModelId = modelId;
         DisplayName = displayName;
         ModelType = modelType;

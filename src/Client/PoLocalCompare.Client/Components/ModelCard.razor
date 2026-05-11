@@ -5,9 +5,15 @@
 <RadzenCard class="@_cardClass" @onclick="OnCardClick" style="@(IsDisabled ? "cursor:not-allowed;opacity:0.45;" : "cursor:pointer;")">
     <div class="model-card__header">
         <span class="model-card__name">@(LabelOverride ?? Model.DisplayName)</span>
-        <span class="model-card__badge model-card__badge--@(Model.ModelType == ModelType.Local ? "local" : "remote")">
-            @Model.ModelType
-        </span>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+            @if (IsSelected)
+            {
+                <span class="model-card__checkmark" title="Selected">✔</span>
+            }
+            <span class="model-card__badge model-card__badge--@(Model.ModelType.ToString().ToLower())">
+                @(Model.ModelType == ModelType.LocalService ? "SVC" : Model.ModelType.ToString().ToUpper())
+            </span>
+        </div>
     </div>
     <div class="model-card__elo">
         ELO: <strong>@Model.CurrentElo.ToString("F0")</strong>
@@ -50,7 +56,15 @@
 
     .model-card--selected {
         border-color: #22c55e;
-        box-shadow: 0 0 0 2px #22c55e44;
+        border-left: 4px solid #22c55e;
+        box-shadow: 0 0 0 2px #22c55e44, inset 0 0 12px #22c55e08;
+        background: #0d1f14;
+    }
+
+    .model-card__checkmark {
+        color: #22c55e;
+        font-size: 0.85rem;
+        font-weight: 700;
     }
 
     .model-card__header {
@@ -80,6 +94,11 @@
 
     .model-card__badge--remote {
         background: #7c3aed;
+        color: #fff;
+    }
+
+    .model-card__badge--localservice {
+        background: #0d9469;
         color: #fff;
     }
 

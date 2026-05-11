@@ -1,0 +1,641 @@
+@page "/local-model-lab"
+@using Microsoft.AspNetCore.Components.Rendering
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using Microsoft.JSInterop
+@using System.Text.Json
+@implements IAsyncDisposable
+@inject DuelApiClient ApiClient
+@inject IJSRuntime JS
+
+<PageTitle>Local Model Lab — LLM Duel Arena</PageTitle>
+
+<div class="lab">
+    <h1 class="lab__title">🧪 Local Model Lab</h1>
+    <p class="lab__subtitle">
+        Environment health · download detection · live inference diagnostics · speed benchmark
+    </p>
+
+    @* ── Environment strip ── *@
+    <div class="lab__env @(_webGpu?.Supported == true ? "lab__env--ok" : "lab__env--warn")">
+        @if (_webGpu is null)
+        {
+            <span class="lab__env-item">⏳ Checking WebGPU…</span>
+        }
+        else if (_webGpu.Supported)
+        {
+            <span class="lab__env-item lab__env-item--ok">✅ WebGPU supported</span>
+            <span class="lab__env-sep">·</span>
+            <span class="lab__env-item">🖥 @(string.IsNullOrEmpty(_webGpu.Vendor) ? "WebGPU Device" : _webGpu.Vendor)@(string.IsNullOrEmpty(_webGpu.Architecture) ? "" : " · " + _webGpu.Architecture)</span>
+        }
+        else
+        {
+            <span class="lab__env-item lab__env-item--err">❌ WebGPU unavailable</span>
+            <span class="lab__env-sep">·</span>
+            <span class="lab__env-item lab__env-item--muted">@_webGpu.Reason</span>
+        }
+        <span class="lab__env-sep">·</span>
+        <span class="lab__env-item">@_models.Count registered</span>
+        <span class="lab__env-sep">·</span>
+        <span class="lab__env-item">@_models.Count(m => m.IsDownloaded == true) downloaded</span>
+        <span class="lab__env-sep">·</span>
+        <span class="lab__env-item lab__env-stat--tested">@_models.Count(m => m.Status == DiagStatus.Complete) tested</span>
+    </div>
+
+    @* ── Prompt config ── *@
+    <div class="lab__prompt-section">
+        <label class="lab__prompt-label">Test Prompt</label>
+        <textarea class="lab__prompt-input"
+                  rows="4"
+                  @bind="_testPrompt"
+                  @bind:event="oninput"
+                  placeholder="Enter the test prompt to run against each model…"></textarea>
+        <div class="lab__btn-row">
+            <button class="lab__btn lab__btn--primary"
+                    @onclick="RunAllDownloaded"
+                    disabled="@(_anyRunning || !_models.Any(m => m.IsDownloaded == true))">
+                ▶ Run All Downloaded
+            </button>
+            <button class="lab__btn lab__btn--smol"
+                    @onclick="RunSmolFamily"
+                    title="@(!_models.Any(m => m.IsSmolLM2 && m.IsDownloaded == true) ? "Download SmolLM2-135M or SmolLM2-360M to enable" : "Race all downloaded SmolLM2 models")"
+                    disabled="@(_anyRunning || !_models.Any(m => m.IsSmolLM2 && m.IsDownloaded == true))">
+                🤏 SmolLM2 Race
+            </button>
+            <button class="lab__btn lab__btn--danger"
+                    @onclick="CancelAll"
+                    disabled="@(!_anyRunning)">
+                ■ Cancel All
+            </button>
+            <button class="lab__btn lab__btn--secondary"
+                    @onclick="RefreshDownloadStatusAsync"
+                    disabled="@_anyRunning">
+                🔄 Refresh
+            </button>
+        </div>
+        @if (!_models.Any(m => m.IsSmolLM2 && m.IsDownloaded == true) && _models.Any(m => m.IsSmolLM2))
+        {
+            <p class="lab__smol-hint">💡 Download SmolLM2-135M or SmolLM2-360M to enable race mode — run <code>python download-models.py</code></p>
+        }
+    </div>
+
+    @* ── Model grid ── *@
+    @if (_loading)
+    {
+        <p class="lab__loading">Loading model list…</p>
+    }
+    else if (_models.Count == 0)
+    {
+        <p class="lab__empty">No local models registered. Register one from the War Room first.</p>
+    }
+    else
+    {
+        var _familyGroups = _models
+            .GroupBy(m => GetModelFamily(m.Model.WebLlmModelId))
+            .OrderBy(g => FamilyOrder(g.Key));
+        foreach (var _family in _familyGroups)
+        {
+            <div class="lab__family-group">
+                <div class="lab__family-header">
+                    <span class="lab__family-name">@_family.Key</span>
+                    <span class="lab__family-count">@_family.Count() model@(_family.Count() == 1 ? "" : "s")</span>
+                </div>
+                <div class="lab__grid">
+                @foreach (var state in _family)
+                {
+                <div class="lab__card @GetCardClass(state)">
+
+                    @* Header row *@
+                    <div class="lab__card-header">
+                        <div class="lab__card-title">
+                            <span class="lab__model-name">@state.Model.DisplayName</span>
+                            @if (state.VramMb > 0)
+                            {
+                                <span class="lab__vram-badge">@state.VramLabel</span>
+                            }
+                        </div>
+                        <div class="lab__card-actions">
+                            @if (state.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
+                            {
+                                <button class="lab__btn-sm lab__btn-sm--run"
+                                        title="Run diagnostic"
+                                        @onclick="() => RunSingleAsync(state)"
+                                        disabled="@(state.IsDownloaded != true || _webGpu?.Supported != true)">
+                                    ▶
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="lab__btn-sm lab__btn-sm--cancel"
+                                        title="Cancel"
+                                        @onclick="() => CancelSingleAsync(state)">
+                                    ■
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @* Model ID chip *@
+                    <div class="lab__model-id">@state.Model.WebLlmModelId</div>
+
+                    @* Download status *@
+                    <div class="lab__download-row">
+                        @if (state.IsDownloaded is null)
+                        {
+                            <span class="lab__badge lab__badge--checking">⏳ Checking…</span>
+                        }
+                        else if (state.IsDownloaded == true)
+                        {
+                            <span class="lab__badge lab__badge--ok">✅ Downloaded</span>
+                        }
+                        else
+                        {
+                            <span class="lab__badge lab__badge--missing">○ Not downloaded</span>
+                        }
+                    </div>
+                    @if (state.IsDownloaded == false)
+                    {
+                        <details class="lab__download-hint">
+                            <summary class="lab__download-hint-summary">How to download</summary>
+                            <code class="lab__download-cmd">python download-models.py</code>
+                        </details>
+                    }
+
+                    @* Running: progress bar + step detail *@
+                    @if (state.Status is DiagStatus.Loading or DiagStatus.Generating)
+                    {
+                        <div class="lab__progress-track">
+                            <div class="lab__progress-fill" style="width: @(state.LoadProgress)%"></div>
+                        </div>
+                        <div class="lab__step-detail">@state.StepDetail</div>
+                    }
+
+                    @* Error *@
+                    @if (state.Status == DiagStatus.Error)
+                    {
+                        <div class="lab__error">❌ @state.ErrorMessage</div>
+                    }
+
+                    @* Cancelled *@
+                    @if (state.Status == DiagStatus.Cancelled)
+                    {
+                        <div class="lab__cancelled">⊘ Cancelled</div>
+                    }
+
+                    @* Results *@
+                    @if (state.Status == DiagStatus.Complete)
+                    {
+                        <div class="lab__metrics">
+                            <div class="lab__metric">
+                                <span class="lab__metric-label">Load</span>
+                                <span class="lab__metric-value">@FormatMs(state.LoadMs)</span>
+                            </div>
+                            <div class="lab__metric">
+                                <span class="lab__metric-label">1st Token</span>
+                                <span class="lab__metric-value">@FormatMs(state.FirstTokenMs)</span>
+                            </div>
+                            <div class="lab__metric lab__metric--highlight">
+                                <span class="lab__metric-label">Tok/s</span>
+                                <span class="lab__metric-value">@state.TokensPerSec</span>
+                            </div>
+                            <div class="lab__metric">
+                                <span class="lab__metric-label">Tokens</span>
+                                <span class="lab__metric-value">@state.TotalTokens</span>
+                            </div>
+                        </div>
+                        <button class="lab__output-toggle"
+                                @onclick="() => state.ShowOutput = !state.ShowOutput">
+                            @(state.ShowOutput ? "▲ Hide output" : "▼ Show output")
+                        </button>
+                        @if (state.ShowOutput)
+                        {
+                            <pre class="lab__output">@state.Output</pre>
+                        }
+                    }
+                </div>
+                }
+                </div>
+            </div>
+        }
+
+        @* ── Comparison placeholder ── *@
+        @if (_testedModels.Count() > 0 && _testedModels.Count() < 2)
+        {
+            <div class="lab__compare-nudge">
+                📊 Run <strong>1 more model</strong> to unlock speed rankings &amp; scatter plot comparison
+            </div>
+        }
+
+        @* ── Summary: shown when ≥ 2 models are tested ── *@
+        @if (_testedModels.Count() >= 2)
+        {
+            var ranked = _testedModels.OrderByDescending(m => m.TokensPerSec).ToList();
+
+            <div class="lab__summary">
+                <h2 class="lab__summary-title">📊 Benchmark Results</h2>
+
+                @* Rankings table *@
+                <div class="lab__table-wrap">
+                    <table class="lab__table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Model</th>
+                                <th>VRAM</th>
+                                <th>Load time</th>
+                                <th>1st token</th>
+                                <th class="lab__th--speed">Tok/s ↑</th>
+                                <th>Tokens out</th>
+                                <th>Completeness</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < ranked.Count; i++)
+                            {
+                                var m = ranked[i];
+                                var medal = i switch { 0 => "🥇", 1 => "🥈", 2 => "🥉", _ => (i + 1).ToString() };
+                                var quality = CompletenessScore(m);
+
+                                <tr class="@(i == 0 ? "lab__tr--winner" : "")">
+                                    <td>@medal</td>
+                                    <td>@m.Model.DisplayName</td>
+                                    <td>@(m.VramMb > 0 ? m.VramLabel : "—")</td>
+                                    <td>@FormatMs(m.LoadMs)</td>
+                                    <td>@FormatMs(m.FirstTokenMs)</td>
+                                    <td class="lab__td--speed">@m.TokensPerSec</td>
+                                    <td>@m.TotalTokens</td>
+                                    <td>
+                                        <div class="lab__quality-wrap">
+                                            <div class="lab__quality-bar" style="width: @quality%"></div>
+                                            <span class="lab__quality-pct">@quality%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="lab__quality-note">
+                    ✱ Completeness = tokens generated ÷ 256 max-token cap. Higher is not always better — inspect output below.
+                </p>
+
+                @* Speed scatter (SVG) — built as MarkupString to avoid Razor <text> conflict *@
+                @{
+                    var maxTps = ranked.Max(m => m.TokensPerSec);
+                }
+                <div class="lab__scatter-wrap">
+                    <h3 class="lab__scatter-title">Speed vs. Output Completeness</h3>
+                    @BuildScatterSvg(ranked, maxTps)
+                </div>
+
+                @* Capability matrix ── fixed prompts, shown only if all were tested with default prompt *@
+                <div class="lab__matrix">
+                    <h3 class="lab__matrix-title">💬 Output Preview — Side by Side</h3>
+                    <div class="lab__matrix-grid" style="grid-template-columns: repeat(@ranked.Count, 1fr)">
+                        @foreach (var m in ranked)
+                        {
+                            <div class="lab__matrix-col">
+                                <div class="lab__matrix-model">@m.Model.DisplayName</div>
+                                <div class="lab__matrix-score">
+                                    <span class="lab__matrix-tps">@m.TokensPerSec tok/s</span>
+                                </div>
+                                <pre class="lab__matrix-output">@TruncateOutput(m.Output, 400)</pre>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    // ── Status enum ──────────────────────────────────────────────────────────
+    private enum DiagStatus { Idle, Checking, Loading, Generating, Complete, Error, Cancelled }
+
+    // ── WebGPU info ──────────────────────────────────────────────────────────
+    private sealed class WebGpuInfo
+    {
+        public bool Supported { get; set; }
+        public string Vendor { get; set; } = "";
+        public string Architecture { get; set; } = "";
+        public string Device { get; set; } = "";
+        public string Reason { get; set; } = "";
+    }
+
+    // ── Per-model diagnostic state ───────────────────────────────────────────
+    private sealed class ModelDiagState
+    {
+        public ModelDto Model { get; init; } = null!;
+        public bool? IsDownloaded { get; set; }
+        public DiagStatus Status { get; set; } = DiagStatus.Idle;
+        public int LoadProgress { get; set; }
+        public string StepDetail { get; set; } = "";
+        public int LoadMs { get; set; }
+        public int FirstTokenMs { get; set; }
+        public int TokensPerSec { get; set; }
+        public int TotalTokens { get; set; }
+        public string Output { get; set; } = "";
+        public string? ErrorMessage { get; set; }
+        public bool ShowOutput { get; set; }
+
+        public bool IsSmolLM2 =>
+            Model.WebLlmModelId?.StartsWith("SmolLM2", StringComparison.OrdinalIgnoreCase) == true;
+
+        public string VramLabel => _vramTable.TryGetValue(Model.WebLlmModelId ?? "", out var v) ? v.Label : "";
+        public int VramMb     => _vramTable.TryGetValue(Model.WebLlmModelId ?? "", out var v) ? v.Mb   : 0;
+    }
+
+    // ── Static VRAM lookup ───────────────────────────────────────────────────
+    private static readonly Dictionary<string, (int Mb, string Label)> _vramTable = new()
+    {
+        ["SmolLM2-135M-Instruct-q0f32-MLC"]          = (720,  "720 MB"),
+        ["SmolLM2-360M-Instruct-q4f32_1-MLC"]         = (580,  "580 MB"),
+        ["SmolLM2-1.7B-Instruct-q4f16_1-MLC"]         = (1774, "1.8 GB"),
+        ["Qwen2.5-0.5B-Instruct-q4f32_1-MLC"]         = (1060, "1.1 GB"),
+        ["Qwen2.5-1.5B-Instruct-q4f32_1-MLC"]         = (1888, "1.9 GB"),
+        ["Qwen2.5-7B-Instruct-q4f16_1-MLC"]           = (5107, "5.1 GB"),
+        ["Llama-3.2-1B-Instruct-q4f16_1-MLC"]         = (879,  "879 MB"),
+        ["Llama-3.2-3B-Instruct-q4f16_1-MLC"]         = (2264, "2.3 GB"),
+        ["Llama-3.1-8B-Instruct-q4f16_1-MLC"]         = (5001, "5.0 GB"),
+        ["Phi-3.5-mini-instruct-q4f32_1-MLC"]         = (5483, "5.5 GB"),
+        ["Phi-4-mini-instruct-q4f16_1-MLC"]           = (3437, "3.4 GB"),
+        ["Mistral-7B-Instruct-v0.3-q4f16_1-MLC"]      = (4573, "4.6 GB"),
+        ["gemma-2-2b-it-q4f16_1-MLC"]                 = (1895, "1.9 GB"),
+        ["gemma3-1b-it-q4f16_1-MLC"]                  = (711,  "711 MB"),
+        ["Qwen3-1.7B-q4f16_1-MLC"]                    = (2037, "2.0 GB"),
+        ["DeepSeek-R1-Distill-Llama-8B-q4f16_1-MLC"]  = (5001, "5.0 GB"),
+    };
+
+    // ── Fields ───────────────────────────────────────────────────────────────
+    private bool _loading = true;
+    private List<ModelDiagState> _models = [];
+    private WebGpuInfo? _webGpu;
+    private string _testPrompt =
+        "Hello! Please complete all three tasks:\n" +
+        "1) What is 17 × 8?\n" +
+        "2) Write a Python one-liner to reverse a string.\n" +
+        "3) In one sentence: what is recursion in programming?";
+    private DotNetObjectReference<LocalModelLab>? _selfRef;
+
+    private bool _anyRunning =>
+        _models.Any(m => m.Status is DiagStatus.Loading or DiagStatus.Generating or DiagStatus.Checking);
+
+    private IEnumerable<ModelDiagState> _testedModels =>
+        _models.Where(m => m.Status == DiagStatus.Complete);
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        _selfRef = DotNetObjectReference.Create(this);
+        var apiModels = await ApiClient.GetModelsAsync();
+        _models = (apiModels ?? [])
+            .Where(m => m.ModelType == ModelType.Local && !string.IsNullOrWhiteSpace(m.WebLlmModelId))
+            .OrderBy(m => _vramTable.TryGetValue(m.WebLlmModelId!, out var v) ? v.Mb : int.MaxValue)
+            .Select(m => new ModelDiagState { Model = m })
+            .ToList();
+        _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _webGpu = await JS.InvokeAsync<WebGpuInfo>("checkWebGpu");
+        StateHasChanged();
+
+        await RefreshDownloadStatusAsync();
+        await RestoreLabResultsAsync();
+    }
+
+    // ── JS Callbacks ─────────────────────────────────────────────────────────
+    [JSInvokable]
+    public Task OnDiagStep(string diagId, string step, string detail, int progress)
+    {
+        return InvokeAsync(() =>
+        {
+            var state = FindById(diagId);
+            if (state is null) return;
+            state.Status = step == "Loading" ? DiagStatus.Loading : DiagStatus.Generating;
+            state.StepDetail = detail;
+            state.LoadProgress = progress;
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public Task OnDiagResult(string diagId, int loadMs, int firstTokenMs,
+                             int tokensPerSec, int totalTokens, string output, string? error)
+    {
+        return InvokeAsync(() =>
+        {
+            var state = FindById(diagId);
+            if (state is null) return;
+
+            if (error is not null)
+            {
+                state.Status = DiagStatus.Error;
+                state.ErrorMessage = error;
+            }
+            else
+            {
+                state.Status       = DiagStatus.Complete;
+                state.LoadMs       = loadMs;
+                state.FirstTokenMs = firstTokenMs;
+                state.TokensPerSec = tokensPerSec;
+                state.TotalTokens  = totalTokens;
+                state.Output       = output;
+                state.ShowOutput   = true;
+                _ = JS.InvokeVoidAsync("saveLabResult", state.Model.ModelId,
+                    new { loadMs, firstTokenMs, tokensPerSec, totalTokens, output });
+                _ = JS.InvokeVoidAsync("pulseTestedCount");
+            }
+            StateHasChanged();
+        });
+    }
+
+    // ── Actions ───────────────────────────────────────────────────────────────
+    private async Task RefreshDownloadStatusAsync()
+    {
+        foreach (var s in _models) s.IsDownloaded = null;
+        StateHasChanged();
+
+        await Task.WhenAll(_models.Select(async state =>
+        {
+            var downloaded = await JS.InvokeAsync<bool>("checkModelFile", state.Model.WebLlmModelId);
+            await InvokeAsync(() =>
+            {
+                state.IsDownloaded = downloaded;
+                StateHasChanged();
+            });
+        }));
+    }
+
+    private async Task RunSingleAsync(ModelDiagState state)
+    {
+        if (state.IsDownloaded != true) return;
+        state.Status      = DiagStatus.Loading;
+        state.LoadProgress = 0;
+        state.StepDetail  = "Starting worker…";
+        state.ErrorMessage = null;
+        state.Output      = "";
+        StateHasChanged();
+
+        await JS.InvokeVoidAsync("runModelDiag", _selfRef, state.Model.ModelId, state.Model.WebLlmModelId, _testPrompt);
+    }
+
+    private async Task RunAllDownloaded()
+    {
+        var targets = _models
+            .Where(m => m.IsDownloaded == true && m.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
+            .ToList();
+        foreach (var s in targets)
+            await RunSingleAsync(s);
+    }
+
+    private async Task RunSmolFamily()
+    {
+        var smol = _models
+            .Where(m => m.IsSmolLM2 && m.IsDownloaded == true && m.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
+            .ToList();
+        foreach (var s in smol)
+            await RunSingleAsync(s);
+    }
+
+    private async Task CancelAll()
+    {
+        await JS.InvokeVoidAsync("cancelAllModelDiags");
+        foreach (var s in _models.Where(m => m.Status is DiagStatus.Loading or DiagStatus.Generating))
+            s.Status = DiagStatus.Cancelled;
+        StateHasChanged();
+    }
+
+    private async Task CancelSingleAsync(ModelDiagState state)
+    {
+        await JS.InvokeVoidAsync("cancelModelDiag", state.Model.ModelId);
+        state.Status = DiagStatus.Cancelled;
+        StateHasChanged();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private ModelDiagState? FindById(string modelId) =>
+        _models.FirstOrDefault(m => m.Model.ModelId == modelId);
+
+    private static string GetModelFamily(string? id) => id switch
+    {
+        _ when id?.StartsWith("SmolLM2",  StringComparison.OrdinalIgnoreCase) == true => "SmolLM2",
+        _ when id?.StartsWith("Llama",    StringComparison.OrdinalIgnoreCase) == true => "Llama",
+        _ when id?.StartsWith("Qwen",     StringComparison.OrdinalIgnoreCase) == true => "Qwen",
+        _ when id?.StartsWith("Phi",      StringComparison.OrdinalIgnoreCase) == true => "Phi",
+        _ when id?.StartsWith("gemma",    StringComparison.OrdinalIgnoreCase) == true => "Gemma",
+        _ when id?.StartsWith("Mistral",  StringComparison.OrdinalIgnoreCase) == true => "Mistral",
+        _ when id?.StartsWith("DeepSeek", StringComparison.OrdinalIgnoreCase) == true => "DeepSeek",
+        _                                                                               => "Other",
+    };
+
+    private static int FamilyOrder(string family) => family switch
+    {
+        "SmolLM2"  => 0,
+        "Llama"    => 1,
+        "Qwen"     => 2,
+        "Phi"      => 3,
+        "Gemma"    => 4,
+        "Mistral"  => 5,
+        "DeepSeek" => 6,
+        _          => 99,
+    };
+
+    private async Task RestoreLabResultsAsync()
+    {
+        try
+        {
+            var saved = await JS.InvokeAsync<Dictionary<string, JsonElement>>("loadLabResults");
+            if (saved is null || saved.Count == 0) return;
+            await InvokeAsync(() =>
+            {
+                foreach (var (modelId, data) in saved)
+                {
+                    var state = _models.FirstOrDefault(m => m.Model.ModelId == modelId);
+                    if (state is null) continue;
+                    state.Status       = DiagStatus.Complete;
+                    state.LoadMs       = data.TryGetProperty("loadMs",       out var lm)  ? lm.GetInt32()  : 0;
+                    state.FirstTokenMs = data.TryGetProperty("firstTokenMs", out var ft)  ? ft.GetInt32()  : 0;
+                    state.TokensPerSec = data.TryGetProperty("tokensPerSec", out var tps) ? tps.GetInt32() : 0;
+                    state.TotalTokens  = data.TryGetProperty("totalTokens",  out var tt)  ? tt.GetInt32()  : 0;
+                    state.Output       = data.TryGetProperty("output",       out var o)   ? o.GetString() ?? "" : "";
+                    state.ShowOutput   = false;
+                }
+                StateHasChanged();
+            });
+        }
+        catch { /* sessionStorage not available or corrupted — ignore */ }
+    }
+
+    private static string GetCardClass(ModelDiagState s) => s.Status switch
+    {
+        DiagStatus.Loading or DiagStatus.Generating => "lab__card--running",
+        DiagStatus.Complete                         => "lab__card--complete",
+        DiagStatus.Error                            => "lab__card--error",
+        DiagStatus.Cancelled                        => "lab__card--cancelled",
+        _                                           => ""
+    };
+
+    private static string FormatMs(int ms) => ms < 0 ? "—" : ms < 1000 ? $"{ms} ms" : $"{ms / 1000.0:F1} s";
+
+    private static int CompletenessScore(ModelDiagState m) =>
+        m.TotalTokens <= 0 ? 0 : Math.Min(100, (int)((m.TotalTokens / 256.0) * 100));
+
+    private static string TruncateOutput(string text, int maxLen) =>
+        text.Length <= maxLen ? text : text[..maxLen] + "\n…";
+
+    private static MarkupString BuildScatterSvg(List<ModelDiagState> ranked, int maxTps)
+    {
+        const int W = 560, H = 220, PadL = 60, PadB = 40, PadR = 20, PadT = 20;
+        var plotW = W - PadL - PadR;
+        var plotH = H - PadT - PadB;
+        var sb = new System.Text.StringBuilder();
+
+        sb.Append($"""<svg class="lab__scatter" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">""");
+
+        // Grid lines
+        for (int g = 1; g <= 4; g++)
+        {
+            var gy = (PadT + plotH - (g / 5.0) * plotH).ToString("F1");
+            sb.Append($"""<line x1="{PadL}" y1="{gy}" x2="{W - PadR}" y2="{gy}" stroke="#2a2a2a" stroke-width="1"/>""");
+        }
+
+        // Axes
+        sb.Append($"""<line x1="{PadL}" y1="{PadT}" x2="{PadL}" y2="{PadT + plotH}" stroke="#555" stroke-width="1.5"/>""");
+        sb.Append($"""<line x1="{PadL}" y1="{PadT + plotH}" x2="{W - PadR}" y2="{PadT + plotH}" stroke="#555" stroke-width="1.5"/>""");
+
+        // Axis labels
+        sb.Append($"""<text x="{W / 2}" y="{H - 4}" class="lab__scatter-axis-label" text-anchor="middle">Tokens / sec →</text>""");
+        sb.Append($"""<text x="10" y="{PadT + plotH / 2}" class="lab__scatter-axis-label" text-anchor="middle" transform="rotate(-90, 10, {PadT + plotH / 2})">Completeness</text>""");
+
+        // Data points
+        foreach (var m in ranked)
+        {
+            var x  = maxTps > 0 ? PadL + (m.TokensPerSec / (double)maxTps) * plotW : PadL;
+            var quality = Math.Min(100, m.TotalTokens <= 0 ? 0 : (int)((m.TotalTokens / 256.0) * 100));
+            var y  = PadT + plotH - (quality / 100.0) * plotH;
+            var xs = x.ToString("F1");
+            var ys = y.ToString("F1");
+            var yl = (y - 11).ToString("F1");
+            var name = System.Net.WebUtility.HtmlEncode(
+                m.Model.DisplayName.Length > 18 ? m.Model.DisplayName[..15] + "…" : m.Model.DisplayName);
+            sb.Append($"""<circle cx="{xs}" cy="{ys}" r="7" class="lab__scatter-dot"/>""");
+            sb.Append($"""<text x="{xs}" y="{yl}" class="lab__scatter-model-label" text-anchor="middle">{name}</text>""");
+        }
+
+        sb.Append("</svg>");
+        return new MarkupString(sb.ToString());
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("cancelAllModelDiags"); } catch { /* ignore if JS context gone */ }
+        _selfRef?.Dispose();
+    }
+}

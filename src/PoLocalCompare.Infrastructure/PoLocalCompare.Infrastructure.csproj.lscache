@@ -250,8 +250,8 @@ Reporting/HtmlLabReportRenderer.cs
  azure.data.tables/12.9.1/lib/netstandard2.0/Azure.Data.Tables.dll
  azure.identity/1.21.0/lib/net10.0/Azure.Identity.dll
  azure.security.keyvault.secrets/4.10.0/lib/net10.0/Azure.Security.KeyVault.Secrets.dll
- azure.storage.blobs/12.23.0/lib/net6.0/Azure.Storage.Blobs.dll
- azure.storage.common/12.22.0/lib/net6.0/Azure.Storage.Common.dll
+ azure.storage.blobs/12.26.0/lib/net8.0/Azure.Storage.Blobs.dll
+ azure.storage.common/12.25.0/lib/net8.0/Azure.Storage.Common.dll
  microsoft.bcl.asyncinterfaces/10.0.3/lib/netstandard2.1/Microsoft.Bcl.AsyncInterfaces.dll
  microsoft.extensions.configuration.abstractions/10.0.3/lib/net10.0/Microsoft.Extensions.Configuration.Abstractions.dll
  microsoft.extensions.dependencyinjection.abstractions/10.0.3/lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
@@ -266,7 +266,7 @@ Reporting/HtmlLabReportRenderer.cs
  microsoft.identitymodel.abstractions/8.14.0/lib/net9.0/Microsoft.IdentityModel.Abstractions.dll
  nulid/1.7.3/lib/net6.0/NUlid.dll
  system.clientmodel/1.10.0/lib/net10.0/System.ClientModel.dll
- system.io.hashing/6.0.0/lib/net6.0/System.IO.Hashing.dll
+ system.io.hashing/8.0.0/lib/net8.0/System.IO.Hashing.dll
  system.memory.data/10.0.3/lib/net10.0/System.Memory.Data.dll
  system.security.cryptography.protecteddata/4.5.0/ref/netstandard2.0/System.Security.Cryptography.ProtectedData.dll
 

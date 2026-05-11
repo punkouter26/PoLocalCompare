@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -8,19 +7,20 @@ using Microsoft.Extensions.Logging;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
 
-namespace PoLocalCompare.Infrastructure.AzureAiFoundry;
+namespace PoLocalCompare.Infrastructure.Ollama;
 
 /// <summary>
-/// Calls Azure OpenAI via the native deployment endpoint with streaming SSE.
-/// Uses api-key header against /openai/deployments/{name}/chat/completions.
+/// Calls a local Ollama instance via its OpenAI-compatible streaming SSE endpoint.
+/// POST {BaseUrl}/v1/chat/completions — no auth required.
+/// ApiEndpointRef on the Model is the Ollama model name (e.g. "llama3.2").
 /// </summary>
-public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
+public sealed class OllamaInferenceProxy : IRemoteInferenceProxy
 {
     private static readonly HttpClient _http = new();
     private readonly IConfiguration _configuration;
-    private readonly ILogger<FoundryInferenceProxy> _logger;
+    private readonly ILogger<OllamaInferenceProxy> _logger;
 
-    public FoundryInferenceProxy(IConfiguration configuration, ILogger<FoundryInferenceProxy> logger)
+    public OllamaInferenceProxy(IConfiguration configuration, ILogger<OllamaInferenceProxy> logger)
     {
         _configuration = configuration;
         _logger = logger;
@@ -36,21 +36,21 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         var result = new DuelResult(duelId, model.ModelId);
         var sw = Stopwatch.StartNew();
 
-        var endpoint = _configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/');
-        var apiKey = _configuration["AzureAiFoundry:ApiKey"];
-        var deploymentName = model.ApiEndpointRef;
+        var baseUrl = (_configuration["Ollama:BaseUrl"] ?? "http://localhost:11434").TrimEnd('/');
+        var modelName = model.ApiEndpointRef;
 
-        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(deploymentName))
+        if (string.IsNullOrWhiteSpace(modelName))
         {
             result.IsFailure = true;
-            result.FailureReason = "Azure AI Foundry configuration is incomplete (Endpoint, ApiKey, or ApiEndpointRef missing).";
+            result.FailureReason = "ApiEndpointRef (Ollama model name) is not set on this model.";
             return result;
         }
 
-        var url = $"{endpoint}/openai/deployments/{deploymentName}/chat/completions?api-version=2024-08-01-preview";
+        var url = $"{baseUrl}/v1/chat/completions";
 
         var requestBody = new
         {
+            model = modelName,
             messages = new[]
             {
                 new { role = "system", content = "You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS. No markdown, no explanation, no code fences." },
@@ -64,7 +64,6 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         var json = JsonSerializer.Serialize(requestBody);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("api-key", apiKey);
         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
         HttpResponseMessage response;
@@ -75,8 +74,8 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         catch (Exception ex)
         {
             result.IsFailure = true;
-            result.FailureReason = $"HTTP request failed: {ex.Message}";
-            _logger.LogError(ex, "HTTP request failed for model {Model}", deploymentName);
+            result.FailureReason = $"HTTP request to Ollama failed: {ex.Message}. Is Ollama running at {baseUrl}?";
+            _logger.LogError(ex, "HTTP request to Ollama failed for model {Model} at {Url}", modelName, url);
             return result;
         }
 
@@ -84,27 +83,25 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         {
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             result.IsFailure = true;
-            result.FailureReason = response.StatusCode == System.Net.HttpStatusCode.NotFound
-                ? $"Deployment \"{deploymentName}\" not found (HTTP 404). Deploy this model in your Azure AI Foundry project first, then retry."
-                : $"HTTP {(int)response.StatusCode}: {body[..Math.Min(300, body.Length)]}";
-            _logger.LogError("Azure OpenAI HTTP {StatusCode} for {Model}: {Body}", (int)response.StatusCode, deploymentName, body[..Math.Min(500, body.Length)]);
+            result.FailureReason = $"Ollama HTTP {(int)response.StatusCode}: {body[..Math.Min(300, body.Length)]}";
+            _logger.LogError("Ollama HTTP {StatusCode} for {Model}: {Body}", (int)response.StatusCode, modelName, body[..Math.Min(500, body.Length)]);
             return result;
         }
 
-        var warmUpMs = sw.ElapsedMilliseconds; // time-to-first-byte (response headers received)
+        var warmUpMs = sw.ElapsedMilliseconds;
 
         var sb = new StringBuilder();
         int tokenCount = 0;
-        long? firstTokenMs = null; // time-to-first-token (actual warm-up per PRD)
+        long? firstTokenMs = null;
         int tagCount = 0;
         int openDepth = 0;
         int styleRules = 0;
-        long lastCallbackAt = -500; // trigger first callback immediately
+        long lastCallbackAt = -500;
 
         try
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
 
             string? line;
             while ((line = await reader.ReadLineAsync(cancellationToken)) is not null &&
@@ -144,12 +141,10 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
                 var elapsed = sw.ElapsedMilliseconds;
                 if (firstTokenMs is null) firstTokenMs = elapsed;
 
-                // Update HTML stats incrementally
                 tagCount += Regex.Matches(token, @"<[a-zA-Z]").Count;
                 openDepth += token.Count(c => c == '<') - token.Count(c => c == '>');
                 styleRules += Regex.Matches(token, @"\{[^}]*\}").Count;
 
-                // Throttle callback to ~500ms
                 if (elapsed - lastCallbackAt >= 500)
                 {
                     lastCallbackAt = elapsed;
@@ -168,7 +163,7 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         {
             result.IsFailure = true;
             result.FailureReason = $"Stream read error: {ex.Message}";
-            _logger.LogError(ex, "Stream read failed for model {Model}", deploymentName);
+            _logger.LogError(ex, "Stream read failed for Ollama model {Model}", modelName);
             return result;
         }
 
@@ -178,7 +173,7 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
         result.HtmlOutputRaw = html;
         result.HtmlOutputSizeBytes = Encoding.UTF8.GetByteCount(html);
         result.TokenCount = tokenCount;
-        result.WarmUpDurationMs = firstTokenMs ?? warmUpMs; // first-token latency
+        result.WarmUpDurationMs = firstTokenMs ?? warmUpMs;
         result.TotalDurationMs = sw.ElapsedMilliseconds;
         result.GenerationDurationMs = Math.Max(0L, result.TotalDurationMs - result.WarmUpDurationMs);
         result.TokenVelocity = result.GenerationDurationMs > 0
@@ -188,16 +183,9 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
             ? (double)Regex.Matches(html, @"<[^>]+>").Count / html.Length
             : 0;
 
-        // Estimate API cost (if pricing is set on the model)
-        if (model.InputTokenPricePerMillion.HasValue || model.OutputTokenPricePerMillion.HasValue)
-        {
-            var outputCost = (tokenCount / 1_000_000.0) * (double)(model.OutputTokenPricePerMillion ?? 0);
-            result.ApiCostUsd = outputCost;
-        }
-
         _logger.LogInformation(
-            "Inference complete for {Model}: {Tokens} tokens, {Bytes} bytes, {Ms}ms",
-            deploymentName, tokenCount, result.HtmlOutputSizeBytes, result.TotalDurationMs);
+            "Ollama inference complete for {Model}: {Tokens} tokens, {Bytes} bytes, {Ms}ms",
+            modelName, tokenCount, result.HtmlOutputSizeBytes, result.TotalDurationMs);
 
         return result;
     }

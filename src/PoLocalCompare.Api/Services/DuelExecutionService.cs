@@ -46,7 +46,12 @@ public sealed class DuelExecutionService
         var duelRepo = scope.ServiceProvider.GetRequiredService<IDuelRepository>();
         var modelRepo = scope.ServiceProvider.GetRequiredService<IModelRepository>();
         var duelResultRepo = scope.ServiceProvider.GetRequiredService<IDuelResultRepository>();
-        var inferenceProxy = scope.ServiceProvider.GetRequiredService<IRemoteInferenceProxy>();
+
+        IRemoteInferenceProxy ResolveProxy(Model model) => model.ModelType switch
+        {
+            ModelType.LocalService => scope.ServiceProvider.GetRequiredKeyedService<IRemoteInferenceProxy>("LocalService"),
+            _ => scope.ServiceProvider.GetRequiredKeyedService<IRemoteInferenceProxy>("Remote")
+        };
 
         Duel? duel = null;
         try
@@ -66,13 +71,13 @@ public sealed class DuelExecutionService
                 return;
             }
 
-            // 300-second watchdog
-            using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(300));
+            // 900-second watchdog (15 min) — allows for WebGPU shader JIT compilation on first run
+            using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(900));
 
             var leftTask = RunModelAsync(duelId, leftModel, "Left", duel.PromptFull,
-                inferenceProxy, duelResultRepo, watchdog.Token);
+                ResolveProxy(leftModel), duelResultRepo, watchdog.Token);
             var rightTask = RunModelAsync(duelId, rightModel, "Right", duel.PromptFull,
-                inferenceProxy, duelResultRepo, watchdog.Token);
+                ResolveProxy(rightModel), duelResultRepo, watchdog.Token);
 
             await Task.WhenAll(leftTask, rightTask);
 
@@ -91,7 +96,7 @@ public sealed class DuelExecutionService
                     StartedAt = duel.StartedAt,
                     CompletedAt = duel.CompletedAt,
                     Verdict = SharedDuelVerdict.Pending,
-                    TimeLimitSeconds = 300,
+                    TimeLimitSeconds = 900,
                 });
         }
         catch (Exception ex)
@@ -182,7 +187,7 @@ public sealed class DuelExecutionService
         // Signal the client to start its Web Worker inference
         await _hubContext.Clients
             .Group($"duel:{duelId}")
-            .SendAsync("StartLocalInference", new { duelId, modelId = model.ModelId, side }, cancellationToken);
+            .SendAsync("StartLocalInference", new { duelId, modelId = model.ModelId, side, webLlmModelId = model.WebLlmModelId }, cancellationToken);
 
         // The client will report back via POST /api/duels/{duelId}/local-result
         // We poll the result repository until the result appears or watchdog fires
@@ -209,8 +214,8 @@ public sealed class DuelExecutionService
 
         // Watchdog expired
         result.IsFailure = true;
-        result.FailureReason = "Watchdog timeout (300s)";
-        result.TotalDurationMs = 300_000;
+        result.FailureReason = "Watchdog timeout (900s)";
+        result.TotalDurationMs = 900_000;
         return result;
     }
 
@@ -267,8 +272,9 @@ public sealed class DuelExecutionService
             result.CharacterDensityRatio = Math.Round((double)nonWhitespace / totalBytes, 4);
         }
 
-        // GreenStats (local models only)
-        if (model.ModelType == ModelType.Local && model.TdpWatts.HasValue && !result.IsFailure)
+        // GreenStats (local models and local-service models with TdpWatts set)
+        if ((model.ModelType == ModelType.Local || model.ModelType == ModelType.LocalService)
+            && model.TdpWatts.HasValue && !result.IsFailure)
         {
             var rateUsd = _configuration.GetValue<double>("GreenStats:ElectricityRateUsd", 0.12);
             var energyWh = GreenStatsCalculator.ComputeEnergyWh(model.TdpWatts.Value, result.TotalDurationMs);

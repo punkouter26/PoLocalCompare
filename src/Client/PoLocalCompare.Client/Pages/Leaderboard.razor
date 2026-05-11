@@ -2,6 +2,7 @@
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
 @using Radzen
 
 <PageTitle>Leaderboard — LLM Duel Arena</PageTitle>
@@ -28,7 +29,18 @@
             ButtonStyle="@(IsGreenSort ? ButtonStyle.Primary : ButtonStyle.Light)"
             Size="ButtonSize.Small"
             class="leaderboard__sort-btn" />
+        <span class="leaderboard__divider">|</span>
+        <RadzenButton
+            Text="@(_activeOnly ? "Active Only" : "All Models")"
+            Click="@(() => _activeOnly = !_activeOnly)"
+            ButtonStyle="@(_activeOnly ? ButtonStyle.Primary : ButtonStyle.Light)"
+            Size="ButtonSize.Small"
+            class="leaderboard__sort-btn" />
     </div>
+    @if (_greenSortWarning)
+    {
+        <p class="leaderboard__green-warn">🌱 No Green Score data yet — complete a duel to populate this ranking.</p>
+    }
 
     @if (_loading)
     {
@@ -47,10 +59,18 @@
                 <a href="/war-room" class="leaderboard__cta">&#x2694;&#xFE0F; Head to the War Room to start one!</a>
             </div>
         }
-        <RadzenDataGrid Data="@_entries" TItem="LeaderboardEntryDto" RowSelect="OnRowSelect" Class="leaderboard__grid leaderboard__grid--scrollable">
+        <RadzenDataGrid Data="@(_activeOnly ? _entries.Where(e => e.DuelCount > 0).ToList() : _entries)" TItem="LeaderboardEntryDto" RowSelect="OnRowSelect" Class="leaderboard__grid leaderboard__grid--scrollable">
             <Columns>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px" />
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" Width="200px" />
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" Width="200px">
+                    <Template Context="entry">
+                        @entry.DisplayName
+                        @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
+                        {
+                            <span class="lb__type-badge lb__type-badge--@mtype.ToString().ToLower()">@(mtype == ModelType.LocalService ? "SVC" : mtype.ToString().ToUpper())</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="CurrentElo" Title="ELO" Width="120px">
                     <Template Context="entry">
                         @((int)Math.Round(entry.CurrentElo))
@@ -96,6 +116,17 @@
                 </RadzenDataGridColumn>
             </Columns>
         </RadzenDataGrid>
+
+        @if (_entries.Count > 0)
+        {
+            var totalDuels = _entries.Sum(e => e.DuelCount) / 2;
+            var topModel = _entries.FirstOrDefault()?.DisplayName ?? "—";
+            <div class="leaderboard__summary">
+                <span>&#x1F4CA; <strong>@_entries.Count</strong> model@(_entries.Count == 1 ? "" : "s") ranked</span>
+                <span>&#x2694;&#xFE0F; <strong>@totalDuels</strong> duel@(totalDuels == 1 ? "" : "s") fought</span>
+                <span>&#x1F3C6; Top: <strong>@topModel</strong></span>
+            </div>
+        }
 
         @if (_selected is not null)
         {
@@ -147,6 +178,8 @@
 
 @code {
     private List<LeaderboardEntryDto> _entries = [];
+    private Dictionary<string, ModelType> _modelTypes = [];
+    private bool _activeOnly;
     private bool _loading = true;
     private string? _error;
 
@@ -156,18 +189,29 @@
     private string? _killListError;
 
     private string _sortBy = "Elo";
+    private bool _greenSortWarning;
     private bool IsGreenSort => string.Equals(_sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase);
     private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
 
     protected override async Task OnInitializedAsync()
     {
+        var modelsTask = ApiClient.GetModelsAsync();
         await LoadLeaderboardAsync();
+        var models = await modelsTask;
+        if (models is not null)
+            _modelTypes = models.ToDictionary(m => m.ModelId, m => m.ModelType);
     }
 
     private async Task SetSortAsync(string sortBy)
     {
         if (string.Equals(_sortBy, sortBy, StringComparison.OrdinalIgnoreCase))
             return;
+        if (sortBy == "GreenScore" && !_entries.Any(e => e.GreenScoreAvg is > 0))
+        {
+            _greenSortWarning = true;
+            return;
+        }
+        _greenSortWarning = false;
         _sortBy = sortBy;
         await LoadLeaderboardAsync();
     }
@@ -247,7 +291,25 @@
     .leaderboard__controls {
         margin-bottom: 1rem;
         display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
         justify-content: flex-end;
+    }
+    .leaderboard__divider { color: #374151; padding: 0 4px; }
+    .lb__type-badge { display: inline-block; font-size: 0.62rem; padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-weight: 700; margin-left: 0.4rem; vertical-align: middle; letter-spacing: 0.04em; }
+    .lb__type-badge--local { background: #1d4ed820; color: #60a5fa; border: 1px solid #1d4ed840; }
+    .lb__type-badge--remote { background: #7c3aed20; color: #a78bfa; border: 1px solid #7c3aed40; }
+    .lb__type-badge--localservice { background: #0d946920; color: #34d399; border: 1px solid #0d946940; }
+
+    .leaderboard__green-warn {
+        font-size: 0.85rem;
+        color: #22c55e;
+        margin: -0.5rem 0 1rem;
+        padding: 6px 10px;
+        background: #22c55e10;
+        border: 1px solid #22c55e30;
+        border-radius: 4px;
     }
 
     .leaderboard__grid {
@@ -284,6 +346,21 @@
         background: #0b0b0b;
         border: 1px solid #2a2a2a;
     }
+
+    .leaderboard__summary {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+        padding: 0.65rem 1rem;
+        background: #111;
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+        color: #9ca3af;
+        font-size: 0.8rem;
+        margin-bottom: 1rem;
+    }
+
+    .leaderboard__summary strong { color: #e5e7eb; }
 
     .leaderboard__status {
         color: #9ca3af;

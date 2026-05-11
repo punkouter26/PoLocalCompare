@@ -9,6 +9,7 @@
 @inject DuelApiClient ApiClient
 @implements IAsyncDisposable
 
+<PageTitle>Duel Processing — LLM Duel Arena</PageTitle>
 <MockDataBanner />
 
 <div class="processing-page">
@@ -18,6 +19,9 @@
     <div class="processing-page__panels">
         <ProcessingPanel
             ModelName="@_leftModelId"
+            DisplayName="@_leftDisplayName"
+            IsLocal="@_leftIsLocal"
+            TdpWatts="@_leftTdpWatts"
             Side="Left"
             Status="@_leftStatus"
             ElapsedMs="@_leftElapsedMs"
@@ -32,10 +36,13 @@
             RepetitionScore="@_leftRepetitionScore"
             PrefillSpeedTps="@_leftPrefillSpeedTps"
             CacheHit="@_leftCacheHit"
-            Detail="@_leftDetail"
+            Detail="@(_leftDetail ?? _leftDiagDetail)"
         />
         <ProcessingPanel
             ModelName="@_rightModelId"
+            DisplayName="@_rightDisplayName"
+            IsLocal="@_rightIsLocal"
+            TdpWatts="@_rightTdpWatts"
             Side="Right"
             Status="@_rightStatus"
             ElapsedMs="@_rightElapsedMs"
@@ -50,7 +57,7 @@
             RepetitionScore="@_rightRepetitionScore"
             PrefillSpeedTps="@_rightPrefillSpeedTps"
             CacheHit="@_rightCacheHit"
-            Detail="@_rightDetail"
+            Detail="@(_rightDetail ?? _rightDiagDetail)"
         />
     </div>
 
@@ -89,6 +96,13 @@
 
     private string _leftModelId = "Left Model";
     private string _rightModelId = "Right Model";
+    private string? _leftDisplayName;
+    private string? _rightDisplayName;
+    private bool _leftIsLocal;
+    private bool _rightIsLocal;
+    private double? _leftTdpWatts;
+    private double? _rightTdpWatts;
+    private Dictionary<string, ModelDto> _models = new();
 
     private DuelStatus _leftStatus = DuelStatus.Initializing;
     private DuelStatus _rightStatus = DuelStatus.Initializing;
@@ -106,6 +120,10 @@
     private bool _rightIsStalled;
     private DateTimeOffset _leftLastTokenAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _rightLastTokenAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _leftLastUpdateAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _rightLastUpdateAt = DateTimeOffset.UtcNow;
+    private string? _leftDiagDetail;
+    private string? _rightDiagDetail;
     // HTML content stats
     private int? _leftHtmlTagCount;
     private int? _rightHtmlTagCount;
@@ -130,6 +148,8 @@
 
     // Track in-flight local inference tasks to avoid double-starting
     private readonly HashSet<string> _runningLocalModels = [];
+    private CancellationTokenSource? _pollCts;
+    private PeriodicTimer? _stallTimer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -140,6 +160,102 @@
 
         var baseUri = Nav.BaseUri.TrimEnd('/');
         await HubClient.ConnectAsync(baseUri, DuelId);
+
+        // Pre-load model metadata for display names
+        var models = await ApiClient.GetModelsAsync();
+        if (models is not null)
+            _models = models.ToDictionary(m => m.ModelId);
+
+        // Immediate check: navigate if duel was already judged (handles page refresh / reconnect).
+        // Also re-hydrate any already-Done results so panels aren't blank on reconnect.
+        var existingDuel = await ApiClient.GetDuelAsync(DuelId);
+        if (existingDuel?.Verdict is DuelVerdict.Left or DuelVerdict.Right)
+        {
+            Nav.NavigateTo($"/arena/{DuelId}");
+            return;
+        }
+
+        if (existingDuel is not null)
+            RehydrateDuelResults(existingDuel);
+
+        // Polling fallback in case the DuelComplete SignalR event is missed
+        _pollCts = new CancellationTokenSource();
+        _ = PollDuelCompletionAsync(_pollCts.Token);
+
+        // Independent stall-detection ticker — fires every 2 s regardless of worker silence
+        _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        _ = RunStallTimerAsync(_stallTimer);
+    }
+
+    private async Task RunStallTimerAsync(PeriodicTimer timer)
+    {
+        while (await timer.WaitForNextTickAsync())
+        {
+            var now = DateTimeOffset.UtcNow;
+            _leftIsStalled  = _leftStatus  == DuelStatus.Generating && (now - _leftLastTokenAt).TotalSeconds  > 10;
+            _rightIsStalled = _rightStatus == DuelStatus.Generating && (now - _rightLastTokenAt).TotalSeconds > 10;
+            // Update diagnostic detail every 2 s: shows how stale the last worker signal is,
+            // giving visibility during GPU shader compilation / pre-fill silence.
+            _leftDiagDetail  = BuildDiagDetail(_leftIsLocal,  _leftStatus,  _leftTokenCount,  _leftLastUpdateAt, now);
+            _rightDiagDetail = BuildDiagDetail(_rightIsLocal, _rightStatus, _rightTokenCount, _rightLastUpdateAt, now);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string? BuildDiagDetail(bool isLocal, DuelStatus status, int tokenCount, DateTimeOffset lastUpdate, DateTimeOffset now)
+    {
+        if (!isLocal || status != DuelStatus.Generating || tokenCount > 0) return null;
+        var secsSince = (int)(now - lastUpdate).TotalSeconds;
+        if (secsSince < 3) return null; // suppress for first few seconds
+        return $"⏳ GPU compiling shaders / pre-filling — last worker signal {secsSince}s ago. Waiting for first token…";
+    }
+
+    /// <summary>Populates panel state from an existing duel's results so a page reconnect
+    /// doesn't show blank panels for models that already finished.</summary>
+    private void RehydrateDuelResults(DuelDto duel)
+    {
+        foreach (var result in duel.Results)
+        {
+            var isLeft = result.ModelId == duel.LeftModelId;
+            if (_models.TryGetValue(result.ModelId, out var meta))
+            {
+                if (isLeft)
+                {
+                    _leftModelId = result.ModelId;
+                    _leftDisplayName = meta.DisplayName;
+                    _leftIsLocal = meta.ModelType == ModelType.Local;
+                    _leftTdpWatts = meta.TdpWatts;
+                    _leftStatus = DuelStatus.Done;
+                    _leftTokenCount = result.TokenCount;
+                    _leftElapsedMs = result.TotalDurationMs;
+                }
+                else
+                {
+                    _rightModelId = result.ModelId;
+                    _rightDisplayName = meta.DisplayName;
+                    _rightIsLocal = meta.ModelType == ModelType.Local;
+                    _rightTdpWatts = meta.TdpWatts;
+                    _rightStatus = DuelStatus.Done;
+                    _rightTokenCount = result.TokenCount;
+                    _rightElapsedMs = result.TotalDurationMs;
+                }
+            }
+        }
+    }
+
+    private async Task PollDuelCompletionAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(5_000, ct); } catch (OperationCanceledException) { break; }
+            try
+            {
+                var duel = await ApiClient.GetDuelAsync(DuelId);
+                if (duel?.Verdict is DuelVerdict.Left or DuelVerdict.Right)
+                    await InvokeAsync(() => Nav.NavigateTo($"/arena/{DuelId}"));
+            }
+            catch { /* ignore transient errors */ }
+        }
     }
 
     private void HandleStatusUpdate(ModelStatusUpdateDto update)
@@ -149,6 +265,12 @@
         if (update.Side == "Left")
         {
             _leftModelId = update.ModelId;
+            if (_models.TryGetValue(update.ModelId, out var lm))
+            {
+                _leftDisplayName = lm.DisplayName;
+                _leftIsLocal = lm.ModelType == ModelType.Local;
+                _leftTdpWatts = lm.TdpWatts;
+            }
             _leftStatus = update.Status;
             _leftElapsedMs = update.ElapsedMs;
             _leftTokenCount = update.TokenCount;
@@ -169,6 +291,12 @@
         else
         {
             _rightModelId = update.ModelId;
+            if (_models.TryGetValue(update.ModelId, out var rm))
+            {
+                _rightDisplayName = rm.DisplayName;
+                _rightIsLocal = rm.ModelType == ModelType.Local;
+                _rightTdpWatts = rm.TdpWatts;
+            }
             _rightStatus = update.Status;
             _rightElapsedMs = update.ElapsedMs;
             _rightTokenCount = update.TokenCount;
@@ -197,6 +325,7 @@
 
         if (isLeft)
         {
+            _leftLastUpdateAt = DateTimeOffset.UtcNow;
             // Capture warm-up: elapsed at the moment Initializing → Generating transitions
             if (_leftPrevStatus == DuelStatus.Initializing && update.Status == "Generating")
                 _leftWarmUpMs = update.ElapsedMs;
@@ -230,6 +359,7 @@
         }
         else
         {
+            _rightLastUpdateAt = DateTimeOffset.UtcNow;
             if (_rightPrevStatus == DuelStatus.Initializing && update.Status == "Generating")
                 _rightWarmUpMs = update.ElapsedMs;
             _rightPrevStatus = update.Status switch {
@@ -265,6 +395,7 @@
     private void HandleDuelComplete(DuelDto dto)
     {
         if (dto.DuelId != DuelId) return;
+        _pollCts?.Cancel();
         Nav.NavigateTo($"/arena/{DuelId}");
     }
 
@@ -295,7 +426,7 @@
             var prompt = duel?.PromptFull ?? string.Empty;
 
             // Stream status updates (signals the JS worker to start)
-            await foreach (var update in WebLlm.StartInferenceAsync(payload.ModelId, prompt, payload.DuelId))
+            await foreach (var update in WebLlm.StartInferenceAsync(payload.ModelId, payload.WebLlmModelId ?? payload.ModelId, prompt, payload.DuelId))
             {
                 if (update.Status == "Done" || update.Status == "Failed")
                 {
@@ -341,6 +472,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        _stallTimer?.Dispose();
         HubClient.OnModelStatusUpdate -= HandleStatusUpdate;
         HubClient.OnDuelComplete -= HandleDuelComplete;
         HubClient.OnStartLocalInference -= HandleStartLocalInference;

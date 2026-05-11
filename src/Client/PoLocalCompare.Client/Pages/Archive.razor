@@ -30,7 +30,16 @@
     }
     else
     {
-        <RadzenDataGrid Data="@_duels" TItem="DuelSummaryDto" RowSelect="OnRowSelect"
+        <div class="archive__filters">
+            @foreach (var label in new[] { "All", "Won", "No Verdict" })
+            {
+                <button class="archive__filter-chip @(_verdictFilter == label ? "archive__filter-chip--active" : "")"
+                        @onclick="() => _verdictFilter = label">
+                    @label
+                </button>
+            }
+        </div>
+        <RadzenDataGrid Data="@FilteredDuels()" TItem="DuelSummaryDto" RowSelect="OnRowSelect"
             RowClass="@_rowClassFn"
             Class="archive__grid">
             <Columns>
@@ -41,7 +50,10 @@
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Property="LeftModelName" Title="Left Model" Width="180px" />
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Property="RightModelName" Title="Right Model" Width="180px" />
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Title="" Width="30px">
-                    <Template Context="d"><span style="color:#6b7280;font-size:0.75rem;">▶</span></Template>
+                    <Template Context="d">
+                        @{ var chevron = d.DuelId == _selectedDuel?.DuelId ? "▾" : "›"; }
+                        <span class="archive__expand-icon">@chevron</span>
+                    </Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Verdict" Width="120px">
                     <Template Context="d">
@@ -54,7 +66,7 @@
                                 <span class="archive__verdict archive__verdict--win">Right ➡</span>
                                 break;
                             default:
-                                <span class="archive__verdict archive__verdict--pending">Pending</span>
+                                <span class="archive__verdict archive__verdict--pending">No Verdict</span>
                                 break;
                         }
                     </Template>
@@ -85,6 +97,11 @@
                         Click="OnReRender"
                         class="archive__btn" />
                     <RadzenButton
+                        Text="⚧ Re-Challenge"
+                        ButtonStyle="ButtonStyle.Light"
+                        Click="@GoToReChallenge"
+                        class="archive__btn" />
+                    <RadzenButton
                         Text="⬇ Export Lab Report"
                         ButtonStyle="ButtonStyle.Success"
                         Click="OnExportReport"
@@ -93,6 +110,14 @@
                     @if (_exportBusy)
                     {
                         <span class="archive__spinner" aria-label="Exporting…" title="Exporting…" />
+                    }
+                    @if (_selectedDuel.Verdict == DuelVerdict.Pending)
+                    {
+                        <RadzenButton
+                            Text="⚔ Judge This Duel"
+                            ButtonStyle="ButtonStyle.Primary"
+                            Click="@GoToArena"
+                            class="archive__btn" />
                     }
                 </div>
 
@@ -117,7 +142,7 @@
         }
 
         <div class="archive__pagination">
-            <span class="archive__count">Showing @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span>
+            <span class="archive__count">Showing @FilteredDuels().Count of @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span></span>
             @if (_hasMore)
             {
                 <RadzenButton Text="Load More" ButtonStyle="ButtonStyle.Light" Click="LoadMoreAsync" />
@@ -141,7 +166,8 @@
     .archive__spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #22c55e; border-top-color: transparent; border-radius: 50%; animation: archive-spin 0.75s linear infinite; align-self: center; margin-left: 4px; }
     .archive__verdict { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
     .archive__verdict--win { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
-    .archive__verdict--pending { background: #eab30820; color: #eab308; border: 1px solid #eab30840; }
+    .archive__verdict--pending { background: #6b728020; color: #9ca3af; border: 1px solid #6b728040; }
+    .archive__expand-icon { display: inline-block; font-size: 1rem; color: #6b7280; line-height: 1; }
     .archive__detail { margin-top: 32px; background: #111; border: 1px solid #333; border-radius: 8px; padding: 24px; }
     .archive__detail-title { color: #22c55e; margin-bottom: 16px; }
     .archive__detail-meta p { margin: 4px 0; color: #d4d4d4; }
@@ -151,6 +177,10 @@
     .archive__viewport-panel { min-height: 600px; }
     .archive__pagination { margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 16px; }
     .archive__count { color: #a3a3a3; font-size: 0.875rem; }
+    .archive__filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .archive__filter-chip { padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid #374151; background: #111; color: #9ca3af; font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
+    .archive__filter-chip:hover { border-color: #6b7280; color: #e5e7eb; }
+    .archive__filter-chip--active { border-color: #22c55e; color: #22c55e; background: #22c55e18; font-weight: 700; }
 
     @@media (max-width: 1023px) {
         .archive__viewports { grid-template-columns: 1fr; scroll-snap-type: y mandatory; overflow-y: auto; }
@@ -167,6 +197,15 @@
     private string? _error;
     private bool _hasMore;
     private const int PageSize = 20;
+
+    private string _verdictFilter = "All";
+
+    private List<DuelSummaryDto> FilteredDuels() => _verdictFilter switch
+    {
+        "Won"       => _duels.Where(d => d.Verdict is DuelVerdict.Left or DuelVerdict.Right).ToList(),
+        "No Verdict" => _duels.Where(d => d.Verdict == DuelVerdict.Pending).ToList(),
+        _            => _duels
+    };
 
     private Func<DuelSummaryDto, string> _rowClassFn => GetRowClass;
 
@@ -218,10 +257,12 @@
         }
     }
 
-    private void OnRowSelect(DuelSummaryDto duel)
+    private async Task OnRowSelect(DuelSummaryDto duel)
     {
         _selectedDuel = duel;
         _reRenderDuel = null;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("eval", "document.querySelector('.archive__detail')?.scrollIntoView({behavior:'smooth',block:'start'})");
     }
 
     private async Task OnReRender()
@@ -271,4 +312,15 @@
 
     private string GetRowClass(DuelSummaryDto d) =>
         d.DuelId == _selectedDuel?.DuelId ? "archive__row--selected" : string.Empty;
+
+    private void GoToArena() => Nav.NavigateTo($"/arena/{_selectedDuel!.DuelId}");
+
+    private void GoToReChallenge()
+    {
+        if (_selectedDuel is null) return;
+        var prompt = Uri.EscapeDataString(_selectedDuel.PromptSummary);
+        var leftId = Uri.EscapeDataString(_selectedDuel.LeftModelId);
+        var rightId = Uri.EscapeDataString(_selectedDuel.RightModelId);
+        Nav.NavigateTo($"/war-room?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
+    }
 }

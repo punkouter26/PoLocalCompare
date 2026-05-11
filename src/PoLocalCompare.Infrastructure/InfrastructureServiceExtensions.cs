@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Infrastructure.AzureAiFoundry;
 using PoLocalCompare.Infrastructure.KeyVault;
+using PoLocalCompare.Infrastructure.Ollama;
 using PoLocalCompare.Infrastructure.Persistence.TableStorage;
 using PoLocalCompare.Infrastructure.Reporting;
 
@@ -36,8 +37,9 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IEloHistoryRepository, EloHistoryRepository>();
         services.AddScoped<IDuelResultRepository, DuelResultRepository>();
 
-        // Remote inference proxy
-        services.AddScoped<IRemoteInferenceProxy, FoundryInferenceProxy>();
+        // Remote inference proxies — keyed by ModelType name so DuelExecutionService can resolve the right one
+        services.AddKeyedScoped<IRemoteInferenceProxy, FoundryInferenceProxy>("Remote");
+        services.AddKeyedScoped<IRemoteInferenceProxy, OllamaInferenceProxy>("LocalService");
 
         // Lab report renderer
         services.AddScoped<ILabReportRenderer, HtmlLabReportRenderer>();
