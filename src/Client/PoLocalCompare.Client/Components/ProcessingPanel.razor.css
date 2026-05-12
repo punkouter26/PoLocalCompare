@@ -144,9 +144,34 @@
     background: #374151;
 }
 
-.processing-panel__progress-fill--generating { background: #eab308; }
+.processing-panel__progress-fill--generating {
+    background: linear-gradient(90deg, #eab308, #f97316, #eab308);
+    background-size: 200% 100%;
+    animation: progressShimmer 2s linear infinite;
+}
 .processing-panel__progress-fill--done       { background: #22c55e; }
 .processing-panel__progress-fill--failed     { background: #ef4444; }
+
+@@keyframes progressShimmer {
+    0%   { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+/* Velocity pace bar (P2) */
+.processing-panel__pace-track {
+    height: 2px;
+    background: #111827;
+    border-radius: 1px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.processing-panel__pace-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #06b6d4, #22c55e);
+    border-radius: 1px;
+    transition: width 0.5s ease-out;
+}
 
 .processing-panel__metrics {
     display: grid;

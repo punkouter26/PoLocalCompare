@@ -9,20 +9,36 @@
         {
             <span class="sandboxed-viewport__badge sandboxed-viewport__badge--loser">LOSER</span>
         }
+        else if (IsLoser == false && ShowWinner)
+        {
+            <span class="sandboxed-viewport__badge sandboxed-viewport__badge--winner">WINNER</span>
+        }
     </div>
-    <iframe
-        srcdoc="@HtmlContent"
-        sandbox="allow-scripts"
-        title="@ModelName output"
-        class="sandboxed-viewport__frame"
-        loading="lazy">
-    </iframe>
+    @if (string.IsNullOrWhiteSpace(HtmlContent))
+    {
+        <div class="sandboxed-viewport__empty">
+            <span class="sandboxed-viewport__empty-icon">🚫</span>
+            <span>Model produced no renderable output</span>
+        </div>
+    }
+    else
+    {
+        <iframe
+            srcdoc="@HtmlContent"
+            sandbox="allow-scripts"
+            allow="accelerometer; gyroscope"
+            title="@ModelName output"
+            class="sandboxed-viewport__frame"
+            loading="lazy">
+        </iframe>
+    }
 </div>
 
 @code {
     [Parameter, EditorRequired] public string HtmlContent { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string ModelName { get; set; } = string.Empty;
     [Parameter] public bool IsLoser { get; set; }
+    [Parameter] public bool ShowWinner { get; set; }
 
     private bool _isLoser => IsLoser;
 }
@@ -74,6 +90,29 @@
     .sandboxed-viewport__badge--loser {
         background: #ef4444;
         color: #fff;
+    }
+
+    .sandboxed-viewport__badge--winner {
+        background: #22c55e;
+        color: #000;
+    }
+
+    .sandboxed-viewport__empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        color: #6b7280;
+        font-size: 0.875rem;
+        font-style: italic;
+        min-height: 200px;
+    }
+
+    .sandboxed-viewport__empty-icon {
+        font-size: 2rem;
+        opacity: 0.4;
     }
 
     .sandboxed-viewport__frame {

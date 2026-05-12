@@ -91,9 +91,14 @@
     color: #22c55e;
     font-weight: 600;
     font-size: 1rem;
-    padding: 0.5rem;
+    padding: 0.5rem 1.5rem;
     background: #052e16;
     border: 1px solid #22c55e44;
     border-radius: 4px;
     margin-bottom: 0.5rem;
+    /* UI#4: sticky verdict bar */
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 8px #00000088;
 }

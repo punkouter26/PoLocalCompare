@@ -122,6 +122,10 @@
 .lab__btn--secondary { background: #2a2a3a; color: #b0b0d0; border-color: #3a3a5a; }
 .lab__btn--secondary:not(:disabled):hover { background: #323248; }
 
+/* UX#10: Verify & Go button */
+.lab__btn--verify { background: #0a2a1a; color: #6ee7b7; border-color: #16553a; }
+.lab__btn--verify:not(:disabled):hover { background: #0d3d24; border-color: #22c55e; }
+
 /* ── Model grid ──────────────────────────────────────────────── */
 .lab__grid {
     display: grid;
@@ -146,6 +150,11 @@
 .lab__card--complete { border-color: #267a4a; }
 .lab__card--error    { border-color: #7a2a2a; }
 .lab__card--cancelled { border-color: #3a3a3a; opacity: 0.7; }
+
+/* O3: Bold left border based on download state */
+.lab__card--border-ready  { border-left: 4px solid #22c55e; }
+.lab__card--border-missing { border-left: 4px solid #f59e0b; }
+.lab__card--border-error   { border-left: 4px solid #ef4444; }
 
 .lab__card-header {
     display: flex;
@@ -174,6 +183,37 @@
     border: 1px solid #2e2e45;
     border-radius: 4px;
     padding: 0.1rem 0.35rem;
+}
+
+.lab__vram-badge--ok    { color: #70c070; border-color: #2a4a2a; background: #0e1e0e; }
+.lab__vram-badge--caution { color: #c0a040; border-color: #3a3010; background: #1a1800; }
+.lab__vram-badge--warn  { color: #c06060; border-color: #4a2020; background: #1e0e0e; }
+
+.lab__vram-warn {
+    font-size: 0.75rem;
+    color: #c06060;
+    cursor: help;
+    line-height: 1;
+}
+
+.lab__warm-badge {
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.lab__cancel-feedback {
+    font-size: 0.72rem;
+    color: #70c070;
+    margin: 0.3rem 0 0;
+    animation: lab-fadeout 2.5s ease forwards;
+}
+
+@keyframes lab-fadeout {
+    0%   { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 .lab__model-id {
@@ -578,6 +618,13 @@
 }
 
 /* ── SmolLM2 hint ───────────────────────────────────────────── */
+.lab__smol-hint-details { margin: 0.3rem 0 0; }
+.lab__smol-hint-summary {
+    font-size: 0.72rem;
+    color: #5a7a5a;
+    cursor: pointer;
+    user-select: none;
+}
 .lab__smol-hint {
     font-size: 0.7rem;
     color: #5a7a5a;

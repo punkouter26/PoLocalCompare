@@ -107,9 +107,12 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             result.IsFailure = true;
             result.FailureReason = response.StatusCode == System.Net.HttpStatusCode.NotFound
-                ? $"Deployment \"{deploymentName}\" not found (HTTP 404). Deploy this model in your Azure AI Foundry project first, then retry."
+                ? $"Deployment \"{deploymentName}\" not found (HTTP 404). Verify the deployment name in Azure AI Foundry matches ApiEndpointRef for this model, or create the deployment in your Azure AI Foundry project."
                 : $"HTTP {(int)response.StatusCode}: {body[..Math.Min(300, body.Length)]}";
-            _logger.LogError("Azure OpenAI HTTP {StatusCode} for {Model}: {Body}", (int)response.StatusCode, deploymentName, body[..Math.Min(500, body.Length)]);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                _logger.LogError("Azure OpenAI deployment \"{Deployment}\" not found (HTTP 404). Verify the deployment name in your Azure AI Foundry project matches the model's ApiEndpointRef.", deploymentName);
+            else
+                _logger.LogError("Azure OpenAI HTTP {StatusCode} for {Model}: {Body}", (int)response.StatusCode, deploymentName, body[..Math.Min(500, body.Length)]);
             return result;
         }
 

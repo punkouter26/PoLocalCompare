@@ -65,6 +65,15 @@
         </div>
     </div>
 
+    @* Velocity pace bar (P2) — always visible when we have velocity data *@
+    @if (TokenVelocity.HasValue && TokenVelocity.Value > 0 && PeakTokenVelocity.HasValue && PeakTokenVelocity.Value > 0)
+    {
+        var pacePercent = Math.Min(100, TokenVelocity.Value / PeakTokenVelocity.Value * 100);
+        <div class="processing-panel__pace-track" title="Current velocity vs peak velocity">
+            <div class="processing-panel__pace-fill" style="width: @pacePercent.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+        </div>
+    }
+
     <div class="processing-panel__metrics">
 
         @* --- Timing (stats 1, 2, 3) --- *@
@@ -89,7 +98,8 @@
             </div>
         }
 
-        @if (ShowAdvanced && Status == DuelStatus.Generating && TokenVelocity.HasValue && TokenVelocity.Value > 0)
+        @* ETA always visible (P2) — moved out of ShowAdvanced guard *@
+        @if (Status == DuelStatus.Generating && TokenVelocity.HasValue && TokenVelocity.Value > 0)
         {
             var remainingTokens = 8000 - TokenCount;
             var etaMs = (long)(remainingTokens / TokenVelocity.Value * 1000);

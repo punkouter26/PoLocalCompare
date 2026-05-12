@@ -8,7 +8,7 @@
  *   { type: 'result', diagId, loadMs, firstTokenMs, tokensPerSec, totalTokens, output, error }
  */
 
-importScripts('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/dist/web-llm.js');
+import * as webllm from '/js/web-llm.js';
 
 self.onmessage = async (event) => {
     const { diagId, webLlmModelId, localModelBaseUrl, prompt } = event.data;
@@ -19,10 +19,13 @@ self.onmessage = async (event) => {
     try {
         emit('step', { step: 'Loading', detail: 'Creating ML engine…', progress: 0 });
 
+        // Look up model_lib (WASM URL) from prebuilt config so local models get the correct WASM library
+        const prebuiltEntry = webllm.prebuiltAppConfig?.model_list?.find(m => m.model_id === webLlmModelId);
         const appConfig = {
             model_list: [{
                 model: localModelBaseUrl + webLlmModelId + '/',
                 model_id: webLlmModelId,
+                model_lib: prebuiltEntry?.model_lib,
             }],
         };
 

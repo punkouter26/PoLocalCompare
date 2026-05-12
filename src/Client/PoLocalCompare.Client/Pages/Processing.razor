@@ -13,7 +13,13 @@
 
 <div class="processing-page">
     <h1 class="processing-page__title">Processing Duel…</h1>
-    <p class="processing-page__duel-id">Duel ID: @DuelId</p>
+    <details class="processing-page__debug">
+        <summary>Debug</summary>
+        <details class="processing-page__debug">
+        <summary>Debug</summary>
+        <p class="processing-page__duel-id">Duel ID: @DuelId</p>
+    </details>
+    </details>
     <div class="processing-page__controls">
         <button class="processing-page__toggle" @onclick="ToggleAdvanced">
             @(_showAdvanced ? "Hide Advanced Metrics" : "Show Advanced Metrics")
@@ -552,6 +558,19 @@
         font-weight: 800;
         color: #eab308;
         margin-bottom: 0.25rem;
+    }
+
+    .processing-page__debug {
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--oled-text-muted);
+    }
+
+    .processing-page__debug summary {
+        cursor: pointer;
+        color: var(--oled-text-muted);
+        user-select: none;
+        font-size: 0.75rem;
     }
 
     .processing-page__duel-id {

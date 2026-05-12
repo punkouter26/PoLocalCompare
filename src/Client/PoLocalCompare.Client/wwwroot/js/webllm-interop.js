@@ -17,7 +17,7 @@ window.startWebLlmInference = function (dotnetRef, modelId, webLlmModelId, promp
         delete workers[modelId];
     }
 
-    const worker = new Worker('/js/webllm-worker.js');
+    const worker = new Worker('/js/webllm-worker.js?v=3', { type: 'module' });
     workers[modelId] = worker;
 
     worker.onmessage = (event) => {

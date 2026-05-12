@@ -9,10 +9,11 @@
 @inject AudioService AudioService
 @inject PromptTemplatesService PromptTemplates
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>War Room — LLM Duel Arena</PageTitle>
 
-<div class="war-room">
+<div class="war-room" @onkeydown="OnKeyDown" tabindex="-1" id="war-room-root">
     <h1 class="war-room__title">⚔ War Room</h1>
 
     @if (_loading)
@@ -21,44 +22,7 @@
     }
     else
     {
-        <div class="war-room__type-filter">
-            @foreach (var label in new[] { "All", "Local", "Remote", "Service" })
-            {
-                <button class="war-room__filter-chip @(_typeFilter == label ? "war-room__filter-chip--active" : "")"
-                        @onclick="() => _typeFilter = label">
-                    @label
-                </button>
-            }
-        </div>
-
-        <div class="war-room__columns">
-            <ModelSelectionColumn
-                Title="Left Model"
-                Models="_allModels"
-                FilteredModels="_filteredModels"
-                ModelLabels="_modelLabels"
-                SelectedModelId="_leftModel?.ModelId"
-                OtherSelectedModelId="_rightModel?.ModelId"
-                OnSelected="SelectLeft"
-                ProjectedEloGain="@ComputeProjectedGain(_leftModel, _rightModel)" />
-
-            <ModelSelectionColumn
-                Title="Right Model"
-                Models="_allModels"
-                FilteredModels="_filteredModels"
-                ModelLabels="_modelLabels"
-                SelectedModelId="_rightModel?.ModelId"
-                OtherSelectedModelId="_leftModel?.ModelId"
-                OnSelected="SelectRight"
-                ProjectedEloGain="@ComputeProjectedGain(_rightModel, _leftModel)" />
-        </div>
-
-        @if (_leftModel is not null && _rightModel is not null && _leftModel.ModelId == _rightModel.ModelId)
-        {
-            <p class="war-room__clash-warning">⚠ Left and Right models must differ — select a different model on one side.</p>
-        }
-
-        @* ── Prompt Templates Section ────────────────────────────────────────── *@
+        @* ── 1. PROMPT FIRST (C4) — Quick Prompts + Textarea above everything ── *@
         <div class="war-room__templates-section">
             <div class="war-room__templates-header">
                 <h3 class="war-room__templates-title">
@@ -98,6 +62,64 @@
             />
         </div>
 
+        @* ── 2. SLOT ASSIGNMENT HEADER (C2) ── *@
+        <div class="war-room__assign-slots">
+            <div class="war-room__slot @(_activeSlot == "Left" ? "war-room__slot--active" : "") @(_leftModel != null ? "war-room__slot--set" : "")"
+                 @onclick="@(() => _activeSlot = "Left")">
+                <span class="war-room__slot-side">⬅ Left Challenger</span>
+                <span class="war-room__slot-name">@(_leftModel?.DisplayName ?? "Click here, then pick a model below")</span>
+                @if (_leftModel != null)
+                {
+                    <button class="war-room__slot-clear" @onclick:stopPropagation="true" @onclick="@(() => { _leftModel = null; _activeSlot = "Left"; })">✕</button>
+                }
+            </div>
+            <div class="war-room__slot-vs">VS</div>
+            <div class="war-room__slot @(_activeSlot == "Right" ? "war-room__slot--active" : "") @(_rightModel != null ? "war-room__slot--set" : "")"
+                 @onclick="@(() => _activeSlot = "Right")">
+                <span class="war-room__slot-side">Right Challenger ➡</span>
+                <span class="war-room__slot-name">@(_rightModel?.DisplayName ?? "Click here, then pick a model below")</span>
+                @if (_rightModel != null)
+                {
+                    <button class="war-room__slot-clear" @onclick:stopPropagation="true" @onclick="@(() => { _rightModel = null; _activeSlot = "Right"; })">✕</button>
+                }
+            </div>
+        </div>
+
+        @* ── 3. TYPE FILTER + UNIFIED MODEL POOL (C2) ── *@
+        <div class="war-room__type-filter">
+            @foreach (var label in new[] { "All", "Local", "Remote", "Service" })
+            {
+                <button class="war-room__filter-chip @(_typeFilter == label ? "war-room__filter-chip--active" : "")"
+                        @onclick="() => _typeFilter = label">
+                    @label
+                </button>
+            }
+        </div>
+
+        <div class="war-room__pool">
+            <p class="war-room__pool-hint">
+                Assigning to: <strong>@_activeSlot</strong> slot — click a model card to assign it
+            </p>
+            @if (!_filteredModels.Any())
+            {
+                <p class="war-room__empty">No models match this filter.</p>
+            }
+            else
+            {
+                @foreach (var model in _filteredModels)
+                {
+                    <ModelCard
+                        Model="model"
+                        LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
+                        IsSelected="@(model.ModelId == _leftModel?.ModelId || model.ModelId == _rightModel?.ModelId)"
+                        IsDisabled="false"
+                        OnSelected="AssignToActiveSlot"
+                        ProjectedEloGain="@ComputeProjectedGain(model, _activeSlot == "Left" ? _rightModel : _leftModel)" />
+                }
+            }
+        </div>
+
+        @* ── 4. ACTIONS ── *@
         <div class="war-room__actions">
             <RadzenButton
                 Text="Commence Duel"
@@ -110,13 +132,21 @@
             @if (!CanCommence)
             {
                 <p class="war-room__validation-hint">
-                    @if (_leftModel is null || _rightModel is null)
+                    @if (_leftModel is null && _rightModel is null)
                     {
-                        @("Select one model from each column to continue.")
+                        @("Assign a model to each slot above to continue.")
+                    }
+                    else if (_leftModel is null)
+                    {
+                        @("Assign a Left Challenger to continue.")
+                    }
+                    else if (_rightModel is null)
+                    {
+                        @("Assign a Right Challenger to continue.")
                     }
                     else if (string.IsNullOrWhiteSpace(_promptText))
                     {
-                        @("Enter a prompt to continue.")
+                        @("Enter a prompt above to continue.")
                     }
                     else
                     {
@@ -204,6 +234,33 @@
     private void SelectLeft(ModelDto model) => _leftModel = model;
     private void SelectRight(ModelDto model) => _rightModel = model;
 
+    // ── Unified slot assignment (C2) ──────────────────────────────────────
+    private string _activeSlot = "Left";
+
+    private void AssignToActiveSlot(ModelDto model)
+    {
+        if (_activeSlot == "Left")
+        {
+            _leftModel = model;
+            // Clear right if it was the same model
+            if (_rightModel?.ModelId == model.ModelId)
+                _rightModel = null;
+            // Auto-advance to right if unset
+            if (_rightModel is null)
+                _activeSlot = "Right";
+        }
+        else
+        {
+            _rightModel = model;
+            // Clear left if it was the same model
+            if (_leftModel?.ModelId == model.ModelId)
+                _leftModel = null;
+            // Auto-advance back to left if unset
+            if (_leftModel is null)
+                _activeSlot = "Left";
+        }
+    }
+
     private double? ComputeProjectedGain(ModelDto? challenger, ModelDto? opponent)
     {
         if (challenger is null || opponent is null) return null;
@@ -233,6 +290,15 @@
         catch (Exception ex)
         {
             _error = $"Failed to start duel: {ex.Message}";
+        }
+    }
+
+    // UX#6: Keyboard shortcut N → focus prompt textarea (when no input/button is active target)
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "n" || e.Key == "N")
+        {
+            await JS.InvokeVoidAsync("eval", "var el = document.getElementById('promptInput'); if (el && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'BUTTON') { el.focus(); el.select(); }");
         }
     }
 
@@ -295,16 +361,98 @@
         border-color: var(--oled-green);
     }
 
-    /* Columns */
-    .war-room__columns {
+    /* Slot assignment header (C2) */
+    .war-room__assign-slots {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 1.25rem;
+    }
+
+    .war-room__slot {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.85rem 1rem;
+        background: var(--oled-surface);
+        border: 2px dashed var(--oled-border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        position: relative;
+        min-height: 64px;
+        justify-content: center;
+    }
+
+    .war-room__slot:hover { border-color: var(--oled-text-muted); }
+    .war-room__slot--active { border-color: var(--oled-cyan); border-style: solid; box-shadow: 0 0 0 2px rgba(6,182,212,0.25); }
+    .war-room__slot--set { border-style: solid; border-color: var(--oled-green); }
+
+    .war-room__slot-side {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--oled-text-muted);
+    }
+
+    .war-room__slot-name {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--oled-text);
+    }
+
+    .war-room__slot--set .war-room__slot-name { color: var(--oled-green); }
+
+    .war-room__slot-clear {
+        position: absolute;
+        top: 0.4rem;
+        right: 0.5rem;
+        background: none;
+        border: none;
+        color: var(--oled-text-muted);
+        cursor: pointer;
+        font-size: 0.85rem;
+        line-height: 1;
+        padding: 0.15rem 0.35rem;
+        border-radius: 50%;
+        transition: color var(--transition-fast);
+    }
+    .war-room__slot-clear:hover { color: var(--oled-red); }
+
+    .war-room__slot-vs {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--oled-text-muted);
+        text-align: center;
+    }
+
+    @@media (max-width: 640px) {
+        .war-room__assign-slots { grid-template-columns: 1fr; }
+        .war-room__slot-vs { display: none; }
+    }
+
+    /* Unified model pool (C2) */
+    .war-room__pool {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 0.75rem;
         margin-bottom: 2rem;
     }
 
-    @@media (max-width: 768px) {
-        .war-room__columns { grid-template-columns: 1fr; }
+    .war-room__pool-hint {
+        grid-column: 1 / -1;
+        font-size: 0.82rem;
+        color: var(--oled-text-muted);
+        margin: 0 0 0.25rem;
+    }
+
+    .war-room__pool-hint strong { color: var(--oled-cyan); }
+
+    .war-room__empty {
+        grid-column: 1 / -1;
+        color: var(--oled-text-muted);
+        font-size: 0.9rem;
     }
 
     /* Prompt Templates */

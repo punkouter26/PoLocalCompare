@@ -8,6 +8,7 @@
 @implements IAsyncDisposable
 @inject DuelApiClient ApiClient
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <PageTitle>Local Model Lab — LLM Duel Arena</PageTitle>
 
@@ -75,10 +76,25 @@
                     disabled="@_anyRunning">
                 🔄 Refresh
             </button>
+            <button class="lab__btn lab__btn--verify"
+                    @onclick="VerifyAndGoAsync"
+                    disabled="@(_anyRunning || !_models.Any(m => m.IsDownloaded == true))"
+                    title="Run diagnostics on all downloaded models, then go to War Room">
+                ✓ Verify &amp; Go to War Room
+            </button>
         </div>
-        @if (!_models.Any(m => m.IsSmolLM2 && m.IsDownloaded == true) && _models.Any(m => m.IsSmolLM2))
+        @if (_models.Any(m => m.IsSmolLM2)
+             && !_models.Any(m => m.IsSmolLM2 && m.IsDownloaded is null)
+             && !_models.Any(m => m.IsSmolLM2 && m.IsDownloaded == true))
         {
-            <p class="lab__smol-hint">💡 Download SmolLM2-135M or SmolLM2-360M to enable race mode — run <code>python download-models.py</code></p>
+            <details class="lab__smol-hint-details">
+                <summary class="lab__smol-hint-summary">💡 Enable race mode</summary>
+                <p class="lab__smol-hint">Download SmolLM2-135M or SmolLM2-360M to enable race mode — run <code>python download-models.py</code></p>
+            </details>
+        }
+        @if (_cancelFeedback is not null)
+        {
+            <p class="lab__cancel-feedback">✓ @_cancelFeedback</p>
         }
     </div>
 
@@ -106,7 +122,7 @@
                 <div class="lab__grid">
                 @foreach (var state in _family)
                 {
-                <div class="lab__card @GetCardClass(state)">
+                <div class="lab__card @GetCardClass(state) @GetCardDownloadClass(state)">
 
                     @* Header row *@
                     <div class="lab__card-header">
@@ -114,7 +130,12 @@
                             <span class="lab__model-name">@state.Model.DisplayName</span>
                             @if (state.VramMb > 0)
                             {
-                                <span class="lab__vram-badge">@state.VramLabel</span>
+                                <span class="lab__vram-badge lab__vram-badge--@state.VramTier"
+                                      title="Estimated GPU VRAM required: @state.VramLabel">@state.VramLabel</span>
+                            }
+                            @if (state.VramTier == "warn")
+                            {
+                                <span class="lab__vram-warn" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
                             }
                         </div>
                         <div class="lab__card-actions">
@@ -192,7 +213,10 @@
                         <div class="lab__metrics">
                             <div class="lab__metric">
                                 <span class="lab__metric-label">Load</span>
-                                <span class="lab__metric-value">@FormatMs(state.LoadMs)</span>
+                                <span class="lab__metric-value">
+                                    @FormatMs(state.LoadMs)
+                                    @if (state.WarmCache) { <span class="lab__warm-badge" title="GPU shaders cached — subsequent loads are faster">⚡</span> }
+                                </span>
                             </div>
                             <div class="lab__metric">
                                 <span class="lab__metric-label">1st Token</span>
@@ -205,6 +229,10 @@
                             <div class="lab__metric">
                                 <span class="lab__metric-label">Tokens</span>
                                 <span class="lab__metric-value">@state.TotalTokens</span>
+                            </div>
+                            <div class="lab__metric">
+                                <span class="lab__metric-label">Quality</span>
+                                <span class="lab__metric-value">@CompletenessScore(state)%</span>
                             </div>
                         </div>
                         <button class="lab__output-toggle"
@@ -222,16 +250,8 @@
             </div>
         }
 
-        @* ── Comparison placeholder ── *@
-        @if (_testedModels.Count() > 0 && _testedModels.Count() < 2)
-        {
-            <div class="lab__compare-nudge">
-                📊 Run <strong>1 more model</strong> to unlock speed rankings &amp; scatter plot comparison
-            </div>
-        }
-
-        @* ── Summary: shown when ≥ 2 models are tested ── *@
-        @if (_testedModels.Count() >= 2)
+        @* ── Summary: shown when ≥ 1 model is tested ── *@
+        @if (_testedModels.Count() >= 1)
         {
             var ranked = _testedModels.OrderByDescending(m => m.TokensPerSec).ToList();
 
@@ -283,14 +303,15 @@
                     ✱ Completeness = tokens generated ÷ 256 max-token cap. Higher is not always better — inspect output below.
                 </p>
 
-                @* Speed scatter (SVG) — built as MarkupString to avoid Razor <text> conflict *@
-                @{
+                @* Speed scatter (SVG) — shown when ≥ 2 models have results *@
+                @if (ranked.Count >= 2)
+                {
                     var maxTps = ranked.Max(m => m.TokensPerSec);
+                    <div class="lab__scatter-wrap">
+                        <h3 class="lab__scatter-title">Speed vs. Output Completeness</h3>
+                        @BuildScatterSvg(ranked, maxTps)
+                    </div>
                 }
-                <div class="lab__scatter-wrap">
-                    <h3 class="lab__scatter-title">Speed vs. Output Completeness</h3>
-                    @BuildScatterSvg(ranked, maxTps)
-                </div>
 
                 @* Capability matrix ── fixed prompts, shown only if all were tested with default prompt *@
                 <div class="lab__matrix">
@@ -342,12 +363,18 @@
         public string Output { get; set; } = "";
         public string? ErrorMessage { get; set; }
         public bool ShowOutput { get; set; }
+        public bool WarmCache { get; set; }
+        public TaskCompletionSource<bool> _completion { get; private set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void ResetCompletion() =>
+            _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public bool IsSmolLM2 =>
             Model.WebLlmModelId?.StartsWith("SmolLM2", StringComparison.OrdinalIgnoreCase) == true;
 
         public string VramLabel => _vramTable.TryGetValue(Model.WebLlmModelId ?? "", out var v) ? v.Label : "";
         public int VramMb     => _vramTable.TryGetValue(Model.WebLlmModelId ?? "", out var v) ? v.Mb   : 0;
+        public string VramTier => VramMb switch { 0 => "", <= 800 => "ok", <= 1500 => "caution", _ => "warn" };
     }
 
     // ── Static VRAM lookup ───────────────────────────────────────────────────
@@ -381,6 +408,9 @@
         "2) Write a Python one-liner to reverse a string.\n" +
         "3) In one sentence: what is recursion in programming?";
     private DotNetObjectReference<LocalModelLab>? _selfRef;
+
+    private bool _runAllCancelled;
+    private string? _cancelFeedback;
 
     private bool _anyRunning =>
         _models.Any(m => m.Status is DiagStatus.Loading or DiagStatus.Generating or DiagStatus.Checking);
@@ -429,7 +459,8 @@
 
     [JSInvokable]
     public Task OnDiagResult(string diagId, int loadMs, int firstTokenMs,
-                             int tokensPerSec, int totalTokens, string output, string? error)
+                             int tokensPerSec, int totalTokens, string output, string? error,
+                             bool warmCache = false)
     {
         return InvokeAsync(() =>
         {
@@ -440,6 +471,7 @@
             {
                 state.Status = DiagStatus.Error;
                 state.ErrorMessage = error;
+                state._completion.TrySetResult(false);
             }
             else
             {
@@ -449,7 +481,9 @@
                 state.TokensPerSec = tokensPerSec;
                 state.TotalTokens  = totalTokens;
                 state.Output       = output;
+                state.WarmCache    = warmCache;
                 state.ShowOutput   = true;
+                state._completion.TrySetResult(true);
                 _ = JS.InvokeVoidAsync("saveLabResult", state.Model.ModelId,
                     new { loadMs, firstTokenMs, tokensPerSec, totalTokens, output });
                 _ = JS.InvokeVoidAsync("pulseTestedCount");
@@ -466,8 +500,19 @@
 
         var results = await Task.WhenAll(_models.Select(async state =>
         {
-            var downloaded = await ApiClient.IsLocalModelDownloadedAsync(state.Model.WebLlmModelId ?? string.Empty);
-            return (state, downloaded);
+            bool? downloaded = null;
+            for (int attempt = 0; attempt < 3 && downloaded is null; attempt++)
+            {
+                try
+                {
+                    downloaded = await ApiClient.IsLocalModelDownloadedAsync(state.Model.WebLlmModelId ?? string.Empty);
+                }
+                catch
+                {
+                    if (attempt < 2) await Task.Delay(500);
+                }
+            }
+            return (state, downloaded ?? false);
         }));
 
         foreach (var (state, downloaded) in results)
@@ -479,11 +524,13 @@
     private async Task RunSingleAsync(ModelDiagState state)
     {
         if (state.IsDownloaded != true) return;
-        state.Status      = DiagStatus.Loading;
+        state.Status       = DiagStatus.Loading;
         state.LoadProgress = 0;
-        state.StepDetail  = "Starting worker…";
+        state.StepDetail   = "Starting worker…";
         state.ErrorMessage = null;
-        state.Output      = "";
+        state.Output       = "";
+        state.WarmCache    = false;
+        state.ResetCompletion();
         StateHasChanged();
 
         await JS.InvokeVoidAsync("runModelDiag", _selfRef, state.Model.ModelId, state.Model.WebLlmModelId, _testPrompt);
@@ -491,27 +538,52 @@
 
     private async Task RunAllDownloaded()
     {
+        _runAllCancelled = false;
         var targets = _models
             .Where(m => m.IsDownloaded == true && m.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
             .ToList();
         foreach (var s in targets)
+        {
+            if (_runAllCancelled) break;
             await RunSingleAsync(s);
+            await s._completion.Task;
+        }
+    }
+
+    // UX#10: Verify & Go — run all downloaded models then navigate to War Room
+    private async Task VerifyAndGoAsync()
+    {
+        await RunAllDownloaded();
+        Nav.NavigateTo("/war-room");
     }
 
     private async Task RunSmolFamily()
     {
+        _runAllCancelled = false;
         var smol = _models
             .Where(m => m.IsSmolLM2 && m.IsDownloaded == true && m.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
             .ToList();
         foreach (var s in smol)
+        {
+            if (_runAllCancelled) break;
             await RunSingleAsync(s);
+            await s._completion.Task;
+        }
     }
 
     private async Task CancelAll()
     {
+        _runAllCancelled = true;
         await JS.InvokeVoidAsync("cancelAllModelDiags");
         foreach (var s in _models.Where(m => m.Status is DiagStatus.Loading or DiagStatus.Generating))
+        {
             s.Status = DiagStatus.Cancelled;
+            s._completion.TrySetResult(false);
+        }
+        _cancelFeedback = "All workers stopped";
+        StateHasChanged();
+        await Task.Delay(2500);
+        _cancelFeedback = null;
         StateHasChanged();
     }
 
@@ -584,6 +656,15 @@
         DiagStatus.Cancelled                        => "lab__card--cancelled",
         _                                           => ""
     };
+
+    // O3: Bold colored left border based on download + status
+    private static string GetCardDownloadClass(ModelDiagState s)
+    {
+        if (s.Status is DiagStatus.Error) return "lab__card--border-error";
+        if (s.IsDownloaded == true) return "lab__card--border-ready";
+        if (s.IsDownloaded == false) return "lab__card--border-missing";
+        return ""; // null = still checking
+    }
 
     private static string FormatMs(int ms) => ms < 0 ? "—" : ms < 1000 ? $"{ms} ms" : $"{ms / 1000.0:F1} s";
 

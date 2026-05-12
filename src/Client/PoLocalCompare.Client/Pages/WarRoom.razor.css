@@ -5,6 +5,52 @@
     color: #e5e7eb;
 }
 
+.war-room__selection-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
+    border-radius: 8px;
+    animation: fadeIn 0.25s ease;
+}
+
+.war-room__selection-slot {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.war-room__selection-label {
+    font-size: 0.7rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.war-room__selection-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #9ca3af;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.war-room__selection-slot--set .war-room__selection-name {
+    color: #22c55e;
+}
+
+.war-room__selection-vs {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #374151;
+    letter-spacing: 0.1em;
+}
+
 .war-room__title {
     font-size: 2rem;
     font-weight: 800;

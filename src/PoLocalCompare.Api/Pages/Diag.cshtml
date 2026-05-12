@@ -1,41 +1,96 @@
 @page
 @model PoLocalCompare.Api.Pages.DiagModel
 
-<h1>Diagnostics</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diagnostics — LLM Duel Arena</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: #000;
+            color: #f0f0f0;
+            font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 0.9rem;
+            min-height: 100vh;
+        }
+        .diag-header {
+            background: #0a0a0a;
+            border-bottom: 1px solid #1a1a1a;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .diag-header__title { font-weight: 700; font-size: 1rem; color: #fff; margin: 0; }
+        .diag-header__back {
+            color: #22c55e;
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+        .diag-header__back:hover { text-decoration: underline; }
+        .diag-body { padding: 1.5rem; max-width: 900px; }
+        h1 { color: #22c55e; font-size: 1.4rem; margin: 0 0 1.5rem; }
+        section { margin-bottom: 1.5rem; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px; padding: 1rem 1.25rem; }
+        h2 { color: #a0a0a0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.75rem; border-bottom: 1px solid #1a1a1a; padding-bottom: 0.4rem; }
+        p { margin: 0.35rem 0; color: #e5e7eb; }
+        strong { color: #22c55e; }
+        code { color: #06b6d4; background: #111; padding: 0.1rem 0.3rem; border-radius: 3px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; color: #6b7280; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.4rem 0.5rem; border-bottom: 1px solid #1a1a1a; }
+        td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #111; color: #d1d5db; }
+        td:first-child { color: #9ca3af; }
+        tr:last-child td { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <div class="diag-header">
+        <span class="diag-header__title">⚔️ LLM Duel Arena</span>
+        <a class="diag-header__back" href="/">← Back to App</a>
+        <a class="diag-header__back" href="/health">Health JSON</a>
+    </div>
+    <div class="diag-body">
+        <h1>Diagnostics</h1>
 
-<section>
-    <h2>Azure Table Storage</h2>
-    <p>Status: <strong>@Model.TableStatus</strong> | Latency: @Model.TableLatencyMs ms</p>
-</section>
+        <section>
+            <h2>Azure Table Storage</h2>
+            <p>Status: <strong>@Model.TableStatus</strong> | Latency: @Model.TableLatencyMs ms</p>
+        </section>
 
-<section>
-    <h2>Azure AI Foundry</h2>
-    <p>Endpoint: <code>@Model.MaskValue(Model.FoundryEndpoint)</code></p>
-</section>
+        <section>
+            <h2>Azure AI Foundry</h2>
+            <p>Endpoint: <code>@Model.MaskValue(Model.FoundryEndpoint)</code></p>
+        </section>
 
-<section>
-    <h2>Key Vault</h2>
-    <p>URI: <code>@Model.MaskValue(Model.KeyVaultUri)</code></p>
-</section>
+        <section>
+            <h2>Key Vault</h2>
+            <p>URI: <code>@Model.MaskValue(Model.KeyVaultUri)</code></p>
+        </section>
 
-<section>
-    <h2>Configuration Keys</h2>
-    <table>
-        <thead><tr><th>Key</th><th>Value</th></tr></thead>
-        <tbody>
-            @foreach (var item in Model.ConfigItems)
-            {
-                <tr><td>@item.Key</td><td>@item.Value</td></tr>
-            }
-        </tbody>
-    </table>
-</section>
+        <section>
+            <h2>Configuration Keys</h2>
+            <table>
+                <thead><tr><th>Key</th><th>Value</th></tr></thead>
+                <tbody>
+                    @foreach (var item in Model.ConfigItems)
+                    {
+                        <tr><td>@item.Key</td><td>@item.Value</td></tr>
+                    }
+                </tbody>
+            </table>
+        </section>
 
-<section>
-    <h2>WebGPU</h2>
-    <p id="webgpu-status">Checking...</p>
-    <script>
-        document.getElementById('webgpu-status').textContent =
-            typeof navigator.gpu !== 'undefined' ? 'Available: Yes' : 'Available: No';
-    </script>
-</section>
+        <section>
+            <h2>WebGPU</h2>
+            <p id="webgpu-status">Checking...</p>
+            <script>
+                document.getElementById('webgpu-status').textContent =
+                    typeof navigator.gpu !== 'undefined' ? 'Available: Yes' : 'Available: No';
+            </script>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,8 +1,7 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
-@using Radzen.Blazor
 
-<RadzenCard class="@_cardClass" @onclick="OnCardClick" style="@(IsDisabled ? "cursor:not-allowed;opacity:0.45;" : "cursor:pointer;")">
+<div class="@_cardClass" @onclick="OnCardClick" style="@_cardStyle">
     <div class="model-card__header">
         <span class="model-card__name">@(LabelOverride ?? Model.DisplayName)</span>
         <div style="display:flex;align-items:center;gap:0.4rem;">
@@ -27,7 +26,7 @@
     <div class="model-card__stats">
         Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Model.DuelCount - Model.WinCount)
     </div>
-</RadzenCard>
+</div>
 
 @code {
     [Parameter, EditorRequired] public ModelDto Model { get; set; } = null!;
@@ -38,6 +37,17 @@
     [Parameter] public double? ProjectedEloGain { get; set; }
 
     private string _cardClass => IsSelected ? "model-card model-card--selected" : "model-card";
+
+    private string _cardStyle
+    {
+        get
+        {
+            var cursor = IsDisabled ? "cursor:not-allowed;opacity:0.45;" : "cursor:pointer;";
+            if (IsSelected)
+                return cursor + "border:2px solid #22c55e !important;box-shadow:0 0 0 2px rgba(34,197,94,0.4),0 0 24px rgba(34,197,94,0.2) !important;background:linear-gradient(135deg,rgba(34,197,94,0.08) 0%,#0a0a0a 100%) !important;";
+            return cursor;
+        }
+    }
 
     private async Task OnCardClick()
     {
@@ -55,6 +65,7 @@
         border-radius: var(--radius-md);
         position: relative;
         overflow: hidden;
+        padding: 1rem;
     }
 
     .model-card::before {
@@ -119,25 +130,36 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3em;
+    }
+
+    .model-card__badge::before {
+        content: '●';
+        font-size: 0.6em;
     }
 
     .model-card__badge--local {
+        background: linear-gradient(135deg, #4c1d95, #7c3aed);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+    }
+    .model-card__badge--local::before { color: #c4b5fd; }
+
+    .model-card__badge--remote {
         background: linear-gradient(135deg, #1d4ed8, #3b82f6);
         color: #fff;
         box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
     }
-
-    .model-card__badge--remote {
-        background: linear-gradient(135deg, #7c3aed, #a855f7);
-        color: #fff;
-        box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
-    }
+    .model-card__badge--remote::before { color: #93c5fd; }
 
     .model-card__badge--localservice {
         background: linear-gradient(135deg, #0d9469, #06b6d4);
         color: #fff;
         box-shadow: 0 2px 8px rgba(13, 148, 105, 0.3);
     }
+    .model-card__badge--localservice::before { color: #6ee7b7; }
 
     .model-card__elo {
         color: var(--oled-text);

@@ -10,36 +10,65 @@
 <PageTitle>LLM Duel Arena</PageTitle>
 
 <div class="home">
-    <div class="home__hero">
-        <h1 class="home__title">LLM Duel Arena</h1>
-        <p class="home__subtitle">
-            Pit AI models head-to-head. Track ELO ratings, win rates, and energy efficiency
-            across thousands of prompt battles — all running locally.
-        </p>
-        <div class="home__cta">
-            <a class="rz-button rz-button-md rz-primary" href="war-room">Enter War Room</a>
-            <a class="rz-button rz-button-md rz-light" href="leaderboard">View Leaderboard</a>
+    @* ── Compact Header (C1) ── *@
+    <div class="home__header">
+        <h1 class="home__title">⚔ LLM Duel Arena</h1>
+        <a href="/war-room" class="rz-button rz-button-md rz-primary">⚔ New Duel</a>
+    </div>
+
+    @* ── Stat Strip (C1) ── *@
+    <div class="home__stats">
+        <div class="home__stat">
+            <span class="home__stat-value">@_totalDuels</span>
+            <span class="home__stat-label">Duels Fought</span>
+        </div>
+        <div class="home__stat">
+            <span class="home__stat-value">@_activeModels</span>
+            <span class="home__stat-label">Active Models</span>
+        </div>
+        <div class="home__stat">
+            <span class="home__stat-value">@(_topModel ?? "—")</span>
+            <span class="home__stat-label">Top Ranked</span>
+        </div>
+        <div class="home__stat @(_unratedCount > 0 ? "home__stat--alert" : "")">
+            <span class="home__stat-value">@_unratedCount</span>
+            <span class="home__stat-label">Need Verdict</span>
         </div>
     </div>
 
-    <div class="home__cards">
-        <a href="/war-room" class="home__card">
-            <span class="home__card-icon">⚔️</span>
-            <h3>Head-to-Head Duels</h3>
-            <p>Send the same prompt to two models simultaneously and judge which response wins.</p>
-        </a>
-        <a href="/leaderboard" class="home__card">
-            <span class="home__card-icon">📈</span>
-            <h3>ELO Rankings</h3>
-            <p>Every verdict shifts ELO scores using the same algorithm chess grandmasters use. The leaderboard updates live.</p>
-        </a>
-        <a href="/leaderboard" class="home__card">
-            <span class="home__card-icon">🌱</span>
-            <h3>Green Score</h3>
-            <p>Measures energy cost per duel (watts × time). Compare accuracy <em>and</em> environmental impact.</p>
-        </a>
-    </div>
+    @* ── Recent Duels (O1 — pending links to arena) ── *@
+    @if (_recentDuels.Count > 0)
+    {
+        <div class="home__recent">
+            <h2 class="home__recent-title">Recent Duels</h2>
+            <div class="home__recent-list">
+                @foreach (var d in _recentDuels)
+                {
+                    var isPending = d.Verdict == DuelVerdict.Pending;
+                    var href = isPending ? $"/arena/{d.DuelId}" : "/archive";
+                    <a href="@href" class="home__recent-item @(isPending ? "home__recent-item--unrated" : "")">
+                        <span class="home__recent-prompt">@d.PromptSummary</span>
+                        <span class="home__recent-vs">@d.LeftModelName <em>vs</em> @d.RightModelName</span>
+                        @if (d.Verdict == DuelVerdict.Left)
+                        {
+                            <span class="home__recent-winner">🏆 @d.LeftModelName</span>
+                        }
+                        else if (d.Verdict == DuelVerdict.Right)
+                        {
+                            <span class="home__recent-winner">🏆 @d.RightModelName</span>
+                        }
+                        else
+                        {
+                            <span class="home__recent-unrated">⚖ Rate it</span>
+                        }
+                        <span class="home__recent-date">@d.StartedAt.ToString("MMM d")</span>
+                    </a>
+                }
+            </div>
+        </div>
+    }
 
+    @* ── Danger Zone (O2 — moved to bottom) ── *@
     <div class="home__danger-zone">
         @if (_resetConfirm)
         {
@@ -61,276 +90,199 @@
                 Click="@(() => _resetConfirm = true)" class="home__danger-btn" />
         }
     </div>
-
-    @if (_recentDuels.Count > 0)
-    {
-        <div class="home__recent">
-            <h2 class="home__recent-title">Recent Duels</h2>
-            <div class="home__recent-list">
-                @foreach (var d in _recentDuels)
-                {
-                    <a href="/archive" class="home__recent-item">
-                        <span class="home__recent-prompt">@d.PromptSummary</span>
-                        <span class="home__recent-vs">@d.LeftModelName <em>vs</em> @d.RightModelName</span>
-                        @if (d.Verdict == DuelVerdict.Left)
-                        {
-                            <span class="home__recent-winner">🏆 @d.LeftModelName</span>
-                        }
-                        else if (d.Verdict == DuelVerdict.Right)
-                        {
-                            <span class="home__recent-winner">🏆 @d.RightModelName</span>
-                        }
-                        else
-                        {
-                            <span class="home__recent-unrated">Unrated</span>
-                        }
-                        <span class="home__recent-date">@d.StartedAt.ToString("MMM d")</span>
-                    </a>
-                }
-            </div>
-        </div>
-    }
 </div>
 
 <style>
     .home { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
-    
-    /* ── Modern Hero Section with Glassmorphism ─────────────────────────── */
-    .home__hero { 
-        text-align: center; 
-        padding: 3rem 1rem; 
-        animation: fadeIn 0.6s ease-out;
-        position: relative;
+
+    /* ── Compact header (C1) ────────────────────────────────────────────── */
+    .home__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
     }
-    
-    .home__hero::before {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 400px;
-        height: 400px;
-        background: radial-gradient(circle, rgba(34, 197, 94, 0.08) 0%, transparent 70%);
-        pointer-events: none;
-        z-index: -1;
-    }
-    
-    .home__title { 
-        font-size: 2.5rem; 
-        font-weight: 800; 
-        margin-bottom: 0.75rem;
-        background: linear-gradient(135deg, #f0f0f0 0%, #a0a0a0 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        letter-spacing: -0.02em;
-    }
-    
-    .home__subtitle { 
-        font-size: 1.15rem; 
-        color: var(--oled-text-muted); 
-        max-width: 560px; 
-        margin: 0 auto 2rem; 
-        line-height: 1.7;
-    }
-    
-    .home__cta { 
-        display: flex; 
-        gap: 1rem; 
-        justify-content: center; 
-        flex-wrap: wrap;
-        animation: slideUp 0.6s ease-out 0.2s both;
-    }
-    
-    /* ── Modern Feature Cards ─────────────────────────────────────────────── */
-    .home__cards { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
-        gap: 1.25rem; 
-        margin-top: 2.5rem;
-        animation: fadeIn 0.6s ease-out 0.4s both;
-    }
-    
-    .home__card { 
-        display: block; 
-        text-decoration: none; 
-        color: inherit; 
-        border: 1px solid var(--oled-border); 
-        border-radius: var(--radius-lg); 
-        padding: 1.75rem; 
-        background: var(--oled-surface);
-        backdrop-filter: blur(10px);
-        transition: all var(--transition-medium);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .home__card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, transparent, var(--oled-green), transparent);
-        opacity: 0;
-        transition: opacity var(--transition-medium);
-    }
-    
-    .home__card:hover { 
-        border-color: var(--oled-green);
-        transform: translateY(-4px);
-        box-shadow: 0 12px 40px rgba(34, 197, 94, 0.15);
-    }
-    
-    .home__card:hover::before {
-        opacity: 1;
-    }
-    
-    .home__card-icon { 
-        font-size: 2.25rem; 
-        display: block; 
-        margin-bottom: 0.75rem;
-        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
-    }
-    
-    .home__card h3 { 
-        margin: 0 0 0.5rem; 
-        font-size: 1.05rem; 
-        font-weight: 600; 
+
+    .home__title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        margin: 0;
         color: var(--oled-text);
+        letter-spacing: -0.01em;
     }
-    
-    .home__card p { 
-        margin: 0; 
-        font-size: 0.875rem; 
-        color: var(--oled-text-muted); 
-        line-height: 1.6; 
+
+    /* ── Stat strip (C1) ────────────────────────────────────────────────── */
+    .home__stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 2rem;
     }
-    
+
+    .home__stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.9rem 0.5rem;
+        background: var(--oled-surface);
+        border: 1px solid var(--oled-border);
+        border-radius: var(--radius-md);
+        text-align: center;
+    }
+
+    .home__stat--alert {
+        border-color: rgba(251, 191, 36, 0.5);
+        background: rgba(251, 191, 36, 0.05);
+    }
+
+    .home__stat-value {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--oled-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .home__stat--alert .home__stat-value { color: #fbbf24; }
+
+    .home__stat-label {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--oled-text-muted);
+    }
+
+    @@media (max-width: 500px) {
+        .home__stats { grid-template-columns: repeat(2, 1fr); }
+    }
+
     /* ── Recent Duels ─────────────────────────────────────────────────────── */
-    .home__recent { 
-        margin-top: 3rem;
-        animation: fadeIn 0.6s ease-out 0.6s both;
+    .home__recent { animation: fadeIn 0.6s ease-out 0.6s both; }
+
+    .home__recent-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--oled-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 1rem;
     }
-    
-    .home__recent-title { 
-        font-size: 0.75rem; 
-        font-weight: 700; 
-        color: var(--oled-text-muted); 
-        text-transform: uppercase; 
-        letter-spacing: 0.1em; 
-        margin-bottom: 1rem; 
+
+    .home__recent-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
     }
-    
-    .home__recent-list { 
-        display: flex; 
-        flex-direction: column; 
-        gap: 0.5rem; 
-    }
-    
-    .home__recent-item { 
-        display: grid; 
-        grid-template-columns: 1fr 1fr auto auto; 
-        align-items: center; 
-        gap: 0.75rem; 
-        padding: 0.75rem 1rem; 
-        border: 1px solid var(--oled-border); 
-        border-radius: var(--radius-md); 
-        text-decoration: none; 
-        color: inherit; 
+
+    .home__recent-item {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto auto;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--oled-border);
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        color: inherit;
         transition: all var(--transition-fast);
         background: var(--oled-surface);
     }
-    
-    .home__recent-item:hover { 
+
+    .home__recent-item:hover {
         border-color: var(--oled-green);
         transform: translateX(4px);
         box-shadow: 0 4px 20px rgba(34, 197, 94, 0.1);
     }
-    
-    .home__recent-prompt { 
-        font-size: 0.85rem; 
-        color: var(--oled-text); 
-        white-space: nowrap; 
-        overflow: hidden; 
-        text-overflow: ellipsis; 
+
+    /* O1: Unrated items get amber left border to signal action needed */
+    .home__recent-item--unrated {
+        border-left: 3px solid rgba(251, 191, 36, 0.7);
     }
-    
-    .home__recent-vs { 
-        font-size: 0.75rem; 
-        color: var(--oled-text-muted); 
-        white-space: nowrap; 
-        overflow: hidden; 
-        text-overflow: ellipsis; 
+
+    .home__recent-item--unrated:hover {
+        border-color: #fbbf24;
+        box-shadow: 0 4px 20px rgba(251, 191, 36, 0.1);
     }
-    
-    .home__recent-winner { 
-        font-size: 0.8rem; 
-        color: var(--oled-green); 
-        font-weight: 600; 
-        white-space: nowrap; 
+
+    .home__recent-prompt {
+        font-size: 0.85rem;
+        color: var(--oled-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-    
-    .home__recent-unrated { 
-        font-size: 0.75rem; 
-        color: var(--oled-text-muted); 
-        font-style: italic; 
+
+    .home__recent-vs {
+        font-size: 0.75rem;
+        color: var(--oled-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-    
-    .home__recent-date { 
-        font-size: 0.7rem; 
-        color: var(--oled-text-muted); 
-        white-space: nowrap; 
+
+    .home__recent-winner {
+        font-size: 0.8rem;
+        color: var(--oled-green);
+        font-weight: 600;
+        white-space: nowrap;
     }
-    
+
+    .home__recent-unrated {
+        font-size: 0.75rem;
+        color: #fbbf24;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .home__recent-date {
+        font-size: 0.7rem;
+        color: var(--oled-text-muted);
+        white-space: nowrap;
+    }
+
     /* ── Danger Zone ─────────────────────────────────────────────────────── */
-    .home__danger-zone { 
-        display: flex; 
-        align-items: center; 
-        gap: 0.75rem; 
-        flex-wrap: wrap; 
-        margin-top: 2.5rem; 
-        padding: 1rem 1.25rem; 
-        border: 1px solid var(--oled-border); 
+    .home__danger-zone {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 2.5rem;
+        padding: 1rem 1.25rem;
+        border: 1px solid var(--oled-border);
         border-radius: var(--radius-md);
         background: var(--oled-surface);
-        animation: fadeIn 0.6s ease-out 0.8s both;
     }
-    
-    .home__danger-msg { 
-        font-size: 0.85rem; 
-        color: var(--oled-red); 
-        flex: 1; 
-        min-width: 200px; 
+
+    .home__danger-msg {
+        font-size: 0.85rem;
+        color: var(--oled-red);
+        flex: 1;
+        min-width: 200px;
     }
-    
-    .home__danger-ok { 
-        font-size: 0.85rem; 
-        color: var(--oled-green); 
-    }
-    
-    .home__danger-btn { 
-        flex-shrink: 0; 
-    }
-    
-    /* ── Responsive Adjustments ──────────────────────────────────────────── */
+
+    .home__danger-ok { font-size: 0.85rem; color: var(--oled-green); }
+    .home__danger-btn { flex-shrink: 0; }
+
     @@media (max-width: 640px) {
-        .home__title { font-size: 1.75rem; }
-        .home__subtitle { font-size: 1rem; }
-        .home__hero { padding: 2rem 1rem; }
-        .home__recent-item { 
-            grid-template-columns: 1fr auto; 
+        .home__recent-item {
+            grid-template-columns: 1fr auto;
             gap: 0.5rem;
         }
-        .home__recent-vs,
-        .home__recent-date { display: none; }
+        .home__recent-vs, .home__recent-date { display: none; }
     }
 </style>
 
 @code {
     private IReadOnlyList<DuelSummaryDto> _recentDuels = [];
+
+    // Stat strip fields (C1)
+    private int _totalDuels;
+    private int _activeModels;
+    private string? _topModel;
+    private int _unratedCount;
 
     private bool _resetConfirm;
     private bool _resetBusy;
@@ -338,8 +290,23 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try { _recentDuels = await ApiClient.ListDuelsAsync(3) ?? []; }
-        catch { _recentDuels = []; }
+        // Load recent duels (8) and leaderboard in parallel
+        var duelsTask = ApiClient.ListDuelsAsync(8);
+        var lbTask = ApiClient.GetLeaderboardAsync("Elo");
+
+        await Task.WhenAll(duelsTask, lbTask);
+
+        var duels = duelsTask.Result ?? [];
+        _recentDuels = duels;
+        _totalDuels = duels.Count;
+        _unratedCount = duels.Count(d => d.Verdict == DuelVerdict.Pending);
+
+        var lb = lbTask.Result;
+        if (lb is not null)
+        {
+            _activeModels = lb.Count(e => e.DuelCount > 0);
+            _topModel = lb.FirstOrDefault(e => e.Rank == 1)?.DisplayName;
+        }
     }
 
     private async Task DoResetAsync()
@@ -349,6 +316,10 @@
         {
             await ApiClient.DevResetAsync();
             _recentDuels = [];
+            _totalDuels = 0;
+            _activeModels = 0;
+            _topModel = null;
+            _unratedCount = 0;
             _resetDone = true;
             _resetConfirm = false;
         }

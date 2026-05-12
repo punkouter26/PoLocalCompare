@@ -77,7 +77,11 @@ public sealed class OllamaInferenceProxy : IRemoteInferenceProxy
         {
             result.IsFailure = true;
             result.FailureReason = $"HTTP request to Ollama failed: {ex.Message}. Is Ollama running at {baseUrl}?";
-            _logger.LogError(ex, "HTTP request to Ollama failed for model {Model} at {Url}", modelName, url);
+            // Connection refused is expected when Ollama is not running locally — warn instead of error.
+            if (ex is HttpRequestException { InnerException: System.Net.Sockets.SocketException })
+                _logger.LogWarning("Ollama unavailable for model {Model} at {Url} — ensure Ollama is running for local model support.", modelName, url);
+            else
+                _logger.LogError(ex, "HTTP request to Ollama failed for model {Model} at {Url}", modelName, url);
             return result;
         }
 
@@ -165,7 +169,10 @@ public sealed class OllamaInferenceProxy : IRemoteInferenceProxy
         {
             result.IsFailure = true;
             result.FailureReason = $"Stream read error: {ex.Message}";
-            _logger.LogError(ex, "Stream read failed for Ollama model {Model}", modelName);
+            if (ex is System.IO.IOException or System.Net.Sockets.SocketException)
+                _logger.LogWarning(ex, "Stream read failed for Ollama model {Model} — connection may have been dropped.", modelName);
+            else
+                _logger.LogError(ex, "Stream read failed for Ollama model {Model}", modelName);
             return result;
         }
 

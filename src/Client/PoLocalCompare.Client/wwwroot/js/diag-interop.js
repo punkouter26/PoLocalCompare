@@ -47,7 +47,7 @@ window.runModelDiag = function (dotnetRef, diagId, webLlmModelId, prompt) {
         delete _diagWorkers[diagId];
     }
 
-    const worker = new Worker('/js/webllm-worker.js');
+    const worker = new Worker('/js/webllm-worker.js?v=3', { type: 'module' });
     _diagWorkers[diagId] = worker;
 
     let firstTokenMs = -1;
@@ -59,21 +59,30 @@ window.runModelDiag = function (dotnetRef, diagId, webLlmModelId, prompt) {
             return 'WebLLM engine could not load. Check your internet connection and try again.';
         }
         if (msg.includes('out of memory') || msg.includes('OOM') || msg.includes('VRAM')) {
-            return 'Ran out of GPU memory. Try a smaller model first.';
+            return 'Ran out of GPU memory. Run models one at a time, or try a smaller model first.';
+        }
+        if (msg.includes('Device was lost') || msg.includes('mapAsync') || msg.includes('GPUBuffer') || msg.includes('external Instance reference')) {
+            return 'GPU ran out of memory — too many models running at once. Run models one at a time, or restart the browser and try a smaller model.';
         }
         if (msg.includes('WebGPU') || msg.includes('requestAdapter')) {
             return 'WebGPU initialisation failed. Ensure your browser supports WebGPU.';
         }
-        // Strip noisy stack-trace prefix
-        return msg.replace(/^Uncaught\s+/i, '').slice(0, 180);
+        if (msg.includes('Missing model_lib')) {
+            return 'Model library not found — this model ID may not be supported by the local runner.';
+        }
+        // Strip noisy stack-trace prefix and stack frames
+        return msg.replace(/^Uncaught\s+/i, '').replace(/\s+at\s+\S+\s*\([^)]+\)/g, '').trim().slice(0, 200);
     }
 
     worker.onmessage = function (e) {
         const m = e.data;
         if (m.type === 'status') {
             if (m.status === 'Initializing') {
-                dotnetRef.invokeMethodAsync('OnDiagStep', diagId, 'Loading',
-                    m.detail || 'Loading model...', m.loadProgress || 0);
+                const progress = m.loadProgress || 0;
+                const detail = (progress === 0 && (!m.detail || /^loading/i.test(m.detail)))
+                    ? 'Compiling GPU shaders…'
+                    : (m.detail || 'Loading model…');
+                dotnetRef.invokeMethodAsync('OnDiagStep', diagId, 'Loading', detail, progress);
             } else if (m.status === 'Generating') {
                 if (genStartMs < 0) genStartMs = Date.now();
                 if (firstTokenMs < 0 && (m.tokenCount || 0) > 0) {
@@ -90,7 +99,7 @@ window.runModelDiag = function (dotnetRef, diagId, webLlmModelId, prompt) {
             const tokens  = m.tokenCount || 0;
             const tps     = Math.round((tokens / genMs) * 1000);
             const ftMs    = firstTokenMs >= 0 ? firstTokenMs : genMs;
-            dotnetRef.invokeMethodAsync('OnDiagResult', diagId, loadMs, ftMs, tps, tokens, m.htmlOutput || '', null);
+            dotnetRef.invokeMethodAsync('OnDiagResult', diagId, loadMs, ftMs, tps, tokens, m.htmlOutput || '', null, !!m.cacheHit);
             worker.terminate();
             delete _diagWorkers[diagId];
         } else if (m.type === 'error') {

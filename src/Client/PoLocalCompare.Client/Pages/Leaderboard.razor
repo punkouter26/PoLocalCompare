@@ -18,18 +18,21 @@
         <RadzenButton Text="ELO" Click="@(() => SetSortAsync("Elo"))"
             ButtonStyle="@(IsGreenSort ? ButtonStyle.Light : ButtonStyle.Primary)"
             Size="ButtonSize.Small" class="leaderboard__sort-btn" />
-        <RadzenButton Text="Green Score" Click="@(() => SetSortAsync("GreenScore"))"
+        <RadzenButton Text="🌱 Green Score" Click="@(() => SetSortAsync("GreenScore"))"
             ButtonStyle="@(IsGreenSort ? ButtonStyle.Primary : ButtonStyle.Light)"
-            Size="ButtonSize.Small" class="leaderboard__sort-btn" />
+            Size="ButtonSize.Small" class="leaderboard__sort-btn"
+            Disabled="@(!_entries.Any(e => e.GreenScoreAvg is > 0))"
+            title="@(!_entries.Any(e => e.GreenScoreAvg is > 0) ? "Run local model duels in Local Lab to unlock Green Score" : "Sort by energy efficiency")" />
         <span class="leaderboard__divider">|</span>
-        <RadzenButton Text="@(_activeOnly ? "Active Only" : "All Models")"
+        <RadzenButton Text="@(_activeOnly ? "Active ✓" : "Show All")"
             Click="@(() => _activeOnly = !_activeOnly)"
             ButtonStyle="@(_activeOnly ? ButtonStyle.Primary : ButtonStyle.Light)"
-            Size="ButtonSize.Small" class="leaderboard__sort-btn" />
+            Size="ButtonSize.Small" class="leaderboard__sort-btn"
+            title="@(_activeOnly ? "Showing models with duels — click to show all" : "Showing all models — click to hide unplayed")" />
     </div>
-    @if (_greenSortWarning)
+    @if (!_entries.Any(e => e.GreenScoreAvg is > 0) && !_loading)
     {
-        <p class="leaderboard__green-warn">🌱 No Green Score data yet — complete a duel to populate this ranking.</p>
+        <p class="leaderboard__green-info">🌱 Green Score unlocks after running local (WebGPU) model duels in <a href="/local-model-lab">Local Lab</a>.</p>
     }
 
     @if (_loading)
@@ -53,7 +56,26 @@
             TItem="LeaderboardEntryDto" RowSelect="OnRowSelect"
             Class="leaderboard__grid leaderboard__grid--scrollable">
             <Columns>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px" />
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px">
+                    <Template Context="entry">
+                        @if (entry.Rank == 1)
+                        {
+                            <span class="lb__rank lb__rank--gold" title="#1 Ranked">🥇</span>
+                        }
+                        else if (entry.Rank == 2)
+                        {
+                            <span class="lb__rank lb__rank--silver" title="#2 Ranked">🥈</span>
+                        }
+                        else if (entry.Rank == 3)
+                        {
+                            <span class="lb__rank lb__rank--bronze" title="#3 Ranked">🥉</span>
+                        }
+                        else
+                        {
+                            <span class="lb__rank">@entry.Rank</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" Width="200px">
                     <Template Context="entry">
                         @entry.DisplayName
@@ -173,7 +195,7 @@
 @code {
     private List<LeaderboardEntryDto> _entries = [];
     private Dictionary<string, ModelType> _modelTypes = [];
-    private bool _activeOnly;
+    private bool _activeOnly = true; // default: hide unplayed models
     private bool _loading = true;
     private string? _error;
 
@@ -183,7 +205,6 @@
     private string? _killListError;
 
     private string _sortBy = "Elo";
-    private bool _greenSortWarning;
     private bool IsGreenSort => string.Equals(_sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase);
     private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
 
@@ -201,11 +222,7 @@
         if (string.Equals(_sortBy, sortBy, StringComparison.OrdinalIgnoreCase))
             return;
         if (sortBy == "GreenScore" && !_entries.Any(e => e.GreenScoreAvg is > 0))
-        {
-            _greenSortWarning = true;
-            return;
-        }
-        _greenSortWarning = false;
+            return; // button is disabled; guard in case of race condition
         _sortBy = sortBy;
         await LoadLeaderboardAsync();
     }
@@ -266,3 +283,21 @@
         }
     }
 }
+
+<style>
+    /* ── Rank medals ─────────────────────────────────────────────── */
+    .lb__rank { font-size: 1.1rem; }
+    .lb__rank--gold   { filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.7)); }
+    .lb__rank--silver { filter: drop-shadow(0 0 4px rgba(180, 180, 180, 0.6)); }
+    .lb__rank--bronze { filter: drop-shadow(0 0 4px rgba(180, 100, 40, 0.5)); }
+
+    /* ── Green Score info ────────────────────────────────────────── */
+    .leaderboard__green-info {
+        font-size: 0.8rem;
+        color: var(--oled-text-muted);
+        margin: 0.25rem 0 0.75rem;
+        padding: 0.4rem 0.75rem;
+        border-left: 2px solid rgba(34, 197, 94, 0.4);
+    }
+    .leaderboard__green-info a { color: var(--oled-green); }
+</style>

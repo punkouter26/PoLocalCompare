@@ -8,6 +8,7 @@
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
 @inject NavigationManager Nav
+@implements IDisposable
 @inject IJSRuntime JS
 
 <div class="arena">
@@ -28,9 +29,10 @@
         <div class="arena__viewports">
             <div class="arena__viewport-panel">
                 <SandboxedViewport
-                    HtmlContent="@_leftResult?.HtmlOutputRaw"
+                    HtmlContent="@(_leftResult?.HtmlOutputRaw ?? string.Empty)"
                     ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
                     IsLoser="@(_loserModelId == _duel.LeftModelId)"
+                    ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.LeftModelId)"
                 />
                 <div class="arena__hud">
                     <TelemetryHud Result="_leftResult" />
@@ -53,9 +55,10 @@
 
             <div class="arena__viewport-panel">
                 <SandboxedViewport
-                    HtmlContent="@_rightResult?.HtmlOutputRaw"
+                    HtmlContent="@(_rightResult?.HtmlOutputRaw ?? string.Empty)"
                     ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
                     IsLoser="@(_loserModelId == _duel.RightModelId)"
+                    ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.RightModelId)"
                 />
                 <div class="arena__hud">
                     <TelemetryHud Result="_rightResult" />
@@ -129,8 +132,20 @@
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
 
+    private IDisposable? _locationChangingReg;
+
     protected override async Task OnInitializedAsync()
     {
+        // UX#7: Block navigation away when verdict is still pending
+        _locationChangingReg = Nav.RegisterLocationChangingHandler(async ctx =>
+        {
+            if (_duel?.Verdict == DuelVerdict.Pending && !_verdictRecorded)
+            {
+                var confirmed = await JS.InvokeAsync<bool>("confirm", "You haven't picked a winner yet. Leave without voting?");
+                if (!confirmed) ctx.PreventNavigation();
+            }
+        });
+
         try
         {
             _duel = await ApiClient.GetDuelAsync(DuelId);
@@ -228,4 +243,7 @@
         // Open the raw HTML source in a new browser tab so the user can inspect it
         await JS.InvokeVoidAsync("openHtmlSource", htmlContent, modelName);
     }
+
+    // UX#7: Dispose location-changing handler
+    public void Dispose() => _locationChangingReg?.Dispose();
 }

@@ -89,7 +89,7 @@
         @if (_selectedDuel is not null)
         {
             <div class="archive__detail">
-                <h2 class="archive__detail-title">Duel Details — <code>@_selectedDuel.DuelId</code></h2>
+                <h2 class="archive__detail-title">Duel Details</h2>
 
                 <div class="archive__detail-meta">
                     <p><strong>Prompt:</strong> @_selectedDuel.PromptSummary</p>
@@ -173,7 +173,7 @@
     private bool _hasMore;
     private const int PageSize = 20;
 
-    private string _verdictFilter = "All";
+    private string _verdictFilter = "No Verdict";
 
     private List<DuelSummaryDto> FilteredDuels() => _verdictFilter switch
     {
@@ -237,7 +237,7 @@
         _selectedDuel = duel;
         _reRenderDuel = null;
         StateHasChanged();
-        await JS.InvokeVoidAsync("eval", "document.querySelector('.archive__detail')?.scrollIntoView({behavior:'smooth',block:'start'})");
+        await JS.InvokeVoidAsync("eval", "void 0"); // no-op (auto-scroll removed P4)
     }
 
     private async Task OnReRender()
@@ -295,7 +295,7 @@
     private static string FormatModelName(string? modelName, string modelId)
     {
         if (IsUnresolvedModelName(modelName, modelId))
-            return $"Unknown ({ShortModelId(modelId)})";
+            return "[Deleted Model]";
 
         return modelName!.Trim();
     }

@@ -4,7 +4,7 @@
  * Emits typed messages back to the main thread.
  */
 
-importScripts('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/dist/web-llm.js');
+import * as webllm from '/js/web-llm.js';
 
 let engine = null;
 let cachedModelId = null;
@@ -68,8 +68,10 @@ self.onmessage = async (event) => {
         console.log(`[WebLLM Worker] Cache check — cachedModelId="${cachedModelId}" isAlreadyCached=${isAlreadyCached}`);
 
         if (!engine || !isAlreadyCached) {
+            // Look up model_lib (WASM URL) from prebuilt config so local models get the correct WASM library
+            const prebuiltEntry = webllm.prebuiltAppConfig?.model_list?.find(m => m.model_id === effectiveModelId);
             const appConfig = localModelBaseUrl
-                ? { model_list: [{ model: localModelBaseUrl + effectiveModelId + '/', model_id: effectiveModelId }] }
+                ? { model_list: [{ model: localModelBaseUrl + effectiveModelId + '/', model_id: effectiveModelId, model_lib: prebuiltEntry?.model_lib }] }
                 : undefined;
 
             console.log(`[WebLLM Worker] Creating MLCEngine — effectiveModelId="${effectiveModelId}" appConfig=`, appConfig ?? '(none, using CDN)');
