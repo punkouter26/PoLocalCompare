@@ -163,6 +163,14 @@ jobs:
             exit 1
           fi
 
+      - name: Start App Service
+        run: |
+          az webapp start \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ steps.deploy_outputs.outputs.app_service_name }}"
+          echo "Waiting for App Service to start..."
+          sleep 30
+
       - name: Deploy application package
         run: |
           az webapp deploy \
@@ -170,7 +178,27 @@ jobs:
             --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
             --src-path ./artifacts/webapp.zip \
             --type zip \
-            --clean true
+            --clean true \
+            --async true
+          echo "Async deployment initiated, waiting for completion..."
+          sleep 60
+          for attempt in $(seq 1 10); do
+            deploy_status=$(az webapp deployment list \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
+              --query "[0].status" -o tsv 2>/dev/null || echo "unknown")
+            echo "Attempt $attempt: deployment status = $deploy_status"
+            if [ "$deploy_status" = "4" ] || [ "$deploy_status" = "Success" ]; then
+              echo "Deployment succeeded"
+              exit 0
+            fi
+            if [ "$deploy_status" = "3" ] || [ "$deploy_status" = "Failed" ]; then
+              echo "::error::Deployment failed with status: $deploy_status"
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "Deployment status check timed out, proceeding to health check"
 
       - name: Capture deployment diagnostics on failure
         if: failure()
