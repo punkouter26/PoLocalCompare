@@ -107,6 +107,10 @@ try
     });
 
     // ─── Infrastructure (Phase 2 — T032–T037) ────────────────────────────────
+    builder.Services.AddHttpClient("OllamaStatus", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(5);
+    });
     builder.Services.AddInfrastructure(builder.Configuration);
 
     // ─── Application use cases (Phase 3 + 4 + 6) ────────────────────────────

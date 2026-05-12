@@ -1,0 +1,180 @@
+.home { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+
+/* ── Compact header ─────────────────────────────────────────────────── */
+.home__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.home__title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    margin: 0;
+    color: var(--oled-text);
+    letter-spacing: -0.01em;
+}
+
+/* ── Stat strip ─────────────────────────────────────────────────────── */
+.home__stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+}
+
+.home__stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.9rem 0.5rem;
+    background: var(--oled-surface);
+    border: 1px solid var(--oled-border);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.home__stat--alert {
+    border-color: rgba(251, 191, 36, 0.5);
+    background: rgba(251, 191, 36, 0.05);
+}
+
+.home__stat-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--oled-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.home__stat--alert .home__stat-value { color: #fbbf24; }
+
+.home__stat-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--oled-text-muted);
+}
+
+@media (max-width: 500px) {
+    .home__stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Recent Duels ─────────────────────────────────────────────────────── */
+.home__recent { animation: fadeIn 0.6s ease-out 0.6s both; }
+
+.home__recent-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--oled-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+}
+
+.home__recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.home__recent-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--oled-border);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--transition-fast);
+    background: var(--oled-surface);
+}
+
+.home__recent-item:hover {
+    border-color: var(--oled-green);
+    transform: translateX(4px);
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.1);
+}
+
+/* Unrated items get amber left border to signal action needed */
+.home__recent-item--unrated {
+    border-left: 3px solid rgba(251, 191, 36, 0.7);
+}
+
+.home__recent-item--unrated:hover {
+    border-color: #fbbf24;
+    box-shadow: 0 4px 20px rgba(251, 191, 36, 0.1);
+}
+
+.home__recent-prompt {
+    font-size: 0.85rem;
+    color: var(--oled-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home__recent-vs {
+    font-size: 0.75rem;
+    color: var(--oled-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home__recent-winner {
+    font-size: 0.8rem;
+    color: var(--oled-green);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.home__recent-unrated {
+    font-size: 0.75rem;
+    color: #fbbf24;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.home__recent-date {
+    font-size: 0.7rem;
+    color: var(--oled-text-muted);
+    white-space: nowrap;
+}
+
+/* ── Danger Zone ─────────────────────────────────────────────────────── */
+.home__danger-zone {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 2.5rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--oled-border);
+    border-radius: var(--radius-md);
+    background: var(--oled-surface);
+}
+
+.home__danger-msg {
+    font-size: 0.85rem;
+    color: var(--oled-red);
+    flex: 1;
+    min-width: 200px;
+}
+
+.home__danger-ok { font-size: 0.85rem; color: var(--oled-green); }
+.home__danger-btn { flex-shrink: 0; }
+
+@media (max-width: 640px) {
+    .home__recent-item {
+        grid-template-columns: 1fr auto;
+        gap: 0.5rem;
+    }
+    .home__recent-vs, .home__recent-date { display: none; }
+}

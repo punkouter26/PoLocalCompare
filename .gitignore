@@ -21,6 +21,9 @@ Thumbs.db
 *.log
 logs/
 
+## AI workflow state files
+.potune-state.json
+
 ## Build outputs
 dist/
 publish/

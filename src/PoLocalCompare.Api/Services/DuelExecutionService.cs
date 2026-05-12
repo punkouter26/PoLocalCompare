@@ -191,10 +191,13 @@ public sealed class DuelExecutionService
         string side,
         CancellationToken cancellationToken)
     {
-        // Signal the client to start its Web Worker inference
+        var payload = new { duelId, modelId = model.ModelId, side, webLlmModelId = model.WebLlmModelId };
+
+        // Signal the client to start its Web Worker inference.
+        // Retry every 5 s — the client may not have joined the SignalR group yet when the first send fires.
         await _hubContext.Clients
             .Group($"duel:{duelId}")
-            .SendAsync("StartLocalInference", new { duelId, modelId = model.ModelId, side, webLlmModelId = model.WebLlmModelId }, cancellationToken);
+            .SendAsync("StartLocalInference", payload, cancellationToken);
 
         // The client will report back via POST /api/duels/{duelId}/local-result
         // We poll the result repository until the result appears or watchdog fires
@@ -204,12 +207,24 @@ public sealed class DuelExecutionService
         };
 
         var started = DateTimeOffset.UtcNow;
+        var lastSignalAt = DateTimeOffset.UtcNow;
+        const int retryIntervalMs = 5_000;
+
         while (!cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(500, cancellationToken);
 
             var elapsed = (long)(DateTimeOffset.UtcNow - started).TotalMilliseconds;
             await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Generating, elapsed, 0);
+
+            // Resend StartLocalInference periodically so late-joining clients receive it
+            if ((DateTimeOffset.UtcNow - lastSignalAt).TotalMilliseconds >= retryIntervalMs)
+            {
+                lastSignalAt = DateTimeOffset.UtcNow;
+                await _hubContext.Clients
+                    .Group($"duel:{duelId}")
+                    .SendAsync("StartLocalInference", payload, cancellationToken);
+            }
 
             // Check if result was posted by client
             using var scope = _scopeFactory.CreateScope();
@@ -289,79 +304,5 @@ public sealed class DuelExecutionService
             result.EnergyCostUsd = GreenStatsCalculator.ComputeEnergyCostUsd(energyWh, rateUsd);
             result.GreenScore = GreenStatsCalculator.ComputeGreenScore(result.TokenCount, energyWh);
         }
-    }
-}
-
-/// <summary>
-/// Background task queue for reliable duel execution (replaces fire-and-forget Task.Run).
-/// </summary>
-public interface IBackgroundTaskQueue
-{
-    void QueueBackgroundWork(Func<CancellationToken, Task> workItem);
-    Task<Func<CancellationToken, Task>> DequeueAsync(CancellationToken cancellationToken);
-}
-
-public sealed class BackgroundTaskQueue : IBackgroundTaskQueue
-{
-    private readonly Channel<Func<CancellationToken, Task>> _queue;
-
-    public BackgroundTaskQueue(int capacity = 100)
-    {
-        _queue = Channel.CreateBounded<Func<CancellationToken, Task>>(new BoundedChannelOptions(capacity)
-        {
-            FullMode = BoundedChannelFullMode.Wait
-        });
-    }
-
-    public void QueueBackgroundWork(Func<CancellationToken, Task> workItem)
-    {
-        if (!_queue.Writer.TryWrite(workItem))
-        {
-            throw new InvalidOperationException("Background task queue is full.");
-        }
-    }
-
-    public async Task<Func<CancellationToken, Task>> DequeueAsync(CancellationToken cancellationToken)
-    {
-        return await _queue.Reader.ReadAsync(cancellationToken);
-    }
-}
-
-/// <summary>
-/// Hosted service that processes queued background tasks.
-/// </summary>
-public sealed class BackgroundTaskService : BackgroundService
-{
-    private readonly IBackgroundTaskQueue _taskQueue;
-    private readonly ILogger<BackgroundTaskService> _logger;
-
-    public BackgroundTaskService(IBackgroundTaskQueue taskQueue, ILogger<BackgroundTaskService> logger)
-    {
-        _taskQueue = taskQueue;
-        _logger = logger;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("Background task service started.");
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                var workItem = await _taskQueue.DequeueAsync(stoppingToken);
-                await workItem(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected during shutdown
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error occurred executing background task.");
-            }
-        }
-
-        _logger.LogInformation("Background task service stopped.");
     }
 }

@@ -122,129 +122,11 @@
                 <div class="lab__grid">
                 @foreach (var state in _family)
                 {
-                <div class="lab__card @GetCardClass(state) @GetCardDownloadClass(state)">
-
-                    @* Header row *@
-                    <div class="lab__card-header">
-                        <div class="lab__card-title">
-                            <span class="lab__model-name">@state.Model.DisplayName</span>
-                            @if (state.VramMb > 0)
-                            {
-                                <span class="lab__vram-badge lab__vram-badge--@state.VramTier"
-                                      title="Estimated GPU VRAM required: @state.VramLabel">@state.VramLabel</span>
-                            }
-                            @if (state.VramTier == "warn")
-                            {
-                                <span class="lab__vram-warn" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
-                            }
-                        </div>
-                        <div class="lab__card-actions">
-                            @if (state.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
-                            {
-                                <button class="lab__btn-sm lab__btn-sm--run"
-                                        title="Run diagnostic"
-                                        @onclick="() => RunSingleAsync(state)"
-                                        disabled="@(state.IsDownloaded != true || _webGpu?.Supported != true)">
-                                    ▶
-                                </button>
-                            }
-                            else
-                            {
-                                <button class="lab__btn-sm lab__btn-sm--cancel"
-                                        title="Cancel"
-                                        @onclick="() => CancelSingleAsync(state)">
-                                    ■
-                                </button>
-                            }
-                        </div>
-                    </div>
-
-                    @* Model ID chip *@
-                    <div class="lab__model-id">@state.Model.WebLlmModelId</div>
-
-                    @* Download status *@
-                    <div class="lab__download-row">
-                        @if (state.IsDownloaded is null)
-                        {
-                            <span class="lab__badge lab__badge--checking">⏳ Checking…</span>
-                        }
-                        else if (state.IsDownloaded == true)
-                        {
-                            <span class="lab__badge lab__badge--ok">✅ Downloaded</span>
-                        }
-                        else
-                        {
-                            <span class="lab__badge lab__badge--missing">⚠ Model assets missing</span>
-                        }
-                    </div>
-                    @if (state.IsDownloaded == false)
-                    {
-                        <details class="lab__download-hint">
-                            <summary class="lab__download-hint-summary">How to download</summary>
-                            <code class="lab__download-cmd">python download-models.py</code>
-                            <span class="lab__download-note">Expected asset: /models/@state.Model.WebLlmModelId/mlc-chat-config.json</span>
-                        </details>
-                    }
-
-                    @* Running: progress bar + step detail *@
-                    @if (state.Status is DiagStatus.Loading or DiagStatus.Generating)
-                    {
-                        <div class="lab__progress-track">
-                            <div class="lab__progress-fill" style="width: @(state.LoadProgress)%"></div>
-                        </div>
-                        <div class="lab__step-detail">@state.StepDetail</div>
-                    }
-
-                    @* Error *@
-                    @if (state.Status == DiagStatus.Error)
-                    {
-                        <div class="lab__error">❌ @state.ErrorMessage</div>
-                    }
-
-                    @* Cancelled *@
-                    @if (state.Status == DiagStatus.Cancelled)
-                    {
-                        <div class="lab__cancelled">⊘ Cancelled</div>
-                    }
-
-                    @* Results *@
-                    @if (state.Status == DiagStatus.Complete)
-                    {
-                        <div class="lab__metrics">
-                            <div class="lab__metric">
-                                <span class="lab__metric-label">Load</span>
-                                <span class="lab__metric-value">
-                                    @FormatMs(state.LoadMs)
-                                    @if (state.WarmCache) { <span class="lab__warm-badge" title="GPU shaders cached — subsequent loads are faster">⚡</span> }
-                                </span>
-                            </div>
-                            <div class="lab__metric">
-                                <span class="lab__metric-label">1st Token</span>
-                                <span class="lab__metric-value">@FormatMs(state.FirstTokenMs)</span>
-                            </div>
-                            <div class="lab__metric lab__metric--highlight">
-                                <span class="lab__metric-label">Tok/s</span>
-                                <span class="lab__metric-value">@state.TokensPerSec</span>
-                            </div>
-                            <div class="lab__metric">
-                                <span class="lab__metric-label">Tokens</span>
-                                <span class="lab__metric-value">@state.TotalTokens</span>
-                            </div>
-                            <div class="lab__metric">
-                                <span class="lab__metric-label">Quality</span>
-                                <span class="lab__metric-value">@CompletenessScore(state)%</span>
-                            </div>
-                        </div>
-                        <button class="lab__output-toggle"
-                                @onclick="() => state.ShowOutput = !state.ShowOutput">
-                            @(state.ShowOutput ? "▲ Hide output" : "▼ Show output")
-                        </button>
-                        @if (state.ShowOutput)
-                        {
-                            <pre class="lab__output">@state.Output</pre>
-                        }
-                    }
-                </div>
+                    <LabModelCard State="state"
+                                  WebGpuSupported="@(_webGpu?.Supported)"
+                                  OnRun="RunSingleAsync"
+                                  OnCancel="CancelSingleAsync"
+                                  OnToggleOutput="@(_ => StateHasChanged())" />
                 }
                 </div>
             </div>
@@ -335,9 +217,6 @@
 </div>
 
 @code {
-    // ── Status enum ──────────────────────────────────────────────────────────
-    private enum DiagStatus { Idle, Checking, Loading, Generating, Complete, Error, Cancelled }
-
     // ── WebGPU info ──────────────────────────────────────────────────────────
     private sealed class WebGpuInfo
     {
@@ -347,56 +226,6 @@
         public string Device { get; set; } = "";
         public string Reason { get; set; } = "";
     }
-
-    // ── Per-model diagnostic state ───────────────────────────────────────────
-    private sealed class ModelDiagState
-    {
-        public ModelDto Model { get; init; } = null!;
-        public bool? IsDownloaded { get; set; }
-        public DiagStatus Status { get; set; } = DiagStatus.Idle;
-        public int LoadProgress { get; set; }
-        public string StepDetail { get; set; } = "";
-        public int LoadMs { get; set; }
-        public int FirstTokenMs { get; set; }
-        public int TokensPerSec { get; set; }
-        public int TotalTokens { get; set; }
-        public string Output { get; set; } = "";
-        public string? ErrorMessage { get; set; }
-        public bool ShowOutput { get; set; }
-        public bool WarmCache { get; set; }
-        public TaskCompletionSource<bool> _completion { get; private set; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public void ResetCompletion() =>
-            _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public bool IsSmolLM2 =>
-            Model.WebLlmModelId?.StartsWith("SmolLM2", StringComparison.OrdinalIgnoreCase) == true;
-
-        public string VramLabel => _vramTable.TryGetValue(Model.WebLlmModelId ?? "", out var v) ? v.Label : "";
-        public int VramMb     => _vramTable.TryGetValue(Model.WebLlmModelId ?? "", out var v) ? v.Mb   : 0;
-        public string VramTier => VramMb switch { 0 => "", <= 800 => "ok", <= 1500 => "caution", _ => "warn" };
-    }
-
-    // ── Static VRAM lookup ───────────────────────────────────────────────────
-    private static readonly Dictionary<string, (int Mb, string Label)> _vramTable = new()
-    {
-        ["SmolLM2-135M-Instruct-q0f32-MLC"]          = (720,  "720 MB"),
-        ["SmolLM2-360M-Instruct-q4f32_1-MLC"]         = (580,  "580 MB"),
-        ["SmolLM2-1.7B-Instruct-q4f16_1-MLC"]         = (1774, "1.8 GB"),
-        ["Qwen2.5-0.5B-Instruct-q4f32_1-MLC"]         = (1060, "1.1 GB"),
-        ["Qwen2.5-1.5B-Instruct-q4f32_1-MLC"]         = (1888, "1.9 GB"),
-        ["Qwen2.5-7B-Instruct-q4f16_1-MLC"]           = (5107, "5.1 GB"),
-        ["Llama-3.2-1B-Instruct-q4f16_1-MLC"]         = (879,  "879 MB"),
-        ["Llama-3.2-3B-Instruct-q4f16_1-MLC"]         = (2264, "2.3 GB"),
-        ["Llama-3.1-8B-Instruct-q4f16_1-MLC"]         = (5001, "5.0 GB"),
-        ["Phi-3.5-mini-instruct-q4f32_1-MLC"]         = (5483, "5.5 GB"),
-        ["Phi-4-mini-instruct-q4f16_1-MLC"]           = (3437, "3.4 GB"),
-        ["Mistral-7B-Instruct-v0.3-q4f16_1-MLC"]      = (4573, "4.6 GB"),
-        ["gemma-2-2b-it-q4f16_1-MLC"]                 = (1895, "1.9 GB"),
-        ["gemma3-1b-it-q4f16_1-MLC"]                  = (711,  "711 MB"),
-        ["Qwen3-1.7B-q4f16_1-MLC"]                    = (2037, "2.0 GB"),
-        ["DeepSeek-R1-Distill-Llama-8B-q4f16_1-MLC"]  = (5001, "5.0 GB"),
-    };
 
     // ── Fields ───────────────────────────────────────────────────────────────
     private bool _loading = true;
@@ -425,8 +254,8 @@
         var apiModels = await ApiClient.GetModelsAsync();
         _models = (apiModels ?? [])
             .Where(m => m.ModelType == ModelType.Local && !string.IsNullOrWhiteSpace(m.WebLlmModelId))
-            .OrderBy(m => _vramTable.TryGetValue(m.WebLlmModelId!, out var v) ? v.Mb : int.MaxValue)
             .Select(m => new ModelDiagState { Model = m })
+            .OrderBy(s => s.VramMb == 0 ? int.MaxValue : s.VramMb)
             .ToList();
         _loading = false;
     }
@@ -646,24 +475,6 @@
             });
         }
         catch { /* sessionStorage not available or corrupted — ignore */ }
-    }
-
-    private static string GetCardClass(ModelDiagState s) => s.Status switch
-    {
-        DiagStatus.Loading or DiagStatus.Generating => "lab__card--running",
-        DiagStatus.Complete                         => "lab__card--complete",
-        DiagStatus.Error                            => "lab__card--error",
-        DiagStatus.Cancelled                        => "lab__card--cancelled",
-        _                                           => ""
-    };
-
-    // O3: Bold colored left border based on download + status
-    private static string GetCardDownloadClass(ModelDiagState s)
-    {
-        if (s.Status is DiagStatus.Error) return "lab__card--border-error";
-        if (s.IsDownloaded == true) return "lab__card--border-ready";
-        if (s.IsDownloaded == false) return "lab__card--border-missing";
-        return ""; // null = still checking
     }
 
     private static string FormatMs(int ms) => ms < 0 ? "—" : ms < 1000 ? $"{ms} ms" : $"{ms / 1000.0:F1} s";

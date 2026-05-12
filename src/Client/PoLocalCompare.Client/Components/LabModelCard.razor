@@ -1,0 +1,164 @@
+@using PoLocalCompare.Client.Pages
+
+<div class="lab__card @GetCardClass(State) @GetCardDownloadClass(State)">
+
+    @* Header row *@
+    <div class="lab__card-header">
+        <div class="lab__card-title">
+            <span class="lab__model-name">@State.Model.DisplayName</span>
+            @if (State.VramMb > 0)
+            {
+                <span class="lab__vram-badge lab__vram-badge--@State.VramTier"
+                      title="Estimated GPU VRAM required: @State.VramLabel">@State.VramLabel</span>
+            }
+            @if (State.VramTier == "warn")
+            {
+                <span class="lab__vram-warn" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
+            }
+        </div>
+        <div class="lab__card-actions">
+            @if (State.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
+            {
+                <button class="lab__btn-sm lab__btn-sm--run"
+                        title="Run diagnostic"
+                        @onclick="HandleRun"
+                        disabled="@(State.IsDownloaded != true || WebGpuSupported != true)">
+                    ▶
+                </button>
+            }
+            else
+            {
+                <button class="lab__btn-sm lab__btn-sm--cancel"
+                        title="Cancel"
+                        @onclick="HandleCancel">
+                    ■
+                </button>
+            }
+        </div>
+    </div>
+
+    @* Model ID chip *@
+    <div class="lab__model-id">@State.Model.WebLlmModelId</div>
+
+    @* Download status *@
+    <div class="lab__download-row">
+        @if (State.IsDownloaded is null)
+        {
+            <span class="lab__badge lab__badge--checking">⏳ Checking…</span>
+        }
+        else if (State.IsDownloaded == true)
+        {
+            <span class="lab__badge lab__badge--ok">✅ Downloaded</span>
+        }
+        else
+        {
+            <span class="lab__badge lab__badge--missing">⚠ Model assets missing</span>
+        }
+    </div>
+    @if (State.IsDownloaded == false)
+    {
+        <details class="lab__download-hint">
+            <summary class="lab__download-hint-summary">How to download</summary>
+            <code class="lab__download-cmd">python download-models.py</code>
+            <span class="lab__download-note">Expected asset: /models/@State.Model.WebLlmModelId/mlc-chat-config.json</span>
+        </details>
+    }
+
+    @* Running: progress bar + step detail *@
+    @if (State.Status is DiagStatus.Loading or DiagStatus.Generating)
+    {
+        <div class="lab__progress-track">
+            <div class="lab__progress-fill" style="width: @(State.LoadProgress)%"></div>
+        </div>
+        <div class="lab__step-detail">@State.StepDetail</div>
+    }
+
+    @* Error *@
+    @if (State.Status == DiagStatus.Error)
+    {
+        <div class="lab__error">❌ @State.ErrorMessage</div>
+    }
+
+    @* Cancelled *@
+    @if (State.Status == DiagStatus.Cancelled)
+    {
+        <div class="lab__cancelled">⊘ Cancelled</div>
+    }
+
+    @* Results *@
+    @if (State.Status == DiagStatus.Complete)
+    {
+        <div class="lab__metrics">
+            <div class="lab__metric">
+                <span class="lab__metric-label">Load</span>
+                <span class="lab__metric-value">
+                    @FormatMs(State.LoadMs)
+                    @if (State.WarmCache) { <span class="lab__warm-badge" title="GPU shaders cached — subsequent loads are faster">⚡</span> }
+                </span>
+            </div>
+            <div class="lab__metric">
+                <span class="lab__metric-label">1st Token</span>
+                <span class="lab__metric-value">@FormatMs(State.FirstTokenMs)</span>
+            </div>
+            <div class="lab__metric lab__metric--highlight">
+                <span class="lab__metric-label">Tok/s</span>
+                <span class="lab__metric-value">@State.TokensPerSec</span>
+            </div>
+            <div class="lab__metric">
+                <span class="lab__metric-label">Tokens</span>
+                <span class="lab__metric-value">@State.TotalTokens</span>
+            </div>
+            <div class="lab__metric">
+                <span class="lab__metric-label">Quality</span>
+                <span class="lab__metric-value">@CompletenessScore(State)%</span>
+            </div>
+        </div>
+        <button class="lab__output-toggle" @onclick="HandleToggleOutput">
+            @(State.ShowOutput ? "▲ Hide output" : "▼ Show output")
+        </button>
+        @if (State.ShowOutput)
+        {
+            <pre class="lab__output">@State.Output</pre>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ModelDiagState State { get; set; } = null!;
+    [Parameter] public bool? WebGpuSupported { get; set; }
+    [Parameter] public EventCallback<ModelDiagState> OnRun { get; set; }
+    [Parameter] public EventCallback<ModelDiagState> OnCancel { get; set; }
+    [Parameter] public EventCallback<ModelDiagState> OnToggleOutput { get; set; }
+
+    private Task HandleRun()    => OnRun.InvokeAsync(State);
+    private Task HandleCancel() => OnCancel.InvokeAsync(State);
+
+    private async Task HandleToggleOutput()
+    {
+        State.ShowOutput = !State.ShowOutput;
+        await OnToggleOutput.InvokeAsync(State);
+    }
+
+    private static string GetCardClass(ModelDiagState s) => s.Status switch
+    {
+        DiagStatus.Loading or DiagStatus.Generating => "lab__card--running",
+        DiagStatus.Complete                         => "lab__card--complete",
+        DiagStatus.Error                            => "lab__card--error",
+        DiagStatus.Cancelled                        => "lab__card--cancelled",
+        _                                           => ""
+    };
+
+    private static string GetCardDownloadClass(ModelDiagState s)
+    {
+        if (s.Status is DiagStatus.Error) return "lab__card--border-error";
+        if (s.IsDownloaded == true)  return "lab__card--border-ready";
+        if (s.IsDownloaded == false) return "lab__card--border-missing";
+        return ""; // null = still checking
+    }
+
+    private static string FormatMs(int ms) =>
+        ms < 0 ? "—" : ms < 1000 ? $"{ms} ms" : $"{ms / 1000.0:F1} s";
+
+    private static int CompletenessScore(ModelDiagState m) =>
+        m.TotalTokens <= 0 ? 0 : Math.Min(100, (int)((m.TotalTokens / 256.0) * 100));
+}

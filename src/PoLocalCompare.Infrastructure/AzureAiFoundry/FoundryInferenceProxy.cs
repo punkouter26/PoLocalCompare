@@ -16,12 +16,16 @@ namespace PoLocalCompare.Infrastructure.AzureAiFoundry;
 /// </summary>
 public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
 {
-    private static readonly HttpClient _http = new();
+    private readonly HttpClient _http;
     private readonly IConfiguration _configuration;
     private readonly ILogger<FoundryInferenceProxy> _logger;
 
-    public FoundryInferenceProxy(IConfiguration configuration, ILogger<FoundryInferenceProxy> logger)
+    public FoundryInferenceProxy(
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        ILogger<FoundryInferenceProxy> logger)
     {
+        _http = httpClientFactory.CreateClient("Foundry");
         _configuration = configuration;
         _logger = logger;
     }

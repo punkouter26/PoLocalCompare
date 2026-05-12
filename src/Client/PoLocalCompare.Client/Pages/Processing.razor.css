@@ -1,0 +1,132 @@
+.processing-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+    color: #e5e7eb;
+}
+
+.processing-page__title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #eab308;
+    margin-bottom: 0.25rem;
+}
+
+.processing-page__debug {
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--oled-text-muted);
+}
+
+.processing-page__debug summary {
+    cursor: pointer;
+    color: var(--oled-text-muted);
+    user-select: none;
+    font-size: 0.75rem;
+}
+
+.processing-page__duel-id {
+    color: #6b7280;
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+}
+
+.processing-page__controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.75rem;
+}
+
+.processing-page__toggle {
+    border: 1px solid #374151;
+    border-radius: 6px;
+    background: #111;
+    color: #d1d5db;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+}
+
+.processing-page__toggle:hover {
+    color: #fff;
+    border-color: #4b5563;
+}
+
+.processing-page__panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+@media (max-width: 1023px) {
+    .processing-page__panels {
+        grid-template-columns: 1fr;
+        scroll-snap-type: y mandatory;
+        overflow-y: scroll;
+        max-height: calc(100vh - 150px);
+    }
+
+    .processing-page__panels > * {
+        scroll-snap-align: start;
+    }
+}
+
+.processing-page__preview-heading {
+    margin-top: 2.5rem;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.processing-page__preview-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.processing-page__previews {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.processing-page__preview-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.processing-page__preview-model {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #9ca3af;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.processing-page__preview-waiting {
+    height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed #374151;
+    border-radius: 6px;
+    color: #4b5563;
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* Shrink the iframe height in preview context (default 500px is too tall during generation) */
+.processing-page__preview-panel ::deep .sandboxed-viewport__frame {
+    min-height: 350px;
+    max-height: 450px;
+}
+
+@media (max-width: 1023px) {
+    .processing-page__previews {
+        grid-template-columns: 1fr;
+    }
+}

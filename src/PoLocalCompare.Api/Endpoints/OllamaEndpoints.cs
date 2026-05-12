@@ -6,20 +6,20 @@ namespace PoLocalCompare.Api.Endpoints;
 
 public static class OllamaEndpoints
 {
-    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
-
     public static IEndpointRouteBuilder MapOllamaEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/ollama").WithTags("Ollama");
 
         group.MapGet("/gpu-status", async (
+            [FromServices] IHttpClientFactory httpClientFactory,
             [FromServices] IConfiguration config,
             [FromServices] ILogger<OllamaEndpointsMarker> logger) =>
         {
+            var http = httpClientFactory.CreateClient("OllamaStatus");
             var baseUrl = (config["Ollama:BaseUrl"] ?? "http://localhost:11434").TrimEnd('/');
             try
             {
-                var ps = await _http.GetFromJsonAsync<OllamaPsResponse>($"{baseUrl}/api/ps");
+                var ps = await http.GetFromJsonAsync<OllamaPsResponse>($"{baseUrl}/api/ps");
                 if (ps?.Models is null)
                     return Results.Ok(Array.Empty<OllamaGpuStatusDto>());
 

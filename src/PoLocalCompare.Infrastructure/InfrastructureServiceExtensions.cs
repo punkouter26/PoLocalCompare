@@ -37,8 +37,15 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IEloHistoryRepository, EloHistoryRepository>();
         services.AddScoped<IDuelResultRepository, DuelResultRepository>();
 
+        // Named HttpClient registrations — managed by IHttpClientFactory for proper socket lifecycle
+        services.AddHttpClient("Ollama", client =>
+        {
+            // Timeout is controlled by the CancellationToken watchdog; HttpClient.Timeout must not fire first.
+            client.Timeout = Timeout.InfiniteTimeSpan;
+        });
+        services.AddHttpClient("Foundry");
+
         // Remote inference proxies — keyed by ModelType name so DuelExecutionService can resolve the right one
-        // Note: HttpClient instances are managed via IHttpClientFactory in .NET 10 for proper lifecycle
         services.AddKeyedScoped<IRemoteInferenceProxy, FoundryInferenceProxy>("Remote");
         services.AddKeyedScoped<IRemoteInferenceProxy, OllamaInferenceProxy>("LocalService");
 
