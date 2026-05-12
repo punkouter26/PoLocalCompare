@@ -54,6 +54,11 @@ public sealed class ModelRepository : IModelRepository
         await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace);
     }
 
+    public async Task DeleteAsync(string modelId)
+    {
+        await _tableClient.DeleteEntityAsync(PartitionKey, modelId);
+    }
+
     private static TableEntity MapToEntity(Model model)
     {
         var entity = new TableEntity(PartitionKey, model.ModelId)

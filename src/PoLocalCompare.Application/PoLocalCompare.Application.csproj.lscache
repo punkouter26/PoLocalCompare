@@ -57,7 +57,6 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 Archive/ExportLabReport/
  ExportLabReportCommand.cs
  ExportLabReportHandler.cs
-Class1.cs
 Duels/CommenceDuel/
  CommenceDuelCommand.cs
  CommenceDuelHandler.cs

@@ -62,30 +62,7 @@
             />
         </div>
 
-        @* ── 2. SLOT ASSIGNMENT HEADER (C2) ── *@
-        <div class="war-room__assign-slots">
-            <div class="war-room__slot @(_activeSlot == "Left" ? "war-room__slot--active" : "") @(_leftModel != null ? "war-room__slot--set" : "")"
-                 @onclick="@(() => _activeSlot = "Left")">
-                <span class="war-room__slot-side">⬅ Left Challenger</span>
-                <span class="war-room__slot-name">@(_leftModel?.DisplayName ?? "Click here, then pick a model below")</span>
-                @if (_leftModel != null)
-                {
-                    <button class="war-room__slot-clear" @onclick:stopPropagation="true" @onclick="@(() => { _leftModel = null; _activeSlot = "Left"; })">✕</button>
-                }
-            </div>
-            <div class="war-room__slot-vs">VS</div>
-            <div class="war-room__slot @(_activeSlot == "Right" ? "war-room__slot--active" : "") @(_rightModel != null ? "war-room__slot--set" : "")"
-                 @onclick="@(() => _activeSlot = "Right")">
-                <span class="war-room__slot-side">Right Challenger ➡</span>
-                <span class="war-room__slot-name">@(_rightModel?.DisplayName ?? "Click here, then pick a model below")</span>
-                @if (_rightModel != null)
-                {
-                    <button class="war-room__slot-clear" @onclick:stopPropagation="true" @onclick="@(() => { _rightModel = null; _activeSlot = "Right"; })">✕</button>
-                }
-            </div>
-        </div>
-
-        @* ── 3. TYPE FILTER + UNIFIED MODEL POOL (C2) ── *@
+        @* ── 2. TYPE FILTER + UNIFIED MODEL POOL ── *@
         <div class="war-room__type-filter">
             @foreach (var label in new[] { "All", "Local", "Remote", "Service" })
             {
@@ -97,9 +74,6 @@
         </div>
 
         <div class="war-room__pool">
-            <p class="war-room__pool-hint">
-                Assigning to: <strong>@_activeSlot</strong> slot — click a model card to assign it
-            </p>
             @if (!_filteredModels.Any())
             {
                 <p class="war-room__empty">No models match this filter.</p>
@@ -112,9 +86,10 @@
                         Model="model"
                         LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
                         IsSelected="@(model.ModelId == _leftModel?.ModelId || model.ModelId == _rightModel?.ModelId)"
+                        Slot="@(model.ModelId == _leftModel?.ModelId ? "Left" : model.ModelId == _rightModel?.ModelId ? "Right" : null)"
                         IsDisabled="false"
-                        OnSelected="AssignToActiveSlot"
-                        ProjectedEloGain="@ComputeProjectedGain(model, _activeSlot == "Left" ? _rightModel : _leftModel)" />
+                        OnSelected="AssignModel"
+                        ProjectedEloGain="@ComputeProjectedGain(model)" />
                 }
             }
         </div>
@@ -134,15 +109,11 @@
                 <p class="war-room__validation-hint">
                     @if (_leftModel is null && _rightModel is null)
                     {
-                        @("Assign a model to each slot above to continue.")
+                        @("Pick two models below to continue.")
                     }
-                    else if (_leftModel is null)
+                    else if (_leftModel is null || _rightModel is null)
                     {
-                        @("Assign a Left Challenger to continue.")
-                    }
-                    else if (_rightModel is null)
-                    {
-                        @("Assign a Right Challenger to continue.")
+                        @("Pick a second model to continue.")
                     }
                     else if (string.IsNullOrWhiteSpace(_promptText))
                     {
@@ -178,6 +149,7 @@
 
     private string _typeFilter = "All";
     private IEnumerable<ModelDto> _filteredModels => FilteredModels(_typeFilter);
+
 
     private IEnumerable<ModelDto> FilteredModels(string filter) => filter switch
     {
@@ -234,34 +206,31 @@
     private void SelectLeft(ModelDto model) => _leftModel = model;
     private void SelectRight(ModelDto model) => _rightModel = model;
 
-    // ── Unified slot assignment (C2) ──────────────────────────────────────
-    private string _activeSlot = "Left";
-
-    private void AssignToActiveSlot(ModelDto model)
+    // ── Sequential model selection: 1st click = left, 2nd click = right ──
+    private void AssignModel(ModelDto model)
     {
-        if (_activeSlot == "Left")
-        {
-            _leftModel = model;
-            // Clear right if it was the same model
-            if (_rightModel?.ModelId == model.ModelId)
-                _rightModel = null;
-            // Auto-advance to right if unset
-            if (_rightModel is null)
-                _activeSlot = "Right";
-        }
-        else
-        {
-            _rightModel = model;
-            // Clear left if it was the same model
-            if (_leftModel?.ModelId == model.ModelId)
-                _leftModel = null;
-            // Auto-advance back to left if unset
-            if (_leftModel is null)
-                _activeSlot = "Left";
-        }
+        // Toggle off if already selected
+        if (_leftModel?.ModelId == model.ModelId) { _leftModel = null; return; }
+        if (_rightModel?.ModelId == model.ModelId) { _rightModel = null; return; }
+
+        // Fill left first, then right
+        if (_leftModel is null) { _leftModel = model; return; }
+        if (_rightModel is null) { _rightModel = model; return; }
+
+        // Both filled — replace right
+        _rightModel = model;
     }
 
-    private double? ComputeProjectedGain(ModelDto? challenger, ModelDto? opponent)
+    private double? ComputeProjectedGain(ModelDto model)
+    {
+        // Show gain for selected models against their opponent
+        if (model.ModelId == _leftModel?.ModelId) return ComputeGain(model, _rightModel);
+        if (model.ModelId == _rightModel?.ModelId) return ComputeGain(model, _leftModel);
+        // Unselected: show gain vs whichever opponent is already picked
+        return ComputeGain(model, _leftModel ?? _rightModel);
+    }
+
+    private static double? ComputeGain(ModelDto? challenger, ModelDto? opponent)
     {
         if (challenger is null || opponent is null) return null;
         var expected = 1.0 / (1.0 + Math.Pow(10.0, (opponent.CurrentElo - challenger.CurrentElo) / 400.0));

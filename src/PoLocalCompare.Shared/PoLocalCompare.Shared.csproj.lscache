@@ -54,7 +54,6 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 /warnaserror+:NU1605,SYSLIB0011
 
 [sourceFiles]
-Class1.cs
 DTOs/
  DuelDto.cs
  DuelResultDto.cs
@@ -63,6 +62,7 @@ DTOs/
  LeaderboardEntryDto.cs
  ModelDto.cs
  ModelStatusUpdateDto.cs
+ OllamaGpuStatusDto.cs
  VerdictRequestDto.cs
  VerdictResponseDto.cs
 Enums/

@@ -5,9 +5,13 @@
     <div class="model-card__header">
         <span class="model-card__name">@(LabelOverride ?? Model.DisplayName)</span>
         <div style="display:flex;align-items:center;gap:0.4rem;">
-            @if (IsSelected)
+            @if (Slot == "Left")
             {
-                <span class="model-card__checkmark" title="Selected">✔</span>
+                <span class="model-card__slot-badge model-card__slot-badge--left" title="Left player">L</span>
+            }
+            else if (Slot == "Right")
+            {
+                <span class="model-card__slot-badge model-card__slot-badge--right" title="Right player">R</span>
             }
             <span class="model-card__badge model-card__badge--@(Model.ModelType.ToString().ToLower())">
                 @(Model.ModelType == ModelType.LocalService ? "SVC" : Model.ModelType.ToString().ToUpper())
@@ -32,6 +36,7 @@
     [Parameter, EditorRequired] public ModelDto Model { get; set; } = null!;
     [Parameter] public string? LabelOverride { get; set; }
     [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public string? Slot { get; set; }  // "Left", "Right", or null
     [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
     [Parameter] public double? ProjectedEloGain { get; set; }
@@ -103,11 +108,26 @@
         transform: scaleY(1);
     }
 
-    .model-card__checkmark {
-        color: var(--oled-green);
-        font-size: 1rem;
+    .model-card__slot-badge {
+        font-size: 0.7rem;
         font-weight: 700;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         animation: scaleIn 0.3s var(--spring-bounce);
+    }
+
+    .model-card__slot-badge--left {
+        background: var(--oled-cyan);
+        color: #000;
+    }
+
+    .model-card__slot-badge--right {
+        background: #f59e0b;
+        color: #000;
     }
 
     .model-card__header {

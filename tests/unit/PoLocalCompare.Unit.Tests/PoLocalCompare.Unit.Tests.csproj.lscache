@@ -61,7 +61,6 @@ obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  PoLocalCompare.Unit.Tests.AssemblyInfo.cs
  PoLocalCompare.Unit.Tests.GlobalUsings.g.cs
-UnitTest1.cs
 
 [metadataReferences]
 ../../../src/

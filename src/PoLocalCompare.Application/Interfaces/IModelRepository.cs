@@ -9,4 +9,5 @@ public interface IModelRepository
     Task<IEnumerable<Model>> GetAllAsync();
     Task SaveAsync(Model model);
     Task UpdateAsync(Model model);
+    Task DeleteAsync(string modelId);
 }

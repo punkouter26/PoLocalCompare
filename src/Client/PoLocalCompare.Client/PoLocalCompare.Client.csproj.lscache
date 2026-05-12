@@ -62,10 +62,12 @@ obj/Debug/net10.0/
  PoLocalCompare.Client.AssemblyInfo.cs
  PoLocalCompare.Client.GlobalUsings.g.cs
  ValidatableTypeAttribute.cs
+Pages/LocalModelLabTypes.cs
 Program.cs
 Services/
  AudioService.cs
  DuelApiClient.cs
+ PromptTemplatesService.cs
  SignalRDuelClient.cs
  WebLlmService.cs
 
@@ -310,10 +312,13 @@ obj/Debug/net10.0/PoLocalCompare.Client.GeneratedMSBuildEditorConfig.editorconfi
 App.razor
 Components/
  EloSparkline.razor
+ LabModelCard.razor
  MockDataBanner.razor
  ModelCard.razor
+ ModelSelectionColumn.razor
  ProcessingPanel.razor
  SandboxedViewport.razor
+ SkeletonLoader.razor
  TelemetryHud.razor
 Layout/
  MainLayout.razor
@@ -321,24 +326,25 @@ Layout/
 Pages/
  Archive.razor
  Arena.razor
- Counter.razor
  Home.razor
  Leaderboard.razor
  LocalModelLab.razor
  NotFound.razor
  Processing.razor
  WarRoom.razor
- Weather.razor
 _Imports.razor
 
 [dynamicFiles]
 App.razor
 Components/
  EloSparkline.razor
+ LabModelCard.razor
  MockDataBanner.razor
  ModelCard.razor
+ ModelSelectionColumn.razor
  ProcessingPanel.razor
  SandboxedViewport.razor
+ SkeletonLoader.razor
  TelemetryHud.razor
 Layout/
  MainLayout.razor
@@ -346,12 +352,10 @@ Layout/
 Pages/
  Archive.razor
  Arena.razor
- Counter.razor
  Home.razor
  Leaderboard.razor
  LocalModelLab.razor
  NotFound.razor
  Processing.razor
  WarRoom.razor
- Weather.razor
 _Imports.razor

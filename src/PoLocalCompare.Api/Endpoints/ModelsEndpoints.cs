@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
+using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Application.Models.ListModels;
 using PoLocalCompare.Application.Models.RegisterModel;
 using PoLocalCompare.Shared.DTOs;
@@ -88,6 +89,20 @@ public static class ModelsEndpoints
         .WithName("GetModelDownloadStatus")
         .WithSummary("Checks whether a local WebLLM model asset has been downloaded.")
         .Produces<ModelDownloadStatusDto>();
+
+        group.MapDelete("/{modelId}", async (
+            [FromRoute] string modelId,
+            [FromServices] IModelRepository repository) =>
+        {
+            var model = await repository.GetByIdAsync(modelId);
+            if (model is null) return Results.NotFound();
+            await repository.DeleteAsync(modelId);
+            return Results.NoContent();
+        })
+        .WithName("DeleteModel")
+        .WithSummary("Removes a model from the registry.")
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status404NotFound);
 
         return app;
     }

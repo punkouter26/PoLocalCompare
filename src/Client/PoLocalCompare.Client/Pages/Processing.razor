@@ -17,11 +17,6 @@
         <summary>Debug</summary>
         <p class="processing-page__duel-id">Duel ID: @DuelId</p>
     </details>
-    <div class="processing-page__controls">
-        <button class="processing-page__toggle" @onclick="ToggleAdvanced">
-            @(_showAdvanced ? "Hide Advanced Metrics" : "Show Advanced Metrics")
-        </button>
-    </div>
 
     <div class="processing-page__panels">
         <ProcessingPanel
@@ -160,7 +155,7 @@
     private string? _rightHtmlPreview;
     private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
     private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
-    private bool _showAdvanced;
+    private bool _showAdvanced = true;
 
     // Track in-flight local inference tasks to avoid double-starting
     private readonly HashSet<string> _runningLocalModels = [];
@@ -466,7 +461,7 @@
         _ = Task.Run(() => RunLocalInferenceAsync(payload));
     }
 
-    private void ToggleAdvanced() => _showAdvanced = !_showAdvanced;
+
 
     private async Task RunLocalInferenceAsync(StartLocalInferencePayload payload)
     {
