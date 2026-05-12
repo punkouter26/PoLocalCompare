@@ -18,28 +18,31 @@
 
     @* ── Stat Strip (C1) ── *@
     <div class="home__stats">
-        <div class="home__stat">
+        <div class="home__stat" style="--stagger-index: 0;">
             <span class="home__stat-value">@_totalDuels</span>
             <span class="home__stat-label">Duels Fought</span>
         </div>
-        <div class="home__stat">
+        <div class="home__stat" style="--stagger-index: 1;">
             <span class="home__stat-value">@_activeModels</span>
             <span class="home__stat-label">Active Models</span>
         </div>
-        <div class="home__stat">
+        <div class="home__stat" style="--stagger-index: 2;">
             <span class="home__stat-value">@(_topModel ?? "—")</span>
             <span class="home__stat-label">Top Ranked</span>
         </div>
-        <div class="home__stat @(_unratedCount > 0 ? "home__stat--alert" : "")">
+        <div class="home__stat @(_unratedCount > 0 ? "home__stat--alert" : "")" style="--stagger-index: 3;">
             <span class="home__stat-value">@_unratedCount</span>
             <span class="home__stat-label">Need Verdict</span>
         </div>
     </div>
 
-    <div class="home__system">
+    <div class="home__system @(_systemRefreshing ? "home__system--refreshing" : "")">
         <div class="home__system-head">
             <h2 class="home__system-title">System Status</h2>
-            <button class="home__system-refresh" @onclick="RefreshSystemAsync">Run Smoke Test</button>
+            <div class="home__system-actions">
+                <button class="home__system-refresh" @onclick="RefreshSystemAsync">Run Smoke Test</button>
+                <button class="home__system-diagnostics" @onclick="ToggleDiagnostics">Diagnostics</button>
+            </div>
         </div>
         @if (_systemLoading)
         {
@@ -69,6 +72,48 @@
             {
                 <p class="home__system-note">@_systemNote</p>
             }
+
+            @if (_showDiagnostics)
+            {
+                <div class="home__diagnostics" role="region" aria-label="Diagnostics Drawer">
+                    <div class="home__diagnostics-head">
+                        <h3>Runtime Diagnostics</h3>
+                        <button class="home__diagnostics-close" @onclick="ToggleDiagnostics">Close</button>
+                    </div>
+
+                    <div class="home__diagnostics-metrics">
+                        <div class="home__diagnostics-pill @(_apiHealthy ? "home__diagnostics-pill--ok" : "home__diagnostics-pill--bad")">
+                            API @(_apiHealthy ? "Healthy" : "Degraded")
+                        </div>
+                        <div class="home__diagnostics-pill @(_modelsReady ? "home__diagnostics-pill--ok" : "home__diagnostics-pill--bad")">
+                            Model Readiness: @(_modelsReady ? "Ready" : "Needs Attention")
+                        </div>
+                        <div class="home__diagnostics-pill">
+                            Ready Basis: @_systemServiceModelCount service / @_systemModelCount total
+                        </div>
+                    </div>
+
+                    @if (_diagnosticWarnings.Count == 0)
+                    {
+                        <p class="home__diagnostics-empty">No warnings or errors in the latest snapshot.</p>
+                    }
+                    else
+                    {
+                        <ul class="home__diagnostics-list">
+                            @foreach (var warning in _diagnosticWarnings)
+                            {
+                                <li class="home__diagnostics-item home__diagnostics-item--@warning.Level.ToLowerInvariant()">
+                                    <span class="home__diagnostics-level">@warning.Level</span>
+                                    <span class="home__diagnostics-message">@warning.Message</span>
+                                    <span class="home__diagnostics-meta">@warning.Timestamp · @warning.Source</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    <p class="home__diagnostics-stamp">Updated @(_diagnosticUpdatedAt is null ? "just now" : _diagnosticUpdatedAt.Value.LocalDateTime.ToString("HH:mm:ss"))</p>
+                </div>
+            }
         }
     </div>
 
@@ -78,11 +123,12 @@
         <div class="home__recent">
             <h2 class="home__recent-title">Recent Duels</h2>
             <div class="home__recent-list">
-                @foreach (var d in _recentDuels)
+                @for (var i = 0; i < _recentDuels.Count; i++)
                 {
+                    var d = _recentDuels[i];
                     var isPending = d.Verdict == DuelVerdict.Pending;
                     var href = isPending ? $"/arena/{d.DuelId}" : "/archive";
-                    <a href="@href" class="home__recent-item @(isPending ? "home__recent-item--unrated" : "")">
+                    <a href="@href" class="home__recent-item @(isPending ? "home__recent-item--unrated" : "")" style="--stagger-index: @i;">
                         <span class="home__recent-prompt">@d.PromptSummary</span>
                         <span class="home__recent-vs">@d.LeftModelName <em>vs</em> @d.RightModelName</span>
                         @if (d.Verdict == DuelVerdict.Left)
@@ -147,6 +193,11 @@
     private int _systemModelCount;
     private int _systemServiceModelCount;
     private string? _systemNote;
+    private bool _showDiagnostics;
+    private bool _systemRefreshing;
+    private bool _modelsReady;
+    private DateTimeOffset? _diagnosticUpdatedAt;
+    private IReadOnlyList<DuelApiClient.DiagnosticsWarningEntryDto> _diagnosticWarnings = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -174,15 +225,18 @@
     private async Task RefreshSystemAsync()
     {
         _systemLoading = true;
+        _systemRefreshing = true;
         _systemNote = null;
         try
         {
             var healthTask = ApiClient.GetHealthSnapshotAsync();
             var smokeTask = ApiClient.GetSmokeSnapshotAsync();
-            await Task.WhenAll(healthTask, smokeTask);
+            var warningsTask = ApiClient.GetDiagnosticsWarningsAsync(6);
+            await Task.WhenAll(healthTask, smokeTask, warningsTask);
 
             var health = healthTask.Result;
             var smoke = smokeTask.Result;
+            var warnings = warningsTask.Result;
             _apiHealthy = string.Equals(health?.Status, "Healthy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(smoke?.Status, "Healthy", StringComparison.OrdinalIgnoreCase);
 
@@ -197,19 +251,33 @@
                 _runtimeMode = "Unknown";
             }
 
+            _modelsReady = _systemModelCount > 0 && (_systemServiceModelCount > 0 || _runtimeMode.StartsWith("Cloud", StringComparison.OrdinalIgnoreCase));
+            _diagnosticWarnings = warnings?.Entries ?? [];
+            _diagnosticUpdatedAt = warnings?.GeneratedAtUtc ?? DateTimeOffset.UtcNow;
+
             _systemNote = $"Updated {DateTime.Now:HH:mm:ss}";
         }
         catch
         {
             _apiHealthy = false;
             _runtimeMode = "Unknown";
+            _modelsReady = false;
+            _diagnosticWarnings = [];
+            _diagnosticUpdatedAt = DateTimeOffset.UtcNow;
             _systemNote = "Smoke test failed. Check API logs.";
         }
         finally
         {
             _systemLoading = false;
+            _ = Task.Delay(750).ContinueWith(_ =>
+            {
+                _systemRefreshing = false;
+                InvokeAsync(StateHasChanged);
+            });
         }
     }
+
+    private void ToggleDiagnostics() => _showDiagnostics = !_showDiagnostics;
 
     private async Task DoResetAsync()
     {

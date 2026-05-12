@@ -227,6 +227,18 @@ public sealed class DuelApiClient
         }
     }
 
+    public async Task<DiagnosticsWarningsDto?> GetDiagnosticsWarningsAsync(int limit = 5)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<DiagnosticsWarningsDto>($"/api/diag/warnings?limit={limit}", JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private sealed class ModelDownloadStatusResponse
     {
         public bool Downloaded { get; set; }
@@ -249,5 +261,19 @@ public sealed class DuelApiClient
         public int Total { get; set; }
         public int LocalService { get; set; }
         public bool CloudMode { get; set; }
+    }
+
+    public sealed class DiagnosticsWarningsDto
+    {
+        public DateTimeOffset GeneratedAtUtc { get; set; }
+        public IReadOnlyList<DiagnosticsWarningEntryDto> Entries { get; set; } = [];
+    }
+
+    public sealed class DiagnosticsWarningEntryDto
+    {
+        public string Level { get; set; } = "Warning";
+        public string Timestamp { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string Source { get; set; } = string.Empty;
     }
 }
