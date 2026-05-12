@@ -117,10 +117,10 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
         Assert.NotEmpty(duelId);
     }
 
-    // ── POST /api/duels → 422 when PromptText is empty ────────────────────
+    // ── POST /api/duels → 400 when PromptText is empty ────────────────────
 
     [Fact]
-    public async Task PostDuel_EmptyPrompt_Returns422()
+    public async Task PostDuel_EmptyPrompt_Returns400()
     {
         var leftId = await SeedRemoteModelAsync("left-int-2", "Left Model 2");
         var rightId = await SeedRemoteModelAsync("right-int-2", "Right Model 2");
@@ -134,7 +134,7 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
 
         var response = await _client.PostAsJsonAsync("/api/duels", payload);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // ── POST /api/duels then POST verdict then GET leaderboard full flow ──

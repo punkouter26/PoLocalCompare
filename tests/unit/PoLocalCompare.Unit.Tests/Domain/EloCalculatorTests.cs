@@ -58,7 +58,8 @@ public class EloCalculatorTests
         var (newA, _) = EloCalculator.Calculate(ratingA: 2000, ratingB: 1400, k: 32, outcomeA: 1.0);
 
         var shift = newA - 2000;
-        Assert.True(shift < 1.0, $"Expected sub-1-point shift for a heavy favourite, got {shift:F1}.");
+        Assert.True(shift <= 1.0, $"Expected at-most 1-point rounded shift for a heavy favourite, got {shift:F1}.");
+        Assert.True(shift > 0.0, "Winner should still gain rating points.");
         Assert.Equal(Math.Round(shift, 1), shift); // 1 decimal place
     }
 

@@ -81,8 +81,11 @@ try
     // Override them back to Azurite so local runs don't hit the real storage account.
     if (builder.Environment.IsDevelopment())
     {
-        builder.Configuration["ConnectionStrings:AzureTableStorage"] = "UseDevelopmentStorage=true";
-        builder.Configuration["ConnectionStrings:AzureBlobStorage"]  = "UseDevelopmentStorage=true";
+        if (string.IsNullOrWhiteSpace(builder.Configuration["ConnectionStrings:AzureTableStorage"]))
+            builder.Configuration["ConnectionStrings:AzureTableStorage"] = "UseDevelopmentStorage=true";
+
+        if (string.IsNullOrWhiteSpace(builder.Configuration["ConnectionStrings:AzureBlobStorage"]))
+            builder.Configuration["ConnectionStrings:AzureBlobStorage"] = "UseDevelopmentStorage=true";
     }
 
     if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(builder.Configuration["AzureAiFoundry:ApiKey"]))
