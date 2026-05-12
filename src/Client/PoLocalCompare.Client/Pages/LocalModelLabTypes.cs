@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Client.Pages;
@@ -19,6 +20,8 @@ public sealed class ModelDiagState
     public string? ErrorMessage { get; set; }
     public bool ShowOutput { get; set; }
     public bool WarmCache { get; set; }
+
+    [JsonIgnore]
     public TaskCompletionSource<bool> _completion { get; private set; } =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 

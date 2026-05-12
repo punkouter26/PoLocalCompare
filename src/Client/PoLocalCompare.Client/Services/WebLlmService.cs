@@ -2,6 +2,7 @@ using Microsoft.JSInterop;
 using PoLocalCompare.Client.Services;
 using PoLocalCompare.Shared.DTOs;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 using System.Threading.Channels;
 
 namespace PoLocalCompare.Client.Services;
@@ -110,6 +111,8 @@ public sealed class WebLlmService : IAsyncDisposable
     {
         public Channel<WebLlmStatusUpdate> Channel { get; } =
             System.Threading.Channels.Channel.CreateUnbounded<WebLlmStatusUpdate>();
+
+        [JsonIgnore]
         public TaskCompletionSource<DuelResultPayload> CompletionSource { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
