@@ -21,6 +21,8 @@ public sealed class DuelRepository : IDuelRepository
 
     public async Task<Duel?> GetByIdAsync(string duelId)
     {
+        await _tableClient.CreateIfNotExistsAsync();
+
         // PartitionKey is YYYYMM derived from ULID timestamp
         var partitionKey = GetPartitionKey(duelId);
         try
@@ -41,18 +43,24 @@ public sealed class DuelRepository : IDuelRepository
 
     public async Task SaveAsync(Duel duel)
     {
+        await _tableClient.CreateIfNotExistsAsync();
+
         var entity = MapToEntity(duel);
         await _tableClient.AddEntityAsync(entity);
     }
 
     public async Task UpdateAsync(Duel duel)
     {
+        await _tableClient.CreateIfNotExistsAsync();
+
         var entity = MapToEntity(duel);
         await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace);
     }
 
     public async Task<IEnumerable<Duel>> ListAsync(int limit, string? beforeMonth)
     {
+        await _tableClient.CreateIfNotExistsAsync();
+
         limit = Math.Clamp(limit, 1, 100);
         var duels = new List<Duel>();
 

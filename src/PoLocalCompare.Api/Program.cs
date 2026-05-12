@@ -269,26 +269,18 @@ try
     // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
     if (app.Environment.IsDevelopment())
     {
-        static async Task RecreateTableWithRetryAsync(TableServiceClient tsc, string tableName)
+        static async Task ClearTableEntitiesAsync(TableClient tableClient)
         {
-            var backoffMs = new[] { 200, 400, 800, 1200, 2000, 3000 };
-
-            for (var attempt = 0; attempt < backoffMs.Length; attempt++)
+            await foreach (var entity in tableClient.QueryAsync<TableEntity>())
             {
                 try
                 {
-                    await tsc.CreateTableAsync(tableName);
-                    return;
+                    await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
                 }
                 catch (RequestFailedException ex)
-                    when (ex.Status == 409 && string.Equals(ex.ErrorCode, "TableBeingDeleted", StringComparison.OrdinalIgnoreCase))
+                    when (ex.Status == 404)
                 {
-                    if (attempt == backoffMs.Length - 1)
-                    {
-                        throw;
-                    }
-
-                    await Task.Delay(backoffMs[attempt]);
+                    // Entity already removed; continue.
                 }
             }
         }
@@ -297,18 +289,13 @@ try
         {
             foreach (var t in new[] { "Duels", "DuelResults", "EloHistory" })
             {
-                try
-                {
-                    await tsc.DeleteTableAsync(t);
-                }
-                catch (RequestFailedException ex) when (ex.Status == 404)
-                {
-                    // Table already absent; continue with recreation.
-                }
-
-                await RecreateTableWithRetryAsync(tsc, t);
+                var table = tsc.GetTableClient(t);
+                await table.CreateIfNotExistsAsync();
+                await ClearTableEntitiesAsync(table);
             }
+
             var mc = tsc.GetTableClient("Models");
+            await mc.CreateIfNotExistsAsync();
             await foreach (var e in mc.QueryAsync<TableEntity>(x => x.PartitionKey == "model"))
             {
                 e["CurrentElo"] = 1200.0;

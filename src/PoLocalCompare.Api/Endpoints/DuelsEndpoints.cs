@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Azure;
 using PoLocalCompare.Application.Archive.ExportLabReport;
 using PoLocalCompare.Application.Duels.CommenceDuel;
 using PoLocalCompare.Application.Duels.GetDuel;
@@ -49,6 +50,13 @@ public static class DuelsEndpoints
                 {
                     ["Request"] = [ex.Message]
                 });
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                return Results.Problem(
+                    title: "Storage not ready",
+                    detail: "Duel storage is initializing. Please retry in a few seconds.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
             }
         })
         .WithName("CommenceDuel")

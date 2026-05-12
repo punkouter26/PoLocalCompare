@@ -54,3 +54,66 @@ coverage/
 test-results/
 playwright-report/
 node_modules/
+
+## Visual Studio additional
+.vs/
+.vscode/*.log
+*.rsuser
+.settings/
+PublishProfiles/
+
+## IDE specific
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+## Application logs (local development)
+src/PoLocalCompare.Api/logs/
+src/Client/PoLocalCompare.Client/logs/
+
+## Docker & Container
+.dockerignore
+*.docker-compose.override.yml
+
+## Azure
+.azure/
+local.settings.json
+.env.local
+.env.*.local
+
+## Package managers
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+## Performance profiling
+*.etl
+*.nettrace
+*.diagsession
+
+## Temporary files
+*.bak
+*.temp
+*.tmp
+temp/
+.temp/
+
+## Rider IDE
+*.sln.iml
+
+## OS specific
+*.exe
+*.com
+*.bat
+*.cmd
+
+## AI/ML models (if large)
+**/*.onnx
+**/*.pb
+**/*.pth
+**/*.pt
+
+## Azure App Service
+scm_restartfile
