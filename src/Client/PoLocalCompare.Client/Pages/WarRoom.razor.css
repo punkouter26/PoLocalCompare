@@ -58,6 +58,16 @@
     margin-bottom: 1.5rem;
 }
 
+.war-room__mode-badge {
+    margin: -0.65rem 0 1rem;
+    border-left: 3px solid #22c55e55;
+    background: #0f172a;
+    color: #cbd5e1;
+    padding: 0.45rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+}
+
 .war-room__loading,
 .war-room__empty {
     color: #6b7280;

@@ -44,6 +44,9 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Restore WebAssembly workload
+        run: dotnet workload restore PoLocalCompare.slnx
+
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
@@ -134,8 +137,31 @@ jobs:
           dotnet publish src/PoLocalCompare.Api/PoLocalCompare.Api.csproj \
             --configuration Release \
             --output ./artifacts/publish
+
+          if [ ! -f ./artifacts/publish/PoLocalCompare.Api.dll ]; then
+            echo "::error::Publish output missing PoLocalCompare.Api.dll"
+            ls -la ./artifacts/publish
+            exit 1
+          fi
+
           cd ./artifacts/publish
           zip -r ../webapp.zip .
+
+      - name: Validate deployment artifact
+        run: |
+          if [ ! -f ./artifacts/webapp.zip ]; then
+            echo "::error::Deployment artifact not found: ./artifacts/webapp.zip"
+            exit 1
+          fi
+
+          zipSizeMb=$(du -m ./artifacts/webapp.zip | cut -f1)
+          echo "Artifact size: ${zipSizeMb} MB"
+
+          unzip -l ./artifacts/webapp.zip | head -n 40
+          if ! unzip -l ./artifacts/webapp.zip | grep -q "PoLocalCompare.Api.dll"; then
+            echo "::error::webapp.zip does not contain PoLocalCompare.Api.dll"
+            exit 1
+          fi
 
       - name: Deploy application package
         run: |
@@ -145,6 +171,15 @@ jobs:
             --src-path ./artifacts/webapp.zip \
             --type zip \
             --clean true
+
+      - name: Capture deployment diagnostics on failure
+        if: failure()
+        run: |
+          az webapp log download \
+            --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --log-file appservice-logs.zip || true
+          echo "Downloaded appservice-logs.zip (if available)"
 
       - name: Health check
         run: |

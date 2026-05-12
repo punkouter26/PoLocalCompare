@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch PoLocalCompare (Edge)",
+      "name": "Launch PoLocalCompare (Integrated Browser)",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
@@ -15,10 +15,10 @@
         "ASPNETCORE_URLS": "https://localhost:5001;http://localhost:5000"
       },
       "serverReadyAction": {
-        "action": "openExternally",
+        "action": "startDebugging",
+        "name": "Open PoLocalCompare in Browser (VS Code)",
         "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
-        "uriFormat": "https://localhost:5001",
-        "browserProgram": "msedge"
+        "uriFormat": "https://localhost:5001"
       },
       "sourceFileMap": {
         "/Views": "${workspaceFolder}/Views"
@@ -38,13 +38,23 @@
         "ASPNETCORE_URLS": "https://localhost:5001;http://localhost:5000"
       },
       "serverReadyAction": {
-        "action": "openExternally",
+        "action": "startDebugging",
+        "name": "Open PoLocalCompare in Browser (VS Code)",
         "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
-        "uriFormat": "https://localhost:5001",
-        "browserProgram": "msedge"
+        "uriFormat": "https://localhost:5001"
       },
       "sourceFileMap": {
         "/Views": "${workspaceFolder}/Views"
+      }
+    },
+    {
+      "name": "Open PoLocalCompare in Browser (VS Code)",
+      "type": "pwa-msedge",
+      "request": "launch",
+      "url": "https://localhost:5001",
+      "webRoot": "${workspaceFolder}/src/Client/PoLocalCompare.Client/wwwroot",
+      "presentation": {
+        "hidden": true
       }
     }
   ]

@@ -23,6 +23,16 @@
     letter-spacing: 0.03em;
 }
 
+.lab__mode-note {
+    margin: -0.5rem 0 0.9rem;
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    border-left: 3px solid #22c55e66;
+    background: #0f172a;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+}
+
 .lab__loading,
 .lab__empty {
     color: #8a8a9a;

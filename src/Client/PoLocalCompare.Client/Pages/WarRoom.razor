@@ -15,6 +15,19 @@
 
 <div class="war-room" @onkeydown="OnKeyDown" tabindex="-1" id="war-room-root">
     <h1 class="war-room__title">⚔ War Room</h1>
+    @if (!_loading)
+    {
+        <p class="war-room__mode-badge">
+            @if (IsCloudMode)
+            {
+                <span>☁ Cloud mode active: Ollama service models are hidden in this environment.</span>
+            }
+            else
+            {
+                <span>🖥 Local mode active: service-backed Ollama models are available.</span>
+            }
+        </p>
+    }
 
     @if (_loading)
     {
@@ -268,6 +281,8 @@
         _leftModel is not null && _rightModel is not null &&
         _leftModel.ModelId != _rightModel.ModelId &&
         !string.IsNullOrWhiteSpace(_promptText);
+
+    private bool IsCloudMode => _allModels.Count > 0 && !_allModels.Any(m => m.ModelType == ModelType.LocalService);
 
 
     protected override async Task OnInitializedAsync()

@@ -36,6 +36,42 @@
         </div>
     </div>
 
+    <div class="home__system">
+        <div class="home__system-head">
+            <h2 class="home__system-title">System Status</h2>
+            <button class="home__system-refresh" @onclick="RefreshSystemAsync">Run Smoke Test</button>
+        </div>
+        @if (_systemLoading)
+        {
+            <p class="home__system-note">Running diagnostics…</p>
+        }
+        else
+        {
+            <div class="home__system-grid">
+                <div class="home__system-card">
+                    <span class="home__system-label">API Health</span>
+                    <span class="home__system-value @(_apiHealthy ? "home__system-value--ok" : "home__system-value--bad")">@(_apiHealthy ? "Healthy" : "Degraded")</span>
+                </div>
+                <div class="home__system-card">
+                    <span class="home__system-label">Runtime Mode</span>
+                    <span class="home__system-value">@_runtimeMode</span>
+                </div>
+                <div class="home__system-card">
+                    <span class="home__system-label">Models</span>
+                    <span class="home__system-value">@_systemModelCount total</span>
+                </div>
+                <div class="home__system-card">
+                    <span class="home__system-label">Service Models</span>
+                    <span class="home__system-value">@_systemServiceModelCount</span>
+                </div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_systemNote))
+            {
+                <p class="home__system-note">@_systemNote</p>
+            }
+        }
+    </div>
+
     @* ── Recent Duels (O1 — pending links to arena) ── *@
     @if (_recentDuels.Count > 0)
     {
@@ -105,6 +141,13 @@
     private bool _resetBusy;
     private bool _resetDone;
 
+    private bool _systemLoading;
+    private bool _apiHealthy;
+    private string _runtimeMode = "Unknown";
+    private int _systemModelCount;
+    private int _systemServiceModelCount;
+    private string? _systemNote;
+
     protected override async Task OnInitializedAsync()
     {
         // Load recent duels (8) and leaderboard in parallel
@@ -123,6 +166,48 @@
         {
             _activeModels = lb.Count(e => e.DuelCount > 0);
             _topModel = lb.FirstOrDefault(e => e.Rank == 1)?.DisplayName;
+        }
+
+        await RefreshSystemAsync();
+    }
+
+    private async Task RefreshSystemAsync()
+    {
+        _systemLoading = true;
+        _systemNote = null;
+        try
+        {
+            var healthTask = ApiClient.GetHealthSnapshotAsync();
+            var smokeTask = ApiClient.GetSmokeSnapshotAsync();
+            await Task.WhenAll(healthTask, smokeTask);
+
+            var health = healthTask.Result;
+            var smoke = smokeTask.Result;
+            _apiHealthy = string.Equals(health?.Status, "Healthy", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(smoke?.Status, "Healthy", StringComparison.OrdinalIgnoreCase);
+
+            if (smoke is not null)
+            {
+                _systemModelCount = smoke.Models.Total;
+                _systemServiceModelCount = smoke.Models.LocalService;
+                _runtimeMode = smoke.Models.CloudMode ? "Cloud (Ollama hidden)" : "Local/Dev";
+            }
+            else
+            {
+                _runtimeMode = "Unknown";
+            }
+
+            _systemNote = $"Updated {DateTime.Now:HH:mm:ss}";
+        }
+        catch
+        {
+            _apiHealthy = false;
+            _runtimeMode = "Unknown";
+            _systemNote = "Smoke test failed. Check API logs.";
+        }
+        finally
+        {
+            _systemLoading = false;
         }
     }
 

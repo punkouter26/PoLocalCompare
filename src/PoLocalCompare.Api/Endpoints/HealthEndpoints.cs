@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using PoLocalCompare.Application.Interfaces;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Api.Endpoints;
 
@@ -86,6 +88,49 @@ public static class HealthEndpoints
         .WithName("Health")
         .WithTags("Health")
         .WithSummary("Health check for all dependencies");
+
+        app.MapGet("/api/diag/smoke", async (
+            TableServiceClient tableServiceClient,
+            IModelRepository modelRepository,
+            IWebHostEnvironment env,
+            HttpContext context) =>
+        {
+            var checks = new Dictionary<string, object>();
+            var overallHealthy = true;
+
+            try
+            {
+                await tableServiceClient.GetPropertiesAsync();
+                checks["azureTableStorage"] = new { status = "Healthy" };
+            }
+            catch (Exception ex)
+            {
+                checks["azureTableStorage"] = new { status = "Unhealthy", error = ex.Message };
+                overallHealthy = false;
+            }
+
+            var allModels = (await modelRepository.GetAllAsync()).ToList();
+            var localServiceCount = allModels.Count(m => m.ModelType == ModelType.LocalService);
+
+            var result = new
+            {
+                status = overallHealthy ? "Healthy" : "Unhealthy",
+                environment = env.EnvironmentName,
+                models = new
+                {
+                    total = allModels.Count,
+                    localService = localServiceCount,
+                    cloudMode = !env.IsDevelopment() && localServiceCount == 0
+                },
+                checks
+            };
+
+            context.Response.StatusCode = overallHealthy ? 200 : 503;
+            return Results.Json(result);
+        })
+        .WithName("DiagnosticsSmoke")
+        .WithTags("Health")
+        .WithSummary("Quick smoke check for runtime dependencies and model source behavior");
 
         return app;
     }

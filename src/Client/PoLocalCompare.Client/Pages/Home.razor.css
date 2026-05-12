@@ -1,4 +1,4 @@
-.home { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+.home { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
 
 /* ── Compact header ─────────────────────────────────────────────────── */
 .home__header {
@@ -22,6 +22,77 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 0.75rem;
     margin-bottom: 2rem;
+    animation: fadeIn 0.45s ease-out;
+}
+
+.home__system {
+    padding: 1rem;
+    border: 1px solid var(--oled-border);
+    border-radius: var(--radius-md);
+    background: var(--oled-surface);
+    margin-bottom: 1.75rem;
+    animation: fadeIn 0.5s ease-out 0.1s both;
+}
+
+.home__system-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.7rem;
+}
+
+.home__system-title {
+    margin: 0;
+    font-size: 0.84rem;
+    color: var(--oled-text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.home__system-refresh {
+    background: #101827;
+    color: #a7f3d0;
+    border: 1px solid #1f3f2f;
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    cursor: pointer;
+}
+
+.home__system-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.6rem;
+}
+
+.home__system-card {
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    padding: 0.55rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.home__system-label {
+    color: var(--oled-text-muted);
+    font-size: 0.67rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.home__system-value {
+    color: var(--oled-text);
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
+.home__system-value--ok { color: #22c55e; }
+.home__system-value--bad { color: #ef4444; }
+
+.home__system-note {
+    margin: 0.6rem 0 0;
+    color: var(--oled-text-muted);
+    font-size: 0.75rem;
 }
 
 .home__stat {
@@ -62,6 +133,7 @@
 
 @media (max-width: 500px) {
     .home__stats { grid-template-columns: repeat(2, 1fr); }
+    .home__system-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ── Recent Duels ─────────────────────────────────────────────────────── */

@@ -24,7 +24,14 @@
     }
     else if (_duels.Count == 0)
     {
-        <p class="archive__empty">No duels recorded yet. <a href="/war-room">Start one!</a></p>
+        <div class="archive__empty-card">
+            <h2>No duels recorded yet</h2>
+            <p>Archive snapshots, verdicts, and lab reports will appear here once a duel completes.</p>
+            <div class="archive__empty-actions">
+                <a class="archive__empty-cta" href="/war-room">⚔ Start a New Duel</a>
+                <a class="archive__empty-link" href="/local-model-lab">🧪 Run Local Lab Diagnostics</a>
+            </div>
+        </div>
     }
     else
     {

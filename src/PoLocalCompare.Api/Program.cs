@@ -1,4 +1,5 @@
 using Azure.Data.Tables;
+using Azure;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using OpenTelemetry.Metrics;
@@ -32,12 +33,18 @@ try
             .ReadFrom.Configuration(ctx.Configuration)
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
+            .Enrich.WithProperty("App", "PoLocalCompare.Api")
             .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
             .WriteTo.Console()
             .WriteTo.File(
                 path: "logs/polocalcompare-.log",
                 rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 7);
+                retainedFileCountLimit: 7)
+            .WriteTo.File(
+                path: "logs/polocalcompare-errors-.log",
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 14,
+                restrictedToMinimumLevel: LogEventLevel.Error);
 
         // Only attach Application Insights sink when the telemetry configuration is available
         var telemetry = services.GetService<Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration>();
@@ -172,6 +179,8 @@ try
         {
             diagCtx.Set("CorrelationId", httpCtx.TraceIdentifier);
             diagCtx.Set("UserId", "anonymous");
+            diagCtx.Set("RequestPath", httpCtx.Request.Path.Value ?? string.Empty);
+            diagCtx.Set("RequestMethod", httpCtx.Request.Method);
             // SessionId: read from cookie or generate a new one for traceability
             var sessionId = httpCtx.Request.Cookies["X-Session-Id"]
                 ?? httpCtx.TraceIdentifier;
@@ -255,13 +264,44 @@ try
     // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
     if (app.Environment.IsDevelopment())
     {
+        static async Task RecreateTableWithRetryAsync(TableServiceClient tsc, string tableName)
+        {
+            var backoffMs = new[] { 200, 400, 800, 1200, 2000, 3000 };
+
+            for (var attempt = 0; attempt < backoffMs.Length; attempt++)
+            {
+                try
+                {
+                    await tsc.CreateTableAsync(tableName);
+                    return;
+                }
+                catch (RequestFailedException ex)
+                    when (ex.Status == 409 && string.Equals(ex.ErrorCode, "TableBeingDeleted", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (attempt == backoffMs.Length - 1)
+                    {
+                        throw;
+                    }
+
+                    await Task.Delay(backoffMs[attempt]);
+                }
+            }
+        }
+
         app.MapPost("/api/dev/reset", async (TableServiceClient tsc) =>
         {
             foreach (var t in new[] { "Duels", "DuelResults", "EloHistory" })
             {
-                await tsc.DeleteTableAsync(t);
-                await Task.Delay(300);
-                await tsc.CreateTableAsync(t);
+                try
+                {
+                    await tsc.DeleteTableAsync(t);
+                }
+                catch (RequestFailedException ex) when (ex.Status == 404)
+                {
+                    // Table already absent; continue with recreation.
+                }
+
+                await RecreateTableWithRetryAsync(tsc, t);
             }
             var mc = tsc.GetTableClient("Models");
             await foreach (var e in mc.QueryAsync<TableEntity>(x => x.PartitionKey == "model"))

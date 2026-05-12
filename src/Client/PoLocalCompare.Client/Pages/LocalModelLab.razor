@@ -19,6 +19,19 @@
     <p class="lab__subtitle">
         Environment health · download detection · live inference diagnostics · speed benchmark
     </p>
+    @if (!_loading)
+    {
+        <p class="lab__mode-note">
+            @if (IsCloudMode)
+            {
+                <span>☁ Cloud mode: Ollama service models are intentionally hidden; browser models run on demand from CDN/local sources.</span>
+            }
+            else
+            {
+                <span>🖥 Local mode: Ollama service models and local browser model assets are available.</span>
+            }
+        </p>
+    }
 
     @* ── Environment strip ── *@
     <div class="lab__env @(_webGpu?.Supported == true ? "lab__env--ok" : "lab__env--warn")">
@@ -294,6 +307,8 @@
 
     private IEnumerable<ModelDiagState> _testedModels =>
         _models.Where(m => m.Status == DiagStatus.Complete);
+
+    private bool IsCloudMode => _models.Count > 0 && !_models.Any(m => m.IsOllamaModel);
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()

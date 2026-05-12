@@ -202,8 +202,51 @@ public sealed class DuelApiClient
         }
     }
 
+    public async Task<HealthSnapshotDto?> GetHealthSnapshotAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<HealthSnapshotDto>("/health", JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<SmokeSnapshotDto?> GetSmokeSnapshotAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<SmokeSnapshotDto>("/api/diag/smoke", JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private sealed class ModelDownloadStatusResponse
     {
         public bool Downloaded { get; set; }
+    }
+
+    public sealed class HealthSnapshotDto
+    {
+        public string Status { get; set; } = "Unknown";
+    }
+
+    public sealed class SmokeSnapshotDto
+    {
+        public string Status { get; set; } = "Unknown";
+        public string Environment { get; set; } = "Unknown";
+        public SmokeModelsDto Models { get; set; } = new();
+    }
+
+    public sealed class SmokeModelsDto
+    {
+        public int Total { get; set; }
+        public int LocalService { get; set; }
+        public bool CloudMode { get; set; }
     }
 }

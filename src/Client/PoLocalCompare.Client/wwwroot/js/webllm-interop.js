@@ -6,6 +6,9 @@
 
 // Map of modelId → Worker, allowing concurrent local model inference
 const workers = {};
+const availabilityCache = new Map();
+const availabilityInflight = new Map();
+const AVAILABILITY_TTL_MS = 15000;
 
 function normalizeModelBaseUrl(baseUrl) {
     if (!baseUrl) {
@@ -33,7 +36,14 @@ async function canReachModelConfig(modelBaseUrl) {
     }
 
     try {
-        const response = await fetch(`${modelBaseUrl}mlc-chat-config.json`, { method: 'HEAD' });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const response = await fetch(`${modelBaseUrl}mlc-chat-config.json`, {
+            method: 'HEAD',
+            signal: controller.signal,
+            cache: 'no-store'
+        });
+        clearTimeout(timeout);
         return response.ok;
     } catch {
         return false;
@@ -53,6 +63,17 @@ function getCdnTemplates(cdnBaseUrlTemplates) {
 }
 
 window.resolveBrowserModelAvailability = async function (webLlmModelId, localModelBaseUrl, cdnBaseUrlTemplates) {
+    const cacheKey = `${webLlmModelId}|${localModelBaseUrl}|${getCdnTemplates(cdnBaseUrlTemplates).join('|')}`;
+    const cached = availabilityCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < AVAILABILITY_TTL_MS) {
+        return cached.value;
+    }
+
+    if (availabilityInflight.has(cacheKey)) {
+        return availabilityInflight.get(cacheKey);
+    }
+
+    const resolvePromise = (async () => {
     const localBaseUrl = normalizeModelBaseUrl(`${normalizeModelBaseUrl(localModelBaseUrl)}${webLlmModelId}`);
     if (await canReachModelConfig(localBaseUrl)) {
         return { available: true, source: 'local', baseUrl: localBaseUrl };
@@ -71,6 +92,16 @@ window.resolveBrowserModelAvailability = async function (webLlmModelId, localMod
     }
 
     return { available: false, source: '', baseUrl: localBaseUrl };
+    })();
+
+    availabilityInflight.set(cacheKey, resolvePromise);
+    try {
+        const result = await resolvePromise;
+        availabilityCache.set(cacheKey, { at: Date.now(), value: result });
+        return result;
+    } finally {
+        availabilityInflight.delete(cacheKey);
+    }
 };
 
 /**

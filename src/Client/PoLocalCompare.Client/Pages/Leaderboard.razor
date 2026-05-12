@@ -48,8 +48,12 @@
         @if (_entries.Count > 0 && _entries.All(e => e.DuelCount == 0))
         {
             <div class="leaderboard__empty-state">
-                <p>&#x1F3C6; No duels have been fought yet.</p>
-                <a href="/war-room" class="leaderboard__cta">&#x2694;&#xFE0F; Head to the War Room to start one!</a>
+                <h2>🏁 No competitive history yet</h2>
+                <p>Run your first duel to generate ELO trends, win rates, and green-score comparisons.</p>
+                <div class="leaderboard__empty-actions">
+                    <a href="/war-room" class="leaderboard__cta">⚔ Start in War Room</a>
+                    <a href="/local-model-lab" class="leaderboard__cta leaderboard__cta--ghost">🧪 Open Local Lab</a>
+                </div>
             </div>
         }
         <RadzenDataGrid Data="@(_activeOnly ? _entries.Where(e => e.DuelCount > 0).ToList() : _entries)"
