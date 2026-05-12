@@ -130,6 +130,11 @@ try
     {
         client.Timeout = TimeSpan.FromSeconds(5);
     });
+    // Foundry client: cap at 35 s to allow for network latency while preventing indefinite hang
+    builder.Services.AddHttpClient("Foundry", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(35);
+    });
     builder.Services.AddInfrastructure(builder.Configuration);
 
     // ─── Application use cases (Phase 3 + 4 + 6) ────────────────────────────

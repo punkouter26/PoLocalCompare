@@ -128,6 +128,11 @@
             <div class="arena__auto-judging">⚖ Auto-judging in progress…</div>
         }
 
+        @if (_autoJudgeError is not null)
+        {
+            <div class="arena__auto-judge-error">@_autoJudgeError</div>
+        }
+
         <div class="arena__actions">
             <RadzenButton
                 Text="👈 Winner: Left"
@@ -187,6 +192,7 @@
     private int _countdownSeconds = 10;
     private CancellationTokenSource _countdownCts = new();
     private bool _autoJudging;
+    private string? _autoJudgeError;
 
     // Live streaming preview while duel is in progress
     private string? _leftStreamingHtml;
@@ -374,6 +380,7 @@
         if (_verdictRecorded || _submitting || _duel is null) return;
         _autoJudging = true;
         _submitting  = true;
+        _autoJudgeError = null;
         StateHasChanged();
         try
         {
@@ -388,11 +395,20 @@
                 _eloShiftRight = _duel.RightModelId == response.WinnerModelId ? response.EloShiftWinner : response.EloShiftLoser;
                 await AudioService.PlaySuccessAsync();
             }
+            else
+            {
+                _autoJudgeError = "Auto-judge timed out — pick a winner manually.";
+            }
+        }
+        catch
+        {
+            _autoJudgeError = "Auto-judge failed — pick a winner manually.";
         }
         finally
         {
             _autoJudging = false;
             _submitting  = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

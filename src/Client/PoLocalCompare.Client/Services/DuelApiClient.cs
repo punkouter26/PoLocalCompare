@@ -157,14 +157,15 @@ public sealed class DuelApiClient
         }
     }
 
-    /// <summary>Asks GPT-4.1 Nano to auto-judge the duel. Returns null on failure.</summary>
+    /// <summary>Asks GPT-4.1 Nano to auto-judge the duel. Returns null on failure or timeout.</summary>
     public async Task<VerdictResponseDto?> AutoJudgeAsync(string duelId)
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         try
         {
-            var response = await _http.PostAsync($"/api/duels/{duelId}/auto-judge", null);
+            var response = await _http.PostAsync($"/api/duels/{duelId}/auto-judge", null, cts.Token);
             if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadFromJsonAsync<VerdictResponseDto>(JsonOptions);
+            return await response.Content.ReadFromJsonAsync<VerdictResponseDto>(JsonOptions, cts.Token);
         }
         catch
         {

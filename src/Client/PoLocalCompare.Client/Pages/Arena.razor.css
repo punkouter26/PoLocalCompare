@@ -137,3 +137,13 @@
     padding: 0.2rem 0.6rem;
     cursor: pointer;
 }
+
+.arena__auto-judge-error {
+    color: #f87171;
+    font-size: 0.875rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #7f1d1d;
+    background: #1f0a0a;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}

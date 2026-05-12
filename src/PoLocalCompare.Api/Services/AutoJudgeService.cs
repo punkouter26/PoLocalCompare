@@ -114,25 +114,46 @@ public sealed class AutoJudgeService
         request.Headers.Add("api-key", apiKey);
         request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        using var response = await http.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        _logger.LogInformation("Auto-judge: Invoking Foundry GPT-4.1-nano for verdict…");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        
+        try
         {
-            _logger.LogWarning("Auto-judge call failed ({Status}) — defaulting to Left.", response.StatusCode);
+            using var response = await http.SendAsync(request, cancellationToken);
+            sw.Stop();
+            _logger.LogInformation("Auto-judge: Foundry call completed in {ElapsedMs}ms with status {Status}", sw.ElapsedMilliseconds, response.StatusCode);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Auto-judge call failed ({Status}) — defaulting to Left.", response.StatusCode);
+                return DuelVerdict.Left;
+            }
+
+            var json    = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(json);
+
+            var content = doc.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString() ?? "LEFT";
+
+            return content.Trim().StartsWith("RIGHT", StringComparison.OrdinalIgnoreCase)
+                ? DuelVerdict.Right
+                : DuelVerdict.Left;
+        }
+        catch (OperationCanceledException ex)
+        {
+            sw.Stop();
+            _logger.LogWarning(ex, "Auto-judge: Foundry call timed out or was cancelled after {ElapsedMs}ms — defaulting to Left.", sw.ElapsedMilliseconds);
             return DuelVerdict.Left;
         }
-
-        var json    = await response.Content.ReadAsStringAsync(cancellationToken);
-        using var doc = JsonDocument.Parse(json);
-
-        var content = doc.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString() ?? "LEFT";
-
-        return content.Trim().StartsWith("RIGHT", StringComparison.OrdinalIgnoreCase)
-            ? DuelVerdict.Right
-            : DuelVerdict.Left;
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "Auto-judge: Foundry call failed after {ElapsedMs}ms — defaulting to Left.", sw.ElapsedMilliseconds);
+            return DuelVerdict.Left;
+        }
     }
 
     private static string Truncate(string? html, int maxChars)
