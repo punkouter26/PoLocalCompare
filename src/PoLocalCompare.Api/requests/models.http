@@ -30,3 +30,59 @@ Content-Type: application/json
   "inputTokenPricePerMillion": 2.50,
   "outputTokenPricePerMillion": 10.00
 }
+
+###
+
+### Register Phi-4 (Azure Foundry Serverless)
+POST {{baseUrl}}/api/models
+Content-Type: application/json
+
+{
+  "displayName": "Phi-4 (Azure Foundry)",
+  "modelType": "Remote",
+  "apiEndpointRef": "Phi-4",
+  "inputTokenPricePerMillion": 0.07,
+  "outputTokenPricePerMillion": 0.14
+}
+
+###
+
+### Register Gemma 3 4B IT (Azure Foundry Serverless — cheapest Gemma 3)
+POST {{baseUrl}}/api/models
+Content-Type: application/json
+
+{
+  "displayName": "Gemma 3 4B IT (Azure Foundry)",
+  "modelType": "Remote",
+  "apiEndpointRef": "gemma-3-4b-it",
+  "inputTokenPricePerMillion": 0.06,
+  "outputTokenPricePerMillion": 0.17
+}
+
+###
+
+### Register DeepSeek-V3-0324 (Azure Foundry Serverless — cheapest DeepSeek)
+POST {{baseUrl}}/api/models
+Content-Type: application/json
+
+{
+  "displayName": "DeepSeek-V3 (Azure Foundry)",
+  "modelType": "Remote",
+  "apiEndpointRef": "DeepSeek-V3-0324",
+  "inputTokenPricePerMillion": 0.27,
+  "outputTokenPricePerMillion": 1.10
+}
+
+###
+
+### Register Cohere Command R (Azure Foundry Serverless — cheapest Cohere)
+POST {{baseUrl}}/api/models
+Content-Type: application/json
+
+{
+  "displayName": "Command R (Azure Foundry)",
+  "modelType": "Remote",
+  "apiEndpointRef": "Cohere-command-r",
+  "inputTokenPricePerMillion": 0.50,
+  "outputTokenPricePerMillion": 1.50
+}

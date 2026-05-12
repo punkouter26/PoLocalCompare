@@ -4,7 +4,12 @@ obj/
 *.user
 *.suo
 .vs/
-.vscode/
+
+## VS Code — ignore user preferences but keep project launch/task config
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 
 ## Secrets and environment-specific config
 appsettings.Development.json

@@ -37,6 +37,19 @@
             <span class="lab__env-item lab__env-item--muted">@_webGpu.Reason</span>
         }
         <span class="lab__env-sep">·</span>
+        @if (_webNn is null)
+        {
+            <span class="lab__env-item">⏳ Checking NPU…</span>
+        }
+        else if (_webNn.Supported)
+        {
+            <span class="lab__env-item lab__env-item--ok">🧠 NPU (@_webNn.DeviceType.ToUpperInvariant())</span>
+        }
+        else
+        {
+            <span class="lab__env-item lab__env-item--muted" title="@_webNn.Reason">🧠 NPU: not detected</span>
+        }
+        <span class="lab__env-sep">·</span>
         <span class="lab__env-item">@_models.Count registered</span>
         <span class="lab__env-sep">·</span>
         <span class="lab__env-item">@_models.Count(m => m.IsDownloaded == true) ready</span>
@@ -227,10 +240,19 @@
         public string Reason { get; set; } = "";
     }
 
+    // ── WebNN / NPU info ─────────────────────────────────────────────────────
+    private sealed class WebNnInfo
+    {
+        public bool Supported { get; set; }
+        public string DeviceType { get; set; } = "";
+        public string Reason { get; set; } = "";
+    }
+
     // ── Fields ───────────────────────────────────────────────────────────────
     private bool _loading = true;
     private List<ModelDiagState> _models = [];
     private WebGpuInfo? _webGpu;
+    private WebNnInfo? _webNn;
     private string _testPrompt =
         "Hello! Please complete all three tasks:\n" +
         "1) What is 17 × 8?\n" +
@@ -265,6 +287,7 @@
         if (!firstRender) return;
 
         _webGpu = await JS.InvokeAsync<WebGpuInfo>("checkWebGpu");
+        _webNn  = await JS.InvokeAsync<WebNnInfo>("checkWebNn");
         StateHasChanged();
 
         await RefreshDownloadStatusAsync();

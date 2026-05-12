@@ -90,6 +90,56 @@ public static class ModelsEndpoints
         .WithSummary("Checks whether a local WebLLM model asset has been downloaded.")
         .Produces<ModelDownloadStatusDto>();
 
+        group.MapPatch("/{modelId}", async (
+            [FromRoute] string modelId,
+            [FromBody] PatchModelRequest request,
+            [FromServices] IModelRepository repository) =>
+        {
+            var model = await repository.GetByIdAsync(modelId);
+            if (model is null) return Results.NotFound();
+
+            var updated = new PoLocalCompare.Domain.Entities.Model
+            {
+                ModelId = model.ModelId,
+                DisplayName = request.DisplayName ?? model.DisplayName,
+                ModelType = model.ModelType,
+                CurrentElo = model.CurrentElo,
+                DuelCount = model.DuelCount,
+                WinCount = model.WinCount,
+                GreenScoreAvg = model.GreenScoreAvg,
+                TdpWatts = model.TdpWatts,
+                WebLlmModelId = model.WebLlmModelId,
+                ApiEndpointRef = request.ApiEndpointRef ?? model.ApiEndpointRef,
+                InputTokenPricePerMillion = model.InputTokenPricePerMillion,
+                OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
+                CreatedAt = model.CreatedAt
+            };
+
+            await repository.UpdateAsync(updated);
+
+            var dto = new PoLocalCompare.Shared.DTOs.ModelDto
+            {
+                ModelId = updated.ModelId,
+                DisplayName = updated.DisplayName,
+                ModelType = updated.ModelType,
+                CurrentElo = updated.CurrentElo,
+                DuelCount = updated.DuelCount,
+                WinCount = updated.WinCount,
+                GreenScoreAvg = updated.GreenScoreAvg,
+                TdpWatts = updated.TdpWatts,
+                WebLlmModelId = updated.WebLlmModelId,
+                ApiEndpointRef = updated.ApiEndpointRef,
+                InputTokenPricePerMillion = updated.InputTokenPricePerMillion,
+                OutputTokenPricePerMillion = updated.OutputTokenPricePerMillion,
+                CreatedAt = updated.CreatedAt
+            };
+            return Results.Ok(dto);
+        })
+        .WithName("PatchModel")
+        .WithSummary("Updates DisplayName and/or ApiEndpointRef for an existing model.")
+        .Produces<PoLocalCompare.Shared.DTOs.ModelDto>()
+        .Produces(StatusCodes.Status404NotFound);
+
         group.MapDelete("/{modelId}", async (
             [FromRoute] string modelId,
             [FromServices] IModelRepository repository) =>
@@ -116,6 +166,10 @@ public sealed record RegisterModelRequest(
     string? ApiEndpointRef,
     decimal? InputTokenPricePerMillion,
     decimal? OutputTokenPricePerMillion);
+
+public sealed record PatchModelRequest(
+    string? DisplayName,
+    string? ApiEndpointRef);
 
 public sealed record ModelDownloadStatusDto(
     string WebLlmModelId,

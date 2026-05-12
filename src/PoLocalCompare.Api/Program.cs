@@ -76,6 +76,14 @@ try
             new PrefixKeyVaultSecretManager("PoLocalCompare"));
     }
 
+    // In Development, Key Vault holds production storage connection strings.
+    // Override them back to Azurite so local runs don't hit the real storage account.
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Configuration["ConnectionStrings:AzureTableStorage"] = "UseDevelopmentStorage=true";
+        builder.Configuration["ConnectionStrings:AzureBlobStorage"]  = "UseDevelopmentStorage=true";
+    }
+
     if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(builder.Configuration["AzureAiFoundry:ApiKey"]))
     {
         Log.Warning("AzureAiFoundry:ApiKey is empty. Configure AzureAiFoundry__ApiKey via user-secrets or environment variables for remote model duels.");
@@ -85,7 +93,7 @@ try
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
-            policy.WithOrigins("http://localhost:5000", "https://localhost:5001")
+            policy.WithOrigins("http://localhost:5000", "https://localhost:5001", "http://localhost:5100", "https://localhost:5101")
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials());
@@ -139,6 +147,10 @@ try
         {
             diagCtx.Set("CorrelationId", httpCtx.TraceIdentifier);
             diagCtx.Set("UserId", "anonymous");
+            // SessionId: read from cookie or generate a new one for traceability
+            var sessionId = httpCtx.Request.Cookies["X-Session-Id"]
+                ?? httpCtx.TraceIdentifier;
+            diagCtx.Set("SessionId", sessionId);
         };
     });
 

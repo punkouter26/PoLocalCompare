@@ -1,181 +1,54 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@* Top horizontal navbar — portrait/phone-first layout (Rule 10) *@
+<nav class="topnav navbar navbar-expand-md navbar-dark">
     <div class="container-fluid">
+        @* App name left-aligned *@
         <a class="navbar-brand" href="">
             <span class="brand-icon">⚔️</span>
             <span class="brand-text">LLM Duel Arena</span>
         </a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+
+        @* Hamburger for mobile portrait *@
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu" aria-expanded="@(!collapseNavMenu)" aria-controls="navbarLinks">
             <span class="navbar-toggler-icon"></span>
         </button>
+
+        @* Nav links — collapse into hamburger on narrow screens *@
+        <div class="@NavMenuCssClass navbar-collapse" id="navbarLinks">
+            <ul class="navbar-nav me-auto mb-2 mb-md-0">
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="war-room">
+                        <span class="nav-icon" aria-hidden="true">&#x2694;&#xFE0F;</span>
+                        <span class="nav-text">War Room</span>
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="leaderboard">
+                        <span class="nav-icon" aria-hidden="true">&#x1F3C6;</span>
+                        <span class="nav-text">Leaderboard</span>
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="archive">
+                        <span class="nav-icon" aria-hidden="true">&#x1F4C1;</span>
+                        <span class="nav-text">Archive</span>
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="local-model-lab">
+                        <span class="nav-icon" aria-hidden="true">&#x1F9EA;</span>
+                        <span class="nav-text">Local Lab</span>
+                    </NavLink>
+                </li>
+            </ul>
+        </div>
     </div>
-</div>
-
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="war-room" Match="NavLinkMatch.All">
-                <span class="nav-icon" aria-hidden="true">&#x2694;&#xFE0F;</span> 
-                <span class="nav-text">War Room</span>
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="leaderboard">
-                <span class="nav-icon" aria-hidden="true">&#x1F3C6;</span> 
-                <span class="nav-text">Leaderboard</span>
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="archive">
-                <span class="nav-icon" aria-hidden="true">&#x1F4C1;</span> 
-                <span class="nav-text">Archive</span>
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="local-model-lab">
-                <span class="nav-icon" aria-hidden="true">&#x1F9EA;</span> 
-                <span class="nav-text">Local Lab</span>
-            </NavLink>
-        </div>
-    </nav>
-    
-    @* ── Keyboard Shortcuts Help ────────────────────────────────────────── *@
-    <div class="nav-shortcuts">
-        <span class="shortcut-hint">Press <kbd>?</kbd> for shortcuts</span>
-    </div>
-</div>
-
-<style>
-    /* ── Modern Navbar ─────────────────────────────────────────────────────── */
-    .navbar-brand {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 0;
-        text-decoration: none;
-        color: var(--oled-text);
-        font-weight: 700;
-        transition: all var(--transition-fast);
-    }
-
-    .navbar-brand:hover {
-        color: var(--oled-green);
-    }
-
-    .brand-icon {
-        font-size: 1.5rem;
-        animation: float 3s ease-in-out infinite;
-    }
-
-    .brand-text {
-        font-size: 1.1rem;
-        letter-spacing: -0.02em;
-    }
-
-    /* ── Modern Navigation Links ────────────────────────────────────────────── */
-    .nav-link {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem;
-        border-radius: var(--radius-md);
-        color: var(--oled-text-muted);
-        text-decoration: none;
-        transition: all var(--transition-fast);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .nav-link::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%) scaleY(0);
-        width: 3px;
-        height: 60%;
-        background: var(--oled-green);
-        border-radius: var(--radius-full);
-        transition: transform var(--transition-fast);
-    }
-
-    .nav-link:hover {
-        color: var(--oled-text);
-        background: var(--oled-surface);
-    }
-
-    .nav-link:hover::before {
-        transform: translateY(-50%) scaleY(1);
-    }
-
-    .nav-link.active {
-        color: var(--oled-green);
-        background: rgba(34, 197, 94, 0.1);
-        font-weight: 600;
-    }
-
-    .nav-link.active::before {
-        transform: translateY(-50%) scaleY(1);
-    }
-
-    .nav-icon {
-        font-size: 1.25rem;
-        width: 24px;
-        text-align: center;
-        flex-shrink: 0;
-    }
-
-    .nav-text {
-        font-size: 0.95rem;
-    }
-
-    /* ── Keyboard Shortcuts ─────────────────────────────────────────────────── */
-    .nav-shortcuts {
-        padding: 1rem;
-        margin-top: auto;
-        border-top: 1px solid var(--oled-border);
-    }
-
-    .shortcut-hint {
-        font-size: 0.75rem;
-        color: var(--oled-text-muted);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.25rem;
-    }
-
-    kbd {
-        display: inline-block;
-        padding: 0.15rem 0.4rem;
-        background: var(--oled-surface-elevated);
-        border: 1px solid var(--oled-border);
-        border-radius: var(--radius-sm);
-        font-size: 0.7rem;
-        font-family: monospace;
-    }
-
-    /* ── Navbar Dark Override ─────────────────────────────────────────────── */
-    .navbar-dark {
-        background: var(--oled-surface) !important;
-        border-bottom: 1px solid var(--oled-border);
-    }
-
-    .navbar-dark .navbar-toggler {
-        border-color: var(--oled-border);
-    }
-
-    .navbar-dark .navbar-toggler-icon {
-        filter: invert(1);
-    }
-</style>
+</nav>
 
 @code {
     private bool collapseNavMenu = true;
 
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    // Builder pattern: collapsible nav state collapses/expands on toggle
+    private string NavMenuCssClass => collapseNavMenu ? "collapse" : "";
 
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
 }

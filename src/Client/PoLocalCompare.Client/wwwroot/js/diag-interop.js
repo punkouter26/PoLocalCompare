@@ -30,6 +30,21 @@ window.checkWebGpu = async function () {
     }
 };
 
+// ── WebNN / NPU detection ───────────────────────────────────────────────────
+window.checkWebNn = async function () {
+    if (!('ml' in navigator)) {
+        return { supported: false, deviceType: '', reason: 'navigator.ml not available — WebNN API not supported in this browser.' };
+    }
+    const order = ['npu', 'gpu', 'cpu'];
+    for (const deviceType of order) {
+        try {
+            const ctx = await navigator.ml.createContext({ deviceType });
+            if (ctx) return { supported: true, deviceType, reason: '' };
+        } catch (_) { /* device type not available, try next */ }
+    }
+    return { supported: false, deviceType: '', reason: 'No WebNN device context could be created.' };
+};
+
 // ── Model file detection ─────────────────────────────────────────────────────
 window.checkModelFile = async function (webLlmModelId) {
     try {

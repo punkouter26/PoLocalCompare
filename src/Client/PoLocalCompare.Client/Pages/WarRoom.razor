@@ -82,14 +82,43 @@
             {
                 @foreach (var model in _filteredModels)
                 {
-                    <ModelCard
-                        Model="model"
-                        LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
-                        IsSelected="@(model.ModelId == _leftModel?.ModelId || model.ModelId == _rightModel?.ModelId)"
-                        Slot="@(model.ModelId == _leftModel?.ModelId ? "Left" : model.ModelId == _rightModel?.ModelId ? "Right" : null)"
-                        IsDisabled="false"
-                        OnSelected="AssignModel"
-                        ProjectedEloGain="@ComputeProjectedGain(model)" />
+                    <div class="war-room__pool-item">
+                        <ModelCard
+                            Model="model"
+                            LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
+                            IsSelected="@(model.ModelId == _leftModel?.ModelId || model.ModelId == _rightModel?.ModelId)"
+                            Slot="@(model.ModelId == _leftModel?.ModelId ? "Left" : model.ModelId == _rightModel?.ModelId ? "Right" : null)"
+                            IsDisabled="false"
+                            OnSelected="AssignModel"
+                            ProjectedEloGain="@ComputeProjectedGain(model)" />
+                        @if (model.ModelType == ModelType.Remote || model.ModelType == ModelType.LocalService)
+                        {
+                            <button class="war-room__edit-btn" title="Edit deployment name"
+                                    @onclick="() => ToggleEdit(model.ModelId)"
+                                    @onclick:stopPropagation="true">
+                                ✏️
+                            </button>
+                        }
+                    </div>
+                    @if (_editingModelId == model.ModelId)
+                    {
+                        <div class="war-room__edit-row">
+                            <label class="war-room__edit-label">Display Name</label>
+                            <input class="war-room__edit-input" @bind="_editDisplayName" placeholder="Display name" />
+                            <label class="war-room__edit-label">Deployment / Model Name (ApiEndpointRef)</label>
+                            <input class="war-room__edit-input" @bind="_editApiEndpointRef" placeholder="e.g. gpt-4o-mini" />
+                            @if (_editError is not null)
+                            {
+                                <p class="war-room__edit-error">@_editError</p>
+                            }
+                            <div class="war-room__edit-actions">
+                                <button class="war-room__edit-save" @onclick="() => SaveEditAsync(model.ModelId)" disabled="@_editSaving">
+                                    @(_editSaving ? "Saving…" : "Save")
+                                </button>
+                                <button class="war-room__edit-cancel" @onclick="CancelEdit">Cancel</button>
+                            </div>
+                        </div>
+                    }
                 }
             }
         </div>
@@ -149,6 +178,69 @@
 
     private string _typeFilter = "All";
     private IEnumerable<ModelDto> _filteredModels => FilteredModels(_typeFilter);
+
+    // ── Inline edit state ─────────────────────────────────────────────────
+    private string? _editingModelId;
+    private string _editDisplayName = string.Empty;
+    private string _editApiEndpointRef = string.Empty;
+    private string? _editError;
+    private bool _editSaving;
+
+    private void ToggleEdit(string modelId)
+    {
+        if (_editingModelId == modelId) { CancelEdit(); return; }
+        var model = _allModels.FirstOrDefault(m => m.ModelId == modelId);
+        if (model is null) return;
+        _editingModelId = modelId;
+        _editDisplayName = model.DisplayName;
+        _editApiEndpointRef = model.ApiEndpointRef ?? string.Empty;
+        _editError = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editingModelId = null;
+        _editError = null;
+    }
+
+    private async Task SaveEditAsync(string modelId)
+    {
+        _editSaving = true;
+        _editError = null;
+        try
+        {
+            var updated = await ApiClient.PatchModelAsync(
+                modelId,
+                string.IsNullOrWhiteSpace(_editDisplayName) ? null : _editDisplayName,
+                string.IsNullOrWhiteSpace(_editApiEndpointRef) ? null : _editApiEndpointRef);
+
+            if (updated is not null)
+            {
+                var idx = _allModels.FindIndex(m => m.ModelId == modelId);
+                if (idx >= 0) _allModels[idx] = updated;
+                // Rebuild disambiguated labels
+                _modelLabels = _allModels
+                    .GroupBy(m => m.DisplayName)
+                    .SelectMany(g =>
+                    {
+                        bool dup = g.Count() > 1;
+                        return g.Select(m => KeyValuePair.Create(
+                            m.ModelId,
+                            dup ? $"{m.DisplayName} (…{(m.ModelId.Length > 6 ? m.ModelId[^6..] : m.ModelId)})" : m.DisplayName));
+                    })
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                CancelEdit();
+            }
+        }
+        catch (Exception ex)
+        {
+            _editError = $"Save failed: {ex.Message}";
+        }
+        finally
+        {
+            _editSaving = false;
+        }
+    }
 
 
     private IEnumerable<ModelDto> FilteredModels(string filter) => filter switch
@@ -575,5 +667,108 @@
         color: var(--oled-yellow);
         font-size: 0.9rem;
         margin-bottom: 1rem;
+    }
+
+    /* Inline model edit */
+    .war-room__pool-item {
+        position: relative;
+    }
+
+    .war-room__edit-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.9rem;
+        opacity: 0.4;
+        padding: 0.2rem 0.35rem;
+        border-radius: var(--radius-sm);
+        transition: opacity var(--transition-fast), background var(--transition-fast);
+        z-index: 1;
+    }
+
+    .war-room__edit-btn:hover {
+        opacity: 1;
+        background: rgba(255,255,255,0.07);
+    }
+
+    .war-room__edit-row {
+        grid-column: 1 / -1;
+        background: var(--oled-surface);
+        border: 1px solid var(--oled-cyan);
+        border-radius: var(--radius-md);
+        padding: 0.85rem 1rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .war-room__edit-label {
+        font-size: 0.75rem;
+        color: var(--oled-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .war-room__edit-input {
+        background: #111;
+        border: 1px solid var(--oled-border);
+        color: var(--oled-text);
+        border-radius: var(--radius-sm);
+        padding: 0.4rem 0.6rem;
+        font-size: 0.9rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .war-room__edit-input:focus {
+        outline: none;
+        border-color: var(--oled-cyan);
+        box-shadow: 0 0 0 2px rgba(6,182,212,0.2);
+    }
+
+    .war-room__edit-error {
+        color: var(--oled-red);
+        font-size: 0.8rem;
+        margin: 0;
+    }
+
+    .war-room__edit-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+    }
+
+    .war-room__edit-save {
+        background: var(--oled-cyan);
+        color: #000;
+        border: none;
+        border-radius: var(--radius-sm);
+        padding: 0.35rem 0.9rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity var(--transition-fast);
+    }
+
+    .war-room__edit-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .war-room__edit-cancel {
+        background: none;
+        border: 1px solid var(--oled-border);
+        color: var(--oled-text-muted);
+        border-radius: var(--radius-sm);
+        padding: 0.35rem 0.9rem;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: border-color var(--transition-fast), color var(--transition-fast);
+    }
+
+    .war-room__edit-cancel:hover {
+        border-color: var(--oled-text-muted);
+        color: var(--oled-text);
     }
 </style>

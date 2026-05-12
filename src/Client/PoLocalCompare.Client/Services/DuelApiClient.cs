@@ -117,6 +117,14 @@ public sealed class DuelApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<ModelDto?> PatchModelAsync(string modelId, string? displayName, string? apiEndpointRef)
+    {
+        var body = new { displayName, apiEndpointRef };
+        var response = await _http.PatchAsJsonAsync($"/api/models/{Uri.EscapeDataString(modelId)}", body, JsonOptions);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ModelDto>(JsonOptions);
+    }
+
     /// <summary>Returns GPU vs CPU placement for all models currently loaded in Ollama.
     /// Returns an empty list (never null) if Ollama is unreachable.</summary>
     public async Task<IReadOnlyList<OllamaGpuStatusDto>> GetOllamaGpuStatusAsync()
