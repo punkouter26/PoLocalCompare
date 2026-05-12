@@ -38,7 +38,7 @@ public sealed class WebLlmService : IAsyncDisposable
         var session = new InferenceSession();
         _sessions[modelId] = session;
 
-        await _js.InvokeVoidAsync("startWebLlmInference", _selfRef, modelId, webLlmModelId, prompt, cancellationToken);
+        await _js.InvokeVoidAsync("startWebLlmInference", cancellationToken, _selfRef, modelId, webLlmModelId, prompt);
 
         await foreach (var update in session.Channel.Reader.ReadAllAsync(cancellationToken))
         {
