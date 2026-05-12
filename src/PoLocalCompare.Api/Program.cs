@@ -138,6 +138,7 @@ try
     if (app.Environment.IsDevelopment())
     {
         await AzuriteSetup.EnsureTablesExistAsync(app.Services);
+        await PoLocalCompare.Infrastructure.Persistence.ModelSeeder.SeedAsync(app.Services);
     }
 
     // ─── Middleware pipeline ─────────────────────────────────────────────────
