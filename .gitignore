@@ -32,6 +32,9 @@ logs/
 ## Build outputs
 dist/
 publish/
+artifacts/
+appservice-logs/
+appservice-logs.zip
 
 ## Local LLM model weights (downloaded by download-models.py, ~4.7 GB)
 src/Client/PoLocalCompare.Client/wwwroot/models/

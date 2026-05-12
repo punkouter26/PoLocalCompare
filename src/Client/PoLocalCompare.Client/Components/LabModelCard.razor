@@ -5,15 +5,27 @@
     @* Header row *@
     <div class="lab__card-header">
         <div class="lab__card-title">
-            <span class="lab__model-name">@State.Model.DisplayName</span>
-            @if (State.VramMb > 0)
+            <div class="lab__card-title-main">
+                <span class="lab__model-name">@FormatDisplayName(State.Model.DisplayName)</span>
+                @if (!State.IsOllamaModel && State.VramTier == "warn")
+                {
+                    <span class="lab__vram-warn" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
+                }
+            </div>
+            <div class="lab__card-title-meta">
+                @if (State.IsOllamaModel)
+                {
+                    <span class="lab__vram-badge lab__vram-badge--ollama" title="Runs via local Ollama daemon">🦙 Ollama</span>
+                }
+                else if (State.VramMb > 0)
+                {
+                    <span class="lab__vram-badge lab__vram-badge--@State.VramTier"
+                          title="Estimated GPU VRAM required: @State.VramLabel">@State.VramLabel</span>
+                }
+            </div>
+            @if (!State.IsOllamaModel && State.VramTier == "warn")
             {
-                <span class="lab__vram-badge lab__vram-badge--@State.VramTier"
-                      title="Estimated GPU VRAM required: @State.VramLabel">@State.VramLabel</span>
-            }
-            @if (State.VramTier == "warn")
-            {
-                <span class="lab__vram-warn" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
+                <span class="lab__vram-hint">High VRAM requirement</span>
             }
         </div>
         <div class="lab__card-actions">
@@ -22,7 +34,7 @@
                 <button class="lab__btn-sm lab__btn-sm--run"
                         title="Run diagnostic"
                         @onclick="HandleRun"
-                        disabled="@(State.IsDownloaded != true || WebGpuSupported != true)">
+                        disabled="@(State.IsDownloaded != true || (!State.IsOllamaModel && WebGpuSupported != true))">
                     ▶
                 </button>
             }
@@ -37,31 +49,65 @@
         </div>
     </div>
 
-    @* Model ID chip *@
-    <div class="lab__model-id">@State.Model.WebLlmModelId</div>
+    @* Model ID chip — show ApiEndpointRef for Ollama, WebLlmModelId for browser *@
+    <div class="lab__model-id">@(State.IsOllamaModel ? State.Model.ApiEndpointRef : State.Model.WebLlmModelId)</div>
 
-    @* Download status *@
+    @* Download status — Ollama models show availability instead *@
     <div class="lab__download-row">
-        @if (State.IsDownloaded is null)
+        @if (State.IsOllamaModel)
         {
-            <span class="lab__badge lab__badge--checking">⏳ Checking…</span>
-        }
-        else if (State.IsDownloaded == true)
-        {
-            <span class="lab__badge lab__badge--ok">✅ Downloaded</span>
+            @if (State.IsDownloaded is null)
+            {
+                <span class="lab__badge lab__badge--checking">⏳ Checking Ollama…</span>
+            }
+            else if (State.IsDownloaded == true)
+            {
+                <span class="lab__badge lab__badge--ok">✅ Available in Ollama</span>
+            }
+            else
+            {
+                <span class="lab__badge lab__badge--missing">⚠ Not found in Ollama — run <code>ollama pull @State.Model.ApiEndpointRef</code></span>
+            }
         }
         else
         {
-            <span class="lab__badge lab__badge--missing">⚠ Model assets missing</span>
+            @if (State.IsDownloaded is null)
+            {
+                <span class="lab__badge lab__badge--checking">⏳ Checking…</span>
+            }
+            else if (State.IsDownloaded == true)
+            {
+                <span class="lab__badge lab__badge--ok">@(State.UsesCdnAssets ? "☁ Ready via CDN" : "✅ Downloaded locally")</span>
+            }
+            else
+            {
+                <span class="lab__badge lab__badge--missing">⚠ Model assets unavailable</span>
+            }
         }
     </div>
-    @if (State.IsDownloaded == false)
+    @if (!State.IsOllamaModel && State.IsDownloaded == false)
     {
-        <details class="lab__download-hint">
-            <summary class="lab__download-hint-summary">How to download</summary>
-            <code class="lab__download-cmd">python download-models.py</code>
-            <span class="lab__download-note">Expected asset: /models/@State.Model.WebLlmModelId/mlc-chat-config.json</span>
-        </details>
+        <div class="lab__download-hint">
+            @if (State.Downloading)
+            {
+                <span class="lab__badge lab__badge--checking">⏬ Downloading… (check back in a few minutes)</span>
+            }
+            else
+            {
+                <button class="lab__btn-sm lab__btn-sm--download"
+                        title="Download from HuggingFace via server"
+                        @onclick="HandleDownload">
+                    ⬇ Download
+                </button>
+            }
+            <span class="lab__download-note">Asset: /models/@State.Model.WebLlmModelId/mlc-chat-config.json</span>
+        </div>
+    }
+    else if (!State.IsOllamaModel && State.UsesCdnAssets)
+    {
+        <div class="lab__download-hint">
+            <span class="lab__download-note">Downloads on first run from the configured CDN.</span>
+        </div>
     }
 
     @* Running: progress bar + step detail *@
@@ -129,9 +175,11 @@
     [Parameter] public EventCallback<ModelDiagState> OnRun { get; set; }
     [Parameter] public EventCallback<ModelDiagState> OnCancel { get; set; }
     [Parameter] public EventCallback<ModelDiagState> OnToggleOutput { get; set; }
+    [Parameter] public EventCallback<string> OnDownload { get; set; }
 
     private Task HandleRun()    => OnRun.InvokeAsync(State);
     private Task HandleCancel() => OnCancel.InvokeAsync(State);
+    private Task HandleDownload() => OnDownload.InvokeAsync(State.Model.WebLlmModelId ?? string.Empty);
 
     private async Task HandleToggleOutput()
     {
@@ -161,4 +209,14 @@
 
     private static int CompletenessScore(ModelDiagState m) =>
         m.TotalTokens <= 0 ? 0 : Math.Min(100, (int)((m.TotalTokens / 256.0) * 100));
+
+    private static string FormatDisplayName(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return string.Empty;
+        }
+
+        return System.Text.RegularExpressions.Regex.Replace(displayName, @"(?<=\d)(?=(MB|GB)\b)", " ");
+    }
 }

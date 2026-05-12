@@ -182,7 +182,11 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
                 if (elapsed - lastCallbackAt >= 500)
                 {
                     lastCallbackAt = elapsed;
-                    var stats = new HtmlStreamStats(tagCount, Math.Max(0, openDepth), styleRules, 0.0);
+                    // Send partial HTML preview every 25 tokens (max 5000 chars) for live streaming
+                    string? preview = tokenCount % 25 == 0
+                        ? sb.ToString()[..Math.Min(5000, sb.Length)]
+                        : null;
+                    var stats = new HtmlStreamStats(tagCount, Math.Max(0, openDepth), styleRules, 0.0, preview);
                     await onTokenUpdate(tokenCount, elapsed, stats);
                 }
             }

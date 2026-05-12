@@ -34,9 +34,9 @@
 .lab__env {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem 0.6rem;
-    padding: 0.6rem 1rem;
+    align-items: stretch;
+    gap: 0.55rem;
+    padding: 0.7rem;
     border-radius: 8px;
     margin-bottom: 1.5rem;
     font-size: 0.8rem;
@@ -52,6 +52,40 @@
 .lab__env-item--ok  { color: #4caf7d; font-weight: 600; }
 .lab__env-item--err { color: #e05c5c; font-weight: 600; }
 .lab__env-item--muted { color: #6a6a7a; }
+
+.lab__env-cluster {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid #2a2a3a;
+    border-radius: 6px;
+    background: #131322;
+}
+
+.lab__env-cluster--runtime {
+    flex: 2 1 520px;
+}
+
+.lab__env-cluster--inventory {
+    flex: 1 1 320px;
+    justify-content: flex-start;
+    gap: 0.4rem;
+}
+
+.lab__env-cluster--inventory .lab__env-item {
+    background: #0e0e1c;
+    border: 1px solid #2a2a3a;
+    border-radius: 999px;
+    padding: 0.15rem 0.45rem;
+}
+
+.lab__env-number {
+    color: #d7defa;
+    font-weight: 700;
+    margin-right: 0.18rem;
+}
 
 /* ── Prompt section ──────────────────────────────────────────── */
 .lab__prompt-section {
@@ -97,6 +131,12 @@
     margin-top: 0.75rem;
 }
 
+.lab__status-note {
+    margin: 0.45rem 0 0.85rem;
+    color: #94a3b8;
+    font-size: 0.8rem;
+}
+
 /* ── Buttons ─────────────────────────────────────────────────── */
 .lab__btn {
     padding: 0.4rem 0.9rem;
@@ -130,7 +170,7 @@
 .lab__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
+    gap: 1.2rem;
     margin-bottom: 2rem;
 }
 
@@ -139,10 +179,10 @@
     background: #12121e;
     border: 1px solid #2a2a3a;
     border-radius: 10px;
-    padding: 0.9rem 1rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.65rem;
     transition: border-color 0.2s;
 }
 
@@ -165,8 +205,23 @@
 
 .lab__card-title {
     display: flex;
-    align-items: baseline;
-    gap: 0.4rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.lab__card-title-main {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.lab__card-title-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
     flex-wrap: wrap;
 }
 
@@ -174,6 +229,7 @@
     font-weight: 600;
     color: #d0d0f0;
     font-size: 0.9rem;
+    line-height: 1.25;
 }
 
 .lab__vram-badge {
@@ -188,12 +244,19 @@
 .lab__vram-badge--ok    { color: #70c070; border-color: #2a4a2a; background: #0e1e0e; }
 .lab__vram-badge--caution { color: #c0a040; border-color: #3a3010; background: #1a1800; }
 .lab__vram-badge--warn  { color: #c06060; border-color: #4a2020; background: #1e0e0e; }
+.lab__vram-badge--ollama { color: #fb923c; border-color: #4a2a0a; background: #1e0e00; }
 
 .lab__vram-warn {
     font-size: 0.75rem;
     color: #c06060;
     cursor: help;
     line-height: 1;
+}
+
+.lab__vram-hint {
+    font-size: 0.66rem;
+    color: #b07a7a;
+    letter-spacing: 0.02em;
 }
 
 .lab__warm-badge {
@@ -404,6 +467,10 @@
 .lab__th--speed { color: #4caf7d !important; }
 .lab__td--speed { color: #6ef0a0; font-weight: 700; font-size: 0.9rem; }
 
+.lab__th--value { color: #c084fc !important; }
+.lab__td--value { color: #d8b4fe; font-weight: 700; font-size: 0.9rem; }
+.lab__td--value--best { color: #a855f7; font-size: 1rem; }
+
 .lab__tr--winner td { background: #0d1a12; }
 
 .lab__quality-wrap {
@@ -415,10 +482,14 @@
 .lab__quality-bar {
     height: 6px;
     border-radius: 3px;
-    background: #3d5af1;
     min-width: 2px;
     max-width: 80px;
 }
+
+/* Colour-coded completeness bars */
+.lab__quality-bar--good { background: #22c55e; }
+.lab__quality-bar--fair { background: #f59e0b; }
+.lab__quality-bar--poor { background: #ef4444; }
 
 .lab__quality-pct {
     font-size: 0.7rem;
@@ -446,11 +517,11 @@
 
 .lab__scatter {
     width: 100%;
-    max-width: 600px;
+    max-width: 700px;
     height: auto;
     display: block;
-    background: #0a0a15;
-    border: 1px solid #1e1e2e;
+    background: #0e0e1c;
+    border: 1px solid #2e2e50;
     border-radius: 8px;
     padding: 4px;
 }
@@ -463,15 +534,44 @@
 
 .lab__scatter-dot:hover { opacity: 1; fill: #6ef0a0; }
 
+/* Colour-coded by completeness */
+.lab__scatter-dot--good { fill: #22c55e; opacity: 0.9; }
+.lab__scatter-dot--fair { fill: #f59e0b; opacity: 0.9; }
+.lab__scatter-dot--poor { fill: #ef4444; opacity: 0.9; }
+.lab__scatter-dot--recommended { filter: drop-shadow(0 0 5px #22c55e88); }
+
 .lab__scatter-axis-label {
-    fill: #555570;
-    font-size: 10px;
+    fill: #9090b8;
+    font-size: 11px;
     font-family: system-ui, sans-serif;
+    font-weight: 500;
 }
 
 .lab__scatter-model-label {
-    fill: #9090c0;
+    fill: #c0c0e0;
+    font-size: 10px;
+    font-family: system-ui, sans-serif;
+    pointer-events: none;
+}
+
+.lab__scatter-tick {
+    fill: #8080a8;
     font-size: 9px;
+    font-family: system-ui, sans-serif;
+}
+
+.lab__scatter-zone-label {
+    fill: #50c878;
+    font-size: 9px;
+    font-family: system-ui, sans-serif;
+    font-style: italic;
+    font-weight: 600;
+}
+
+.lab__scatter-rec-label {
+    fill: #4ade80;
+    font-size: 9.5px;
+    font-weight: 700;
     font-family: system-ui, sans-serif;
 }
 
@@ -531,15 +631,15 @@
 
 /* ── Family grouping ───────────────────────────────────────────── */
 .lab__family-group {
-    margin-bottom: 1.75rem;
+    margin-bottom: 2.15rem;
 }
 
 .lab__family-header {
     display: flex;
     align-items: baseline;
     gap: 0.75rem;
-    padding: 0.3rem 0.1rem;
-    margin-bottom: 0.6rem;
+    padding: 0.35rem 0.1rem;
+    margin-bottom: 0.85rem;
     border-bottom: 1px solid #2a2a3a;
 }
 
@@ -653,4 +753,27 @@
 
 .lab__env-stat--pulse {
     animation: lab-pulse-green 1.4s ease-out forwards;
+}
+
+@media (max-width: 900px) {
+    .lab {
+        padding: 1.15rem 0.75rem 2.5rem;
+    }
+
+    .lab__env {
+        gap: 0.45rem;
+    }
+
+    .lab__env-cluster {
+        flex: 1 1 100%;
+    }
+
+    .lab__btn-row .lab__btn {
+        flex: 1 1 180px;
+    }
+
+    .lab__grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
 }

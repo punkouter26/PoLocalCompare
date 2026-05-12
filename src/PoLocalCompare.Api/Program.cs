@@ -13,6 +13,7 @@ using PoLocalCompare.Infrastructure;
 using PoLocalCompare.Infrastructure.Persistence;
 using Scalar.AspNetCore;
 using Serilog;
+using Serilog.Events;
 
 // ─── Bootstrap logger (before DI) ───────────────────────────────────────────
 Log.Logger = new LoggerConfiguration()
@@ -144,6 +145,26 @@ try
     // ─── Middleware pipeline ─────────────────────────────────────────────────
     app.UseSerilogRequestLogging(opts =>
     {
+        opts.GetLevel = (httpCtx, elapsed, ex) =>
+        {
+            if (ex is not null || httpCtx.Response.StatusCode >= 500)
+                return LogEventLevel.Error;
+
+            if (httpCtx.Response.StatusCode >= 400)
+                return LogEventLevel.Warning;
+
+            var path = httpCtx.Request.Path;
+            if (path.StartsWithSegments("/_framework")
+                || path.StartsWithSegments("/css")
+                || path.StartsWithSegments("/js")
+                || path.Value?.EndsWith(".wasm", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return LogEventLevel.Debug;
+            }
+
+            return LogEventLevel.Information;
+        };
+
         opts.EnrichDiagnosticContext = (diagCtx, httpCtx) =>
         {
             diagCtx.Set("CorrelationId", httpCtx.TraceIdentifier);

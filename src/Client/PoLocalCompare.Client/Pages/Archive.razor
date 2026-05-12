@@ -37,6 +37,13 @@
                 </button>
             }
         </div>
+        @if (FilteredDuels().Count == 0)
+        {
+            <div class="archive__filtered-empty">
+                <p>No duels match the <strong>@_verdictFilter</strong> filter.</p>
+                <button class="archive__filter-reset" @onclick="ResetFilters">Show all duels</button>
+            </div>
+        }
         <RadzenDataGrid Data="@FilteredDuels()" TItem="DuelSummaryDto" RowSelect="OnRowSelect"
             RowClass="@_rowClassFn"
             Class="archive__grid">
@@ -183,6 +190,8 @@
     };
 
     private Func<DuelSummaryDto, string> _rowClassFn => GetRowClass;
+
+    private void ResetFilters() => _verdictFilter = "All";
 
     protected override async Task OnInitializedAsync()
     {

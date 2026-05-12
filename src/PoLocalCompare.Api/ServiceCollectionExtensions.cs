@@ -37,6 +37,8 @@ public static class ServiceCollectionExtensions
                 kFactor);
         });
 
+        services.AddSingleton<AutoJudgeService>();
+
         return services;
     }
 }

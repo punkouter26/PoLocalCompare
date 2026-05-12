@@ -18,4 +18,8 @@
     <ProjectReference Include="..\..\PoLocalCompare.Shared\PoLocalCompare.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="wwwroot\models\**\*" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
 </Project>

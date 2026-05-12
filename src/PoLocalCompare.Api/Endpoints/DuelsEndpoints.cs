@@ -105,7 +105,7 @@ public static class DuelsEndpoints
         .Produces(StatusCodes.Status200OK)
         .ProducesValidationProblem();
 
-        // T063 — POST /api/duels/{duelId}/verdict
+        // POST /api/duels/{duelId}/verdict
         group.MapPost("/{duelId}/verdict", async (
             string duelId,
             [FromBody] VerdictRequestDto request,
@@ -140,6 +140,30 @@ public static class DuelsEndpoints
         .Produces(StatusCodes.Status404NotFound)
         .Produces(StatusCodes.Status409Conflict)
         .Produces(StatusCodes.Status422UnprocessableEntity);
+
+        // POST /api/duels/{duelId}/auto-judge — GPT-4.1 Nano judges when user doesn’t pick within timeout
+        group.MapPost("/{duelId}/auto-judge", async (
+            string duelId,
+            [FromServices] AutoJudgeService autoJudgeService,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var response = await autoJudgeService.JudgeAsync(duelId, cancellationToken);
+                if (response is null)
+                    return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
+                return Results.Ok(response);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Conflict(new { error = ex.Message });
+            }
+        })
+        .WithName("AutoJudgeDuel")
+        .WithSummary("Uses GPT-4.1 Nano to automatically judge the duel winner when no human verdict is given.")
+        .Produces<VerdictResponseDto>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status409Conflict);
 
         // T077 — GET /api/duels (archive listing with pagination)
         group.MapGet("/", async (

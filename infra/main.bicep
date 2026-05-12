@@ -10,7 +10,12 @@ param location string = resourceGroup().location
 param sharedResourceGroupName string = 'PoShared'
 
 @description('App Service Plan name in PoShared resource group')
-param sharedAppServicePlanName string = 'PoShared-AppServicePlan'
+param sharedAppServicePlanName string = 'asp-poshared-linux'
+
+resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: 'kv-poshared'
+  scope: resourceGroup(sharedResourceGroupName)
+}
 
 // ─── Storage Account ──────────────────────────────────────────────────────────
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -67,7 +72,7 @@ resource duelHtmlOutputsContainer 'Microsoft.Storage/storageAccounts/blobService
   }
 }
 
-// ─── App Service (reference existing from PoShared) ───────────────────────────
+// ─── Linux App Service (shared plan in PoShared) ─────────────────────────────
 resource sharedAppServicePlan 'Microsoft.Web/serverfarms@2023-12-01' existing = {
   name: sharedAppServicePlanName
   scope: resourceGroup(sharedResourceGroupName)
@@ -76,6 +81,7 @@ resource sharedAppServicePlan 'Microsoft.Web/serverfarms@2023-12-01' existing = 
 resource appService 'Microsoft.Web/sites@2023-12-01' = {
   name: 'PoLocalCompare-AppService-${environmentName}'
   location: location
+  kind: 'app,linux'
   identity: {
     type: 'SystemAssigned'
   }
@@ -83,8 +89,35 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: sharedAppServicePlan.id
     httpsOnly: true
     siteConfig: {
-      netFrameworkVersion: 'v10.0'
-      use32BitWorkerProcess: false
+      alwaysOn: true
+      appCommandLine: 'dotnet PoLocalCompare.Api.dll'
+      appSettings: [
+        {
+          name: 'ASPNETCORE_ENVIRONMENT'
+          value: 'Production'
+        }
+        {
+          name: 'ASPNETCORE_URLS'
+          value: 'http://+:8080'
+        }
+        {
+          name: 'KeyVault__Uri'
+          value: sharedKeyVault.properties.vaultUri
+        }
+        {
+          name: 'ConnectionStrings__AzureTableStorage'
+          value: '@Microsoft.KeyVault(SecretUri=${sharedKeyVault.properties.vaultUri}secrets/PoLocalCompare--ConnectionStrings--AzureTableStorage/)'
+        }
+        {
+          name: 'ConnectionStrings__AzureBlobStorage'
+          value: '@Microsoft.KeyVault(SecretUri=${sharedKeyVault.properties.vaultUri}secrets/PoLocalCompare--ConnectionStrings--AzureBlobStorage/)'
+        }
+      ]
+      ftpsState: 'Disabled'
+      healthCheckPath: '/health'
+      linuxFxVersion: 'DOTNETCORE|10.0'
+      minTlsVersion: '1.2'
+      http20Enabled: true
     }
   }
 }

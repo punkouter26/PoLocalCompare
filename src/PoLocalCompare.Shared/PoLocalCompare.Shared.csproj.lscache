@@ -62,6 +62,7 @@ DTOs/
  LeaderboardEntryDto.cs
  ModelDto.cs
  ModelStatusUpdateDto.cs
+ OllamaBenchmarkResultDto.cs
  OllamaGpuStatusDto.cs
  VerdictRequestDto.cs
  VerdictResponseDto.cs

@@ -1,4 +1,5 @@
 using Microsoft.JSInterop;
+using Microsoft.Extensions.Configuration;
 using PoLocalCompare.Client.Services;
 using PoLocalCompare.Shared.DTOs;
 using System.Runtime.CompilerServices;
@@ -13,15 +14,25 @@ public sealed class WebLlmService : IAsyncDisposable
 {
     private readonly IJSRuntime _js;
     private readonly DuelApiClient _apiClient;
+    private readonly string[] _cdnBaseUrlTemplates;
 
     // Per-modelId session state
     private readonly Dictionary<string, InferenceSession> _sessions = [];
     private DotNetObjectReference<WebLlmService>? _selfRef;
 
-    public WebLlmService(IJSRuntime js, DuelApiClient apiClient)
+    public WebLlmService(IJSRuntime js, DuelApiClient apiClient, IConfiguration configuration)
     {
         _js = js;
         _apiClient = apiClient;
+        var primary = configuration["BrowserModels:PrimaryCdnBaseUrlTemplate"]
+            ?? configuration["BrowserModels:CdnBaseUrlTemplate"];
+        var backup = configuration["BrowserModels:BackupCdnBaseUrlTemplate"];
+        _cdnBaseUrlTemplates = [
+            ..new[] { primary, backup }
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => v!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     /// <summary>Starts inference via the WebLLM Web Worker and reports status updates.
@@ -38,7 +49,7 @@ public sealed class WebLlmService : IAsyncDisposable
         var session = new InferenceSession();
         _sessions[modelId] = session;
 
-        await _js.InvokeVoidAsync("startWebLlmInference", cancellationToken, _selfRef, modelId, webLlmModelId, prompt);
+        await _js.InvokeVoidAsync("startWebLlmInference", cancellationToken, _selfRef, modelId, webLlmModelId, prompt, _cdnBaseUrlTemplates);
 
         await foreach (var update in session.Channel.Reader.ReadAllAsync(cancellationToken))
         {

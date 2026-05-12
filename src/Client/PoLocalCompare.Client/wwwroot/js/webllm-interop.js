@@ -7,10 +7,76 @@
 // Map of modelId → Worker, allowing concurrent local model inference
 const workers = {};
 
+function normalizeModelBaseUrl(baseUrl) {
+    if (!baseUrl) {
+        return '';
+    }
+
+    return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+}
+
+function buildCdnModelBaseUrl(webLlmModelId, cdnBaseUrlTemplate) {
+    if (!cdnBaseUrlTemplate || !webLlmModelId) {
+        return '';
+    }
+
+    if (cdnBaseUrlTemplate.includes('{modelId}')) {
+        return normalizeModelBaseUrl(cdnBaseUrlTemplate.replaceAll('{modelId}', encodeURIComponent(webLlmModelId)));
+    }
+
+    return normalizeModelBaseUrl(`${cdnBaseUrlTemplate}${encodeURIComponent(webLlmModelId)}`);
+}
+
+async function canReachModelConfig(modelBaseUrl) {
+    if (!modelBaseUrl) {
+        return false;
+    }
+
+    try {
+        const response = await fetch(`${modelBaseUrl}mlc-chat-config.json`, { method: 'HEAD' });
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
+function getCdnTemplates(cdnBaseUrlTemplates) {
+    if (!cdnBaseUrlTemplates) {
+        return [];
+    }
+
+    if (Array.isArray(cdnBaseUrlTemplates)) {
+        return cdnBaseUrlTemplates.filter(Boolean);
+    }
+
+    return [cdnBaseUrlTemplates];
+}
+
+window.resolveBrowserModelAvailability = async function (webLlmModelId, localModelBaseUrl, cdnBaseUrlTemplates) {
+    const localBaseUrl = normalizeModelBaseUrl(`${normalizeModelBaseUrl(localModelBaseUrl)}${webLlmModelId}`);
+    if (await canReachModelConfig(localBaseUrl)) {
+        return { available: true, source: 'local', baseUrl: localBaseUrl };
+    }
+
+    const templates = getCdnTemplates(cdnBaseUrlTemplates);
+    for (let i = 0; i < templates.length; i++) {
+        const cdnBaseUrl = buildCdnModelBaseUrl(webLlmModelId, templates[i]);
+        if (await canReachModelConfig(cdnBaseUrl)) {
+            return {
+                available: true,
+                source: i === 0 ? 'cdn' : 'cdn-backup',
+                baseUrl: cdnBaseUrl
+            };
+        }
+    }
+
+    return { available: false, source: '', baseUrl: localBaseUrl };
+};
+
 /**
  * Called from Blazor WebLlmService via IJSRuntime.InvokeVoidAsync("startWebLlmInference", dotnetRef, modelId, webLlmModelId, prompt)
  */
-window.startWebLlmInference = function (dotnetRef, modelId, webLlmModelId, prompt) {
+window.startWebLlmInference = async function (dotnetRef, modelId, webLlmModelId, prompt, cdnBaseUrlTemplates) {
     // Terminate any previous worker for this modelId
     if (workers[modelId]) {
         workers[modelId].terminate();
@@ -47,6 +113,10 @@ window.startWebLlmInference = function (dotnetRef, modelId, webLlmModelId, promp
     };
 
     // Pass the origin-relative models base so the worker can self-host models
-    const localModelBaseUrl = window.location.origin + '/models/';
-    worker.postMessage({ modelId, webLlmModelId, prompt, localModelBaseUrl });
+    const availability = await window.resolveBrowserModelAvailability(
+        webLlmModelId,
+        window.location.origin + '/models/',
+        cdnBaseUrlTemplates);
+
+    worker.postMessage({ modelId, webLlmModelId, prompt, localModelBaseUrl: availability.baseUrl });
 };

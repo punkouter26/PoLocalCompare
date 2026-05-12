@@ -101,21 +101,19 @@
                         @($"{entry.WinCount}/{losses}{pctStr}")
                     </Template>
                 </RadzenDataGridColumn>
-                @if (_entries.Any(e => e.GreenScoreAvg.HasValue))
-                {
-                    <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="Green Score" Width="140px">
-                        <Template Context="entry">
-                            @if (entry.GreenScoreAvg.HasValue)
-                            {
-                                @entry.GreenScoreAvg.Value.ToString("F1")
-                            }
-                            else
-                            {
-                                <span style="color: var(--rz-text-secondary-color);">—</span>
-                            }
-                        </Template>
-                    </RadzenDataGridColumn>
-                }
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="🌱 Green Score" Width="150px"
+                    HeaderTooltip="Tokens generated per watt-hour. Higher = more energy efficient.">
+                    <Template Context="entry">
+                        @if (entry.GreenScoreAvg.HasValue)
+                        {
+                            <span title="@entry.GreenScoreAvg.Value.ToString("F1") tok/Wh">@entry.GreenScoreAvg.Value.ToString("F1")</span>
+                        }
+                        else
+                        {
+                            <span style="color: var(--rz-text-secondary-color);" title="Run a local model duel to generate this score">—</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="ELO Trend (last 20)" Width="170px">
                     <Template Context="entry">
                         @if (entry.EloSparkline is not null && entry.EloSparkline.Length > 1)

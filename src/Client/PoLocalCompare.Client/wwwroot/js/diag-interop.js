@@ -46,17 +46,15 @@ window.checkWebNn = async function () {
 };
 
 // ── Model file detection ─────────────────────────────────────────────────────
-window.checkModelFile = async function (webLlmModelId) {
-    try {
-        const r = await fetch(`/models/${webLlmModelId}/mlc-chat-config.json`, { method: 'HEAD' });
-        return r.ok;
-    } catch {
-        return false;
-    }
+window.checkModelFile = async function (webLlmModelId, cdnBaseUrlTemplates) {
+    return window.resolveBrowserModelAvailability(
+        webLlmModelId,
+        window.location.origin + '/models/',
+    cdnBaseUrlTemplates);
 };
 
 // ── Diagnostic runner ────────────────────────────────────────────────────────
-window.runModelDiag = function (dotnetRef, diagId, webLlmModelId, prompt) {
+window.runModelDiag = async function (dotnetRef, diagId, webLlmModelId, prompt, cdnBaseUrlTemplates) {
     if (_diagWorkers[diagId]) {
         _diagWorkers[diagId].terminate();
         delete _diagWorkers[diagId];
@@ -118,22 +116,27 @@ window.runModelDiag = function (dotnetRef, diagId, webLlmModelId, prompt) {
             worker.terminate();
             delete _diagWorkers[diagId];
         } else if (m.type === 'error') {
-            dotnetRef.invokeMethodAsync('OnDiagResult', diagId, -1, -1, 0, 0, '', friendlyError(m.reason));
+            dotnetRef.invokeMethodAsync('OnDiagResult', diagId, -1, -1, 0, 0, '', friendlyError(m.reason), false);
             worker.terminate();
             delete _diagWorkers[diagId];
         }
     };
 
     worker.onerror = function (err) {
-        dotnetRef.invokeMethodAsync('OnDiagResult', diagId, -1, -1, 0, 0, '', friendlyError(err.message));
+        dotnetRef.invokeMethodAsync('OnDiagResult', diagId, -1, -1, 0, 0, '', friendlyError(err.message), false);
         delete _diagWorkers[diagId];
     };
+
+    const availability = await window.resolveBrowserModelAvailability(
+        webLlmModelId,
+        window.location.origin + '/models/',
+        cdnBaseUrlTemplates);
 
     worker.postMessage({
         modelId: diagId,
         webLlmModelId: webLlmModelId,
         prompt: prompt,
-        localModelBaseUrl: window.location.origin + '/models/',
+        localModelBaseUrl: availability.baseUrl,
     });
 };
 

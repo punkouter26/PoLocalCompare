@@ -9,6 +9,8 @@ public sealed class ModelDiagState
 {
     public ModelDto Model { get; init; } = null!;
     public bool? IsDownloaded { get; set; }
+    public bool Downloading { get; set; }   // true while server-side download is running
+    public string AssetSource { get; set; } = "";
     public DiagStatus Status { get; set; } = DiagStatus.Idle;
     public int LoadProgress { get; set; }
     public string StepDetail { get; set; } = "";
@@ -30,6 +32,9 @@ public sealed class ModelDiagState
 
     public bool IsSmolLM2 =>
         Model.WebLlmModelId?.StartsWith("SmolLM2", StringComparison.OrdinalIgnoreCase) == true;
+
+    public bool IsOllamaModel => Model.ModelType == PoLocalCompare.Shared.Enums.ModelType.LocalService;
+    public bool UsesCdnAssets => AssetSource.StartsWith("cdn", StringComparison.OrdinalIgnoreCase);
 
     private static readonly Dictionary<string, (int Mb, string Label)> _vramTable = new()
     {

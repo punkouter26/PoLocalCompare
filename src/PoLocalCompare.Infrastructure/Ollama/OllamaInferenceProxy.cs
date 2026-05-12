@@ -156,7 +156,10 @@ public sealed class OllamaInferenceProxy : IRemoteInferenceProxy
                 if (elapsed - lastCallbackAt >= 500)
                 {
                     lastCallbackAt = elapsed;
-                    var stats = new HtmlStreamStats(tagCount, Math.Max(0, openDepth), styleRules, 0.0);
+                    string? preview = tokenCount % 25 == 0
+                        ? sb.ToString()[..Math.Min(5000, sb.Length)]
+                        : null;
+                    var stats = new HtmlStreamStats(tagCount, Math.Max(0, openDepth), styleRules, 0.0, preview);
                     await onTokenUpdate(tokenCount, elapsed, stats);
                 }
             }

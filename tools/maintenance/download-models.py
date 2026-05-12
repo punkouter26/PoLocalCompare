@@ -54,14 +54,32 @@ def download(repo_id: str) -> None:
 
 
 def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Download WebLLM MLC model files from HuggingFace.")
+    parser.add_argument(
+        "--model",
+        metavar="MODEL_ID",
+        help="Download only this model ID (e.g. SmolLM2-135M-Instruct-q0f32-MLC). Omit to download all.",
+    )
+    args = parser.parse_args()
+
+    if args.model:
+        models = [r for r in MODELS if r.split("/")[1] == args.model]
+        if not models:
+            print(f"ERROR: '{args.model}' not found in MODELS list.", file=sys.stderr)
+            print("Available IDs:", ", ".join(r.split("/")[1] for r in MODELS))
+            sys.exit(1)
+    else:
+        models = MODELS
+
     print(f"Model output directory: {BASE_DIR}")
-    for repo_id in MODELS:
+    for repo_id in models:
         try:
             download(repo_id)
         except Exception as exc:
             print(f"ERROR downloading {repo_id}: {exc}", file=sys.stderr)
             sys.exit(1)
-    print(f"\nAll models downloaded to: {BASE_DIR}")
+    print(f"\nDone. Downloaded {len(models)} model(s) to: {BASE_DIR}")
 
 
 if __name__ == "__main__":

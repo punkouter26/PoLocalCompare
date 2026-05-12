@@ -15,9 +15,17 @@ public static class ModelsEndpoints
         var group = app.MapGroup("/api/models").WithTags("Models");
 
         group.MapGet("/", async (
-            [FromServices] ListModelsHandler handler) =>
+            [FromServices] ListModelsHandler handler,
+            [FromServices] IWebHostEnvironment env) =>
         {
             var models = await handler.HandleAsync(new ListModelsQuery());
+            if (!env.IsDevelopment())
+            {
+                models = models
+                    .Where(model => model.ModelType != ModelType.LocalService)
+                    .ToList();
+            }
+
             return Results.Ok(models);
         })
         .WithName("ListModels")
@@ -152,6 +160,55 @@ public static class ModelsEndpoints
         .WithName("DeleteModel")
         .WithSummary("Removes a model from the registry.")
         .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status404NotFound);
+
+        // POST /api/models/{webLlmModelId}/download — triggers background HuggingFace download
+        group.MapPost("/{webLlmModelId}/download", async (
+            [FromRoute] string webLlmModelId,
+            [FromServices] IModelRepository modelRepo,
+            [FromServices] IWebHostEnvironment env) =>
+        {
+            // Validate format — only alphanumeric, dots, hyphens (prevents path traversal)
+            if (!System.Text.RegularExpressions.Regex.IsMatch(webLlmModelId, @"^[a-zA-Z0-9._-]+$"))
+                return Results.BadRequest(new { error = "Invalid model ID format." });
+
+            var models = await modelRepo.GetAllAsync();
+            var model = models.FirstOrDefault(m => m.WebLlmModelId == webLlmModelId);
+            if (model is null)
+                return Results.NotFound(new { error = $"No registered model with WebLlmModelId '{webLlmModelId}'." });
+
+            var scriptPath = Path.GetFullPath(
+                Path.Combine(env.ContentRootPath, "..", "..", "tools", "maintenance", "download-models.py"));
+
+            if (!File.Exists(scriptPath))
+                return Results.Problem(
+                    "download-models.py not found. Run from repo root.",
+                    statusCode: StatusCodes.Status500InternalServerError);
+
+            // Start download as a detached background process — returns immediately
+            _ = Task.Run(async () =>
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "python",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                };
+                psi.ArgumentList.Add(scriptPath);
+                psi.ArgumentList.Add("--model");
+                psi.ArgumentList.Add(webLlmModelId);
+
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process is not null) await process.WaitForExitAsync();
+            });
+
+            return Results.AcceptedAtRoute(null, new { webLlmModelId, status = "Downloading in background. Refresh status in a few minutes." });
+        })
+        .WithName("DownloadModel")
+        .WithSummary("Triggers background download of a local WebLLM model from HuggingFace.")
+        .Produces(StatusCodes.Status202Accepted)
+        .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status404NotFound);
 
         return app;

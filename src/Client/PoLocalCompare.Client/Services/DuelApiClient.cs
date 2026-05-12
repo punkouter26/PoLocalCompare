@@ -141,6 +141,67 @@ public sealed class DuelApiClient
         }
     }
 
+    /// <summary>Triggers a background server-side download of a local WebLLM model from HuggingFace.
+    /// Returns false if the model is not found or the request fails.</summary>
+    public async Task<bool> RequestModelDownloadAsync(string webLlmModelId)
+    {
+        try
+        {
+            var response = await _http.PostAsync(
+                $"/api/models/{Uri.EscapeDataString(webLlmModelId)}/download", null);
+            return response.StatusCode == System.Net.HttpStatusCode.Accepted;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Asks GPT-4.1 Nano to auto-judge the duel. Returns null on failure.</summary>
+    public async Task<VerdictResponseDto?> AutoJudgeAsync(string duelId)
+    {
+        try
+        {
+            var response = await _http.PostAsync($"/api/duels/{duelId}/auto-judge", null);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<VerdictResponseDto>(JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Returns all model names pulled in the local Ollama instance. Never null — empty on failure.</summary>
+    public async Task<IReadOnlyList<string>> GetOllamaAvailableModelsAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<IReadOnlyList<string>>(
+                "/api/ollama/available-models", JsonOptions) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Runs a timed benchmark on an Ollama model via the server. Returns null on network failure.</summary>
+    public async Task<OllamaBenchmarkResultDto?> BenchmarkOllamaModelAsync(string modelName, string prompt)
+    {
+        try
+        {
+            var body = new { modelName, prompt };
+            var response = await _http.PostAsJsonAsync("/api/ollama/benchmark", body, JsonOptions);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<OllamaBenchmarkResultDto>(JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private sealed class ModelDownloadStatusResponse
     {
         public bool Downloaded { get; set; }

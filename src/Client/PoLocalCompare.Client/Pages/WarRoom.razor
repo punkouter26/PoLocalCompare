@@ -63,6 +63,18 @@
         </div>
 
         @* ── 2. TYPE FILTER + UNIFIED MODEL POOL ── *@
+        <div class="war-room__selection-bar">
+            <div class="war-room__selection-slot @(_leftModel is not null ? "war-room__selection-slot--set" : "")">
+                <span class="war-room__selection-label">Left</span>
+                <span class="war-room__selection-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
+            </div>
+            <span class="war-room__selection-vs">VS</span>
+            <div class="war-room__selection-slot @(_rightModel is not null ? "war-room__selection-slot--set" : "")">
+                <span class="war-room__selection-label">Right</span>
+                <span class="war-room__selection-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
+            </div>
+        </div>
+
         <div class="war-room__type-filter">
             @foreach (var label in new[] { "All", "Local", "Remote", "Service" })
             {
@@ -72,6 +84,7 @@
                 </button>
             }
         </div>
+        <p class="war-room__hint">Tip: click a selected model again to unselect it, then choose a replacement.</p>
 
         <div class="war-room__pool">
             @if (!_filteredModels.Any())

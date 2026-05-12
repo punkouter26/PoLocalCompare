@@ -54,6 +54,31 @@
     flex-shrink: 0;
 }
 
+.arena__failure-card {
+    border: 1px solid #7f1d1d;
+    background: #1f0a0a;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    color: #fecaca;
+}
+
+.arena__failure-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.arena__failure-body {
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.arena__failure-hint {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: #fda4af;
+}
+
 .arena__elo-badge {
     text-align: center;
     font-size: 1.1rem;
@@ -101,4 +126,14 @@
     top: 0;
     z-index: 10;
     box-shadow: 0 2px 8px #00000088;
+}
+
+.arena__auto-judge-pause {
+    margin-top: 0.4rem;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #cbd5e1;
+    border-radius: 4px;
+    padding: 0.2rem 0.6rem;
+    cursor: pointer;
 }
