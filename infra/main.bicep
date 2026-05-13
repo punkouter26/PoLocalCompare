@@ -17,11 +17,10 @@ resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   scope: resourceGroup(sharedResourceGroupName)
 }
 
-// ─── Reference to shared Application Insights (PoShared) ──────────────────────
-resource sharedApplicationInsights 'Microsoft.Insights/components@2020-02-02' existing = {
-  name: 'ai-poshared'
-  scope: resourceGroup(sharedResourceGroupName)
-}
+// ─── Application Insights Connection String (optional, set if ai-poshared exists) ────────
+var applicationInsightsConnectionString = ''
+// Note: Application Insights (ai-poshared) should be created separately in PoShared RG
+// Once created, update this to: @Microsoft.KeyVault(SecretUri=...) or set as environment variable
 
 // ─── Storage Account ──────────────────────────────────────────────────────────
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -117,10 +116,6 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'ConnectionStrings__AzureBlobStorage'
           value: '@Microsoft.KeyVault(SecretUri=${sharedKeyVault.properties.vaultUri}secrets/PoLocalCompare--ConnectionStrings--AzureBlobStorage/)'
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: sharedApplicationInsights.properties.ConnectionString
         }
       ]
       ftpsState: 'Disabled'
