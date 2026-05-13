@@ -11,19 +11,23 @@
         *, *::before, *::after { box-sizing: border-box; }
         body {
             margin: 0;
-            background: #000;
-            color: #f0f0f0;
+            background: radial-gradient(circle at top right, #102016 0%, #060809 45%, #040506 100%);
+            color: #ecf4f0;
             font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
             font-size: 0.9rem;
             min-height: 100vh;
         }
         .diag-header {
-            background: #0a0a0a;
-            border-bottom: 1px solid #1a1a1a;
+            background: rgba(6, 8, 9, 0.92);
+            border-bottom: 1px solid #1e2723;
             padding: 0.75rem 1.5rem;
             display: flex;
             align-items: center;
             gap: 1.5rem;
+            position: sticky;
+            top: 0;
+            backdrop-filter: blur(8px);
+            z-index: 10;
         }
         .diag-header__title { font-weight: 700; font-size: 1rem; color: #fff; margin: 0; }
         .diag-header__back {
@@ -32,18 +36,79 @@
             font-size: 0.8rem;
         }
         .diag-header__back:hover { text-decoration: underline; }
-        .diag-body { padding: 1.5rem; max-width: 900px; }
-        h1 { color: #22c55e; font-size: 1.4rem; margin: 0 0 1.5rem; }
-        section { margin-bottom: 1.5rem; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px; padding: 1rem 1.25rem; }
-        h2 { color: #a0a0a0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.75rem; border-bottom: 1px solid #1a1a1a; padding-bottom: 0.4rem; }
+        .diag-body { padding: 1.5rem; max-width: 980px; }
+        h1 { color: #40e48e; font-size: 1.5rem; margin: 0 0 0.4rem; }
+        .diag-lead {
+            margin: 0 0 1.2rem;
+            color: #9cb4aa;
+            max-width: 70ch;
+            line-height: 1.45;
+        }
+        .diag-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.9rem;
+            margin-bottom: 1.1rem;
+        }
+        .diag-summary__card {
+            background: linear-gradient(180deg, #0f1513 0%, #0a0f0d 100%);
+            border: 1px solid #1f2a25;
+            border-radius: 8px;
+            padding: 0.8rem 0.9rem;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+        }
+        .diag-summary__label {
+            color: #8a9b94;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            font-size: 0.7rem;
+            margin-bottom: 0.3rem;
+        }
+        .diag-summary__value {
+            font-weight: 700;
+            color: #f8fffb;
+            font-size: 1.15rem;
+        }
+        .diag-summary__value--ok { color: #4ade80; }
+        .diag-summary__value--warn { color: #f59e0b; }
+        .diag-summary__value--bad { color: #f87171; }
+        section {
+            margin-bottom: 1rem;
+            background: linear-gradient(180deg, #0d1210 0%, #070b09 100%);
+            border: 1px solid #1a2420;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.26);
+        }
+        h2 { color: #9ab1a7; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.75rem; border-bottom: 1px solid #1a2320; padding-bottom: 0.4rem; }
         p { margin: 0.35rem 0; color: #e5e7eb; }
         strong { color: #22c55e; }
-        code { color: #06b6d4; background: #111; padding: 0.1rem 0.3rem; border-radius: 3px; }
+        code { color: #7dd3fc; background: #111814; padding: 0.1rem 0.3rem; border-radius: 3px; }
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; color: #6b7280; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.4rem 0.5rem; border-bottom: 1px solid #1a1a1a; }
-        td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #111; color: #d1d5db; }
+        th { text-align: left; color: #7b8d86; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.4rem 0.5rem; border-bottom: 1px solid #1b2622; }
+        td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #0d1411; color: #d1d5db; }
         td:first-child { color: #9ca3af; }
         tr:last-child td { border-bottom: none; }
+        .diag-status-chip {
+            display: inline-block;
+            padding: 0.15rem 0.55rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border: 1px solid;
+            vertical-align: middle;
+            margin-left: 0.25rem;
+        }
+        .diag-status-chip--ok {
+            color: #4ade80;
+            background: rgba(74, 222, 128, 0.14);
+            border-color: rgba(74, 222, 128, 0.45);
+        }
+        .diag-status-chip--bad {
+            color: #fca5a5;
+            background: rgba(248, 113, 113, 0.14);
+            border-color: rgba(248, 113, 113, 0.48);
+        }
     </style>
 </head>
 <body>
@@ -53,11 +118,47 @@
         <a class="diag-header__back" href="/health">Health JSON</a>
     </div>
     <div class="diag-body">
+        @{
+            var tableHealthy = string.Equals(Model.TableStatus, "Healthy", StringComparison.OrdinalIgnoreCase);
+            var overallStatus = tableHealthy ? "Healthy" : "Degraded";
+            var statusChipClass = tableHealthy ? "diag-status-chip diag-status-chip--ok" : "diag-status-chip diag-status-chip--bad";
+        }
         <h1>Diagnostics</h1>
+        <p class="diag-lead">
+            Runtime observability snapshot for local troubleshooting. Use this page first when startup or middleware behavior looks inconsistent.
+        </p>
+
+        <div class="diag-summary">
+            <div class="diag-summary__card">
+                <div class="diag-summary__label">Overall Status</div>
+                <div class="diag-summary__value @(tableHealthy ? "diag-summary__value--ok" : "diag-summary__value--bad")">@overallStatus</div>
+            </div>
+            <div class="diag-summary__card">
+                <div class="diag-summary__label">Table Latency</div>
+                <div class="diag-summary__value @(Model.TableLatencyMs > 250 ? "diag-summary__value--warn" : "diag-summary__value--ok")">@Model.TableLatencyMs ms</div>
+            </div>
+            <div class="diag-summary__card">
+                <div class="diag-summary__label">Foundry Config</div>
+                <div class="diag-summary__value @(string.IsNullOrWhiteSpace(Model.FoundryEndpoint) ? "diag-summary__value--bad" : "diag-summary__value--ok")">
+                    @(string.IsNullOrWhiteSpace(Model.FoundryEndpoint) ? "Missing" : "Configured")
+                </div>
+            </div>
+            <div class="diag-summary__card">
+                <div class="diag-summary__label">Key Vault Config</div>
+                <div class="diag-summary__value @(string.IsNullOrWhiteSpace(Model.KeyVaultUri) ? "diag-summary__value--bad" : "diag-summary__value--ok")">
+                    @(string.IsNullOrWhiteSpace(Model.KeyVaultUri) ? "Missing" : "Configured")
+                </div>
+            </div>
+        </div>
 
         <section>
             <h2>Azure Table Storage</h2>
-            <p>Status: <strong>@Model.TableStatus</strong> | Latency: @Model.TableLatencyMs ms</p>
+            <p>
+                Status:
+                <strong>@Model.TableStatus</strong>
+                <span class="@statusChipClass">@overallStatus</span>
+                | Latency: @Model.TableLatencyMs ms
+            </p>
         </section>
 
         <section>

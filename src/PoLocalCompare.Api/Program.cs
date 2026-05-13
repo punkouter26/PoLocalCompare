@@ -15,6 +15,7 @@ using PoLocalCompare.Infrastructure.Persistence;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
+using System.IO;
 
 // ─── Bootstrap logger (before DI) ───────────────────────────────────────────
 Log.Logger = new LoggerConfiguration()
@@ -149,6 +150,8 @@ try
 
     // ─── Build ───────────────────────────────────────────────────────────────
     var app = builder.Build();
+
+    ProgramBootstrapVerifier.VerifyClientBootstrapAssets(app);
 
     // ─── Dev-only: ensure Azurite tables exist (T036) ────────────────────────
     if (app.Environment.IsDevelopment())
@@ -325,5 +328,54 @@ finally
     Log.CloseAndFlush();
 }
 
-// Expose Program class for WebApplicationFactory in integration tests
 public partial class Program { }
+
+static class ProgramBootstrapVerifier
+{
+    public static void VerifyClientBootstrapAssets(WebApplication app)
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "PoLocalCompare.Client.staticwebassets.endpoints.json"),
+            Path.Combine(AppContext.BaseDirectory, "PoLocalCompare.Api.staticwebassets.endpoints.json"),
+        };
+
+        string? manifestPath = candidates.FirstOrDefault(File.Exists);
+        if (manifestPath is null)
+        {
+            logger.LogError("Startup verification failed: static web asset manifest was not found in {BaseDirectory}", AppContext.BaseDirectory);
+            return;
+        }
+
+        string manifestContent;
+        try
+        {
+            manifestContent = File.ReadAllText(manifestPath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Startup verification failed: could not read static web asset manifest at {ManifestPath}", manifestPath);
+            return;
+        }
+
+        bool hasFingerprintedBootstrap = manifestContent.Contains("_framework/blazor.webassembly.", StringComparison.OrdinalIgnoreCase)
+            && manifestContent.Contains(".js", StringComparison.OrdinalIgnoreCase);
+        bool hasNonFingerprintedBootstrap = manifestContent.Contains("_framework/blazor.webassembly.js", StringComparison.OrdinalIgnoreCase);
+
+        if (!hasFingerprintedBootstrap)
+        {
+            logger.LogError("Startup verification failed: no Blazor WebAssembly bootstrap asset mapping was found in {ManifestPath}", manifestPath);
+            return;
+        }
+
+        if (!hasNonFingerprintedBootstrap)
+        {
+            logger.LogWarning("Startup verification: manifest has only fingerprinted Blazor bootstrap mappings. Ensure index.html resolves the fingerprinted _framework/blazor.webassembly asset.");
+        }
+        else
+        {
+            logger.LogInformation("Startup verification: Blazor bootstrap static asset mappings were found in {ManifestPath}", manifestPath);
+        }
+    }
+}
