@@ -3,8 +3,6 @@ using Microsoft.Extensions.Configuration;
 using PoLocalCompare.Client.Services;
 using PoLocalCompare.Shared.DTOs;
 using System.Runtime.CompilerServices;
-using System.Text.Json.Serialization;
-using System.Threading.Channels;
 
 namespace PoLocalCompare.Client.Services;
 
@@ -13,17 +11,13 @@ namespace PoLocalCompare.Client.Services;
 public sealed class WebLlmService : IAsyncDisposable
 {
     private readonly IJSRuntime _js;
-    private readonly DuelApiClient _apiClient;
     private readonly string[] _cdnBaseUrlTemplates;
-
-    // Per-modelId session state
-    private readonly Dictionary<string, InferenceSession> _sessions = [];
+    private readonly InferenceSessionStore _sessions = new();
     private DotNetObjectReference<WebLlmService>? _selfRef;
 
-    public WebLlmService(IJSRuntime js, DuelApiClient apiClient, IConfiguration configuration)
+    public WebLlmService(IJSRuntime js, IConfiguration configuration)
     {
         _js = js;
-        _apiClient = apiClient;
         var primary = configuration["BrowserModels:PrimaryCdnBaseUrlTemplate"]
             ?? configuration["BrowserModels:CdnBaseUrlTemplate"];
         var backup = configuration["BrowserModels:BackupCdnBaseUrlTemplate"];
@@ -46,8 +40,7 @@ public sealed class WebLlmService : IAsyncDisposable
     {
         _selfRef ??= DotNetObjectReference.Create(this);
 
-        var session = new InferenceSession();
-        _sessions[modelId] = session;
+        var session = _sessions.CreateOrReplace(modelId);
 
         await _js.InvokeVoidAsync("startWebLlmInference", cancellationToken, _selfRef, modelId, webLlmModelId, prompt, _cdnBaseUrlTemplates);
 
@@ -66,7 +59,7 @@ public sealed class WebLlmService : IAsyncDisposable
     /// <summary>Returns the full result payload (including HTML) after inference completes.</summary>
     public Task<DuelResultPayload?> GetResultAsync(string modelId, CancellationToken cancellationToken = default)
     {
-        if (_sessions.TryGetValue(modelId, out var session))
+        if (_sessions.TryGet(modelId, out var session))
             return session.CompletionSource.Task.WaitAsync(cancellationToken)
                 .ContinueWith(t => t.IsCompletedSuccessfully ? t.Result : null, TaskScheduler.Default);
         return Task.FromResult<DuelResultPayload?>(null);
@@ -85,7 +78,7 @@ public sealed class WebLlmService : IAsyncDisposable
         var update = new WebLlmStatusUpdate(status, tokenCount, elapsedMs, null, detail,
             htmlTagCount, openTagDepth, styleRuleCount, repetitionScore,
             prefillSpeedTps > 0 ? prefillSpeedTps : null, cacheHit, htmlPreview);
-        if (_sessions.TryGetValue(modelId, out var session))
+        if (_sessions.TryGet(modelId, out var session))
             session.Channel.Writer.TryWrite(update);
         OnStatusUpdate?.Invoke(modelId, update);
     }
@@ -93,7 +86,7 @@ public sealed class WebLlmService : IAsyncDisposable
     [JSInvokable]
     public void ReceiveComplete(string modelId, string htmlOutput, int tokenCount, long totalMs, long warmUpMs)
     {
-        if (_sessions.TryGetValue(modelId, out var session))
+        if (_sessions.TryGet(modelId, out var session))
         {
             session.Channel.Writer.TryWrite(new WebLlmStatusUpdate("Done", tokenCount, totalMs, null));
             session.CompletionSource.TrySetResult(new DuelResultPayload(htmlOutput, tokenCount, totalMs, warmUpMs));
@@ -103,7 +96,7 @@ public sealed class WebLlmService : IAsyncDisposable
     [JSInvokable]
     public void ReceiveError(string modelId, string reason)
     {
-        if (_sessions.TryGetValue(modelId, out var session))
+        if (_sessions.TryGet(modelId, out var session))
         {
             session.Channel.Writer.TryWrite(new WebLlmStatusUpdate("Failed", 0, 0, reason));
             session.CompletionSource.TrySetException(new InvalidOperationException(reason));
@@ -116,16 +109,6 @@ public sealed class WebLlmService : IAsyncDisposable
         _selfRef = null;
         _sessions.Clear();
         await ValueTask.CompletedTask;
-    }
-
-    private sealed class InferenceSession
-    {
-        public Channel<WebLlmStatusUpdate> Channel { get; } =
-            System.Threading.Channels.Channel.CreateUnbounded<WebLlmStatusUpdate>();
-
-        [JsonIgnore]
-        public TaskCompletionSource<DuelResultPayload> CompletionSource { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 }
 

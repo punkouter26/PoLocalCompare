@@ -1,0 +1,101 @@
+flowchart TD
+    START(["🎯 User Opens App"])
+
+    subgraph WarRoom["🏠 War Room — Primary Entry Point"]
+        LOAD["📋 Load Available Models<br/>GET /api/models"]
+        DISPLAY["🃏 Display Model Cards<br/>Local / Remote / Service tabs"]
+        FILTER{{"Filter by Type?"}}
+        FILTER -->|Local| LOCAL_CARDS
+        FILTER -->|Remote| REMOTE_CARDS
+        FILTER -->|All| ALL_CARDS
+        LOCAL_CARDS["🖥️ Local Models (WebLLM)"]
+        REMOTE_CARDS["☁️ Remote Models (Foundry)"]
+        ALL_CARDS["📦 All Models"]
+    end
+
+    LOAD --> DISPLAY
+    DISPLAY --> FILTER
+
+    subgraph Select["⚔️ Model Selection Flow"]
+        CLICK_1["🖱️ Click First Model<br/>Assigned to LEFT slot"]
+        CLICK_2["🖱️ Click Second Model<br/>Assigned to RIGHT slot"]
+        TOGGLE["🔄 Click again to deselect<br/>Toggle behavior"]
+        VS["⚔️ VS Display<br/>Both slots filled"]
+    end
+
+    ALL_CARDS --> CLICK_1
+    LOCAL_CARDS --> CLICK_1
+    REMOTE_CARDS --> CLICK_1
+    CLICK_1 --> CLICK_2
+    CLICK_1 --> TOGGLE
+    TOGGLE --> CLICK_1
+    CLICK_2 --> VS
+
+    subgraph Prompt["📝 Prompt Entry"]
+        TEXTAREA["📜 Enter HTML Generation Prompt<br/>'Build a responsive dashboard...'"]
+        TEMPLATE["💡 Optional: Use Prompt Template<br/>Dashboard / Form / Landing Page"]
+        VALID{{"Valid?"}}
+    end
+
+    VS --> TEXTAREA
+    TEXTAREA --> TEMPLATE
+    TEMPLATE --> VALID
+
+    VALID -->|Invalid| HINT["💡 Must pick 2 different models<br/>+ non-empty prompt"]
+    HINT --> TEXTAREA
+
+    VALID -->|Valid| COMMENCE["⚔️ Commence Duel<br/>Button glows green"]
+
+    subgraph Execute["⚡ Duel Execution"]
+        POST["POST /api/duels<br/>Returns duelId (202)"]
+        REDIRECT["🔄 Navigate to Processing<br/>/processing/{duelId}"]
+        CONCURRENT["⚡ Concurrent Inference<br/>Left vs Right"]
+        STREAM["📡 SignalR: Token Stream<br/>500ms updates"]
+        PREVIEW["👁️ Live HTML Preview<br/>Real-time rendering"]
+        COMPLETE["✅ Both Complete<br/>Navigate to Arena"]
+    end
+
+    COMMENCE --> POST
+    POST --> REDIRECT
+    REDIRECT --> CONCURRENT
+    CONCURRENT --> STREAM
+    STREAM --> PREVIEW
+    PREVIEW --> COMPLETE
+
+    subgraph Arena["🏟️ Arena — Critical Decision Point"]
+        SPLIT["📐 Split View<br/>Left HTML | Right HTML"]
+        SANDBOX["🔒 Sandboxed iframes<br/>sandbox='allow-scripts'"]
+        REVIEW["👀 User Reviews Both<br/>Compare quality + speed"]
+        WINNER["🎯 Click Winner Button<br/>Left Wins / Right Wins"]
+        CONFIRM["✅ Confirm Verdict<br/>Dialog → POST /verdict"]
+    end
+
+    COMPLETE --> SPLIT
+    SPLIT --> SANDBOX
+    SANDBOX --> REVIEW
+    REVIEW --> WINNER
+    WINNER --> CONFIRM
+
+    subgraph Result["📊 Instant Results"]
+        ELO["📈 ELO Recalculated<br/>K=32 formula applied"]
+        RANK["🏆 Leaderboard Updated<br/>New rankings visible"]
+        COMPARE["📊 Compare Stats<br/>Token count / velocity / quality"]
+    end
+
+    CONFIRM --> ELO
+    ELO --> RANK
+    RANK --> COMPARE
+
+    COMPARE --> AGAIN["🔄 Start Another Duel?<br/>Back to War Room"]
+    AGAIN --> LOAD
+
+    DONE(["✨ Mission Complete"])
+
+    style START fill:#22c55e,stroke:#000,color:#000
+    style DONE fill:#22c55e,stroke:#000,color:#000
+    style WarRoom fill:#1a1a2e,stroke:#06b6d4,color:#fff
+    style Select fill:#1a1a2e,stroke:#22c55e,color:#fff
+    style Prompt fill:#16213e,stroke:#eab308,color:#fff
+    style Execute fill:#0f3460,stroke:#22c55e,color:#fff
+    style Arena fill:#1a1a2e,stroke:#06b6d4,color:#fff
+    style Result fill:#16213e,stroke:#22c55e,color:#fff

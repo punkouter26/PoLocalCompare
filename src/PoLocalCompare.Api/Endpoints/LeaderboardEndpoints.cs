@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using PoLocalCompare.Application.Leaderboard.GetKillList;
 using PoLocalCompare.Application.Leaderboard.GetLeaderboard;
+using PoLocalCompare.Application.Leaderboard.GetKillList;
 using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Api.Endpoints;
@@ -15,7 +15,7 @@ public static class LeaderboardEndpoints
             [FromQuery] string? sortBy,
             [FromServices] GetLeaderboardHandler handler) =>
         {
-            var rows = await handler.HandleAsync(new GetLeaderboardQuery(sortBy ?? "Elo"));
+            var rows = await handler.HandleAsync(sortBy ?? "Elo");
             return Results.Ok(rows);
         })
         .WithName("GetLeaderboard")
@@ -26,7 +26,7 @@ public static class LeaderboardEndpoints
             string modelId,
             [FromServices] GetKillListHandler handler) =>
         {
-            var rows = await handler.HandleAsync(new GetKillListQuery(modelId));
+            var rows = await handler.HandleAsync(modelId);
             return Results.Ok(rows);
         })
         .WithName("GetKillList")

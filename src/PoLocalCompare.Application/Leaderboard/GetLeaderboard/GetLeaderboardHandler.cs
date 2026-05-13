@@ -19,7 +19,7 @@ public sealed class GetLeaderboardHandler
         _duelResultRepository = duelResultRepository;
     }
 
-    public async Task<IReadOnlyList<LeaderboardEntryDto>> HandleAsync(GetLeaderboardQuery query)
+    public async Task<IReadOnlyList<LeaderboardEntryDto>> HandleAsync(string sortBy = "Elo")
     {
         var models = (await _modelRepository.GetAllAsync()).ToList();
         var rows = new List<LeaderboardEntryDto>(models.Count);
@@ -46,14 +46,14 @@ public sealed class GetLeaderboardHandler
             });
         }
 
-        var sorted = string.Equals(query.SortBy, "GreenScore", StringComparison.OrdinalIgnoreCase)
+        var sorted = string.Equals(sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase)
             ? rows
                 .OrderByDescending(x => x.GreenScoreAvg.HasValue)
                 .ThenByDescending(x => x.GreenScoreAvg)
                 .ThenByDescending(x => x.CurrentElo)
                 .ThenBy(x => x.DisplayName)
                 .ToList()
-            : string.Equals(query.SortBy, "Quality", StringComparison.OrdinalIgnoreCase)
+            : string.Equals(sortBy, "Quality", StringComparison.OrdinalIgnoreCase)
             ? rows
                 .OrderByDescending(x => x.OutputQualityAvg.HasValue)
                 .ThenByDescending(x => x.OutputQualityAvg)

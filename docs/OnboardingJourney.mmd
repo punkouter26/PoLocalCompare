@@ -1,0 +1,95 @@
+flowchart TD
+    START(["🚀 User Arrives"])
+    LAND["🏠 Landing Page<br/>War Room"]
+
+    START -->|First Visit| LAND
+
+    subgraph Discovery["🔍 Discovery Phase"]
+        CHECK_MODEL["🖥 Check WebGPU Support<br/>Local Model Readiness"]
+        GPU_OK{{"WebGPU<br/>Available?"}}
+        MODEL_LIST["📋 Load Model List<br/>API: GET /api/models"]
+        FILTER["🔎 Browse / Filter Models<br/>Local / Remote / Service"]
+    end
+
+    GPU_OK -->|Yes| MODEL_LIST
+    GPU_OK -->|No| INFO["ℹ️ Info: WebGPU not supported<br/>Can still use Remote models"]
+    INFO --> MODEL_LIST
+
+    LAND --> Discovery
+    CHECK_MODEL --> GPU_OK
+    MODEL_LIST --> FILTER
+
+    subgraph Selection["⚔️ Model Selection"]
+        SELECT_LEFT["👈 Select Left Model<br/>Click to assign"]
+        SELECT_RIGHT["👉 Select Right Model<br/>Click to assign"]
+        PROMPT["📝 Enter Prompt<br/>HTML generation task"]
+        VALIDATE{{"Both models + Prompt?"}}
+    end
+
+    FILTER --> SELECT_LEFT
+    SELECT_LEFT --> SELECT_RIGHT
+    SELECT_RIGHT --> PROMPT
+    PROMPT --> VALIDATE
+
+    VALIDATE -->|No| HINT["💡 Hint: Pick 2 different models<br/>+ Enter prompt to continue"]
+    HINT --> SELECT_LEFT
+
+    VALIDATE -->|Yes| COMMENCE["⚔️ Commence Duel<br/>Button Enabled"]
+    COMMENCE --> CLICK["🖱️ Click Commence"]
+    CLICK --> POST[/"POST /api/duels<br/>202 Accepted"]
+
+    subgraph DuelStart["⚡ Duel Execution"]
+        REDIRECT["🔄 Redirect to Processing<br/>/processing/{duelId}"]
+        JOIN["🔗 Join SignalR Group<br/>duel:{duelId}"]
+        SIGNAL["📡 Wait for StartLocalInference<br/>SignalR Event"]
+        INFERENCE{{"Model Type?"}}
+        LOCAL["🖥️ Local: WebLLM (WebGPU)<br/>SignalR → Browser Worker"]
+        REMOTE["☁️ Remote: Azure Foundry<br/>Server-side inference"]
+        SERVICE["🔧 Service: Ollama<br/>Server-side inference"]
+    end
+
+    POST --> REDIRECT
+    REDIRECT --> JOIN
+    JOIN --> SIGNAL
+    SIGNAL --> INFERENCE
+    INFERENCE -->|Local| LOCAL
+    INFERENCE -->|Remote| REMOTE
+    INFERENCE -->|LocalService| SERVICE
+
+    subgraph Completion["✅ Both Sides Complete"]
+        COMPLETE["🎯 DuelComplete Event<br/>SignalR → Client"]
+        NAV_ARENA["🏟️ Auto-Navigate to Arena<br/>/arena/{duelId}"]
+    end
+
+    LOCAL --> COMPLETE
+    REMOTE --> COMPLETE
+    SERVICE --> COMPLETE
+    COMPLETE --> NAV_ARENA
+
+    subgraph Aha["💡 Aha! Moment"]
+        VIEW["👁️ View Side-by-Side HTML<br/>Sandboxed Viewports"]
+        JUDGE["⚖️ Pick Winner<br/>Left Wins / Right Wins"]
+        VERDICT{{"Verdict Recorded"}}
+        ELO["📊 ELO Updated<br/>Leaderboard changes"]
+        CELEBRATE["🎉 Win Celebration<br/>Green highlight + Sound"]
+    end
+
+    NAV_ARENA --> VIEW
+    VIEW --> JUDGE
+    JUDGE --> VERDICT
+    VERDICT --> ELO
+    ELO --> CELEBRATE
+
+    VERDICT -->|No Selection| TIMEOUT["⏰ 24h Verdict Deadline<br/>Auto-Judge (GPT-4.1 Nano)"]
+    TIMEOUT --> AUTO_JUDGE["🤖 Auto-Judge<br/>POST /api/duels/{id}/auto-judge"]
+    AUTO_JUDGE --> ELO
+
+    CELEBRATE --> DONE(["✨ Ready for Next Duel"])
+
+    style START fill:#22c55e,stroke:#000,color:#000
+    style DONE fill:#22c55e,stroke:#000,color:#000
+    style Aha fill:#0f3460,stroke:#eab308,color:#fff
+    style Discovery fill:#1a1a2e,stroke:#06b6d4,color:#fff
+    style Selection fill:#1a1a2e,stroke:#22c55e,color:#fff
+    style DuelStart fill:#16213e,stroke:#06b6d4,color:#fff
+    style Completion fill:#16213e,stroke:#eab308,color:#fff

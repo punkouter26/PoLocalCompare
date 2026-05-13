@@ -14,9 +14,9 @@ public sealed class GetKillListHandler
         _modelRepository = modelRepository;
     }
 
-    public async Task<IReadOnlyList<HeadToHeadDto>> HandleAsync(GetKillListQuery query)
+    public async Task<IReadOnlyList<HeadToHeadDto>> HandleAsync(string modelId)
     {
-        var history = (await _eloHistoryRepository.GetAllByModelAsync(query.ModelId)).ToList();
+        var history = (await _eloHistoryRepository.GetAllByModelAsync(modelId)).ToList();
 
         var grouped = history
             .GroupBy(x => x.OpponentModelId)

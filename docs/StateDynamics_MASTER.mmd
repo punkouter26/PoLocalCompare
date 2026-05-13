@@ -1,0 +1,76 @@
+stateDiagram-v2
+    [*] --> Empty: System Init
+
+    state Duel {
+        [*] --> PendingDuel: Created
+        PendingDuel --> Initializing: StartDuel
+        Initializing --> Generating: FirstToken
+        Generating --> Done: BothSidesComplete
+        Generating --> Failed: WatchdogTimeout / Error
+        Done --> PendingVerdict: Arena Loaded
+        PendingVerdict --> Judged: HumanVerdict / AutoJudge
+        PendingVerdict --> Expired: DeadlinePassed
+        Judged --> [*]: Complete
+        Expired --> [*]: Complete
+        Failed --> [*]: Complete
+    }
+
+    state Model {
+        [*] --> Available: Registered
+        Available --> Selected: UserClicks
+        Available --> Unavailable: AvailabilityCheckFailed
+        Unavailable --> Available: RetrySuccess
+        Selected --> Deselected: Toggle / DifferentSlot
+        Deselected --> Available: ClickAgain
+        Selected --> ActiveDuel: DuelStarted
+        ActiveDuel --> Available: DuelComplete
+    }
+
+    state DuelResult {
+        [*] --> Pending: Created
+        Pending --> InProgress: InferenceStarted
+        InProgress --> Streaming: TokensReceived
+        Streaming --> Enriching: InferenceComplete
+        Enriching --> Complete: StorageSaved
+        InProgress --> Failed: InferenceError
+        Failed --> [*]: Recorded
+        Complete --> [*]: Archived
+    }
+
+    state ELO {
+        [*] --> 1200: NewModel
+        1200 --> Win: Verdict = Winner
+        1200 --> Loss: Verdict = Loser
+        Win --> Updated: +K*(1-E)
+        Loss --> Updated: +K*(0-E)
+        Updated --> Tracking: RecordSaved
+        Tracking --> [*]: SparklineUpdated
+    }
+
+    state Processing {
+        [*] --> WaitingSignalR: ProcessingPageLoaded
+        WaitingSignalR --> WaitingLocal: StartLocalInference Event
+        WaitingSignalR --> WaitingRemote: InferenceStarted
+        WaitingLocal --> LocalStreaming: WebWorkerStart
+        WaitingRemote --> RemoteStreaming: TokensReceived
+        LocalStreaming --> LocalComplete: Done Event
+        RemoteStreaming --> RemoteComplete: Done Event
+        LocalComplete --> BothDone: RemoteAlreadyDone
+        RemoteComplete --> BothDone: LocalAlreadyDone
+        BothDone --> [*]: NavigateArena
+    }
+
+    note top of Duel
+        Duel is the Aggregate Root.
+        VerdictDeadline set at creation (default 24h).
+    end note
+
+    note top of Model
+        Model availability checked per-session.
+        Local models require WebGPU confirmation.
+    end note
+
+    note top of ELO
+        K=32 for all matches.
+        Minimum 0.1 shift enforced for decisive outcomes.
+    end note

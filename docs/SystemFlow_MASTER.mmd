@@ -1,0 +1,97 @@
+flowchart TD
+    subgraph Client["🖥️ Client (Blazor WASM)"]
+        USER["👤 User"]
+        WAR_ROOM["🏠 War Room<br/>Model Selection + Prompt"]
+        PROCESSING["⚡ Processing<br/>Live Monitoring"]
+        ARENA["🏟️ Arena<br/>Verdict + Comparison"]
+        
+        USER --> WAR_ROOM
+        WAR_ROOM -->|POST /api/duels| API
+        WAR_ROOM -->|SignalR Subscribe| HUB
+        PROCESSING -->|SignalR Events| HUB
+        PROCESSING -->|POST /local-result| API
+        ARENA -->|POST /verdict| API
+    end
+
+    subgraph Server["☁️ Server (ASP.NET Core)"]
+        API["🌐 API Endpoints<br/>/api/duels, /api/models, /api/leaderboard"]
+        HUB["📡 DuelHub (SignalR)<br/>duel:{duelId} groups"]
+        BG["⚙️ BackgroundTaskQueue<br/>DuelExecutionService"]
+        
+        API -->|Creates| DUEL
+        API --> HANDLERS
+        HUB -->|Broadcasts| BG
+        BG --> HANDLERS
+    end
+
+    subgraph Application["📋 Application Handlers"]
+        COMMENCE["CommenceDuelHandler<br/>Creates Duel + queues execution"]
+        RECORD["RecordVerdictHandler<br/>Updates ELO + saves EloRecord"]
+        GET_LB["GetLeaderboardHandler<br/>Aggregates rankings + sparklines"]
+        AUTO["AutoJudgeService<br/>Calls GPT-4.1 Nano"]
+        
+        COMMENCE -->|Enqueues| BG
+        BG -->|Runs| EXEC
+        EXEC -->|Streaming| HUB
+        RECORD -->|Calculates| ELO_CALC
+    end
+
+    subgraph Execution["⚡ Duel Execution Flow"]
+        EXEC["DuelExecutionService"]
+        LEFT{{"Left Model Type?"}}
+        RIGHT{{"Right Model Type?"}}
+        
+        LOCAL["🖥️ Local: WebLLM"]
+        REMOTE["☁️ Remote: Foundry"]
+        SERVICE["🔧 Service: Ollama"]
+        
+        EXEC --> LEFT
+        EXEC --> RIGHT
+        LEFT -->|Local| LOCAL
+        LEFT -->|Remote| REMOTE
+        LEFT -->|Service| SERVICE
+        RIGHT -->|Local| LOCAL
+        RIGHT -->|Remote| REMOTE
+        RIGHT -->|Service| SERVICE
+        
+        LOCAL -->|SignalR| HUB
+        REMOTE -->|HTTP| FOUNDRY
+        SERVICE -->|HTTP| OLLAMA
+        
+        FOUNDRY -->|Response| HUB
+        OLLAMA -->|Response| HUB
+    end
+
+    subgraph Data["💾 Data Persistence"]
+        ATS["Azure Table Storage"]
+        BLOB["Azure Blob Storage"]
+        
+        ATS --> MODELS["Models Table"]
+        ATS --> DUELS["Duels Table"]
+        ATS --> RESULTS["DuelResults Table"]
+        ATS --> ELO_HIST["EloHistory Table"]
+        BLOB --> HTML["duel-html-outputs"]
+        
+        COMMENCE -->|Save| DUELS
+        EXEC -->|Save| RESULTS
+        RECORD -->|Update| MODELS
+        RECORD -->|Append| ELO_HIST
+        EXEC -->|Store| HTML
+    end
+
+    subgraph AI["🤖 AI Providers"]
+        FOUNDRY["Azure AI Foundry<br/>Remote Models (GPT-4o)"]
+        OLLAMA["Ollama Service<br/>LocalService Models"]
+        WEBGPU["WebGPU (Browser)<br/>Local Models"]
+        
+        FOUNDRY -->|Inference| SERVER
+        OLLAMA -->|Inference| SERVER
+        WEBGPU -->|Inference| CLIENT
+    end
+
+    style Client fill:#1a1a2e,stroke:#22c55e,color:#fff
+    style Server fill:#16213e,stroke:#06b6d4,color:#fff
+    style Application fill:#0f3460,stroke:#eab308,color:#fff
+    style Execution fill:#1a1a2e,stroke:#22c55e,color:#fff
+    style Data fill:#16213e,stroke:#06b6d4,color:#fff
+    style AI fill:#0f3460,stroke:#eab308,color:#fff

@@ -21,7 +21,7 @@ public static class ModelsEndpoints
             [FromServices] ListModelsHandler handler,
             [FromServices] IWebHostEnvironment env) =>
         {
-            var models = await handler.HandleAsync(new ListModelsQuery());
+            var models = await handler.HandleAsync();
             if (!env.IsDevelopment())
             {
                 models = models
@@ -42,7 +42,7 @@ public static class ModelsEndpoints
             [FromServices] IHttpClientFactory httpClientFactory,
             CancellationToken cancellationToken) =>
         {
-            var models = await handler.HandleAsync(new ListModelsQuery());
+            var models = await handler.HandleAsync();
             if (!env.IsDevelopment())
             {
                 models = models

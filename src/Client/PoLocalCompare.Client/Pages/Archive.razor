@@ -7,7 +7,6 @@
 @using Radzen.Blazor
 @inject DuelApiClient ApiClient
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>Archive — LLM Duel Arena</PageTitle>
 
@@ -43,14 +42,6 @@
                     @label
                 </button>
             }
-            <button class="archive__filter-chip @(_qualityFilter == "Quality80" ? "archive__filter-chip--active" : "")"
-                    @onclick="ToggleQualityFilter">
-                Quality 80+
-            </button>
-            <button class="archive__filter-chip @(_sortMode == "Quality" ? "archive__filter-chip--active" : "")"
-                    @onclick="ToggleSortMode">
-                Sort: @(_sortMode == "Quality" ? "Quality" : "Newest")
-            </button>
         </div>
         @if (FilteredDuels().Count == 0)
         {
@@ -126,25 +117,10 @@
 
                 <div class="archive__detail-actions">
                     <RadzenButton
-                        Text="🔁 Re-render"
-                        ButtonStyle="ButtonStyle.Secondary"
-                        Click="OnReRender"
-                        class="archive__btn" />
-                    <RadzenButton
                         Text="⚧ Re-Challenge"
                         ButtonStyle="ButtonStyle.Light"
                         Click="@GoToReChallenge"
                         class="archive__btn" />
-                    <RadzenButton
-                        Text="⬇ Export Lab Report"
-                        ButtonStyle="ButtonStyle.Success"
-                        Click="OnExportReport"
-                        Disabled="@_exportBusy"
-                        class="archive__btn" />
-                    @if (_exportBusy)
-                    {
-                        <span class="archive__spinner" aria-label="Exporting…" title="Exporting…" />
-                    }
                     @if (_selectedDuel.Verdict == DuelVerdict.Pending)
                     {
                         <RadzenButton
@@ -154,24 +130,6 @@
                             class="archive__btn" />
                     }
                 </div>
-
-                @if (_reRenderDuel is not null)
-                {
-                    <div class="archive__viewports">
-                        <div class="archive__viewport-panel">
-                            <SandboxedViewport
-                                HtmlContent="@(_reRenderDuel.Results?.FirstOrDefault(r => r.ModelId == _selectedDuel.LeftModelId)?.HtmlOutputRaw ?? string.Empty)"
-                                ModelName="@FormatModelName(_selectedDuel.LeftModelName, _selectedDuel.LeftModelId)"
-                                IsLoser="@(_selectedDuel.Verdict == DuelVerdict.Right)" />
-                        </div>
-                        <div class="archive__viewport-panel">
-                            <SandboxedViewport
-                                HtmlContent="@(_reRenderDuel.Results?.FirstOrDefault(r => r.ModelId == _selectedDuel.RightModelId)?.HtmlOutputRaw ?? string.Empty)"
-                                ModelName="@FormatModelName(_selectedDuel.RightModelName, _selectedDuel.RightModelId)"
-                                IsLoser="@(_selectedDuel.Verdict == DuelVerdict.Left)" />
-                        </div>
-                    </div>
-                }
             </div>
         }
 
@@ -188,16 +146,12 @@
 @code {
     private List<DuelSummaryDto> _duels = [];
     private DuelSummaryDto? _selectedDuel;
-    private DuelDto? _reRenderDuel;
     private bool _loading = true;
-    private bool _exportBusy;
     private string? _error;
     private bool _hasMore;
     private const int PageSize = 20;
 
     private string _verdictFilter = "No Verdict";
-    private string _qualityFilter = "All";
-    private string _sortMode = "Newest";
 
     private List<DuelSummaryDto> FilteredDuels()
     {
@@ -207,17 +161,9 @@
             "No Verdict" => _duels.Where(d => d.Verdict == DuelVerdict.Pending),
             _ => _duels
         };
-
-        if (_qualityFilter == "Quality80")
-        {
-            query = query.Where(d => d.AvgOutputQualityScore.HasValue && d.AvgOutputQualityScore.Value >= 80);
-        }
-
-        query = _sortMode == "Quality"
-            ? query.OrderByDescending(d => d.AvgOutputQualityScore ?? -1).ThenByDescending(d => d.StartedAt)
-            : query.OrderByDescending(d => d.StartedAt);
-
-        return query.ToList();
+        return query
+            .OrderByDescending(d => d.StartedAt)
+            .ToList();
     }
 
     private Func<DuelSummaryDto, string> _rowClassFn => GetRowClass;
@@ -225,14 +171,7 @@
     private void ResetFilters()
     {
         _verdictFilter = "All";
-        _qualityFilter = "All";
-        _sortMode = "Newest";
     }
-
-    private void ToggleQualityFilter() =>
-        _qualityFilter = _qualityFilter == "Quality80" ? "All" : "Quality80";
-
-    private void ToggleSortMode() => _sortMode = _sortMode == "Quality" ? "Newest" : "Quality";
 
     protected override async Task OnInitializedAsync()
     {
@@ -285,46 +224,7 @@
     private async Task OnRowSelect(DuelSummaryDto duel)
     {
         _selectedDuel = duel;
-        _reRenderDuel = null;
-        StateHasChanged();
-        await JS.InvokeVoidAsync("eval", "void 0"); // no-op (auto-scroll removed P4)
-    }
-
-    private async Task OnReRender()
-    {
-        if (_selectedDuel is null) return;
-        try
-        {
-            _reRenderDuel = await ApiClient.GetDuelAsync(_selectedDuel.DuelId);
-        }
-        catch (Exception ex)
-        {
-            _error = $"Failed to load duel: {ex.Message}";
-        }
-    }
-
-    private async Task OnExportReport()
-    {
-        if (_selectedDuel is null) return;
-        _exportBusy = true;
-        try
-        {
-            var bytes = await ApiClient.DownloadReportAsync(_selectedDuel.DuelId);
-            if (bytes is not null)
-            {
-                var base64 = Convert.ToBase64String(bytes);
-                var fileName = $"lab-report-{_selectedDuel.DuelId}.html";
-                await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, "text/html", base64);
-            }
-        }
-        catch (Exception ex)
-        {
-            _error = $"Export failed: {ex.Message}";
-        }
-        finally
-        {
-            _exportBusy = false;
-        }
+        await Task.CompletedTask;
     }
 
     private static string GetWinnerName(DuelSummaryDto d)

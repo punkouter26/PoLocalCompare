@@ -7,7 +7,6 @@
 @using Radzen.Blazor
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
-@inject PromptTemplatesService PromptTemplates
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -35,32 +34,6 @@
     }
     else
     {
-        @* ── 1. PROMPT FIRST (C4) — Quick Prompts + Textarea above everything ── *@
-        <div class="war-room__templates-section">
-            <div class="war-room__templates-header">
-                <h3 class="war-room__templates-title">
-                    <span>📋</span> Quick Prompts
-                </h3>
-                @if (!string.IsNullOrEmpty(_promptText))
-                {
-                    <button class="war-room__clear-prompt" @onclick="ClearPrompt">
-                        ✕ Clear
-                    </button>
-                }
-            </div>
-            <div class="war-room__templates-grid">
-                @foreach (var template in PromptTemplates.GetAll())
-                {
-                    <button class="war-room__template-card @(IsTemplateSelected(template) ? "war-room__template-card--selected" : "")"
-                            @onclick="() => SelectTemplate(template)">
-                        <span class="war-room__template-icon">@template.Icon</span>
-                        <span class="war-room__template-name">@template.Name</span>
-                        <span class="war-room__template-category">@template.Category</span>
-                    </button>
-                }
-            </div>
-        </div>
-
         <div class="war-room__prompt-section">
             <label class="war-room__label" for="promptInput">Prompt (5-minute duel, HTML output)</label>
             <p class="war-room__hint">💡 Local models may take 5–10 min to load on first use. Remote models respond immediately.</p>
@@ -122,34 +95,7 @@
                         {
                             <p class="war-room__availability-note">🚫 @GetUnavailableReason(model)</p>
                         }
-                        @if (model.ModelType == ModelType.Remote || model.ModelType == ModelType.LocalService)
-                        {
-                            <button class="war-room__edit-btn" title="Edit deployment name"
-                                    @onclick="() => ToggleEdit(model.ModelId)"
-                                    @onclick:stopPropagation="true">
-                                ✏️
-                            </button>
-                        }
                     </div>
-                    @if (_editingModelId == model.ModelId)
-                    {
-                        <div class="war-room__edit-row">
-                            <label class="war-room__edit-label">Display Name</label>
-                            <input class="war-room__edit-input" @bind="_editDisplayName" placeholder="Display name" />
-                            <label class="war-room__edit-label">Deployment / Model Name (ApiEndpointRef)</label>
-                            <input class="war-room__edit-input" @bind="_editApiEndpointRef" placeholder="e.g. gpt-4o-mini" />
-                            @if (_editError is not null)
-                            {
-                                <p class="war-room__edit-error">@_editError</p>
-                            }
-                            <div class="war-room__edit-actions">
-                                <button class="war-room__edit-save" @onclick="() => SaveEditAsync(model.ModelId)" disabled="@_editSaving">
-                                    @(_editSaving ? "Saving…" : "Save")
-                                </button>
-                                <button class="war-room__edit-cancel" @onclick="CancelEdit">Cancel</button>
-                            </div>
-                        </div>
-                    }
                 }
             }
         </div>
@@ -214,71 +160,6 @@
 
     private string _typeFilter = "All";
     private IEnumerable<ModelDto> _filteredModels => FilteredModels(_typeFilter);
-
-    // ── Inline edit state ─────────────────────────────────────────────────
-    private string? _editingModelId;
-    private string _editDisplayName = string.Empty;
-    private string _editApiEndpointRef = string.Empty;
-    private string? _editError;
-    private bool _editSaving;
-
-    private void ToggleEdit(string modelId)
-    {
-        if (_editingModelId == modelId) { CancelEdit(); return; }
-        var model = _allModels.FirstOrDefault(m => m.ModelId == modelId);
-        if (model is null) return;
-        _editingModelId = modelId;
-        _editDisplayName = model.DisplayName;
-        _editApiEndpointRef = model.ApiEndpointRef ?? string.Empty;
-        _editError = null;
-    }
-
-    private void CancelEdit()
-    {
-        _editingModelId = null;
-        _editError = null;
-    }
-
-    private async Task SaveEditAsync(string modelId)
-    {
-        _editSaving = true;
-        _editError = null;
-        try
-        {
-            var updated = await ApiClient.PatchModelAsync(
-                modelId,
-                string.IsNullOrWhiteSpace(_editDisplayName) ? null : _editDisplayName,
-                string.IsNullOrWhiteSpace(_editApiEndpointRef) ? null : _editApiEndpointRef);
-
-            if (updated is not null)
-            {
-                var idx = _allModels.FindIndex(m => m.ModelId == modelId);
-                if (idx >= 0) _allModels[idx] = updated;
-                // Rebuild disambiguated labels
-                _modelLabels = _allModels
-                    .GroupBy(m => m.DisplayName)
-                    .SelectMany(g =>
-                    {
-                        bool dup = g.Count() > 1;
-                        return g.Select(m => KeyValuePair.Create(
-                            m.ModelId,
-                            dup ? $"{m.DisplayName} (…{(m.ModelId.Length > 6 ? m.ModelId[^6..] : m.ModelId)})" : m.DisplayName));
-                    })
-                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
-                await RefreshAvailabilityAsync();
-                CancelEdit();
-            }
-        }
-        catch (Exception ex)
-        {
-            _editError = $"Save failed: {ex.Message}";
-        }
-        finally
-        {
-            _editSaving = false;
-        }
-    }
 
 
     private IEnumerable<ModelDto> FilteredModels(string filter) => filter switch
@@ -440,23 +321,6 @@
         }
     }
 
-    // ── Prompt Templates ──────────────────────────────────────────────────
-    private PromptTemplate? _selectedTemplate;
-
-    private void SelectTemplate(PromptTemplate template)
-    {
-        _selectedTemplate = template;
-        _promptText = template.Prompt;
-    }
-
-    private void ClearPrompt()
-    {
-        _selectedTemplate = null;
-        _promptText = string.Empty;
-    }
-
-    private bool IsTemplateSelected(PromptTemplate template) =>
-        _selectedTemplate?.Id == template.Id;
 }
 
 <style>

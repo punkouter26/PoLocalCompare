@@ -1,0 +1,33 @@
+erDiagram
+    MODEL ||--o{ DUEL : challenges
+    MODEL ||--o{ RESULT : produces
+    MODEL ||--o{ ELO : tracks
+    DUEL ||--o{ RESULT : has
+
+    MODEL {
+        string Id PK
+        string Name
+        enum Type
+        double Elo
+    }
+
+    DUEL {
+        string Id PK
+        string LeftId FK
+        string RightId FK
+        enum Verdict
+    }
+
+    RESULT {
+        string DuelId PK
+        string ModelId PK
+        int Tokens
+        long Duration
+    }
+
+    ELO {
+        string ModelId PK
+        string DuelId PK
+        double After
+        double Shift
+    }

@@ -248,6 +248,7 @@ try
         await next();
     });
 
+    app.UseBlazorFrameworkFiles();
     app.UseStaticFiles();
 
     app.UseRouting();

@@ -13,7 +13,7 @@ public sealed class ListModelsHandler
         _modelRepository = modelRepository;
     }
 
-    public async Task<IEnumerable<ModelDto>> HandleAsync(ListModelsQuery query)
+    public async Task<IEnumerable<ModelDto>> HandleAsync()
     {
         var models = await _modelRepository.GetAllAsync();
         return models.Select(RegisterModelHandler.MapToDto);

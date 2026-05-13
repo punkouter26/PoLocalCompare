@@ -1,0 +1,18 @@
+flowchart TD
+    START([Exception]) --> AUTH[Auth Error]
+    START --> VALID[Validation Error]
+    START --> NETWORK[Network Error]
+    START --> INFER[Inference Error]
+    START --> STORAGE[Storage Error]
+
+    AUTH --> HANDLE[Handle]
+    VALID --> HANDLE
+    NETWORK --> HANDLE
+    INFER --> HANDLE
+    STORAGE --> HANDLE
+
+    HANDLE --> RETRY[Retry]
+    HANDLE --> FAIL[Fail]
+
+    style START fill:#ef4444,stroke:#000,color:#fff
+    style FAIL fill:#ef4444,stroke:#000,color:#fff

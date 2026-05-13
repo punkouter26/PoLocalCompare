@@ -1,0 +1,13 @@
+flowchart TD
+    START([User Opens]) --> WR[War Room]
+    WR --> MODELS[Load Models]
+    MODELS --> SELECT[Select 2 Models]
+    SELECT --> PROMPT[Enter Prompt]
+    PROMPT --> COMMENCE[Commence]
+    COMMENCE --> PROC[Processing]
+    PROC --> ARENA[Arena]
+    ARENA --> JUDGE[Judge Winner]
+    JUDGE --> RESULT[View Results]
+    RESULT --> REPEAT[Repeat]
+
+    style START fill:#22c55e,stroke:#000,color:#000

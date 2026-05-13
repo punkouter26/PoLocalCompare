@@ -1,0 +1,91 @@
+flowchart TB
+    subgraph Browser["🖥 Browser (WASM Client)"]
+        direction TB
+        WR["War Room<br/>Model Selection + Prompt"]
+        PROC["Processing<br/>Live Token Streaming"]
+        ARENA["Arena<br/>Verdict + Comparison"]
+        LB["Leaderboard<br/>ELO Rankings"]
+        ARCH["Archive<br/>Historical Duels"]
+        LML["Local Model Lab<br/>GPU Diagnostics"]
+    end
+
+    subgraph ClientServices["⚙ Client Services"]
+        DAPI["DuelApiClient<br/>HTTP REST"]
+        SIG["SignalRDuelClient<br/>WebSocket Events"]
+        WLLM["WebLlmService<br/>WebGPU Inference"]
+    end
+
+    subgraph ComputeTier["☁️ Compute Tier (ASP.NET Core)"]
+        direction TB
+        API["Api Host<br/>Minimal API + SignalR"]
+        END["Endpoints<br/>/api/duels, /api/leaderboard, /api/models"]
+        HUB["DuelHub<br/>SignalR Real-time"]
+        SVC["DuelExecutionService<br/>Background Task Queue"]
+    end
+
+    subgraph ApplicationLayer["📋 Application Layer"]
+        COMM["CommenceDuelHandler"]
+        VERDICT["RecordVerdictHandler"]
+        LBH["GetLeaderboardHandler"]
+        EXP["ExportLabReportHandler"]
+        AUTO["AutoJudgeService"]
+    end
+
+    subgraph DataTier["💾 Data Tier"]
+        direction LR
+        ATS["Azure Table Storage"]
+        subgraph Tables["Tables"]
+            M["Models<br/>PK: model<br/>RK: modelId"]
+            D["Duels<br/>PK: YYYYMM<br/>RK: duelId"]
+            DR["DuelResults<br/>PK: duelId<br/>RK: modelId"]
+            ELO["EloHistory<br/>PK: modelId<br/>RK: invTicks_duelId"]
+        end
+        ABS["Azure Blob Storage<br/>duel-html-outputs"]
+    end
+
+    subgraph AIProvider["🤖 AI Providers"]
+        FOUNDRY["Azure AI Foundry<br/>Remote Models (GPT-4o)"]
+        OLLAMA["Ollama Service<br/>LocalService Models"]
+        WEBGPU["WebGPU<br/>Local Models (Browser)"]
+    end
+
+    WR -->|POST /api/duels| API
+    WR --> DAPI
+    PROC --> SIG
+    PROC --> WLLM
+    ARENA --> DAPI
+    LB --> DAPI
+    ARCH --> DAPI
+    LML -->|GET /api/ollama| API
+
+    DAPI --> END
+    SIG --> HUB
+    WLLM -->|JS Interop| WEBGPU
+
+    API --> END
+    END --> COMM
+    END --> VERDICT
+    END --> LBH
+    END --> EXP
+
+    COMM -->|Creates Duel| SVC
+    SVC -->|Background| FOUNDRY
+    SVC -->|Background| OLLAMA
+    SVC -->|Signals Client| HUB
+
+    VERDICT -->|ELO Calc| ApplicationLayer
+    VERDICT --> ATS
+
+    ATS --> M
+    ATS --> D
+    ATS --> DR
+    ATS --> ELO
+    ATS --> ABS
+
+    style Browser fill:#1a1a2e,stroke:#22c55e,color:#fff
+    style ClientServices fill:#16213e,stroke:#06b6d4,color:#fff
+    style ComputeTier fill:#0f3460,stroke:#eab308,color:#fff
+    style ApplicationLayer fill:#1a1a2e,stroke:#22c55e,color:#fff
+    style DataTier fill:#16213e,stroke:#06b6d4,color:#fff
+    style AIProvider fill:#0f3460,stroke:#eab308,color:#fff
+    style Tables fill:#1a1a2e,stroke:#6b7280,color:#fff

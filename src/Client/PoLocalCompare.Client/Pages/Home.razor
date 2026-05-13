@@ -41,7 +41,6 @@
             <h2 class="home__system-title">System Status</h2>
             <div class="home__system-actions">
                 <button class="home__system-refresh" @onclick="RefreshSystemAsync">Run Smoke Test</button>
-                <button class="home__system-diagnostics" @onclick="ToggleDiagnostics">Diagnostics</button>
             </div>
         </div>
         @if (_systemLoading)
@@ -71,48 +70,6 @@
             @if (!string.IsNullOrWhiteSpace(_systemNote))
             {
                 <p class="home__system-note">@_systemNote</p>
-            }
-
-            @if (_showDiagnostics)
-            {
-                <div class="home__diagnostics" role="region" aria-label="Diagnostics Drawer">
-                    <div class="home__diagnostics-head">
-                        <h3>Runtime Diagnostics</h3>
-                        <button class="home__diagnostics-close" @onclick="ToggleDiagnostics">Close</button>
-                    </div>
-
-                    <div class="home__diagnostics-metrics">
-                        <div class="home__diagnostics-pill @(_apiHealthy ? "home__diagnostics-pill--ok" : "home__diagnostics-pill--bad")">
-                            API @(_apiHealthy ? "Healthy" : "Degraded")
-                        </div>
-                        <div class="home__diagnostics-pill @(_modelsReady ? "home__diagnostics-pill--ok" : "home__diagnostics-pill--bad")">
-                            Model Readiness: @(_modelsReady ? "Ready" : "Needs Attention")
-                        </div>
-                        <div class="home__diagnostics-pill">
-                            Ready Basis: @_systemServiceModelCount service / @_systemModelCount total
-                        </div>
-                    </div>
-
-                    @if (_diagnosticWarnings.Count == 0)
-                    {
-                        <p class="home__diagnostics-empty">No warnings or errors in the latest snapshot.</p>
-                    }
-                    else
-                    {
-                        <ul class="home__diagnostics-list">
-                            @foreach (var warning in _diagnosticWarnings)
-                            {
-                                <li class="home__diagnostics-item home__diagnostics-item--@warning.Level.ToLowerInvariant()">
-                                    <span class="home__diagnostics-level">@warning.Level</span>
-                                    <span class="home__diagnostics-message">@warning.Message</span>
-                                    <span class="home__diagnostics-meta">@warning.Timestamp · @warning.Source</span>
-                                </li>
-                            }
-                        </ul>
-                    }
-
-                    <p class="home__diagnostics-stamp">Updated @(_diagnosticUpdatedAt is null ? "just now" : _diagnosticUpdatedAt.Value.LocalDateTime.ToString("HH:mm:ss"))</p>
-                </div>
             }
         }
     </div>
@@ -150,28 +107,6 @@
         </div>
     }
 
-    @* ── Danger Zone (O2 — moved to bottom) ── *@
-    <div class="home__danger-zone">
-        @if (_resetConfirm)
-        {
-            <span class="home__danger-msg">⚠ This will delete all duels, results and ELO history and reset model ratings. Are you sure?</span>
-            <RadzenButton Text="Yes, clear everything" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
-                Disabled="@_resetBusy" Click="@DoResetAsync" class="home__danger-btn" />
-            <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
-                Click="@(() => _resetConfirm = false)" class="home__danger-btn" />
-        }
-        else if (_resetDone)
-        {
-            <span class="home__danger-ok">✓ All data cleared.</span>
-            <RadzenButton Text="Clear again" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
-                Click="@(() => { _resetDone = false; _resetConfirm = true; })" class="home__danger-btn" />
-        }
-        else
-        {
-            <RadzenButton Text="🗑 Clear All Duel Data" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
-                Click="@(() => _resetConfirm = true)" class="home__danger-btn" />
-        }
-    </div>
 </div>
 
 @code {
@@ -183,21 +118,14 @@
     private string? _topModel;
     private int _unratedCount;
 
-    private bool _resetConfirm;
-    private bool _resetBusy;
-    private bool _resetDone;
-
     private bool _systemLoading;
     private bool _apiHealthy;
     private string _runtimeMode = "Unknown";
     private int _systemModelCount;
     private int _systemServiceModelCount;
     private string? _systemNote;
-    private bool _showDiagnostics;
     private bool _systemRefreshing;
     private bool _modelsReady;
-    private DateTimeOffset? _diagnosticUpdatedAt;
-    private IReadOnlyList<DuelApiClient.DiagnosticsWarningEntryDto> _diagnosticWarnings = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -231,12 +159,10 @@
         {
             var healthTask = ApiClient.GetHealthSnapshotAsync();
             var smokeTask = ApiClient.GetSmokeSnapshotAsync();
-            var warningsTask = ApiClient.GetDiagnosticsWarningsAsync(6);
-            await Task.WhenAll(healthTask, smokeTask, warningsTask);
+            await Task.WhenAll(healthTask, smokeTask);
 
             var health = healthTask.Result;
             var smoke = smokeTask.Result;
-            var warnings = warningsTask.Result;
             _apiHealthy = string.Equals(health?.Status, "Healthy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(smoke?.Status, "Healthy", StringComparison.OrdinalIgnoreCase);
 
@@ -252,9 +178,6 @@
             }
 
             _modelsReady = _systemModelCount > 0 && (_systemServiceModelCount > 0 || _runtimeMode.StartsWith("Cloud", StringComparison.OrdinalIgnoreCase));
-            _diagnosticWarnings = warnings?.Entries ?? [];
-            _diagnosticUpdatedAt = warnings?.GeneratedAtUtc ?? DateTimeOffset.UtcNow;
-
             _systemNote = $"Updated {DateTime.Now:HH:mm:ss}";
         }
         catch
@@ -262,8 +185,6 @@
             _apiHealthy = false;
             _runtimeMode = "Unknown";
             _modelsReady = false;
-            _diagnosticWarnings = [];
-            _diagnosticUpdatedAt = DateTimeOffset.UtcNow;
             _systemNote = "Smoke test failed. Check API logs.";
         }
         finally
@@ -277,23 +198,4 @@
         }
     }
 
-    private void ToggleDiagnostics() => _showDiagnostics = !_showDiagnostics;
-
-    private async Task DoResetAsync()
-    {
-        _resetBusy = true;
-        try
-        {
-            await ApiClient.DevResetAsync();
-            _recentDuels = [];
-            _totalDuels = 0;
-            _activeModels = 0;
-            _topModel = null;
-            _unratedCount = 0;
-            _resetDone = true;
-            _resetConfirm = false;
-        }
-        catch { /* swallow — server may not be in dev mode */ }
-        finally { _resetBusy = false; }
-    }
 }

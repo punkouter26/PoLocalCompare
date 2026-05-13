@@ -143,21 +143,6 @@
                 class="arena__action-btn"
             />
             <RadzenButton
-                Text="🔄 Restart"
-                ButtonStyle="ButtonStyle.Info"
-                Size="ButtonSize.Medium"
-                Click="@RestartViewports"
-                class="arena__action-btn"
-            />
-            <RadzenButton
-                Text="Re-Challenge"
-                ButtonStyle="ButtonStyle.Secondary"
-                Size="ButtonSize.Medium"
-                Disabled="@_submitting"
-                Click="@ReChallengeAsync"
-                class="arena__action-btn"
-            />
-            <RadzenButton
                 Text="Winner: Right 👉"
                 ButtonStyle="ButtonStyle.Success"
                 Size="ButtonSize.Large"
@@ -165,6 +150,32 @@
                 Click="@(() => RecordVerdictAsync(DuelVerdict.Right))"
                 class="arena__action-btn"
             />
+        </div>
+
+        <div class="arena__secondary-actions">
+            <button class="arena__source-btn" @onclick="ToggleSecondaryActions">
+                @(_showSecondaryActions ? "Hide extras" : "More actions")
+            </button>
+            @if (_showSecondaryActions)
+            {
+                <div class="arena__actions">
+                    <RadzenButton
+                        Text="🔄 Restart"
+                        ButtonStyle="ButtonStyle.Info"
+                        Size="ButtonSize.Medium"
+                        Click="@RestartViewports"
+                        class="arena__action-btn"
+                    />
+                    <RadzenButton
+                        Text="Re-Challenge"
+                        ButtonStyle="ButtonStyle.Secondary"
+                        Size="ButtonSize.Medium"
+                        Disabled="@_submitting"
+                        Click="@ReChallengeAsync"
+                        class="arena__action-btn"
+                    />
+                </div>
+            }
         </div>
     }
 </div>
@@ -193,6 +204,7 @@
     private CancellationTokenSource _countdownCts = new();
     private bool _autoJudging;
     private string? _autoJudgeError;
+    private bool _showSecondaryActions;
 
     // Live streaming preview while duel is in progress
     private string? _leftStreamingHtml;
@@ -299,6 +311,8 @@
         var rightId = Uri.EscapeDataString(_duel.RightModelId);
         Nav.NavigateTo($"/war-room?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
     }
+
+    private void ToggleSecondaryActions() => _showSecondaryActions = !_showSecondaryActions;
 
     private void ApplyEloShifts(DuelDto duel)
     {
