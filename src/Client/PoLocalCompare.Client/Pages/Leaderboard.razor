@@ -23,6 +23,11 @@
             Size="ButtonSize.Small" class="leaderboard__sort-btn"
             Disabled="@(!_entries.Any(e => e.GreenScoreAvg is > 0))"
             title="@(!_entries.Any(e => e.GreenScoreAvg is > 0) ? "Run local model duels in Local Lab to unlock Green Score" : "Sort by energy efficiency")" />
+        <RadzenButton Text="🧪 Output Quality" Click="@(() => SetSortAsync("Quality"))"
+            ButtonStyle="@(IsQualitySort ? ButtonStyle.Primary : ButtonStyle.Light)"
+            Size="ButtonSize.Small" class="leaderboard__sort-btn"
+            Disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
+            title="Sort by persisted HTML output quality score" />
         <span class="leaderboard__divider">|</span>
         <RadzenButton Text="@(_activeOnly ? "Active ✓" : "Show All")"
             Click="@(() => _activeOnly = !_activeOnly)"
@@ -103,6 +108,19 @@
                             var pctStr = entry.DuelCount > 0 ? $" ({winPct:F0}%)" : "";
                         }
                         @($"{entry.WinCount}/{losses}{pctStr}")
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="OutputQualityAvg" Title="🧪 Output Quality" Width="160px"
+                    HeaderTooltip="Average persisted HTML quality score (0-100).">
+                    <Template Context="entry">
+                        @if (entry.OutputQualityAvg.HasValue)
+                        {
+                            <span title="@($"{entry.OutputQualityAvg.Value:F1}")">@entry.OutputQualityAvg.Value.ToString("F1")</span>
+                        }
+                        else
+                        {
+                            <span style="color: var(--rz-text-secondary-color);">—</span>
+                        }
                     </Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="🌱 Green Score" Width="150px"
@@ -208,6 +226,7 @@
 
     private string _sortBy = "Elo";
     private bool IsGreenSort => string.Equals(_sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase);
+    private bool IsQualitySort => string.Equals(_sortBy, "Quality", StringComparison.OrdinalIgnoreCase);
     private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
 
     protected override async Task OnInitializedAsync()
@@ -224,6 +243,8 @@
         if (string.Equals(_sortBy, sortBy, StringComparison.OrdinalIgnoreCase))
             return;
         if (sortBy == "GreenScore" && !_entries.Any(e => e.GreenScoreAvg is > 0))
+            return; // button is disabled; guard in case of race condition
+        if (sortBy == "Quality" && !_entries.Any(e => e.OutputQualityAvg.HasValue))
             return; // button is disabled; guard in case of race condition
         _sortBy = sortBy;
         await LoadLeaderboardAsync();

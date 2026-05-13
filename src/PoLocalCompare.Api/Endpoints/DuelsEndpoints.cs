@@ -96,6 +96,7 @@ public static class DuelsEndpoints
                 {
                     HtmlOutputRaw = normalizedHtml,
                     HtmlOutputSizeBytes = System.Text.Encoding.UTF8.GetByteCount(normalizedHtml),
+                    OutputQualityScore = HtmlOutputQualityScorer.Score(normalizedHtml),
                 TokenCount = request.TokenCount,
                 TotalDurationMs = request.TotalDurationMs,
                 WarmUpDurationMs = request.WarmUpDurationMs,

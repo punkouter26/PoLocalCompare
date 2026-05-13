@@ -13,6 +13,7 @@ public sealed class DuelResultDto
     public string HtmlOutputRaw { get; init; } = string.Empty;
     public long HtmlOutputSizeBytes { get; init; }
     public double CharacterDensityRatio { get; init; }
+    public int OutputQualityScore { get; init; }
     public bool IsFailure { get; init; }
     public string? FailureReason { get; init; }
     public double? EnergyWh { get; init; }

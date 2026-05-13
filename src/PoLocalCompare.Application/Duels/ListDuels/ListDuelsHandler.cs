@@ -8,11 +8,16 @@ public sealed class ListDuelsHandler
 {
     private readonly IDuelRepository _duelRepository;
     private readonly IModelRepository _modelRepository;
+    private readonly IDuelResultRepository _duelResultRepository;
 
-    public ListDuelsHandler(IDuelRepository duelRepository, IModelRepository modelRepository)
+    public ListDuelsHandler(
+        IDuelRepository duelRepository,
+        IModelRepository modelRepository,
+        IDuelResultRepository duelResultRepository)
     {
         _duelRepository = duelRepository;
         _modelRepository = modelRepository;
+        _duelResultRepository = duelResultRepository;
     }
 
     public async Task<IReadOnlyList<DuelSummaryDto>> HandleAsync(ListDuelsQuery query)
@@ -24,6 +29,10 @@ public sealed class ListDuelsHandler
         {
             var leftModel = await _modelRepository.GetByIdAsync(duel.LeftModelId);
             var rightModel = await _modelRepository.GetByIdAsync(duel.RightModelId);
+            var duelResults = (await _duelResultRepository.GetByDuelIdAsync(duel.DuelId)).ToList();
+            var leftResult = duelResults.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
+            var rightResult = duelResults.FirstOrDefault(r => r.ModelId == duel.RightModelId);
+            var qualitySamples = duelResults.Select(r => r.OutputQualityScore).ToList();
 
             result.Add(new DuelSummaryDto
             {
@@ -39,6 +48,9 @@ public sealed class ListDuelsHandler
                 CompletedAt = duel.CompletedAt,
                 Verdict = (DuelVerdict)duel.Verdict,
                 WinnerModelId = duel.WinnerModelId,
+                LeftOutputQualityScore = leftResult?.OutputQualityScore,
+                RightOutputQualityScore = rightResult?.OutputQualityScore,
+                AvgOutputQualityScore = qualitySamples.Count > 0 ? qualitySamples.Average() : null,
             });
         }
 

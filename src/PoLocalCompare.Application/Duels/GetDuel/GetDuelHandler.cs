@@ -43,6 +43,7 @@ public sealed class GetDuelHandler
                 HtmlOutputRaw = r.HtmlOutputRaw,
                 HtmlOutputSizeBytes = r.HtmlOutputSizeBytes,
                 CharacterDensityRatio = r.CharacterDensityRatio,
+                OutputQualityScore = r.OutputQualityScore,
                 IsFailure = r.IsFailure,
                 FailureReason = r.FailureReason,
                 EnergyWh = r.EnergyWh,

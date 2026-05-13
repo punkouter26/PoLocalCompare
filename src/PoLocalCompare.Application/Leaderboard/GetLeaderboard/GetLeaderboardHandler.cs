@@ -7,11 +7,16 @@ public sealed class GetLeaderboardHandler
 {
     private readonly IModelRepository _modelRepository;
     private readonly IEloHistoryRepository _eloHistoryRepository;
+    private readonly IDuelResultRepository _duelResultRepository;
 
-    public GetLeaderboardHandler(IModelRepository modelRepository, IEloHistoryRepository eloHistoryRepository)
+    public GetLeaderboardHandler(
+        IModelRepository modelRepository,
+        IEloHistoryRepository eloHistoryRepository,
+        IDuelResultRepository duelResultRepository)
     {
         _modelRepository = modelRepository;
         _eloHistoryRepository = eloHistoryRepository;
+        _duelResultRepository = duelResultRepository;
     }
 
     public async Task<IReadOnlyList<LeaderboardEntryDto>> HandleAsync(GetLeaderboardQuery query)
@@ -23,6 +28,10 @@ public sealed class GetLeaderboardHandler
         {
             var history = await _eloHistoryRepository.GetLast20Async(model.ModelId);
             var sparkline = history.Select(x => Math.Round(x.EloAfter, 1)).ToArray();
+            var modelResults = (await _duelResultRepository.GetByModelIdAsync(model.ModelId)).ToList();
+            var qualityAvg = modelResults.Count > 0
+                ? modelResults.Average(r => r.OutputQualityScore)
+                : (double?)null;
 
             rows.Add(new LeaderboardEntryDto
             {
@@ -31,6 +40,7 @@ public sealed class GetLeaderboardHandler
                 CurrentElo = Math.Round(model.CurrentElo, 1),
                 DuelCount = model.DuelCount,
                 WinCount = model.WinCount,
+                OutputQualityAvg = qualityAvg,
                 GreenScoreAvg = model.GreenScoreAvg > 0 ? model.GreenScoreAvg : null,
                 EloSparkline = sparkline,
             });
@@ -40,6 +50,13 @@ public sealed class GetLeaderboardHandler
             ? rows
                 .OrderByDescending(x => x.GreenScoreAvg.HasValue)
                 .ThenByDescending(x => x.GreenScoreAvg)
+                .ThenByDescending(x => x.CurrentElo)
+                .ThenBy(x => x.DisplayName)
+                .ToList()
+            : string.Equals(query.SortBy, "Quality", StringComparison.OrdinalIgnoreCase)
+            ? rows
+                .OrderByDescending(x => x.OutputQualityAvg.HasValue)
+                .ThenByDescending(x => x.OutputQualityAvg)
                 .ThenByDescending(x => x.CurrentElo)
                 .ThenBy(x => x.DisplayName)
                 .ToList()
@@ -57,6 +74,7 @@ public sealed class GetLeaderboardHandler
                 CurrentElo = entry.CurrentElo,
                 DuelCount = entry.DuelCount,
                 WinCount = entry.WinCount,
+                OutputQualityAvg = entry.OutputQualityAvg,
                 GreenScoreAvg = entry.GreenScoreAvg,
                 EloSparkline = entry.EloSparkline,
             })

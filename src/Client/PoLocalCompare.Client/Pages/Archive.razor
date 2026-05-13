@@ -43,6 +43,14 @@
                     @label
                 </button>
             }
+            <button class="archive__filter-chip @(_qualityFilter == "Quality80" ? "archive__filter-chip--active" : "")"
+                    @onclick="ToggleQualityFilter">
+                Quality 80+
+            </button>
+            <button class="archive__filter-chip @(_sortMode == "Quality" ? "archive__filter-chip--active" : "")"
+                    @onclick="ToggleSortMode">
+                Sort: @(_sortMode == "Quality" ? "Quality" : "Newest")
+            </button>
         </div>
         @if (FilteredDuels().Count == 0)
         {
@@ -188,17 +196,43 @@
     private const int PageSize = 20;
 
     private string _verdictFilter = "No Verdict";
+    private string _qualityFilter = "All";
+    private string _sortMode = "Newest";
 
-    private List<DuelSummaryDto> FilteredDuels() => _verdictFilter switch
+    private List<DuelSummaryDto> FilteredDuels()
     {
-        "Won"       => _duels.Where(d => d.Verdict is DuelVerdict.Left or DuelVerdict.Right).ToList(),
-        "No Verdict" => _duels.Where(d => d.Verdict == DuelVerdict.Pending).ToList(),
-        _            => _duels
-    };
+        IEnumerable<DuelSummaryDto> query = _verdictFilter switch
+        {
+            "Won" => _duels.Where(d => d.Verdict is DuelVerdict.Left or DuelVerdict.Right),
+            "No Verdict" => _duels.Where(d => d.Verdict == DuelVerdict.Pending),
+            _ => _duels
+        };
+
+        if (_qualityFilter == "Quality80")
+        {
+            query = query.Where(d => d.AvgOutputQualityScore.HasValue && d.AvgOutputQualityScore.Value >= 80);
+        }
+
+        query = _sortMode == "Quality"
+            ? query.OrderByDescending(d => d.AvgOutputQualityScore ?? -1).ThenByDescending(d => d.StartedAt)
+            : query.OrderByDescending(d => d.StartedAt);
+
+        return query.ToList();
+    }
 
     private Func<DuelSummaryDto, string> _rowClassFn => GetRowClass;
 
-    private void ResetFilters() => _verdictFilter = "All";
+    private void ResetFilters()
+    {
+        _verdictFilter = "All";
+        _qualityFilter = "All";
+        _sortMode = "Newest";
+    }
+
+    private void ToggleQualityFilter() =>
+        _qualityFilter = _qualityFilter == "Quality80" ? "All" : "Quality80";
+
+    private void ToggleSortMode() => _sortMode = _sortMode == "Quality" ? "Newest" : "Quality";
 
     protected override async Task OnInitializedAsync()
     {

@@ -3,6 +3,7 @@ using Azure.Data.Tables;
 using Azure.Storage.Blobs;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
+using PoLocalCompare.Domain.Services;
 
 namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
 
@@ -65,6 +66,17 @@ public sealed class DuelResultRepository : IDuelResultRepository
         return results;
     }
 
+    public async Task<IEnumerable<DuelResult>> GetByModelIdAsync(string modelId)
+    {
+        var results = new List<DuelResult>();
+        await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
+            filter: $"RowKey eq '{modelId}'"))
+        {
+            results.Add(await MapToResultAsync(entity));
+        }
+        return results;
+    }
+
     private static TableEntity MapToEntity(DuelResult result, string htmlOutput)
     {
         return new TableEntity(result.DuelId, result.ModelId)
@@ -77,6 +89,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
             ["HtmlOutputRaw"] = htmlOutput,
             ["HtmlOutputSizeBytes"] = result.HtmlOutputSizeBytes,
             ["CharacterDensityRatio"] = result.CharacterDensityRatio,
+            ["OutputQualityScore"] = result.OutputQualityScore,
             ["IsFailure"] = result.IsFailure,
             ["FailureReason"] = result.FailureReason,
             ["EnergyWh"] = result.EnergyWh,
@@ -111,6 +124,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
             HtmlOutputRaw = htmlOutput,
             HtmlOutputSizeBytes = entity.GetInt64("HtmlOutputSizeBytes") ?? 0,
             CharacterDensityRatio = entity.GetDouble("CharacterDensityRatio") ?? 0,
+            OutputQualityScore = entity.GetInt32("OutputQualityScore") ?? HtmlOutputQualityScorer.Score(htmlOutput),
             IsFailure = entity.GetBoolean("IsFailure") ?? false,
             FailureReason = entity.GetString("FailureReason"),
             EnergyWh = entity.GetDouble("EnergyWh"),

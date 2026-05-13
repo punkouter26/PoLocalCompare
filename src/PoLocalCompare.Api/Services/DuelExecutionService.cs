@@ -294,6 +294,8 @@ public sealed class DuelExecutionService
             result.CharacterDensityRatio = Math.Round((double)nonWhitespace / totalBytes, 4);
         }
 
+        result.OutputQualityScore = HtmlOutputQualityScorer.Score(html);
+
         // GreenStats (local models and local-service models with TdpWatts set)
         if ((model.ModelType == ModelType.Local || model.ModelType == ModelType.LocalService)
             && model.TdpWatts.HasValue && !result.IsFailure)

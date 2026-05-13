@@ -13,6 +13,7 @@ public sealed class DuelResult
     public string HtmlOutputRaw { get; set; }
     public long HtmlOutputSizeBytes { get; set; }
     public double CharacterDensityRatio { get; set; }
+    public int OutputQualityScore { get; set; }
     public bool IsFailure { get; set; }
     public string? FailureReason { get; set; }
 

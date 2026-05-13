@@ -18,6 +18,9 @@ public sealed class DuelSummaryDto
     public string? LoserModelId { get; init; }
     public double? EloShiftWinner { get; init; }
     public double? EloShiftLoser { get; init; }
+    public int? LeftOutputQualityScore { get; init; }
+    public int? RightOutputQualityScore { get; init; }
+    public double? AvgOutputQualityScore { get; init; }
     /// <summary>True when only one model completed (partial duel).</summary>
     public bool IsPartial { get; init; }
 }

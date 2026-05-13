@@ -12,6 +12,7 @@ public sealed class LeaderboardEntryDto
     public int DuelCount { get; init; }
     public int WinCount { get; init; }
     public double WinRate { get; init; }
+    public double? OutputQualityAvg { get; init; }
     public double? GreenScoreAvg { get; init; }
     public double? TdpWatts { get; init; }
     public string? WebLlmModelId { get; init; }
