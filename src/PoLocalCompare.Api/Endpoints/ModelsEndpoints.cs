@@ -5,6 +5,9 @@ using PoLocalCompare.Application.Models.ListModels;
 using PoLocalCompare.Application.Models.RegisterModel;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 
 namespace PoLocalCompare.Api.Endpoints;
 
@@ -31,6 +34,237 @@ public static class ModelsEndpoints
         .WithName("ListModels")
         .WithSummary("Returns all registered models with current ELO and duel counts.")
         .Produces<IEnumerable<ModelDto>>();
+
+        group.MapGet("/availability", async (
+            [FromServices] ListModelsHandler handler,
+            [FromServices] IWebHostEnvironment env,
+            [FromServices] IConfiguration config,
+            [FromServices] IHttpClientFactory httpClientFactory,
+            CancellationToken cancellationToken) =>
+        {
+            var models = await handler.HandleAsync(new ListModelsQuery());
+            if (!env.IsDevelopment())
+            {
+                models = models
+                    .Where(model => model.ModelType != ModelType.LocalService)
+                    .ToList();
+            }
+
+            var modelList = models.ToList();
+
+            // Probe Ollama tags once for all LocalService models.
+            string[] ollamaAvailableModels = [];
+            bool ollamaChecked = false;
+            string? ollamaError = null;
+            if (modelList.Any(m => m.ModelType == ModelType.LocalService))
+            {
+                var ollamaBaseUrl = (config["Ollama:BaseUrl"] ?? "http://localhost:11434").TrimEnd('/');
+                var ollamaStatusClient = httpClientFactory.CreateClient("OllamaStatus");
+                try
+                {
+                    var tags = await ollamaStatusClient.GetFromJsonAsync<OllamaTagsResponse>($"{ollamaBaseUrl}/api/tags", cancellationToken);
+                    ollamaAvailableModels = tags?.Models?.Select(m => m.Name).ToArray() ?? [];
+                    ollamaChecked = true;
+                }
+                catch (Exception ex)
+                {
+                    ollamaError = $"Ollama unavailable: {ex.Message}";
+                }
+            }
+
+            var foundryEndpoint = config["AzureAiFoundry:Endpoint"]?.TrimEnd('/');
+            var foundryApiKey = config["AzureAiFoundry:ApiKey"];
+            var foundryClient = httpClientFactory.CreateClient("Foundry");
+
+            static async Task<(HttpStatusCode StatusCode, string Body)> SendProbeAsync(
+                HttpClient client,
+                string url,
+                string apiKey,
+                string body,
+                CancellationToken ct)
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post, url);
+                req.Headers.Add("api-key", apiKey);
+                req.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(6));
+                var resp = await client.SendAsync(req, cts.Token);
+                var respBody = await resp.Content.ReadAsStringAsync(cts.Token);
+                return (resp.StatusCode, respBody);
+            }
+
+            async Task<ModelAvailabilityDto> CheckAvailabilityAsync(ModelDto model)
+            {
+                if (model.ModelType == ModelType.Local)
+                {
+                    // Browser models may be downloaded on first run, so keep them selectable.
+                    return new ModelAvailabilityDto
+                    {
+                        ModelId = model.ModelId,
+                        IsAvailable = true,
+                        Reason = null
+                    };
+                }
+
+                if (model.ModelType == ModelType.LocalService)
+                {
+                    var modelRef = model.ApiEndpointRef ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(modelRef))
+                    {
+                        return new ModelAvailabilityDto
+                        {
+                            ModelId = model.ModelId,
+                            IsAvailable = false,
+                            Reason = "ApiEndpointRef is empty."
+                        };
+                    }
+
+                    if (!ollamaChecked)
+                    {
+                        return new ModelAvailabilityDto
+                        {
+                            ModelId = model.ModelId,
+                            IsAvailable = false,
+                            Reason = ollamaError ?? "Unable to verify Ollama availability."
+                        };
+                    }
+
+                    var available = ollamaAvailableModels.Any(m =>
+                        m.Equals(modelRef, StringComparison.OrdinalIgnoreCase) ||
+                        m.StartsWith(modelRef + ":", StringComparison.OrdinalIgnoreCase));
+
+                    return new ModelAvailabilityDto
+                    {
+                        ModelId = model.ModelId,
+                        IsAvailable = available,
+                        Reason = available ? null : $"Not found in Ollama: {modelRef}"
+                    };
+                }
+
+                // Remote model check against deployment endpoint first, then model inference endpoint.
+                if (string.IsNullOrWhiteSpace(foundryEndpoint) || string.IsNullOrWhiteSpace(foundryApiKey))
+                {
+                    return new ModelAvailabilityDto
+                    {
+                        ModelId = model.ModelId,
+                        IsAvailable = false,
+                        Reason = "AzureAiFoundry endpoint or API key is missing."
+                    };
+                }
+
+                if (string.IsNullOrWhiteSpace(model.ApiEndpointRef))
+                {
+                    return new ModelAvailabilityDto
+                    {
+                        ModelId = model.ModelId,
+                        IsAvailable = false,
+                        Reason = "ApiEndpointRef is empty."
+                    };
+                }
+
+                var deploymentName = model.ApiEndpointRef;
+
+                var deploymentUrl = $"{foundryEndpoint}/openai/deployments/{deploymentName}/chat/completions?api-version=2024-08-01-preview";
+                var modelInferenceUrl = $"{foundryEndpoint}/models/chat/completions?api-version=2024-05-01-preview";
+
+                var deploymentBody = JsonSerializer.Serialize(new
+                {
+                    messages = new[] { new { role = "user", content = "Say OK." } },
+                    max_tokens = 1,
+                    temperature = 0,
+                    stream = false
+                });
+
+                var inferenceBody = JsonSerializer.Serialize(new
+                {
+                    model = deploymentName,
+                    messages = new[] { new { role = "user", content = "Say OK." } },
+                    max_tokens = 1,
+                    temperature = 0,
+                    stream = false
+                });
+
+                try
+                {
+                    var (deploymentStatus, deploymentRespBody) = await SendProbeAsync(
+                        foundryClient,
+                        deploymentUrl,
+                        foundryApiKey,
+                        deploymentBody,
+                        cancellationToken);
+
+                    if ((int)deploymentStatus is >= 200 and < 300)
+                    {
+                        return new ModelAvailabilityDto
+                        {
+                            ModelId = model.ModelId,
+                            IsAvailable = true,
+                            Reason = null
+                        };
+                    }
+
+                    if (deploymentStatus == HttpStatusCode.NotFound)
+                    {
+                        var (inferenceStatus, inferenceRespBody) = await SendProbeAsync(
+                            foundryClient,
+                            modelInferenceUrl,
+                            foundryApiKey,
+                            inferenceBody,
+                            cancellationToken);
+
+                        var fallbackAvailable = (int)inferenceStatus is >= 200 and < 300;
+                        return new ModelAvailabilityDto
+                        {
+                            ModelId = model.ModelId,
+                            IsAvailable = fallbackAvailable,
+                            Reason = fallbackAvailable
+                                ? null
+                                : inferenceStatus == HttpStatusCode.NotFound
+                                    ? "Model/deployment not found in this Azure AI Foundry resource."
+                                    : $"Model endpoint unavailable (HTTP {(int)inferenceStatus})."
+                        };
+                    }
+
+                    return new ModelAvailabilityDto
+                    {
+                        ModelId = model.ModelId,
+                        IsAvailable = false,
+                        Reason = deploymentStatus switch
+                        {
+                            HttpStatusCode.Unauthorized => "Foundry API key is invalid.",
+                            HttpStatusCode.Forbidden => "Foundry access forbidden for this key/resource.",
+                            HttpStatusCode.TooManyRequests => "Rate limited while probing. Try again shortly.",
+                            _ => $"Deployment endpoint unavailable (HTTP {(int)deploymentStatus})."
+                        }
+                    };
+                }
+                catch (OperationCanceledException)
+                {
+                    return new ModelAvailabilityDto
+                    {
+                        ModelId = model.ModelId,
+                        IsAvailable = false,
+                        Reason = "Probe timed out."
+                    };
+                }
+                catch (Exception)
+                {
+                    return new ModelAvailabilityDto
+                    {
+                        ModelId = model.ModelId,
+                        IsAvailable = false,
+                        Reason = "Probe failed."
+                    };
+                }
+            }
+
+            var results = await Task.WhenAll(modelList.Select(CheckAvailabilityAsync));
+
+            return Results.Ok(results);
+        })
+        .WithName("GetModelAvailability")
+        .WithSummary("Returns per-model runtime availability so only confirmed working models can be selected.")
+        .Produces<IEnumerable<ModelAvailabilityDto>>();
 
         group.MapPost("/", async (
             [FromBody] RegisterModelRequest request,
@@ -231,3 +465,9 @@ public sealed record PatchModelRequest(
 public sealed record ModelDownloadStatusDto(
     string WebLlmModelId,
     bool Downloaded);
+
+file sealed record OllamaTagsResponse(
+    IReadOnlyList<OllamaTagModel>? Models);
+
+file sealed record OllamaTagModel(
+    string Name);

@@ -4,6 +4,7 @@ namespace PoLocalCompare.Shared.DTOs;
 
 public sealed class ModelDto
 {
+    public string Id => ModelId;
     public string ModelId { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public ModelType ModelType { get; init; }

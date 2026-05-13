@@ -7,12 +7,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
+using PoLocalCompare.Domain.Services;
 
 namespace PoLocalCompare.Infrastructure.AzureAiFoundry;
 
 /// <summary>
-/// Calls Azure OpenAI via the native deployment endpoint with streaming SSE.
-/// Uses api-key header against /openai/deployments/{name}/chat/completions.
+/// Calls Azure OpenAI deployment endpoint with streaming SSE.
+/// If deployment lookup returns 404, falls back to Azure AI Foundry model inference endpoint.
 /// </summary>
 public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
 {
@@ -51,72 +52,142 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
             return result;
         }
 
-        var url = $"{endpoint}/openai/deployments/{deploymentName}/chat/completions?api-version=2024-08-01-preview";
+        var deploymentUrl = $"{endpoint}/openai/deployments/{deploymentName}/chat/completions?api-version=2024-08-01-preview";
+        var modelInferenceUrl = $"{endpoint}/models/chat/completions?api-version=2024-05-01-preview";
 
-        var requestBody = new
+        var messages = new[]
         {
-            messages = new[]
-            {
-                new { role = "system", content = "You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS. No markdown, no explanation, no code fences." },
-                new { role = "user", content = promptFull }
-            },
+            new { role = "system", content = "You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS. No markdown, no explanation, no code fences." },
+            new { role = "user", content = promptFull }
+        };
+
+        var deploymentRequestBody = new
+        {
+            messages,
             stream = true,
             max_tokens = 4096,
             temperature = 0.7
         };
 
-        var json = JsonSerializer.Serialize(requestBody);
-
-        HttpResponseMessage response;
-        const int maxAttempts = 3;
-        int attempt = 0;
-        while (true)
+        var modelInferenceRequestBody = new
         {
-            attempt++;
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Add("api-key", apiKey);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            model = deploymentName,
+            messages,
+            stream = true,
+            max_tokens = 4096,
+            temperature = 0.7
+        };
 
-            try
+        var deploymentJson = JsonSerializer.Serialize(deploymentRequestBody);
+        var modelInferenceJson = JsonSerializer.Serialize(modelInferenceRequestBody);
+
+        async Task<(HttpResponseMessage? Response, string? TransportError)> SendWithRetryAsync(
+            string url,
+            string payload,
+            string target,
+            CancellationToken ct)
+        {
+            const int maxAttempts = 3;
+            int attempt = 0;
+
+            while (true)
             {
-                response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                attempt++;
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Add("api-key", apiKey);
+                request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+                HttpResponseMessage response;
+                try
+                {
+                    response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                }
+                catch (Exception ex)
+                {
+                    return (null, $"HTTP request failed: {ex.Message}");
+                }
+
+                var isTransient = response.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable
+                                                        or System.Net.HttpStatusCode.BadGateway
+                                                        or System.Net.HttpStatusCode.TooManyRequests;
+                if (isTransient && attempt < maxAttempts)
+                {
+                    response.Dispose();
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                    _logger.LogWarning("Transient {StatusCode} for {Target}, retry {Attempt}/{Max} in {Delay}s",
+                        (int)response.StatusCode, target, attempt, maxAttempts, delay.TotalSeconds);
+                    await Task.Delay(delay, ct);
+                    continue;
+                }
+
+                return (response, null);
             }
-            catch (Exception ex)
+        }
+
+        var (deploymentResponse, deploymentTransportError) = await SendWithRetryAsync(
+            deploymentUrl,
+            deploymentJson,
+            $"deployment '{deploymentName}'",
+            cancellationToken);
+
+        if (deploymentResponse is null)
+        {
+            result.IsFailure = true;
+            result.FailureReason = deploymentTransportError ?? "Unknown transport error while calling Azure AI Foundry.";
+            _logger.LogError("HTTP request failed for model {Model}: {Error}", deploymentName, result.FailureReason);
+            return result;
+        }
+
+        var response = deploymentResponse;
+
+        if (!response.IsSuccessStatusCode && response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            var deploymentNotFoundBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            response.Dispose();
+
+            _logger.LogWarning(
+                "Deployment endpoint returned 404 for {Model}. Trying Foundry model inference endpoint /models/chat/completions.",
+                deploymentName);
+
+            var (modelInferenceResponse, modelInferenceTransportError) = await SendWithRetryAsync(
+                modelInferenceUrl,
+                modelInferenceJson,
+                $"model '{deploymentName}'",
+                cancellationToken);
+
+            if (modelInferenceResponse is null)
             {
                 result.IsFailure = true;
-                result.FailureReason = $"HTTP request failed: {ex.Message}";
-                _logger.LogError(ex, "HTTP request failed for model {Model}", deploymentName);
+                result.FailureReason = modelInferenceTransportError ?? "Unknown transport error while calling model inference endpoint.";
+                _logger.LogError("Fallback model inference call failed for {Model}: {Error}", deploymentName, result.FailureReason);
                 return result;
             }
 
-            // Retry on transient server errors (503, 502, 429) up to maxAttempts
-            var isTransient = response.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable
-                                                    or System.Net.HttpStatusCode.BadGateway
-                                                    or System.Net.HttpStatusCode.TooManyRequests;
-            if (isTransient && attempt < maxAttempts)
+            response = modelInferenceResponse;
+            if (!response.IsSuccessStatusCode)
             {
-                response.Dispose();
-                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s
-                _logger.LogWarning("Azure OpenAI transient {StatusCode} for {Model}, retry {Attempt}/{Max} in {Delay}s",
-                    (int)response.StatusCode, deploymentName, attempt, maxAttempts, delay.TotalSeconds);
-                await Task.Delay(delay, cancellationToken);
-                continue;
+                var fallbackBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                result.IsFailure = true;
+                result.FailureReason =
+                    $"Model '{deploymentName}' failed on both endpoints. " +
+                    $"Deployment endpoint: HTTP 404. Model inference endpoint: HTTP {(int)response.StatusCode}: {fallbackBody[..Math.Min(200, fallbackBody.Length)]}";
+                _logger.LogError(
+                    "Model '{Model}' failed on deployment endpoint (404) and model inference endpoint ({StatusCode}). Deployment body: {DeployBody}. Fallback body: {FallbackBody}",
+                    deploymentName,
+                    (int)response.StatusCode,
+                    deploymentNotFoundBody[..Math.Min(300, deploymentNotFoundBody.Length)],
+                    fallbackBody[..Math.Min(300, fallbackBody.Length)]);
+                return result;
             }
 
-            break;
+            _logger.LogInformation("Model '{Model}' succeeded via model inference endpoint fallback.", deploymentName);
         }
-
-        if (!response.IsSuccessStatusCode)
+        else if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             result.IsFailure = true;
-            result.FailureReason = response.StatusCode == System.Net.HttpStatusCode.NotFound
-                ? $"Deployment \"{deploymentName}\" not found (HTTP 404). Verify the deployment name in Azure AI Foundry matches ApiEndpointRef for this model, or create the deployment in your Azure AI Foundry project."
-                : $"HTTP {(int)response.StatusCode}: {body[..Math.Min(300, body.Length)]}";
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                _logger.LogError("Azure OpenAI deployment \"{Deployment}\" not found (HTTP 404). Verify the deployment name in your Azure AI Foundry project matches the model's ApiEndpointRef.", deploymentName);
-            else
-                _logger.LogError("Azure OpenAI HTTP {StatusCode} for {Model}: {Body}", (int)response.StatusCode, deploymentName, body[..Math.Min(500, body.Length)]);
+            result.FailureReason = $"HTTP {(int)response.StatusCode}: {body[..Math.Min(300, body.Length)]}";
+            _logger.LogError("Azure OpenAI HTTP {StatusCode} for {Model}: {Body}", (int)response.StatusCode, deploymentName, body[..Math.Min(500, body.Length)]);
             return result;
         }
 
@@ -207,7 +278,7 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
 
         sw.Stop();
 
-        var html = sb.ToString();
+        var html = HtmlOutputNormalizer.Normalize(sb.ToString());
         result.HtmlOutputRaw = html;
         result.HtmlOutputSizeBytes = Encoding.UTF8.GetByteCount(html);
         result.TokenCount = tokenCount;

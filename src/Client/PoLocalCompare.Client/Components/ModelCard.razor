@@ -1,5 +1,6 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
+@using System.Text.RegularExpressions
 
 <div class="@_cardClass" @onclick="OnCardClick" style="@_cardStyle">
     <div class="model-card__header">
@@ -30,6 +31,15 @@
     <div class="model-card__stats">
         Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Model.DuelCount - Model.WinCount)
     </div>
+    <div class="model-card__params">
+        Params: <span class="model-card__params-value">@GetParameterLabel()</span>
+    </div>
+    @if (Model.InputTokenPricePerMillion.HasValue || Model.OutputTokenPricePerMillion.HasValue)
+    {
+        <div class="model-card__pricing">
+            in: $@FormatPrice(Model.InputTokenPricePerMillion ?? 0) &nbsp;·&nbsp; out: $@FormatPrice(Model.OutputTokenPricePerMillion ?? 0) <span class="model-card__pricing-unit">/ 1M tkns</span>
+        </div>
+    }
 </div>
 
 @code {
@@ -58,6 +68,32 @@
     {
         if (!IsDisabled)
             await OnSelected.InvokeAsync(Model);
+    }
+
+    private static string FormatPrice(decimal price) =>
+        price == 0 ? "0" : price < 1 ? price.ToString("G4") : price.ToString("0.##");
+
+    private string GetParameterLabel()
+    {
+        // Prefer explicit known values for select open models.
+        var known = (Model.ApiEndpointRef ?? string.Empty).ToLowerInvariant() switch
+        {
+            "meta-llama-3.3-70b-instruct" => "70B",
+            "phi-4" => "14B",
+            "phi-4-mini-instruct" => "3.8B",
+            _ => null
+        };
+
+        if (!string.IsNullOrWhiteSpace(known))
+            return known;
+
+        // Try parsing from display/model names like "1.7B", "360M", "70B".
+        var searchText = $"{Model.DisplayName} {Model.WebLlmModelId} {Model.ApiEndpointRef}";
+        var match = Regex.Match(searchText, @"\b(\d+(?:\.\d+)?)\s*([BM])\b", RegexOptions.IgnoreCase);
+        if (match.Success)
+            return $"{match.Groups[1].Value}{match.Groups[2].Value.ToUpperInvariant()}";
+
+        return "Undisclosed";
     }
 }
 
@@ -156,7 +192,7 @@
     }
 
     .model-card__badge::before {
-        content: '●';
+        content: 'o';
         font-size: 0.6em;
     }
 
@@ -208,6 +244,29 @@
     .model-card__stats {
         color: var(--oled-text-muted);
         font-size: 0.8rem;
+    }
+
+    .model-card__params {
+        color: var(--oled-text-muted);
+        font-size: 0.78rem;
+        margin-top: 0.15rem;
+    }
+
+    .model-card__params-value {
+        color: var(--oled-text);
+        font-weight: 600;
+    }
+
+    .model-card__pricing {
+        color: var(--oled-text-muted);
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+        opacity: 0.8;
+    }
+
+    .model-card__pricing-unit {
+        opacity: 0.6;
+        font-size: 0.7rem;
     }
     
     /* Ripple effect on click */

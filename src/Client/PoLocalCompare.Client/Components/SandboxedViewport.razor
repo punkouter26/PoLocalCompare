@@ -1,3 +1,5 @@
+@using System.Text.RegularExpressions
+
 @* SandboxedViewport — renders model-generated HTML in an XSS-safe sandboxed iframe.
    sandbox="allow-scripts" permits JS execution required by generated HTML apps.
    allow-same-origin is deliberately omitted so scripts cannot access parent frame, cookies, or localStorage. *@
@@ -5,6 +7,9 @@
 <div class="sandboxed-viewport @(_isLoser ? "sandboxed-viewport--loser" : "")">
     <div class="sandboxed-viewport__header">
         <span class="sandboxed-viewport__model-name">@ModelName</span>
+        <span class="sandboxed-viewport__score" title="Heuristic quality score based on renderability checks">
+            Quality @_qualityScore/100
+        </span>
         @if (_isLoser)
         {
             <span class="sandboxed-viewport__badge sandboxed-viewport__badge--loser">LOSER</span>
@@ -14,7 +19,16 @@
             <span class="sandboxed-viewport__badge sandboxed-viewport__badge--winner">WINNER</span>
         }
     </div>
-    @if (string.IsNullOrWhiteSpace(HtmlContent))
+    @if (_diagnosticItems.Count > 0)
+    {
+        <div class="sandboxed-viewport__diagnostics">
+            @foreach (var item in _diagnosticItems)
+            {
+                <span class="sandboxed-viewport__diagnostic-item">@item</span>
+            }
+        </div>
+    }
+    @if (string.IsNullOrWhiteSpace(_normalizedHtml))
     {
         <div class="sandboxed-viewport__empty">
             <span class="sandboxed-viewport__empty-icon">🚫</span>
@@ -24,7 +38,7 @@
     else
     {
         <iframe
-            srcdoc="@HtmlContent"
+            srcdoc="@_normalizedHtml"
             sandbox="allow-scripts"
             allow="accelerometer; gyroscope"
             title="@ModelName output"
@@ -40,7 +54,104 @@
     [Parameter] public bool IsLoser { get; set; }
     [Parameter] public bool ShowWinner { get; set; }
 
+    private readonly List<string> _diagnosticItems = [];
+    private string _normalizedHtml = string.Empty;
+    private int _qualityScore = 100;
     private bool _isLoser => IsLoser;
+
+    protected override void OnParametersSet()
+    {
+        _diagnosticItems.Clear();
+
+        var raw = HtmlContent ?? string.Empty;
+        var containsFence = ContainsMarkdownFence(raw);
+        _normalizedHtml = NormalizeHtml(raw);
+
+        var hasDoctype = ContainsTag(_normalizedHtml, "!doctype");
+        var hasHtml = ContainsTag(_normalizedHtml, "html");
+        var hasBody = ContainsTag(_normalizedHtml, "body");
+        var hasScript = ContainsTag(_normalizedHtml, "script");
+        var looksLikeHtml = LooksLikeHtml(_normalizedHtml);
+
+        if (containsFence)
+        {
+            _diagnosticItems.Add("Markdown code fences detected and removed");
+        }
+
+        if (!looksLikeHtml && !string.IsNullOrWhiteSpace(_normalizedHtml))
+        {
+            _diagnosticItems.Add("Output may not be valid HTML");
+        }
+
+        if (!hasDoctype && !string.IsNullOrWhiteSpace(_normalizedHtml))
+        {
+            _diagnosticItems.Add("Missing <!DOCTYPE html>");
+        }
+
+        if (!hasScript && !string.IsNullOrWhiteSpace(_normalizedHtml))
+        {
+            _diagnosticItems.Add("No <script> tag found");
+        }
+
+        _qualityScore = 100;
+        if (containsFence) _qualityScore -= 10;
+        if (!looksLikeHtml) _qualityScore -= 40;
+        if (!hasDoctype) _qualityScore -= 10;
+        if (!hasHtml) _qualityScore -= 10;
+        if (!hasBody) _qualityScore -= 10;
+        if (!hasScript) _qualityScore -= 10;
+        if (_normalizedHtml.Length < 200 && !string.IsNullOrWhiteSpace(_normalizedHtml)) _qualityScore -= 10;
+        _qualityScore = Math.Clamp(_qualityScore, 0, 100);
+    }
+
+    private static bool ContainsMarkdownFence(string content) =>
+        content.Contains("```", StringComparison.Ordinal);
+
+    private static string NormalizeHtml(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = raw.Trim();
+
+        var fencedBlock = Regex.Match(
+            trimmed,
+            @"^\s*```(?:html)?\s*(?<body>[\s\S]*?)\s*```\s*$",
+            RegexOptions.IgnoreCase);
+
+        if (fencedBlock.Success)
+        {
+            var body = fencedBlock.Groups["body"].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                return body;
+            }
+        }
+
+        var firstFence = Regex.Match(
+            trimmed,
+            @"```(?:html)?\s*(?<body>[\s\S]*?)\s*```",
+            RegexOptions.IgnoreCase);
+
+        if (firstFence.Success)
+        {
+            var body = firstFence.Groups["body"].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                return body;
+            }
+        }
+
+        return trimmed;
+    }
+
+    private static bool ContainsTag(string html, string tagName) =>
+        Regex.IsMatch(html, $@"<\s*{Regex.Escape(tagName)}\b", RegexOptions.IgnoreCase);
+
+    private static bool LooksLikeHtml(string html) =>
+        Regex.IsMatch(html, @"<(?:!doctype|html|head|body|canvas|div|script|style)\b", RegexOptions.IgnoreCase);
 }
 
 <style>
@@ -78,6 +189,17 @@
         text-overflow: ellipsis;
     }
 
+    .sandboxed-viewport__score {
+        margin-left: auto;
+        color: #93c5fd;
+        font-size: 0.72rem;
+        font-weight: 700;
+        border: 1px solid #1d4ed8;
+        border-radius: 999px;
+        padding: 0.1rem 0.45rem;
+        background: rgba(30, 64, 175, 0.18);
+    }
+
     .sandboxed-viewport__badge {
         font-size: 0.7rem;
         font-weight: 700;
@@ -108,6 +230,24 @@
         font-size: 0.875rem;
         font-style: italic;
         min-height: 200px;
+    }
+
+    .sandboxed-viewport__diagnostics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 0.4rem 0.65rem;
+        border-bottom: 1px solid #2a2a2a;
+        background: #0f172a;
+    }
+
+    .sandboxed-viewport__diagnostic-item {
+        font-size: 0.72rem;
+        color: #fde68a;
+        border: 1px solid #854d0e;
+        background: rgba(133, 77, 14, 0.2);
+        border-radius: 999px;
+        padding: 0.1rem 0.45rem;
     }
 
     .sandboxed-viewport__empty-icon {

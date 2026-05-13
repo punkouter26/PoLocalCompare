@@ -98,6 +98,7 @@
             }
         </div>
         <p class="war-room__hint">Tip: click a selected model again to unselect it, then choose a replacement.</p>
+        <p class="war-room__hint">Only models confirmed as available are selectable.</p>
 
         <div class="war-room__pool">
             @if (!_filteredModels.Any())
@@ -114,9 +115,13 @@
                             LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
                             IsSelected="@(model.ModelId == _leftModel?.ModelId || model.ModelId == _rightModel?.ModelId)"
                             Slot="@(model.ModelId == _leftModel?.ModelId ? "Left" : model.ModelId == _rightModel?.ModelId ? "Right" : null)"
-                            IsDisabled="false"
+                            IsDisabled="@(!IsModelSelectable(model))"
                             OnSelected="AssignModel"
                             ProjectedEloGain="@ComputeProjectedGain(model)" />
+                        @if (!IsModelSelectable(model))
+                        {
+                            <p class="war-room__availability-note">🚫 @GetUnavailableReason(model)</p>
+                        }
                         @if (model.ModelType == ModelType.Remote || model.ModelType == ModelType.LocalService)
                         {
                             <button class="war-room__edit-btn" title="Edit deployment name"
@@ -174,6 +179,10 @@
                     {
                         @("Enter a prompt above to continue.")
                     }
+                    else if ((_leftModel is not null && !IsModelSelectable(_leftModel)) || (_rightModel is not null && !IsModelSelectable(_rightModel)))
+                    {
+                        @("One or both selected models are unavailable. Pick confirmed working models.")
+                    }
                     else
                     {
                         @("Left and Right models must be different.")
@@ -201,6 +210,7 @@
     private ModelDto? _rightModel;
     private string _promptText = string.Empty;
     private string? _error;
+    private Dictionary<string, ModelAvailabilityDto> _availabilityByModelId = new(StringComparer.Ordinal);
 
     private string _typeFilter = "All";
     private IEnumerable<ModelDto> _filteredModels => FilteredModels(_typeFilter);
@@ -255,6 +265,8 @@
                             dup ? $"{m.DisplayName} (…{(m.ModelId.Length > 6 ? m.ModelId[^6..] : m.ModelId)})" : m.DisplayName));
                     })
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+                await RefreshAvailabilityAsync();
                 CancelEdit();
             }
         }
@@ -280,6 +292,7 @@
     private bool CanCommence =>
         _leftModel is not null && _rightModel is not null &&
         _leftModel.ModelId != _rightModel.ModelId &&
+        IsModelSelectable(_leftModel) && IsModelSelectable(_rightModel) &&
         !string.IsNullOrWhiteSpace(_promptText);
 
     private bool IsCloudMode => _allModels.Count > 0 && !_allModels.Any(m => m.ModelType == ModelType.LocalService);
@@ -306,6 +319,8 @@
                     })
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
+                await RefreshAvailabilityAsync();
+
                 // Pre-fill from query parameters (Re-Challenge flow)
                 if (!string.IsNullOrEmpty(PromptParam))
                     _promptText = Uri.UnescapeDataString(PromptParam);
@@ -315,6 +330,9 @@
 
                 if (!string.IsNullOrEmpty(RightModelIdParam))
                     _rightModel = _allModels.FirstOrDefault(m => m.ModelId == RightModelIdParam);
+
+                if (_leftModel is not null && !IsModelSelectable(_leftModel)) _leftModel = null;
+                if (_rightModel is not null && !IsModelSelectable(_rightModel)) _rightModel = null;
             }
         }
         finally
@@ -329,6 +347,8 @@
     // ── Sequential model selection: 1st click = left, 2nd click = right ──
     private void AssignModel(ModelDto model)
     {
+        if (!IsModelSelectable(model)) return;
+
         // Toggle off if already selected
         if (_leftModel?.ModelId == model.ModelId) { _leftModel = null; return; }
         if (_rightModel?.ModelId == model.ModelId) { _rightModel = null; return; }
@@ -339,6 +359,35 @@
 
         // Both filled — replace right
         _rightModel = model;
+    }
+
+    private bool IsModelSelectable(ModelDto model)
+    {
+        if (_availabilityByModelId.TryGetValue(model.ModelId, out var status))
+            return status.IsAvailable;
+
+        return model.ModelType == ModelType.Local;
+    }
+
+    private string GetUnavailableReason(ModelDto model)
+    {
+        if (_availabilityByModelId.TryGetValue(model.ModelId, out var status) && !string.IsNullOrWhiteSpace(status.Reason))
+            return status.Reason;
+        return "Not confirmed working right now.";
+    }
+
+    private async Task RefreshAvailabilityAsync()
+    {
+        var availability = await ApiClient.GetModelAvailabilityAsync();
+        if (availability is null)
+        {
+            _availabilityByModelId = new Dictionary<string, ModelAvailabilityDto>(StringComparer.Ordinal);
+            return;
+        }
+
+        _availabilityByModelId = availability
+            .Where(a => !string.IsNullOrWhiteSpace(a.ModelId))
+            .ToDictionary(a => a.ModelId, a => a, StringComparer.Ordinal);
     }
 
     private double? ComputeProjectedGain(ModelDto model)
@@ -700,6 +749,12 @@
     /* Inline model edit */
     .war-room__pool-item {
         position: relative;
+    }
+
+    .war-room__availability-note {
+        margin: -0.25rem 0 0.5rem 0.25rem;
+        font-size: 0.78rem;
+        color: var(--oled-red);
     }
 
     .war-room__edit-btn {

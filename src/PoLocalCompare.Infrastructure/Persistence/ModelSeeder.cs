@@ -34,6 +34,12 @@ public static class ModelSeeder
         new Model("01SEED000000000000000000D", "GPT-4.1 Mini",  ModelType.Remote, apiEndpointRef: "gpt-4.1-mini",        inputTokenPricePerMillion: 0.4m,  outputTokenPricePerMillion: 1.6m),
         new Model("01SEED000000000000000000E", "GPT-4.1 Nano",  ModelType.Remote, apiEndpointRef: "gpt-4.1-nano",        inputTokenPricePerMillion: 0.1m,  outputTokenPricePerMillion: 0.4m),
         new Model("01SEED000000000000000000F", "Phi-4 Mini",    ModelType.Remote, apiEndpointRef: "Phi-4-mini-instruct", inputTokenPricePerMillion: 0.07m, outputTokenPricePerMillion: 0.28m),
+        new Model("01SEED000000000000000000G", "Phi-4",          ModelType.Remote, apiEndpointRef: "Phi-4",                         inputTokenPricePerMillion: 0.07m,  outputTokenPricePerMillion: 0.28m),
+        new Model("01SEED000000000000000000H", "Llama 3.3 70B",  ModelType.Remote, apiEndpointRef: "Meta-Llama-3.3-70B-Instruct",   inputTokenPricePerMillion: 0.23m,  outputTokenPricePerMillion: 0.73m),
+        new Model("01SEED000000000000000000J", "Mistral Small",  ModelType.Remote, apiEndpointRef: "Mistral-small",                 inputTokenPricePerMillion: 0.10m,  outputTokenPricePerMillion: 0.30m),
+        new Model("01SEED000000000000000000K", "GPT-5 Nano",     ModelType.Remote, apiEndpointRef: "gpt-5-nano",                    inputTokenPricePerMillion: 0.05m,  outputTokenPricePerMillion: 0.40m),
+        new Model("01SEED000000000000000000M", "GPT-5.4 Mini",   ModelType.Remote, apiEndpointRef: "gpt-5.4-mini",                  inputTokenPricePerMillion: 0.75m,  outputTokenPricePerMillion: 4.50m),
+        new Model("01SEED000000000000000000N", "GPT-5.4 Nano",   ModelType.Remote, apiEndpointRef: "gpt-5.4-nano",                  inputTokenPricePerMillion: 0.20m,  outputTokenPricePerMillion: 1.25m),
     ];
 
     public static async Task SeedAsync(IServiceProvider services)

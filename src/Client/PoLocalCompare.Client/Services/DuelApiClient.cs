@@ -44,6 +44,11 @@ public sealed class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<ModelDto>>("/api/models", JsonOptions);
     }
 
+    public async Task<IReadOnlyList<ModelAvailabilityDto>?> GetModelAvailabilityAsync()
+    {
+        return await _http.GetFromJsonAsync<IReadOnlyList<ModelAvailabilityDto>>("/api/models/availability", JsonOptions);
+    }
+
     public async Task<bool> IsLocalModelDownloadedAsync(string webLlmModelId)
     {
         if (string.IsNullOrWhiteSpace(webLlmModelId))

@@ -8,6 +8,7 @@ using PoLocalCompare.Application.Duels.RecordVerdict;
 using PoLocalCompare.Api.Services;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
+using PoLocalCompare.Domain.Services;
 using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Api.Endpoints;
@@ -89,10 +90,12 @@ public static class DuelsEndpoints
                     ["ModelId"] = ["ModelId is required."]
                 });
 
+                var normalizedHtml = HtmlOutputNormalizer.Normalize(request.HtmlOutputRaw);
+
             var result = new DuelResult(duelId, request.ModelId)
-            {
-                HtmlOutputRaw = request.HtmlOutputRaw ?? string.Empty,
-                HtmlOutputSizeBytes = System.Text.Encoding.UTF8.GetByteCount(request.HtmlOutputRaw ?? string.Empty),
+                {
+                    HtmlOutputRaw = normalizedHtml,
+                    HtmlOutputSizeBytes = System.Text.Encoding.UTF8.GetByteCount(normalizedHtml),
                 TokenCount = request.TokenCount,
                 TotalDurationMs = request.TotalDurationMs,
                 WarmUpDurationMs = request.WarmUpDurationMs,
