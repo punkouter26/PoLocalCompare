@@ -13,7 +13,7 @@
         </button>
 
         @* Nav links — collapse into hamburger on narrow screens *@
-        <div class="@NavMenuCssClass navbar-collapse" id="navbarLinks">
+        <div class="@NavMenuCssClass" id="navbarLinks">
             <ul class="navbar-nav me-auto mb-2 mb-md-0">
                 <li class="nav-item">
                     <NavLink class="nav-link" href="war-room">
@@ -48,7 +48,7 @@
     private bool collapseNavMenu = true;
 
     // Builder pattern: collapsible nav state collapses/expands on toggle
-    private string NavMenuCssClass => collapseNavMenu ? "collapse" : "";
+    private string NavMenuCssClass => collapseNavMenu ? "navbar-collapse" : "navbar-collapse nav-open";
 
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
 }

@@ -17,4 +17,9 @@ article.content {
     padding-top: 1rem;
 }
 
+article.app-content {
+    padding-inline: clamp(0.75rem, 2vw, 1.5rem);
+    overflow-x: clip;
+}
+
 
