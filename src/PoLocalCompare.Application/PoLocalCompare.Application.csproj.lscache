@@ -76,18 +76,14 @@ Interfaces/
  ILabReportRenderer.cs
  IModelRepository.cs
  IRemoteInferenceProxy.cs
-Leaderboard/GetKillList/
- GetKillListHandler.cs
- GetKillListQuery.cs
-Leaderboard/GetLeaderboard/
- GetLeaderboardHandler.cs
- GetLeaderboardQuery.cs
-Models/ListModels/
- ListModelsHandler.cs
- ListModelsQuery.cs
-Models/RegisterModel/
- RegisterModelCommand.cs
- RegisterModelHandler.cs
+Leaderboard/
+ GetKillList/GetKillListHandler.cs
+ GetLeaderboard/GetLeaderboardHandler.cs
+Models/
+ ListModels/ListModelsHandler.cs
+ RegisterModel/
+  RegisterModelCommand.cs
+  RegisterModelHandler.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  PoLocalCompare.Application.AssemblyInfo.cs

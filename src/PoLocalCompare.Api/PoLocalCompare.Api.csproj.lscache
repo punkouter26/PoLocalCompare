@@ -84,7 +84,7 @@ Services/
  PoLocalCompare.Domain/obj/Debug/net10.0/ref/PoLocalCompare.Domain.dll
  PoLocalCompare.Infrastructure/obj/Debug/net10.0/ref/PoLocalCompare.Infrastructure.dll
  PoLocalCompare.Shared/obj/Debug/net10.0/ref/PoLocalCompare.Shared.dll
-<DOTNET>/packs/Microsoft.AspNetCore.App.Ref/10.0.7/ref/net10.0/
+<DOTNET>/packs/Microsoft.AspNetCore.App.Ref/10.0.8/ref/net10.0/
  Microsoft.AspNetCore.Antiforgery.dll
  Microsoft.AspNetCore.Authentication.Abstractions.dll
  Microsoft.AspNetCore.Authentication.BearerToken.dll
@@ -225,7 +225,7 @@ Services/
  System.Formats.Cbor.dll
  System.Security.Cryptography.Xml.dll
  System.Threading.RateLimiting.dll
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.7/ref/net10.0/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.8/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
  Microsoft.VisualBasic.dll
@@ -418,6 +418,7 @@ Services/
  microsoft.aspnetcore.signalr.client.core/9.0.4/lib/net9.0/Microsoft.AspNetCore.SignalR.Client.Core.dll
  microsoft.aspnetcore.signalr.client/9.0.4/lib/net9.0/Microsoft.AspNetCore.SignalR.Client.dll
  microsoft.bcl.asyncinterfaces/10.0.3/lib/netstandard2.1/Microsoft.Bcl.AsyncInterfaces.dll
+ microsoft.dotnet.hotreload.webassembly.browser/10.0.204/lib/net10.0/Microsoft.DotNet.HotReload.WebAssembly.Browser.dll
  microsoft.extensions.dependencymodel/9.0.0/lib/net9.0/Microsoft.Extensions.DependencyModel.dll
  microsoft.extensions.logging.applicationinsights/2.22.0/lib/netstandard2.0/Microsoft.Extensions.Logging.ApplicationInsights.dll
  microsoft.identity.client.extensions.msal/4.83.1/lib/net8.0/Microsoft.Identity.Client.Extensions.Msal.dll
@@ -461,7 +462,7 @@ Services/
  system.windows.extensions/6.0.0/lib/net6.0/System.Windows.Extensions.dll
 
 [analyzerReferences]
-<DOTNET>/packs/Microsoft.AspNetCore.App.Ref/10.0.7/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.AspNetCore.App.Ref/10.0.8/analyzers/dotnet/cs/
  Microsoft.AspNetCore.App.Analyzers.dll
  Microsoft.AspNetCore.App.CodeFixes.dll
  Microsoft.AspNetCore.App.SourceGenerators.dll
@@ -469,21 +470,21 @@ Services/
  Microsoft.Extensions.Logging.Generators.dll
  Microsoft.Extensions.Options.SourceGeneration.dll
  Microsoft.Extensions.Validation.ValidationsGenerator.dll
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.7/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.8/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
  System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
-<DOTNET>/sdk/10.0.203/Sdks/Microsoft.NET.Sdk.Razor/source-generators/
+<DOTNET>/sdk/10.0.204/Sdks/Microsoft.NET.Sdk.Razor/source-generators/
  Microsoft.AspNetCore.Razor.Utilities.Shared.dll
  Microsoft.CodeAnalysis.Razor.Compiler.dll
  Microsoft.Extensions.ObjectPool.dll
-<DOTNET>/sdk/10.0.203/Sdks/Microsoft.NET.Sdk.Web/analyzers/cs/
+<DOTNET>/sdk/10.0.204/Sdks/Microsoft.NET.Sdk.Web/analyzers/cs/
  Microsoft.AspNetCore.Analyzers.dll
  Microsoft.AspNetCore.Mvc.Analyzers.dll
-<DOTNET>/sdk/10.0.203/Sdks/Microsoft.NET.Sdk/analyzers/
+<DOTNET>/sdk/10.0.204/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 <NUGET>/
@@ -491,7 +492,7 @@ Services/
  system.clientmodel/1.10.0/analyzers/dotnet/cs/System.ClientModel.SourceGeneration.dll
 
 [analyzerConfigFiles]
-<DOTNET>/sdk/10.0.203/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+<DOTNET>/sdk/10.0.204/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/PoLocalCompare.Api.GeneratedMSBuildEditorConfig.editorconfig
 
 [additionalFiles]

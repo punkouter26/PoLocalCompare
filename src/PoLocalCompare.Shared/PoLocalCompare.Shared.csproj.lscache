@@ -60,6 +60,7 @@ DTOs/
  DuelSummaryDto.cs
  HeadToHeadDto.cs
  LeaderboardEntryDto.cs
+ ModelAvailabilityDto.cs
  ModelDto.cs
  ModelStatusUpdateDto.cs
  OllamaBenchmarkResultDto.cs

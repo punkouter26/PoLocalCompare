@@ -66,6 +66,8 @@ obj/Debug/net10.0/
 Services/
  EloCalculator.cs
  GreenStatsCalculator.cs
+ HtmlOutputNormalizer.cs
+ HtmlOutputQualityScorer.cs
 ValueObjects/
  CharacterDensity.cs
  GreenScore.cs
