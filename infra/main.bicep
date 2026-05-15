@@ -12,15 +12,18 @@ param sharedResourceGroupName string = 'PoShared'
 @description('App Service Plan name in PoShared resource group')
 param sharedAppServicePlanName string = 'asp-poshared-linux'
 
+@description('Application Insights resource name in PoShared resource group')
+param sharedAppInsightsName string = 'poappideinsights8f9c9a4e'
+
 resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: 'kv-poshared'
   scope: resourceGroup(sharedResourceGroupName)
 }
 
-// --- Application Insights Connection String (optional, set if ai-poshared exists) ----
-var applicationInsightsConnectionString = ''
-// Note: Application Insights (ai-poshared) should be created separately in PoShared RG
-// Once created, update this to: @Microsoft.KeyVault(SecretUri=...) or set as environment variable
+resource sharedAppInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: sharedAppInsightsName
+  scope: resourceGroup(sharedResourceGroupName)
+}
 
 // --- Storage Account --------------------------------------------------------------
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -115,6 +118,14 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'AzureStorage__AccountName'
           value: storageAccount.name
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: sharedAppInsights.properties.ConnectionString
+        }
+        {
+          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+          value: '~3'
         }
       ]
       ftpsState: 'Disabled'

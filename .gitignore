@@ -4,6 +4,7 @@ obj/
 *.user
 *.suo
 .vs/
+*.lscache
 
 ## VS Code — ignore user preferences but keep project launch/task config
 .vscode/*
@@ -28,6 +29,8 @@ logs/
 
 ## AI workflow state files
 .potune-state.json
+run_final.json
+run_status.json
 
 ## Build outputs
 dist/
@@ -74,7 +77,7 @@ src/PoLocalCompare.Api/logs/
 src/Client/PoLocalCompare.Client/logs/
 
 ## Docker & Container
-.dockerignore
+docker-compose.override.yml
 *.docker-compose.override.yml
 
 ## Azure

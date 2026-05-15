@@ -16,6 +16,7 @@ env:
   AZURE_RESOURCE_GROUP: PoLocalCompare
   AZURE_SHARED_RESOURCE_GROUP: PoShared
   AZURE_APP_SERVICE_PLAN_NAME: asp-poshared-linux
+  AZURE_APP_INSIGHTS_NAME: poappideinsights8f9c9a4e
   AZURE_KEY_VAULT_NAME: kv-poshared
   AZURE_ENVIRONMENT_NAME: dev
   DEPLOYMENT_NAME: polocalcompare-infra
@@ -90,6 +91,7 @@ jobs:
             --parameters environmentName="${{ env.AZURE_ENVIRONMENT_NAME }}" \
                          sharedResourceGroupName="${{ env.AZURE_SHARED_RESOURCE_GROUP }}" \
                          sharedAppServicePlanName="${{ env.AZURE_APP_SERVICE_PLAN_NAME }}" \
+                         sharedAppInsightsName="${{ env.AZURE_APP_INSIGHTS_NAME }}" \
             --validation-level Provider
 
       - name: Deploy infrastructure
@@ -101,6 +103,7 @@ jobs:
             --parameters environmentName="${{ env.AZURE_ENVIRONMENT_NAME }}" \
                          sharedResourceGroupName="${{ env.AZURE_SHARED_RESOURCE_GROUP }}" \
                          sharedAppServicePlanName="${{ env.AZURE_APP_SERVICE_PLAN_NAME }}" \
+                         sharedAppInsightsName="${{ env.AZURE_APP_INSIGHTS_NAME }}" \
             --output none
 
       - name: Read deployment outputs
@@ -168,8 +171,6 @@ jobs:
           az webapp start \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
             --name "${{ steps.deploy_outputs.outputs.app_service_name }}"
-          echo "Waiting for App Service to start..."
-          sleep 30
 
       - name: Deploy application package
         run: |
@@ -178,7 +179,24 @@ jobs:
             --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
             --src-path ./artifacts/webapp.zip \
             --type zip \
-            --clean true
+            --clean true \
+            --async true
+
+      - name: Verify deployment health
+        run: |
+          appUrl="${{ steps.deploy_outputs.outputs.app_service_url }}"
+          echo "Waiting for site to become healthy at $appUrl/health ..."
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$appUrl/health" || echo "000")
+            echo "Attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Site is healthy."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Site did not become healthy within 5 minutes"
+          exit 1
 
       - name: Capture deployment diagnostics on failure
         if: failure()
