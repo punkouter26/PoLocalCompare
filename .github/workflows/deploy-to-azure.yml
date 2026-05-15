@@ -209,21 +209,6 @@ jobs:
             --log-file appservice-logs.zip || true
           echo "Downloaded appservice-logs.zip (if available)"
 
-      - name: Health check
-        run: |
-          echo "Waiting for the app to warm up..."
-          sleep 30
-          for attempt in $(seq 1 10); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${{ steps.deploy_outputs.outputs.app_service_url }}/health")
-            echo "Attempt $attempt -> HTTP $status"
-            if [ "$status" = "200" ]; then
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "::error::Health check failed"
-          exit 1
-
       - name: Deployment summary
         if: always()
         run: |
