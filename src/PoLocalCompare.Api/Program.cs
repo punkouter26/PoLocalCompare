@@ -80,11 +80,19 @@ try
     {
         try
         {
-            var credential = new DefaultAzureCredential();
+            Log.Information("Loading Key Vault configuration from {KeyVaultUri}...", keyVaultUri);
+            // Short network timeout so the MSI sidecar not-yet-ready condition fails fast
+            // instead of hanging for 3-5 minutes, which would exceed the 230-second App
+            // Service container warmup probe window and cause every cold-start to fail.
+            var credentialOptions = new DefaultAzureCredentialOptions();
+            credentialOptions.Retry.NetworkTimeout = TimeSpan.FromSeconds(15);
+            credentialOptions.Retry.MaxRetries = 1;
+            var credential = new DefaultAzureCredential(credentialOptions);
             builder.Configuration.AddAzureKeyVault(
                 new Uri(keyVaultUri),
                 credential,
                 new PrefixKeyVaultSecretManager("PoLocalCompare"));
+            Log.Information("Key Vault configuration loaded successfully.");
         }
         catch (Exception ex)
         {
