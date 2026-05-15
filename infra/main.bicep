@@ -122,8 +122,6 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
       linuxFxVersion: 'DOTNETCORE|10.0'
       minTlsVersion: '1.2'
       http20Enabled: true
-      // Give the .NET/Blazor WASM app up to 5 minutes to start on first cold boot
-      healthCheckMaxPingFailures: 10
     }
   }
 }

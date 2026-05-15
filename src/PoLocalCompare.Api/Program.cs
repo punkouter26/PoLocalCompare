@@ -78,11 +78,21 @@ try
     var keyVaultUri = builder.Configuration["KeyVault:Uri"];
     if (!string.IsNullOrEmpty(keyVaultUri))
     {
-        var credential = new DefaultAzureCredential();
-        builder.Configuration.AddAzureKeyVault(
-            new Uri(keyVaultUri),
-            credential,
-            new PrefixKeyVaultSecretManager("PoLocalCompare"));
+        try
+        {
+            var credential = new DefaultAzureCredential();
+            builder.Configuration.AddAzureKeyVault(
+                new Uri(keyVaultUri),
+                credential,
+                new PrefixKeyVaultSecretManager("PoLocalCompare"));
+        }
+        catch (Exception ex)
+        {
+            // Key Vault is optional — if the managed identity isn't ready yet or the
+            // access policy hasn't propagated, log a warning and continue. The app will
+            // function without Key Vault secrets; AI Foundry features may be unavailable.
+            Log.Warning(ex, "Key Vault configuration could not be loaded from {KeyVaultUri}. Continuing without Key Vault secrets.", keyVaultUri);
+        }
     }
 
     // In Development, Key Vault holds production storage connection strings.
