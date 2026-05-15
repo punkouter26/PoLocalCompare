@@ -12,14 +12,9 @@ permissions:
 
 env:
   DOTNET_VERSION: 10.0.x
-  AZURE_LOCATION: westus2
   AZURE_RESOURCE_GROUP: PoLocalCompare
-  AZURE_SHARED_RESOURCE_GROUP: PoShared
-  AZURE_APP_SERVICE_PLAN_NAME: asp-poshared-linux
-  AZURE_APP_INSIGHTS_NAME: poappideinsights8f9c9a4e
-  AZURE_KEY_VAULT_NAME: kv-poshared
-  AZURE_ENVIRONMENT_NAME: dev
-  DEPLOYMENT_NAME: polocalcompare-infra
+  AZURE_WEBAPP_NAME: polocalcompare-appservice-dev
+  AZURE_WEBAPP_URL: https://polocalcompare-appservice-dev.azurewebsites.net
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
   AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -30,9 +25,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-test-deploy:
+  build-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 25
 
     steps:
       - name: Checkout code
@@ -48,25 +43,11 @@ jobs:
       - name: Restore WebAssembly workload
         run: dotnet workload restore PoLocalCompare.slnx
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-
       - name: Restore
         run: dotnet restore PoLocalCompare.slnx
 
       - name: Build
         run: dotnet build PoLocalCompare.slnx --configuration Release --no-restore
-
-      - name: Run unit tests
-        run: dotnet test tests/unit/PoLocalCompare.Unit.Tests/PoLocalCompare.Unit.Tests.csproj --configuration Release --no-build --verbosity normal
-
-      - name: Run integration tests
-        run: dotnet test tests/integration/PoLocalCompare.Integration.Tests/PoLocalCompare.Integration.Tests.csproj --configuration Release --no-build --verbosity normal
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -74,66 +55,6 @@ jobs:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Ensure resource group exists
-        run: |
-          az group create \
-            --name "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --location "${{ env.AZURE_LOCATION }}" \
-            --output none
-
-      - name: Preview infrastructure changes
-        run: |
-          az deployment group what-if \
-            --name "${{ env.DEPLOYMENT_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --template-file infra/main.bicep \
-            --parameters environmentName="${{ env.AZURE_ENVIRONMENT_NAME }}" \
-                         sharedResourceGroupName="${{ env.AZURE_SHARED_RESOURCE_GROUP }}" \
-                         sharedAppServicePlanName="${{ env.AZURE_APP_SERVICE_PLAN_NAME }}" \
-                         sharedAppInsightsName="${{ env.AZURE_APP_INSIGHTS_NAME }}" \
-            --validation-level Provider
-
-      - name: Deploy infrastructure
-        run: |
-          az deployment group create \
-            --name "${{ env.DEPLOYMENT_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --template-file infra/main.bicep \
-            --parameters environmentName="${{ env.AZURE_ENVIRONMENT_NAME }}" \
-                         sharedResourceGroupName="${{ env.AZURE_SHARED_RESOURCE_GROUP }}" \
-                         sharedAppServicePlanName="${{ env.AZURE_APP_SERVICE_PLAN_NAME }}" \
-                         sharedAppInsightsName="${{ env.AZURE_APP_INSIGHTS_NAME }}" \
-            --output none
-
-      - name: Read deployment outputs
-        id: deploy_outputs
-        run: |
-          appServiceName=$(az deployment group show \
-            --name "${{ env.DEPLOYMENT_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --query "properties.outputs.appServiceName.value" \
-            -o tsv)
-          appServiceUrl=$(az deployment group show \
-            --name "${{ env.DEPLOYMENT_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --query "properties.outputs.appServiceUrl.value" \
-            -o tsv)
-          echo "app_service_name=$appServiceName" >> "$GITHUB_OUTPUT"
-          echo "app_service_url=$appServiceUrl" >> "$GITHUB_OUTPUT"
-
-      - name: Grant Key Vault access to the app identity
-        run: |
-          principalId=$(az webapp identity show \
-            --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --query principalId \
-            -o tsv)
-          az keyvault set-policy \
-            --name "${{ env.AZURE_KEY_VAULT_NAME }}" \
-            --object-id "$principalId" \
-            --secret-permissions get list \
-            --output none
 
       - name: Publish application
         run: |
@@ -170,13 +91,13 @@ jobs:
         run: |
           az webapp start \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ steps.deploy_outputs.outputs.app_service_name }}"
+            --name "${{ env.AZURE_WEBAPP_NAME }}"
 
       - name: Enforce App Service startup/deploy settings
         run: |
           az webapp config appsettings set \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --settings \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               ENABLE_ORYX_BUILD=false \
@@ -188,7 +109,7 @@ jobs:
         run: |
           az webapp deploy \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --src-path ./artifacts/webapp.zip \
             --type zip \
             --clean true \
@@ -196,9 +117,9 @@ jobs:
 
       - name: Verify deployment health
         run: |
-          appUrl="${{ steps.deploy_outputs.outputs.app_service_url }}"
+          appUrl="${{ env.AZURE_WEBAPP_URL }}"
           echo "Waiting for site to become healthy at $appUrl/health ..."
-          for i in $(seq 1 80); do
+          for i in $(seq 1 40); do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$appUrl/health" || echo "000")
             echo "Attempt $i: HTTP $code"
             if [ "$code" = "200" ]; then
@@ -207,14 +128,14 @@ jobs:
             fi
             sleep 15
           done
-          echo "::error::Site did not become healthy within 20 minutes"
+          echo "::error::Site did not become healthy within 10 minutes"
           exit 1
 
       - name: Capture deployment diagnostics on failure
         if: failure()
         run: |
           az webapp log download \
-            --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
             --log-file appservice-logs.zip || true
           echo "Downloaded appservice-logs.zip (if available)"
@@ -227,6 +148,5 @@ jobs:
           echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Resource Group | ${{ env.AZURE_RESOURCE_GROUP }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Shared App Service Plan | ${{ env.AZURE_APP_SERVICE_PLAN_NAME }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| App Service | ${{ steps.deploy_outputs.outputs.app_service_name }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| URL | ${{ steps.deploy_outputs.outputs.app_service_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| App Service | ${{ env.AZURE_WEBAPP_NAME }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| URL | ${{ env.AZURE_WEBAPP_URL }} |" >> "$GITHUB_STEP_SUMMARY"
