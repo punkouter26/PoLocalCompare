@@ -123,13 +123,8 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: sharedAppInsights.properties.ConnectionString
         }
-        {
-          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
-          value: '~3'
-        }
       ]
       ftpsState: 'Disabled'
-      healthCheckPath: '/health'
       linuxFxVersion: 'DOTNETCORE|10.0'
       minTlsVersion: '1.2'
       http20Enabled: true
