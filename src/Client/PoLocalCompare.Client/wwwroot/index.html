@@ -45,7 +45,7 @@
             const timeoutUi = document.getElementById("boot-timeout-ui");
             const timeoutMessage = document.getElementById("boot-timeout-message");
             const app = document.getElementById("app");
-            const timeoutMs = 10000;
+            const timeoutMs = 45000;
 
             const showFallback = (message) => {
                 if (!timeoutUi || timeoutUi.hidden === false) {
@@ -62,7 +62,7 @@
             };
 
             const timer = setTimeout(() => {
-                showFallback("The app is still loading after 10 seconds. This usually means a client runtime asset failed to load.");
+                showFallback("The app is still loading after 45 seconds. This usually means a client runtime asset failed to load.");
             }, timeoutMs);
 
             window.__clearBootTimeout = () => {
@@ -117,7 +117,15 @@
             document.body.appendChild(script);
         })();
     </script>
-    <script src="/js/webllm-interop.js?v=2"></script>
+    <!-- Defer non-critical webllm-interop until app is ready -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const script = document.createElement("script");
+            script.src = "/js/webllm-interop.js?v=2";
+            script.async = true;
+            document.body.appendChild(script);
+        });
+    </script>
     <script src="/js/diag-interop.js?v=3"></script>
     <script src="/js/util.js?v=2"></script>
 </body>
