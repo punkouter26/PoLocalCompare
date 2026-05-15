@@ -8,6 +8,8 @@ Utility scripts for maintaining and managing the PoLocalCompare application.
 
 **Purpose:** Downloads WebLLM MLC model files from HuggingFace.
 
+**When to run:** First-time setup on any new development PC before using Local Model Lab.
+
 **Usage:**
 ```bash
 python SCRIPTS/download-models.py

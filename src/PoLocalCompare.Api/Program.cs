@@ -101,16 +101,6 @@ try
         Log.Warning("AzureAiFoundry:ApiKey is empty. Configure AzureAiFoundry__ApiKey via user-secrets or environment variables for remote model duels.");
     }
 
-    // ─── CORS (T040) ─────────────────────────────────────────────────────────
-    builder.Services.AddCors(options =>
-    {
-        options.AddDefaultPolicy(policy =>
-            policy.WithOrigins("http://localhost:5000", "https://localhost:5001", "http://localhost:5100", "https://localhost:5101")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials());
-    });
-
     // ─── SignalR ──────────────────────────────────────────────────────────────
     builder.Services.AddSignalR();
 
@@ -234,8 +224,6 @@ try
         ctx.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
         await next(ctx);
     });
-
-    app.UseCors();
 
     if (app.Environment.IsDevelopment())
     {

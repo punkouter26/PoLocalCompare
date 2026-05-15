@@ -11,7 +11,7 @@
 <PageTitle>Archive — PoLocalCompare</PageTitle>
 
 <div class="archive">
-    <h1 class="archive__title">&#x1F52C; Lab Archive</h1>
+    <h1 class="archive__title">Lab Archive</h1>
 
     @if (_loading)
     {
@@ -55,7 +55,7 @@
             Class="archive__grid">
             <Columns>
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Property="StartedAt" Title="Date" Width="170px">
-                    <Template Context="d">@d.StartedAt.ToString("yyyy-MM-dd HH:mm")</Template>
+                    <Template Context="d">@d.StartedAt.ToString("yyyy-MM-dd HH:mm") <span class="archive__tz">UTC</span></Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Property="PromptSummary" Title="Prompt" Width="200px" />
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Left Model" Width="180px">
@@ -117,6 +117,11 @@
 
                 <div class="archive__detail-actions">
                     <RadzenButton
+                        Text="👁 View Output"
+                        ButtonStyle="ButtonStyle.Light"
+                        Click="@(() => Nav.NavigateTo($"/arena/{_selectedDuel.DuelId}"))"
+                        class="archive__btn" />
+                    <RadzenButton
                         Text="⚧ Re-Challenge"
                         ButtonStyle="ButtonStyle.Light"
                         Click="@GoToReChallenge"
@@ -151,7 +156,7 @@
     private bool _hasMore;
     private const int PageSize = 20;
 
-    private string _verdictFilter = "No Verdict";
+    private string _verdictFilter = "All";
 
     private List<DuelSummaryDto> FilteredDuels()
     {

@@ -177,6 +177,12 @@
     flex-shrink: 0;
 }
 
+.archive__tz {
+    font-size: 0.7em;
+    opacity: 0.55;
+    letter-spacing: 0.03em;
+}
+
 .archive__viewports {
     display: grid;
     grid-template-columns: 1fr 1fr;
