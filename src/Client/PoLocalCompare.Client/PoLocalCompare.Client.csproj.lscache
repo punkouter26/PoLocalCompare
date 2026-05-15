@@ -91,7 +91,6 @@ Services/
  microsoft.aspnetcore.signalr.client/9.0.4/lib/net9.0/Microsoft.AspNetCore.SignalR.Client.dll
  microsoft.aspnetcore.signalr.common/9.0.4/lib/net9.0/Microsoft.AspNetCore.SignalR.Common.dll
  microsoft.aspnetcore.signalr.protocols.json/9.0.4/lib/net9.0/Microsoft.AspNetCore.SignalR.Protocols.Json.dll
- microsoft.dotnet.hotreload.webassembly.browser/10.0.204/lib/net10.0/Microsoft.DotNet.HotReload.WebAssembly.Browser.dll
  microsoft.extensions.configuration.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.Abstractions.dll
  microsoft.extensions.configuration.binder/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.Binder.dll
  microsoft.extensions.configuration.fileextensions/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.FileExtensions.dll

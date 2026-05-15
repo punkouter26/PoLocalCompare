@@ -418,7 +418,6 @@ Services/
  microsoft.aspnetcore.signalr.client.core/9.0.4/lib/net9.0/Microsoft.AspNetCore.SignalR.Client.Core.dll
  microsoft.aspnetcore.signalr.client/9.0.4/lib/net9.0/Microsoft.AspNetCore.SignalR.Client.dll
  microsoft.bcl.asyncinterfaces/10.0.3/lib/netstandard2.1/Microsoft.Bcl.AsyncInterfaces.dll
- microsoft.dotnet.hotreload.webassembly.browser/10.0.204/lib/net10.0/Microsoft.DotNet.HotReload.WebAssembly.Browser.dll
  microsoft.extensions.dependencymodel/9.0.0/lib/net9.0/Microsoft.Extensions.DependencyModel.dll
  microsoft.extensions.logging.applicationinsights/2.22.0/lib/netstandard2.0/Microsoft.Extensions.Logging.ApplicationInsights.dll
  microsoft.identity.client.extensions.msal/4.83.1/lib/net8.0/Microsoft.Identity.Client.Extensions.Msal.dll
