@@ -172,6 +172,18 @@ jobs:
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
             --name "${{ steps.deploy_outputs.outputs.app_service_name }}"
 
+      - name: Enforce App Service startup/deploy settings
+        run: |
+          az webapp config appsettings set \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ steps.deploy_outputs.outputs.app_service_name }}" \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              ENABLE_ORYX_BUILD=false \
+              WEBSITES_PORT=8080 \
+              WEBSITES_CONTAINER_START_TIME_LIMIT=1800 \
+            --output none
+
       - name: Deploy application package
         run: |
           az webapp deploy \
@@ -180,13 +192,13 @@ jobs:
             --src-path ./artifacts/webapp.zip \
             --type zip \
             --clean true \
-            --async true
+            --track-status false
 
       - name: Verify deployment health
         run: |
           appUrl="${{ steps.deploy_outputs.outputs.app_service_url }}"
           echo "Waiting for site to become healthy at $appUrl/health ..."
-          for i in $(seq 1 20); do
+          for i in $(seq 1 80); do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$appUrl/health" || echo "000")
             echo "Attempt $i: HTTP $code"
             if [ "$code" = "200" ]; then
@@ -195,7 +207,7 @@ jobs:
             fi
             sleep 15
           done
-          echo "::error::Site did not become healthy within 5 minutes"
+          echo "::error::Site did not become healthy within 20 minutes"
           exit 1
 
       - name: Capture deployment diagnostics on failure

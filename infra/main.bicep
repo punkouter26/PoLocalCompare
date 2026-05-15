@@ -109,6 +109,24 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
           value: 'http://+:8080'
         }
         {
+          name: 'WEBSITES_PORT'
+          value: '8080'
+        }
+        {
+          // Publish output is already built in CI; skip Oryx build on deploy.
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'false'
+        }
+        {
+          name: 'ENABLE_ORYX_BUILD'
+          value: 'false'
+        }
+        {
+          // Warmup often exceeds 230s when MSI sidecar/container cold-starts.
+          name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
+          value: '1800'
+        }
+        {
           name: 'KeyVault__Uri'
           value: sharedKeyVault.properties.vaultUri
         }
