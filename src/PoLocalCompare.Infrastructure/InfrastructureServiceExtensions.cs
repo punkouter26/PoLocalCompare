@@ -2,6 +2,7 @@ using Azure.Data.Tables;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Azure.Identity;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Infrastructure.AzureAiFoundry;
 using PoLocalCompare.Infrastructure.KeyVault;
@@ -17,19 +18,29 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Azure Table Storage
-        var tableConnectionString = configuration.GetConnectionString("AzureTableStorage")
-            ?? configuration["AzureTableStorage:ConnectionString"]
-            ?? "UseDevelopmentStorage=true";
-
-        services.AddSingleton(new TableServiceClient(tableConnectionString));
-
-        // Azure Blob Storage
-        var blobConnectionString = configuration.GetConnectionString("AzureBlobStorage")
-            ?? configuration["AzureBlobStorage:ConnectionString"]
-            ?? "UseDevelopmentStorage=true";
-
-        services.AddSingleton(new BlobServiceClient(blobConnectionString));
+        // Azure Storage — prefer managed identity in production (AzureStorage__AccountName is set
+        // by Bicep and the App Service identity has Storage Table/Blob Data Contributor RBAC roles).
+        // Fall back to a connection string for local dev (Azurite via UseDevelopmentStorage=true).
+        var storageAccountName = configuration["AzureStorage:AccountName"];
+        if (!string.IsNullOrWhiteSpace(storageAccountName))
+        {
+            var credential = new DefaultAzureCredential();
+            services.AddSingleton(new TableServiceClient(
+                new Uri($"https://{storageAccountName}.table.core.windows.net"),
+                credential));
+            services.AddSingleton(new BlobServiceClient(
+                new Uri($"https://{storageAccountName}.blob.core.windows.net"),
+                credential));
+        }
+        else
+        {
+            var tableConnectionString = configuration.GetConnectionString("AzureTableStorage")
+                ?? "UseDevelopmentStorage=true";
+            var blobConnectionString = configuration.GetConnectionString("AzureBlobStorage")
+                ?? "UseDevelopmentStorage=true";
+            services.AddSingleton(new TableServiceClient(tableConnectionString));
+            services.AddSingleton(new BlobServiceClient(blobConnectionString));
+        }
 
         // Repositories
         services.AddScoped<IModelRepository, ModelRepository>();
