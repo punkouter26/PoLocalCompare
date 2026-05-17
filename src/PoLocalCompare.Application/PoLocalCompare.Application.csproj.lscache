@@ -21,7 +21,7 @@ ProjectAssetsFile=<PATH>obj/project.assets.json
 RootNamespace=PoLocalCompare.Application
 RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
-SolutionPath=<PATH>../../PoLocalCompare.slnx
+SolutionPath=*Undefined*
 TargetFrameworkIdentifier=.NETCoreApp
 TargetPath=<PATH>bin/Debug/net10.0/PoLocalCompare.Application.dll
 TargetRefPath=<PATH>obj/Debug/net10.0/ref/PoLocalCompare.Application.dll
@@ -76,18 +76,14 @@ Interfaces/
  ILabReportRenderer.cs
  IModelRepository.cs
  IRemoteInferenceProxy.cs
-Leaderboard/GetKillList/
- GetKillListHandler.cs
- GetKillListQuery.cs
-Leaderboard/GetLeaderboard/
- GetLeaderboardHandler.cs
- GetLeaderboardQuery.cs
-Models/ListModels/
- ListModelsHandler.cs
- ListModelsQuery.cs
-Models/RegisterModel/
- RegisterModelCommand.cs
- RegisterModelHandler.cs
+Leaderboard/
+ GetKillList/GetKillListHandler.cs
+ GetLeaderboard/GetLeaderboardHandler.cs
+Models/
+ ListModels/ListModelsHandler.cs
+ RegisterModel/
+  RegisterModelCommand.cs
+  RegisterModelHandler.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  PoLocalCompare.Application.AssemblyInfo.cs
@@ -97,7 +93,7 @@ obj/Debug/net10.0/
 ../
  PoLocalCompare.Domain/obj/Debug/net10.0/ref/PoLocalCompare.Domain.dll
  PoLocalCompare.Shared/obj/Debug/net10.0/ref/PoLocalCompare.Shared.dll
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.7/ref/net10.0/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.8/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
  Microsoft.VisualBasic.dll
@@ -268,17 +264,17 @@ obj/Debug/net10.0/
 <NUGET>/nulid/1.7.3/lib/net6.0/NUlid.dll
 
 [analyzerReferences]
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.7/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.8/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
  System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
-<DOTNET>/sdk/10.0.203/Sdks/Microsoft.NET.Sdk/analyzers/
+<DOTNET>/sdk/10.0.204/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 
 [analyzerConfigFiles]
-<DOTNET>/sdk/10.0.203/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+<DOTNET>/sdk/10.0.204/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/PoLocalCompare.Application.GeneratedMSBuildEditorConfig.editorconfig
