@@ -17,14 +17,23 @@
 # 1. Start Azurite (Azure Storage emulator)
 docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
 
-# 2. Configure Azure AI Foundry (optional — enables remote model duels)
+# 2. Download browser model assets locally (recommended on every new PC)
+python SCRIPTS/download-models.py
+
+# 3. Configure Azure AI Foundry (optional — enables remote model duels)
 dotnet user-secrets set "AzureAiFoundry:ApiKey" "your-key"
 
-# 3. Run the API
+# 4. Run the API
 dotnet run --project src/PoLocalCompare.Api --launch-profile https
 
-# 4. Open the app
+# 5. Open the app
 open https://localhost:5001
+```
+
+If `python SCRIPTS/download-models.py` fails on a new machine, install the dependency first:
+
+```bash
+pip install huggingface_hub
 ```
 
 ---

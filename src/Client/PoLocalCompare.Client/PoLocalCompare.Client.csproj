@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <WasmSdkPackageVersion>10.0.7</WasmSdkPackageVersion>
   </PropertyGroup>
 

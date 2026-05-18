@@ -7,31 +7,35 @@
 @using Radzen.Blazor
 @inject DuelApiClient ApiClient
 
-<PageTitle>LLM Duel Arena</PageTitle>
+<PageTitle>PoLocalCompare</PageTitle>
 
 <div class="home">
     @* ── Compact Header (C1) ── *@
     <div class="home__header">
-        <h1 class="home__title">⚔ LLM Duel Arena</h1>
-        <a href="/war-room" class="rz-button rz-button-md rz-primary">⚔ New Duel</a>
+        <h1 class="home__title">LLM Duel Arena</h1>
+        <a href="/war-room" class="rz-button rz-button-md rz-primary">New Duel</a>
     </div>
 
     @* ── Stat Strip (C1) ── *@
     <div class="home__stats">
         <div class="home__stat" style="--stagger-index: 0;">
-            <span class="home__stat-value">@_totalDuels</span>
+            @if (_statsLoading) { <div class="skeleton home__stat-skeleton"></div> }
+            else { <span class="home__stat-value">@_totalDuels</span> }
             <span class="home__stat-label">Duels Fought</span>
         </div>
         <div class="home__stat" style="--stagger-index: 1;">
-            <span class="home__stat-value">@_activeModels</span>
+            @if (_statsLoading) { <div class="skeleton home__stat-skeleton"></div> }
+            else { <span class="home__stat-value">@_activeModels</span> }
             <span class="home__stat-label">Active Models</span>
         </div>
         <div class="home__stat" style="--stagger-index: 2;">
-            <span class="home__stat-value">@(_topModel ?? "—")</span>
+            @if (_statsLoading) { <div class="skeleton home__stat-skeleton"></div> }
+            else { <span class="home__stat-value">@(_topModel ?? "—")</span> }
             <span class="home__stat-label">Top Ranked</span>
         </div>
-        <div class="home__stat @(_unratedCount > 0 ? "home__stat--alert" : "")" style="--stagger-index: 3;">
-            <span class="home__stat-value">@_unratedCount</span>
+        <div class="home__stat @(!_statsLoading && _unratedCount > 0 ? "home__stat--alert" : "")" style="--stagger-index: 3;">
+            @if (_statsLoading) { <div class="skeleton home__stat-skeleton"></div> }
+            else { <span class="home__stat-value">@_unratedCount</span> }
             <span class="home__stat-label">Need Verdict</span>
         </div>
     </div>
@@ -117,6 +121,7 @@
     private int _activeModels;
     private string? _topModel;
     private int _unratedCount;
+    private bool _statsLoading = true;
 
     private bool _systemLoading;
     private bool _apiHealthy;
@@ -137,15 +142,22 @@
 
         var duels = duelsTask.Result ?? [];
         _recentDuels = duels;
-        _totalDuels = duels.Count;
         _unratedCount = duels.Count(d => d.Verdict == DuelVerdict.Pending);
 
         var lb = lbTask.Result;
         if (lb is not null)
         {
+            // Derive true total from leaderboard (each duel counted from 2 model sides)
+            _totalDuels = lb.Sum(e => e.DuelCount) / 2;
             _activeModels = lb.Count(e => e.DuelCount > 0);
             _topModel = lb.FirstOrDefault(e => e.Rank == 1)?.DisplayName;
         }
+        else
+        {
+            // Fallback: use the page-limited fetch count
+            _totalDuels = duels.Count;
+        }
+        _statsLoading = false;
 
         await RefreshSystemAsync();
     }

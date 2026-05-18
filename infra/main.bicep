@@ -12,17 +12,20 @@ param sharedResourceGroupName string = 'PoShared'
 @description('App Service Plan name in PoShared resource group')
 param sharedAppServicePlanName string = 'asp-poshared-linux'
 
+@description('Application Insights resource name in PoShared resource group')
+param sharedAppInsightsName string = 'poappideinsights8f9c9a4e'
+
 resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: 'kv-poshared'
   scope: resourceGroup(sharedResourceGroupName)
 }
 
-// ─── Application Insights Connection String (optional, set if ai-poshared exists) ────────
-var applicationInsightsConnectionString = ''
-// Note: Application Insights (ai-poshared) should be created separately in PoShared RG
-// Once created, update this to: @Microsoft.KeyVault(SecretUri=...) or set as environment variable
+resource sharedAppInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: sharedAppInsightsName
+  scope: resourceGroup(sharedResourceGroupName)
+}
 
-// ─── Storage Account ──────────────────────────────────────────────────────────
+// --- Storage Account --------------------------------------------------------------
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: 'polocalcompare${environmentName}sa'
   location: location
@@ -37,7 +40,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 
-// ─── Table Storage Service ─────────────────────────────────────────────────────
+// --- Table Storage Service --------------------------------------------------------
 resource tableService 'Microsoft.Storage/storageAccounts/tableServices@2023-05-01' = {
   parent: storageAccount
   name: 'default'
@@ -63,7 +66,7 @@ resource eloHistoryTable 'Microsoft.Storage/storageAccounts/tableServices/tables
   name: 'EloHistory'
 }
 
-// ─── Blob Storage ─────────────────────────────────────────────────────────────
+// --- Blob Storage -----------------------------------------------------------------
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   parent: storageAccount
   name: 'default'
@@ -77,7 +80,7 @@ resource duelHtmlOutputsContainer 'Microsoft.Storage/storageAccounts/blobService
   }
 }
 
-// ─── Linux App Service (shared plan in PoShared) ─────────────────────────────
+// --- Linux App Service (shared plan in PoShared) ----------------------------------
 resource sharedAppServicePlan 'Microsoft.Web/serverfarms@2023-12-01' existing = {
   name: sharedAppServicePlanName
   scope: resourceGroup(sharedResourceGroupName)
@@ -106,20 +109,40 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
           value: 'http://+:8080'
         }
         {
+          name: 'WEBSITES_PORT'
+          value: '8080'
+        }
+        {
+          // Publish output is already built in CI; skip Oryx build on deploy.
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'false'
+        }
+        {
+          name: 'ENABLE_ORYX_BUILD'
+          value: 'false'
+        }
+        {
+          // Warmup often exceeds 230s when MSI sidecar/container cold-starts.
+          name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
+          value: '1800'
+        }
+        {
           name: 'KeyVault__Uri'
           value: sharedKeyVault.properties.vaultUri
         }
+        // Storage auth uses managed identity (RBAC roles assigned below).
+        // InfrastructureServiceExtensions uses this name to build the service URI
+        // without needing a connection string or a Key Vault secret.
         {
-          name: 'ConnectionStrings__AzureTableStorage'
-          value: '@Microsoft.KeyVault(SecretUri=${sharedKeyVault.properties.vaultUri}secrets/PoLocalCompare--ConnectionStrings--AzureTableStorage/)'
+          name: 'AzureStorage__AccountName'
+          value: storageAccount.name
         }
         {
-          name: 'ConnectionStrings__AzureBlobStorage'
-          value: '@Microsoft.KeyVault(SecretUri=${sharedKeyVault.properties.vaultUri}secrets/PoLocalCompare--ConnectionStrings--AzureBlobStorage/)'
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: sharedAppInsights.properties.ConnectionString
         }
       ]
       ftpsState: 'Disabled'
-      healthCheckPath: '/health'
       linuxFxVersion: 'DOTNETCORE|10.0'
       minTlsVersion: '1.2'
       http20Enabled: true
@@ -127,7 +150,7 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
   }
 }
 
-// ─── RBAC: Storage Table Data Contributor ────────────────────────────────────
+// --- RBAC: Storage Table Data Contributor -----------------------------------------
 @description('Storage Table Data Contributor role')
 var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 
@@ -141,7 +164,7 @@ resource tableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01
   }
 }
 
-// ─── RBAC: Storage Blob Data Contributor ─────────────────────────────────────
+// --- RBAC: Storage Blob Data Contributor ------------------------------------------
 @description('Storage Blob Data Contributor role')
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 
@@ -155,7 +178,7 @@ resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
   }
 }
 
-// ─── Outputs ─────────────────────────────────────────────────────────────────
+// --- Outputs ----------------------------------------------------------------------
 output storageAccountName string = storageAccount.name
 output appServiceName string = appService.name
 output appServiceUrl string = 'https://${appService.properties.defaultHostName}'

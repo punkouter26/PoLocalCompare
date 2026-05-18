@@ -22,11 +22,15 @@ public static class HealthEndpoints
             var checks = new Dictionary<string, object>();
             var overallHealthy = true;
 
-            // Azure Table Storage check
+            // Azure Table Storage check — use a data-plane operation so that only
+            // Storage Table Data Contributor RBAC is required (GetPropertiesAsync is
+            // a management-plane call that requires Storage Account Contributor).
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                await tableServiceClient.GetPropertiesAsync();
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await foreach (var _ in tableServiceClient.QueryAsync(maxPerPage: 1, cancellationToken: cts.Token))
+                    break;
                 sw.Stop();
                 checks["azureTableStorage"] = new { status = "Healthy", latencyMs = sw.ElapsedMilliseconds };
             }

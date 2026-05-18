@@ -6,7 +6,7 @@
 @using Radzen
 @using Radzen.Blazor
 
-<PageTitle>Leaderboard — LLM Duel Arena</PageTitle>
+<PageTitle>Leaderboard — PoLocalCompare</PageTitle>
 
 @inject DuelApiClient ApiClient
 
@@ -30,7 +30,7 @@
             title="Sort by persisted HTML output quality score" />
         <span class="leaderboard__divider">|</span>
         <RadzenButton Text="@(_activeOnly ? "Active ✓" : "Show All")"
-            Click="@(() => _activeOnly = !_activeOnly)"
+            Click="ToggleActiveOnly"
             ButtonStyle="@(_activeOnly ? ButtonStyle.Primary : ButtonStyle.Light)"
             Size="ButtonSize.Small" class="leaderboard__sort-btn"
             title="@(_activeOnly ? "Showing models with duels — click to show all" : "Showing all models — click to hide unplayed")" />
@@ -61,27 +61,28 @@
                 </div>
             </div>
         }
-        <RadzenDataGrid Data="@(_activeOnly ? _entries.Where(e => e.DuelCount > 0).ToList() : _entries)"
+        <RadzenDataGrid Data="@_displayedEntries"
             TItem="LeaderboardEntryDto" RowSelect="OnRowSelect"
             Class="leaderboard__grid leaderboard__grid--scrollable">
             <Columns>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px">
                     <Template Context="entry">
-                        @if (entry.Rank == 1)
+                        @{ var dr = _displayedEntries.IndexOf(entry) + 1; }
+                        @if (dr == 1)
                         {
                             <span class="lb__rank lb__rank--gold" title="#1 Ranked">🥇</span>
                         }
-                        else if (entry.Rank == 2)
+                        else if (dr == 2)
                         {
                             <span class="lb__rank lb__rank--silver" title="#2 Ranked">🥈</span>
                         }
-                        else if (entry.Rank == 3)
+                        else if (dr == 3)
                         {
                             <span class="lb__rank lb__rank--bronze" title="#3 Ranked">🥉</span>
                         }
                         else
                         {
-                            <span class="lb__rank">@entry.Rank</span>
+                            <span class="lb__rank">@dr</span>
                         }
                     </Template>
                 </RadzenDataGridColumn>
@@ -141,6 +142,10 @@
                         @if (entry.EloSparkline is not null && entry.EloSparkline.Length > 1)
                         {
                             <EloSparkline Values="entry.EloSparkline" />
+                        }
+                        else if (entry.EloSparkline is not null && entry.EloSparkline.Length == 1)
+                        {
+                            <span title="Only 1 duel recorded so far" style="color: var(--rz-text-secondary-color); font-style: italic;">1 duel</span>
                         }
                         else
                         {
@@ -214,6 +219,7 @@
 
 @code {
     private List<LeaderboardEntryDto> _entries = [];
+    private List<LeaderboardEntryDto> _displayedEntries = [];
     private Dictionary<string, ModelType> _modelTypes = [];
     private bool _activeOnly = true; // default: hide unplayed models
     private bool _loading = true;
@@ -250,6 +256,14 @@
         await LoadLeaderboardAsync();
     }
 
+    private void ToggleActiveOnly()
+    {
+        _activeOnly = !_activeOnly;
+        _displayedEntries = _activeOnly
+            ? _entries.Where(e => e.DuelCount > 0).ToList()
+            : _entries;
+    }
+
     private void CloseKillList()
     {
         _selected = null;
@@ -269,6 +283,9 @@
         {
             var rows = await ApiClient.GetLeaderboardAsync(_sortBy);
             _entries = rows?.ToList() ?? [];
+            _displayedEntries = _activeOnly
+                ? _entries.Where(e => e.DuelCount > 0).ToList()
+                : _entries;
         }
         catch (Exception ex)
         {
@@ -307,20 +324,3 @@
     }
 }
 
-<style>
-    /* ── Rank medals ─────────────────────────────────────────────── */
-    .lb__rank { font-size: 1.1rem; }
-    .lb__rank--gold   { filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.7)); }
-    .lb__rank--silver { filter: drop-shadow(0 0 4px rgba(180, 180, 180, 0.6)); }
-    .lb__rank--bronze { filter: drop-shadow(0 0 4px rgba(180, 100, 40, 0.5)); }
-
-    /* ── Green Score info ────────────────────────────────────────── */
-    .leaderboard__green-info {
-        font-size: 0.8rem;
-        color: var(--oled-text-muted);
-        margin: 0.25rem 0 0.75rem;
-        padding: 0.4rem 0.75rem;
-        border-left: 2px solid rgba(34, 197, 94, 0.4);
-    }
-    .leaderboard__green-info a { color: var(--oled-green); }
-</style>

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 /* ── OLED Black Theme (Modernized 2025/2026) ────────────────────────────────── */
 
 /* Modern 2025/2026 Color Palette with Glassmorphism Support */
@@ -8,19 +10,20 @@
     --oled-surface-elevated: #111111;
     --oled-border: #1a1a1a;
     --oled-border-light: #2a2a2a;
-    --oled-text: #f0f0f0;
-    --oled-text-muted: #a0a0a0;
+    --oled-text: #f5f7fb;
+    --oled-text-muted: #9ea8bb;
+    --oled-surface-accent: #131b2d;
     
     /* Semantic Colors */
-    --oled-green: #22c55e;
+    --oled-green: #2ddc84;
     --oled-yellow: #eab308;
     --oled-red: #ef4444;
-    --oled-blue: #3b82f6;
-    --oled-purple: #a855f7;
-    --oled-cyan: #06b6d4;
+    --oled-blue: #53a6ff;
+    --oled-purple: #7d96ff;
+    --oled-cyan: #12b8cf;
     
     /* Glass Effect Variables */
-    --glass-bg: rgba(17, 17, 17, 0.7);
+    --glass-bg: rgba(19, 27, 45, 0.7);
     --glass-border: rgba(255, 255, 255, 0.08);
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     
@@ -123,15 +126,26 @@
 }
 
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
     background-color: var(--oled-bg);
     color: var(--oled-text);
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
+}
+
+body {
+    background-image:
+        radial-gradient(circle at 15% -5%, rgba(18, 184, 207, 0.18), transparent 36%),
+        radial-gradient(circle at 88% 0%, rgba(45, 220, 132, 0.1), transparent 34%),
+        linear-gradient(180deg, #020306 0%, #000000 40%, #03050a 100%);
+    background-attachment: fixed;
 }
 
 h1, h2, h3, h4, h5, h6 {
     color: var(--oled-text);
+    font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+    letter-spacing: -0.015em;
 }
 
 h1:focus {
@@ -183,9 +197,22 @@ a:hover {
 
 .content {
     padding-top: 1.1rem;
-    background-color: var(--oled-bg);
+    background-color: transparent;
     color: var(--oled-text);
     min-height: 100vh;
+}
+
+.app-content > * {
+    animation: fadeIn 240ms ease-out;
+}
+
+.section-eyebrow {
+    margin: 0;
+    color: var(--oled-text-muted);
+    font-size: 0.73rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
 }
 
 /* ── Duel grid: 2-column desktop, scroll-snap mobile ─────────────────────── */

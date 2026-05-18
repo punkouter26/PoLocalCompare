@@ -18,7 +18,7 @@
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
 }
 
 .leaderboard__sort-label {
@@ -34,6 +34,23 @@
 .leaderboard__divider {
     color: #374151;
     padding: 0 4px;
+}
+
+.lb__rank { font-size: 1.1rem; }
+.lb__rank--gold   { filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.7)); }
+.lb__rank--silver { filter: drop-shadow(0 0 4px rgba(180, 180, 180, 0.6)); }
+.lb__rank--bronze { filter: drop-shadow(0 0 4px rgba(180, 100, 40, 0.5)); }
+
+.leaderboard__green-info {
+    font-size: 0.8rem;
+    color: var(--oled-text-muted);
+    margin: 0.25rem 0 0.75rem;
+    padding: 0.4rem 0.75rem;
+    border-left: 2px solid rgba(45, 220, 132, 0.4);
+}
+
+.leaderboard__green-info a {
+    color: var(--oled-green);
 }
 
 .lb__type-badge {

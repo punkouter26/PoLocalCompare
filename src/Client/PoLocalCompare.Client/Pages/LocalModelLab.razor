@@ -12,13 +12,27 @@
 @inject NavigationManager Nav
 @inject IConfiguration Configuration
 
-<PageTitle>Local Model Lab — LLM Duel Arena</PageTitle>
+<PageTitle>Local Model Lab — PoLocalCompare</PageTitle>
 
 <div class="lab">
-    <h1 class="lab__title">🧪 Local Model Lab</h1>
+    <h1 class="lab__title">Local Model Lab</h1>
     <p class="lab__subtitle">
         Environment health · download detection · live inference diagnostics · speed benchmark
     </p>
+    <div class="lab__view-toggle" role="tablist" aria-label="Lab detail level">
+        <button class="lab__view-btn @(!_advancedMode ? "lab__view-btn--active" : "")"
+                role="tab"
+                aria-selected="@(!_advancedMode)"
+                @onclick="() => _advancedMode = false">
+            Quick Health
+        </button>
+        <button class="lab__view-btn @(_advancedMode ? "lab__view-btn--active" : "")"
+                role="tab"
+                aria-selected="@_advancedMode"
+                @onclick="() => _advancedMode = true">
+            Advanced Diagnostics
+        </button>
+    </div>
     @if (!_loading)
     {
         <p class="lab__mode-note">
@@ -84,6 +98,16 @@
     {
         <p class="lab__status-note">Last status check: @_statusLastUpdatedUtc.Value.ToLocalTime().ToString("HH:mm:ss")</p>
     }
+    @if (_showLocalSetupHint)
+    {
+        <div class="lab__setup-hint">
+            <p class="lab__setup-hint-title">First-time setup for a new PC</p>
+            <p class="lab__setup-hint-copy">
+                Local browser assets are not fully present yet (@_browserModelsUsingLocalAssets/@_browserModels.Count() local).
+                Run <code>python SCRIPTS/download-models.py</code>, then click <strong>Refresh</strong>.
+            </p>
+        </div>
+    }
 
     @* ── Prompt config ── *@
     <div class="lab__prompt-section">
@@ -97,29 +121,29 @@
             <button class="lab__btn lab__btn--primary"
                     @onclick="RunAllDownloaded"
                     disabled="@(_anyRunning || !_models.Any(m => m.IsDownloaded == true))">
-                ▶ Run All Downloaded
+                Run All Downloaded
             </button>
             <button class="lab__btn lab__btn--smol"
                     @onclick="RunSmolFamily"
                     title="@(!_models.Any(m => m.IsSmolLM2 && m.IsDownloaded == true) ? "Download SmolLM2-135M or SmolLM2-360M to enable" : "Race all downloaded SmolLM2 models")"
                     disabled="@(_anyRunning || !_models.Any(m => m.IsSmolLM2 && m.IsDownloaded == true))">
-                🤏 SmolLM2 Race
+                SmolLM2 Race
             </button>
             <button class="lab__btn lab__btn--danger"
                     @onclick="CancelAll"
                     disabled="@(!_anyRunning)">
-                ■ Cancel All
+                Cancel All
             </button>
             <button class="lab__btn lab__btn--secondary"
                     @onclick="RefreshDownloadStatusAsync"
                     disabled="@_anyRunning">
-                🔄 Refresh
+                Refresh
             </button>
             <button class="lab__btn lab__btn--verify"
                     @onclick="VerifyAndGoAsync"
                     disabled="@(_anyRunning || !_models.Any(m => m.IsDownloaded == true))"
                     title="Run diagnostics on all downloaded models, then go to War Room">
-                ✓ Verify &amp; Go to War Room
+                Verify and Go to War Room
             </button>
         </div>
         @if (_models.Any(m => m.IsSmolLM2)
@@ -131,23 +155,56 @@
                 <p class="lab__smol-hint">Download SmolLM2-135M or SmolLM2-360M to enable race mode — run <code>python download-models.py</code></p>
             </details>
         }
+        @if (!_loading && !_models.Any(m => m.IsDownloaded == true))
+        {
+            <p class="lab__no-models-hint">
+                ⬇ No models downloaded yet.
+                Run <code>python SCRIPTS/download-models.py</code> to get started,
+                then click <strong>Refresh</strong>.
+            </p>
+        }
         @if (_cancelFeedback is not null)
         {
             <p class="lab__cancel-feedback">✓ @_cancelFeedback</p>
         }
     </div>
 
+    @if (!_advancedMode)
+    {
+        <div class="lab__quick-panel">
+            <h2 class="lab__quick-title">Quick Health Snapshot</h2>
+            <p class="lab__quick-copy">Use this view for rapid readiness checks. Switch to Advanced Diagnostics for per-model traces, benchmark tables, and output matrices.</p>
+            <div class="lab__quick-metrics">
+                <div class="lab__quick-metric">
+                    <span class="lab__quick-label">Registered</span>
+                    <span class="lab__quick-value">@_models.Count</span>
+                </div>
+                <div class="lab__quick-metric">
+                    <span class="lab__quick-label">Ready</span>
+                    <span class="lab__quick-value">@_models.Count(m => m.IsDownloaded == true)</span>
+                </div>
+                <div class="lab__quick-metric">
+                    <span class="lab__quick-label">Tested</span>
+                    <span class="lab__quick-value">@_models.Count(m => m.Status == DiagStatus.Complete)</span>
+                </div>
+            </div>
+            <button class="lab__btn lab__btn--secondary" @onclick="() => _advancedMode = true">Open Advanced Diagnostics</button>
+        </div>
+    }
+
     @* ── Model grid ── *@
-    @if (_loading)
+    @if (_advancedMode)
     {
-        <p class="lab__loading">Loading model list…</p>
-    }
-    else if (_models.Count == 0)
-    {
-        <p class="lab__empty">No local models registered. Register one from the War Room first.</p>
-    }
-    else
-    {
+        if (_loading)
+        {
+            <p class="lab__loading">Loading model list…</p>
+        }
+        else if (_models.Count == 0)
+        {
+            <p class="lab__empty">No local models registered. Register one from the War Room first.</p>
+        }
+        else
+        {
         var _familyGroups = _models
             .GroupBy(m => GetModelFamily(m))
             .OrderBy(g => FamilyOrder(g.Key));
@@ -172,9 +229,9 @@
             </div>
         }
 
-        @* ── Summary: shown when ≥ 1 model is tested ── *@
-        @if (_testedModels.Count() >= 1)
-        {
+            @* ── Summary: shown when ≥ 1 model is tested ── *@
+            @if (_testedModels.Count() >= 1)
+            {
             var ranked = _testedModels.OrderByDescending(m => ValueScore(m)).ToList();
 
             <div class="lab__summary">
@@ -255,6 +312,7 @@
                     </div>
                 </div>
             </div>
+            }
         }
     }
 </div>
@@ -301,12 +359,22 @@
 
     private bool _runAllCancelled;
     private string? _cancelFeedback;
+    private bool _advancedMode;
 
     private bool _anyRunning =>
         _models.Any(m => m.Status is DiagStatus.Loading or DiagStatus.Generating or DiagStatus.Checking);
 
     private IEnumerable<ModelDiagState> _testedModels =>
         _models.Where(m => m.Status == DiagStatus.Complete);
+
+    private IEnumerable<ModelDiagState> _browserModels =>
+        _models.Where(m => !m.IsOllamaModel);
+
+    private int _browserModelsUsingLocalAssets =>
+        _browserModels.Count(m => m.IsDownloaded == true && !m.UsesCdnAssets);
+
+    private bool _showLocalSetupHint =>
+        !_loading && _browserModels.Any() && _browserModelsUsingLocalAssets < _browserModels.Count();
 
     private bool IsCloudMode => _models.Count > 0 && !_models.Any(m => m.IsOllamaModel);
 

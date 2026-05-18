@@ -1,4 +1,5 @@
 @page "/war-room"
+@using Microsoft.AspNetCore.Components.Web
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
@@ -10,137 +11,205 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<PageTitle>War Room — LLM Duel Arena</PageTitle>
+<PageTitle>War Room - PoLocalCompare</PageTitle>
 
 <div class="war-room" @onkeydown="OnKeyDown" tabindex="-1" id="war-room-root">
-    <h1 class="war-room__title">⚔ War Room</h1>
+    <h1 class="war-room__title">War Room</h1>
+
+    <ol class="war-room__steps" aria-label="Duel setup steps">
+        <li class="war-room__step @(ActiveStep > 1 ? "war-room__step--done" : ActiveStep == 1 ? "war-room__step--active" : "")">
+            <span class="war-room__step-number">1</span>
+            <span class="war-room__step-label">Write prompt</span>
+        </li>
+        <li class="war-room__step @(ActiveStep > 2 ? "war-room__step--done" : ActiveStep == 2 ? "war-room__step--active" : "")">
+            <span class="war-room__step-number">2</span>
+            <span class="war-room__step-label">Pick two models</span>
+        </li>
+        <li class="war-room__step @(ActiveStep == 3 ? "war-room__step--active" : "")">
+            <span class="war-room__step-number">3</span>
+            <span class="war-room__step-label">Launch duel</span>
+        </li>
+    </ol>
+
     @if (!_loading)
     {
         <p class="war-room__mode-badge">
             @if (IsCloudMode)
             {
-                <span>☁ Cloud mode active: Ollama service models are hidden in this environment.</span>
+                <span>Cloud mode active. Service-backed Ollama models are hidden in this environment.</span>
             }
             else
             {
-                <span>🖥 Local mode active: service-backed Ollama models are available.</span>
+                <span>Local mode active. Service-backed Ollama models are available.</span>
             }
         </p>
     }
 
     @if (_loading)
     {
-        <p class="war-room__loading">Loading models…</p>
+        <div class="war-room__loading-panel">
+            <p class="war-room__loading-title">Preparing model roster...</p>
+            <div class="war-room__loading-skeletons" aria-hidden="true">
+                <div class="skeleton skeleton-card"></div>
+                <div class="skeleton skeleton-card"></div>
+                <div class="skeleton skeleton-card"></div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_loadWarning))
+            {
+                <p class="war-room__loading-warning">@_loadWarning</p>
+                <button class="war-room__retry-btn" @onclick="RetryLoadAsync">Retry loading models</button>
+            }
+        </div>
     }
     else
     {
-        <div class="war-room__prompt-section">
-            <label class="war-room__label" for="promptInput">Prompt (5-minute duel, HTML output)</label>
-            <p class="war-room__hint">💡 Local models may take 5–10 min to load on first use. Remote models respond immediately.</p>
-            <RadzenTextArea
-                id="promptInput"
-                @bind-Value="_promptText"
-                @oninput="@((ChangeEventArgs e) => { _promptText = e.Value?.ToString() ?? string.Empty; })"
-                Rows="6"
-                class="war-room__textarea"
-                spellcheck="true"
-                Placeholder="Describe the HTML app you want both models to build…"
-            />
-        </div>
-
-        @* ── 2. TYPE FILTER + UNIFIED MODEL POOL ── *@
-        <div class="war-room__selection-bar">
-            <div class="war-room__selection-slot @(_leftModel is not null ? "war-room__selection-slot--set" : "")">
-                <span class="war-room__selection-label">Left</span>
-                <span class="war-room__selection-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
+        <section class="war-room__section">
+            <p class="section-eyebrow">Step 1</p>
+            <div class="war-room__prompt-section">
+                <label class="war-room__label" for="promptInput">Prompt for a five-minute HTML duel</label>
+                <p class="war-room__hint">Tip: local models can take longer on first warmup; remote models usually respond immediately.</p>
+                <RadzenTextArea
+                    id="promptInput"
+                    @bind-Value="_promptText"
+                    @oninput="@((ChangeEventArgs e) => { _promptText = e.Value?.ToString() ?? string.Empty; })"
+                    Rows="6"
+                    class="war-room__textarea"
+                    spellcheck="true"
+                    Placeholder="Describe the HTML app you want both models to build..."
+                />
             </div>
-            <span class="war-room__selection-vs">VS</span>
-            <div class="war-room__selection-slot @(_rightModel is not null ? "war-room__selection-slot--set" : "")">
-                <span class="war-room__selection-label">Right</span>
-                <span class="war-room__selection-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
+        </section>
+
+        <section class="war-room__section">
+            <p class="section-eyebrow">Step 2</p>
+
+            <div class="war-room__selection-bar">
+                <div class="war-room__selection-slot @(_leftModel is not null ? "war-room__selection-slot--set" : "")">
+                    <span class="war-room__selection-label">Left</span>
+                    <span class="war-room__selection-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
+                </div>
+                <span class="war-room__selection-vs">VS</span>
+                <div class="war-room__selection-slot @(_rightModel is not null ? "war-room__selection-slot--set" : "")">
+                    <span class="war-room__selection-label">Right</span>
+                    <span class="war-room__selection-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
+                </div>
             </div>
-        </div>
 
-        <div class="war-room__type-filter">
-            @foreach (var label in new[] { "All", "Local", "Remote", "Service" })
+            @if (_leftModel is not null && _rightModel is not null)
             {
-                <button class="war-room__filter-chip @(_typeFilter == label ? "war-room__filter-chip--active" : "")"
-                        @onclick="() => _typeFilter = label">
-                    @label
-                </button>
-            }
-        </div>
-        <p class="war-room__hint">Tip: click a selected model again to unselect it, then choose a replacement.</p>
-        <p class="war-room__hint">Only models confirmed as available are selectable.</p>
-
-        <div class="war-room__pool">
-            @if (!_filteredModels.Any())
-            {
-                <p class="war-room__empty">No models match this filter.</p>
-            }
-            else
-            {
-                @foreach (var model in _filteredModels)
-                {
-                    <div class="war-room__pool-item">
-                        <ModelCard
-                            Model="model"
-                            LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
-                            IsSelected="@(model.ModelId == _leftModel?.ModelId || model.ModelId == _rightModel?.ModelId)"
-                            Slot="@(model.ModelId == _leftModel?.ModelId ? "Left" : model.ModelId == _rightModel?.ModelId ? "Right" : null)"
-                            IsDisabled="@(!IsModelSelectable(model))"
-                            OnSelected="AssignModel"
-                            ProjectedEloGain="@ComputeProjectedGain(model)" />
-                        @if (!IsModelSelectable(model))
-                        {
-                            <p class="war-room__availability-note">🚫 @GetUnavailableReason(model)</p>
-                        }
+                <div class="war-room__compare">
+                    <div class="war-room__compare-card">
+                        <span class="war-room__compare-model">@_leftModel.DisplayName</span>
+                        <span class="war-room__compare-meta">ELO @Math.Round(_leftModel.CurrentElo)</span>
                     </div>
+                    <div class="war-room__compare-center">
+                        Left win chance @ComputeWinPct(_leftModel, _rightModel).ToString("F0")%
+                    </div>
+                    <div class="war-room__compare-card">
+                        <span class="war-room__compare-model">@_rightModel.DisplayName</span>
+                        <span class="war-room__compare-meta">ELO @Math.Round(_rightModel.CurrentElo)</span>
+                    </div>
+                </div>
+            }
+
+            <div class="war-room__controls-row">
+                <input class="war-room__search-input"
+                       @bind="_modelSearch"
+                       @bind:event="oninput"
+                       placeholder="Search models by name or id" />
+                <select class="war-room__sort-select" @bind="_sortBy">
+                    <option value="Recommended">Recommended</option>
+                    <option value="Elo">ELO High-Low</option>
+                    <option value="Name">Name A-Z</option>
+                </select>
+            </div>
+
+            <div class="war-room__type-filter">
+                @foreach (var label in new[] { "All", "Local", "Remote", "Service" })
+                {
+                    <button class="war-room__filter-chip @(_typeFilter == label ? "war-room__filter-chip--active" : "")"
+                            @onclick="() => _typeFilter = label">
+                        @label
+                    </button>
                 }
-            }
-        </div>
+            </div>
+            <p class="war-room__hint">Click a selected model again to unselect it, then choose a replacement.</p>
 
-        @* ── 4. ACTIONS ── *@
-        <div class="war-room__actions">
-            <RadzenButton
-                Text="Commence Duel"
-                ButtonStyle="ButtonStyle.Danger"
-                Size="ButtonSize.Large"
-                Disabled="@(!CanCommence)"
-                Click="@CommenceDuelAsync"
-                class="war-room__commence-btn"
-            />
-            @if (!CanCommence)
+            <div class="war-room__pool">
+                @if (!_filteredModels.Any())
+                {
+                    <p class="war-room__empty">No models match the current filters.</p>
+                }
+                else
+                {
+                    @foreach (var model in _filteredModels)
+                    {
+                        <div class="war-room__pool-item">
+                            <div class="war-room__pool-item-head">
+                                <span class="war-room__pool-type">@GetTypeLabel(model)</span>
+                                <span class="war-room__pool-elo">ELO @Math.Round(model.CurrentElo)</span>
+                            </div>
+                            <ModelCard
+                                Model="model"
+                                LabelOverride="@(_modelLabels.GetValueOrDefault(model.ModelId))"
+                                IsSelected="@(model.ModelId == _leftModel?.ModelId || model.ModelId == _rightModel?.ModelId)"
+                                Slot="@(model.ModelId == _leftModel?.ModelId ? "Left" : model.ModelId == _rightModel?.ModelId ? "Right" : null)"
+                                IsDisabled="@(!IsModelSelectable(model))"
+                                OnSelected="AssignModel"
+                                ProjectedEloGain="@ComputeProjectedGain(model)" />
+                            @if (!IsModelSelectable(model))
+                            {
+                                <p class="war-room__availability-note">Unavailable: @GetUnavailableReason(model)</p>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </section>
+
+        <section class="war-room__section">
+            <p class="section-eyebrow">Step 3</p>
+            <div class="war-room__actions">
+                <RadzenButton
+                    Text="Start Duel"
+                    ButtonStyle="ButtonStyle.Danger"
+                    Size="ButtonSize.Large"
+                    Disabled="@(!CanCommence)"
+                    Click="@CommenceDuelAsync"
+                    class="war-room__commence-btn"
+                />
+                @if (!CanCommence)
+                {
+                    <p class="war-room__validation-hint">
+                        @if (_leftModel is null && _rightModel is null)
+                        {
+                            @("Pick two models below to continue.")
+                        }
+                        else if (_leftModel is null || _rightModel is null)
+                        {
+                            @("Pick a second model to continue.")
+                        }
+                        else if (string.IsNullOrWhiteSpace(_promptText))
+                        {
+                            @("Enter a prompt above to continue.")
+                        }
+                        else if ((_leftModel is not null && !IsModelSelectable(_leftModel)) || (_rightModel is not null && !IsModelSelectable(_rightModel)))
+                        {
+                            @("One or both selected models are unavailable. Pick confirmed working models.")
+                        }
+                        else
+                        {
+                            @("Left and Right models must be different.")
+                        }
+                    </p>
+                }
+            </div>
+
+            @if (_error is not null)
             {
-                <p class="war-room__validation-hint">
-                    @if (_leftModel is null && _rightModel is null)
-                    {
-                        @("Pick two models below to continue.")
-                    }
-                    else if (_leftModel is null || _rightModel is null)
-                    {
-                        @("Pick a second model to continue.")
-                    }
-                    else if (string.IsNullOrWhiteSpace(_promptText))
-                    {
-                        @("Enter a prompt above to continue.")
-                    }
-                    else if ((_leftModel is not null && !IsModelSelectable(_leftModel)) || (_rightModel is not null && !IsModelSelectable(_rightModel)))
-                    {
-                        @("One or both selected models are unavailable. Pick confirmed working models.")
-                    }
-                    else
-                    {
-                        @("Left and Right models must be different.")
-                    }
-                </p>
+                <p class="war-room__error">@_error</p>
             }
-        </div>
-
-        @if (_error is not null)
-        {
-            <p class="war-room__error">@_error</p>
-        }
+        </section>
     }
 </div>
 
@@ -155,20 +224,47 @@
     private ModelDto? _leftModel;
     private ModelDto? _rightModel;
     private string _promptText = string.Empty;
+    private string _modelSearch = string.Empty;
+    private string _sortBy = "Recommended";
+    private string? _loadWarning;
     private string? _error;
     private Dictionary<string, ModelAvailabilityDto> _availabilityByModelId = new(StringComparer.Ordinal);
 
     private string _typeFilter = "All";
-    private IEnumerable<ModelDto> _filteredModels => FilteredModels(_typeFilter);
+    private IEnumerable<ModelDto> _filteredModels => FilteredModels(_typeFilter, _modelSearch, _sortBy);
 
+    private bool HasPrompt => !string.IsNullOrWhiteSpace(_promptText);
+    private bool HasPair => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
+    private int ActiveStep => !HasPrompt ? 1 : !HasPair ? 2 : 3;
 
-    private IEnumerable<ModelDto> FilteredModels(string filter) => filter switch
+    private IEnumerable<ModelDto> FilteredModels(string filter, string search, string sortBy)
     {
-        "Local"   => _allModels.Where(m => m.ModelType == ModelType.Local),
-        "Remote"  => _allModels.Where(m => m.ModelType == ModelType.Remote),
-        "Service" => _allModels.Where(m => m.ModelType == ModelType.LocalService),
-        _         => _allModels
-    };
+        IEnumerable<ModelDto> query = filter switch
+        {
+            "Local" => _allModels.Where(m => m.ModelType == ModelType.Local),
+            "Remote" => _allModels.Where(m => m.ModelType == ModelType.Remote),
+            "Service" => _allModels.Where(m => m.ModelType == ModelType.LocalService),
+            _ => _allModels
+        };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(m =>
+                m.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                m.ModelId.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = sortBy switch
+        {
+            "Elo" => query.OrderByDescending(m => m.CurrentElo),
+            "Name" => query.OrderBy(m => m.DisplayName),
+            _ => query
+                .OrderByDescending(IsModelSelectable)
+                .ThenByDescending(m => m.CurrentElo)
+        };
+
+        return query;
+    }
 
     private bool CanCommence =>
         _leftModel is not null && _rightModel is not null &&
@@ -178,43 +274,59 @@
 
     private bool IsCloudMode => _allModels.Count > 0 && !_allModels.Any(m => m.ModelType == ModelType.LocalService);
 
-
     protected override async Task OnInitializedAsync()
     {
+        await LoadModelsAsync();
+    }
+
+    private async Task LoadModelsAsync()
+    {
+        _loading = true;
+        _loadWarning = null;
+        _error = null;
+
         try
         {
-            var models = await ApiClient.GetModelsAsync();
-            if (models is not null)
+            var modelsTask = ApiClient.GetModelsAsync();
+            var completedTask = await Task.WhenAny(modelsTask, Task.Delay(TimeSpan.FromSeconds(12)));
+
+            if (completedTask != modelsTask)
             {
-                _allModels = models.ToList();
-
-                // Build disambiguated labels for models sharing the same display name
-                _modelLabels = _allModels
-                    .GroupBy(m => m.DisplayName)
-                    .SelectMany(g =>
-                    {
-                        bool dup = g.Count() > 1;
-                        return g.Select(m => KeyValuePair.Create(
-                            m.ModelId,
-                            dup ? $"{m.DisplayName} (…{(m.ModelId.Length > 6 ? m.ModelId[^6..] : m.ModelId)})" : m.DisplayName));
-                    })
-                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
-                await RefreshAvailabilityAsync();
-
-                // Pre-fill from query parameters (Re-Challenge flow)
-                if (!string.IsNullOrEmpty(PromptParam))
-                    _promptText = Uri.UnescapeDataString(PromptParam);
-
-                if (!string.IsNullOrEmpty(LeftModelIdParam))
-                    _leftModel = _allModels.FirstOrDefault(m => m.ModelId == LeftModelIdParam);
-
-                if (!string.IsNullOrEmpty(RightModelIdParam))
-                    _rightModel = _allModels.FirstOrDefault(m => m.ModelId == RightModelIdParam);
-
-                if (_leftModel is not null && !IsModelSelectable(_leftModel)) _leftModel = null;
-                if (_rightModel is not null && !IsModelSelectable(_rightModel)) _rightModel = null;
+                _loadWarning = "Model loading is taking longer than expected. Retry to refresh availability.";
+                return;
             }
+
+            var models = await modelsTask;
+            if (models is null)
+            {
+                _loadWarning = "No model metadata returned from the API.";
+                return;
+            }
+
+            _allModels = models.ToList();
+
+            _modelLabels = _allModels
+                .GroupBy(m => m.DisplayName)
+                .SelectMany(g =>
+                {
+                    var dup = g.Count() > 1;
+                    return g.Select(m => KeyValuePair.Create(
+                        m.ModelId,
+                        dup ? $"{m.DisplayName} (...{(m.ModelId.Length > 6 ? m.ModelId[^6..] : m.ModelId)})" : m.DisplayName));
+                })
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            await RefreshAvailabilityAsync();
+
+            if (!string.IsNullOrWhiteSpace(PromptParam))
+                _promptText = Uri.UnescapeDataString(PromptParam);
+            if (!string.IsNullOrWhiteSpace(LeftModelIdParam))
+                _leftModel = _allModels.FirstOrDefault(m => m.ModelId == LeftModelIdParam);
+            if (!string.IsNullOrWhiteSpace(RightModelIdParam))
+                _rightModel = _allModels.FirstOrDefault(m => m.ModelId == RightModelIdParam);
+
+            if (_leftModel is not null && !IsModelSelectable(_leftModel)) _leftModel = null;
+            if (_rightModel is not null && !IsModelSelectable(_rightModel)) _rightModel = null;
         }
         finally
         {
@@ -222,23 +334,21 @@
         }
     }
 
-    private void SelectLeft(ModelDto model) => _leftModel = model;
-    private void SelectRight(ModelDto model) => _rightModel = model;
+    private async Task RetryLoadAsync()
+    {
+        await LoadModelsAsync();
+    }
 
-    // ── Sequential model selection: 1st click = left, 2nd click = right ──
     private void AssignModel(ModelDto model)
     {
         if (!IsModelSelectable(model)) return;
 
-        // Toggle off if already selected
         if (_leftModel?.ModelId == model.ModelId) { _leftModel = null; return; }
         if (_rightModel?.ModelId == model.ModelId) { _rightModel = null; return; }
 
-        // Fill left first, then right
         if (_leftModel is null) { _leftModel = model; return; }
         if (_rightModel is null) { _rightModel = model; return; }
 
-        // Both filled — replace right
         _rightModel = model;
     }
 
@@ -246,7 +356,6 @@
     {
         if (_availabilityByModelId.TryGetValue(model.ModelId, out var status))
             return status.IsAvailable;
-
         return model.ModelType == ModelType.Local;
     }
 
@@ -254,8 +363,16 @@
     {
         if (_availabilityByModelId.TryGetValue(model.ModelId, out var status) && !string.IsNullOrWhiteSpace(status.Reason))
             return status.Reason;
-        return "Not confirmed working right now.";
+        return "Not confirmed available right now.";
     }
+
+    private string GetTypeLabel(ModelDto model) => model.ModelType switch
+    {
+        ModelType.Local => "LOCAL",
+        ModelType.Remote => "REMOTE",
+        ModelType.LocalService => "SERVICE",
+        _ => "UNKNOWN"
+    };
 
     private async Task RefreshAvailabilityAsync()
     {
@@ -273,10 +390,8 @@
 
     private double? ComputeProjectedGain(ModelDto model)
     {
-        // Show gain for selected models against their opponent
         if (model.ModelId == _leftModel?.ModelId) return ComputeGain(model, _rightModel);
         if (model.ModelId == _rightModel?.ModelId) return ComputeGain(model, _leftModel);
-        // Unselected: show gain vs whichever opponent is already picked
         return ComputeGain(model, _leftModel ?? _rightModel);
     }
 
@@ -288,6 +403,12 @@
         return Math.Round(k * (1.0 - expected), 1);
     }
 
+    private static double ComputeWinPct(ModelDto left, ModelDto right)
+    {
+        var expected = 1.0 / (1.0 + Math.Pow(10.0, (right.CurrentElo - left.CurrentElo) / 400.0));
+        return expected * 100.0;
+    }
+
     private async Task CommenceDuelAsync()
     {
         if (!CanCommence) return;
@@ -297,12 +418,7 @@
         try
         {
             await AudioService.PlaySnareRollAsync();
-
-            var dto = await ApiClient.CommenceDuelAsync(
-                _leftModel!.ModelId,
-                _rightModel!.ModelId,
-                _promptText);
-
+            var dto = await ApiClient.CommenceDuelAsync(_leftModel!.ModelId, _rightModel!.ModelId, _promptText);
             if (dto is not null)
                 Nav.NavigateTo($"/processing/{dto.DuelId}");
         }
@@ -312,7 +428,6 @@
         }
     }
 
-    // UX#6: Keyboard shortcut N → focus prompt textarea (when no input/button is active target)
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "n" || e.Key == "N")
@@ -320,402 +435,4 @@
             await JS.InvokeVoidAsync("eval", "var el = document.getElementById('promptInput'); if (el && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'BUTTON') { el.focus(); el.select(); }");
         }
     }
-
 }
-
-<style>
-    .war-room { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
-
-    .war-room__title {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 1.5rem;
-        color: var(--oled-text);
-    }
-
-    /* Filter chips */
-    .war-room__type-filter {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-    }
-
-    .war-room__filter-chip {
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--oled-border);
-        border-radius: var(--radius-full);
-        background: var(--oled-surface);
-        color: var(--oled-text-muted);
-        cursor: pointer;
-        transition: all var(--transition-fast);
-        font-size: 0.875rem;
-    }
-
-    .war-room__filter-chip:hover {
-        border-color: var(--oled-green);
-        color: var(--oled-text);
-    }
-
-    .war-room__filter-chip--active {
-        background: var(--oled-green);
-        color: #000;
-        border-color: var(--oled-green);
-    }
-
-    /* Slot assignment header (C2) */
-    .war-room__assign-slots {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        gap: 1rem;
-        align-items: center;
-        margin-bottom: 1.25rem;
-    }
-
-    .war-room__slot {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        padding: 0.85rem 1rem;
-        background: var(--oled-surface);
-        border: 2px dashed var(--oled-border);
-        border-radius: var(--radius-md);
-        cursor: pointer;
-        transition: all var(--transition-fast);
-        position: relative;
-        min-height: 64px;
-        justify-content: center;
-    }
-
-    .war-room__slot:hover { border-color: var(--oled-text-muted); }
-    .war-room__slot--active { border-color: var(--oled-cyan); border-style: solid; box-shadow: 0 0 0 2px rgba(6,182,212,0.25); }
-    .war-room__slot--set { border-style: solid; border-color: var(--oled-green); }
-
-    .war-room__slot-side {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--oled-text-muted);
-    }
-
-    .war-room__slot-name {
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: var(--oled-text);
-    }
-
-    .war-room__slot--set .war-room__slot-name { color: var(--oled-green); }
-
-    .war-room__slot-clear {
-        position: absolute;
-        top: 0.4rem;
-        right: 0.5rem;
-        background: none;
-        border: none;
-        color: var(--oled-text-muted);
-        cursor: pointer;
-        font-size: 0.85rem;
-        line-height: 1;
-        padding: 0.15rem 0.35rem;
-        border-radius: 50%;
-        transition: color var(--transition-fast);
-    }
-    .war-room__slot-clear:hover { color: var(--oled-red); }
-
-    .war-room__slot-vs {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--oled-text-muted);
-        text-align: center;
-    }
-
-    @@media (max-width: 640px) {
-        .war-room__assign-slots { grid-template-columns: 1fr; }
-        .war-room__slot-vs { display: none; }
-    }
-
-    /* Unified model pool (C2) */
-    .war-room__pool {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 2rem;
-    }
-
-    .war-room__pool-hint {
-        grid-column: 1 / -1;
-        font-size: 0.82rem;
-        color: var(--oled-text-muted);
-        margin: 0 0 0.25rem;
-    }
-
-    .war-room__pool-hint strong { color: var(--oled-cyan); }
-
-    .war-room__empty {
-        grid-column: 1 / -1;
-        color: var(--oled-text-muted);
-        font-size: 0.9rem;
-    }
-
-    /* Prompt Templates */
-    .war-room__templates-section {
-        background: var(--oled-surface);
-        border: 1px solid var(--oled-border);
-        border-radius: var(--radius-lg);
-        padding: 1.25rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .war-room__templates-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
-    }
-
-    .war-room__templates-title {
-        font-size: 1rem;
-        font-weight: 600;
-        color: var(--oled-text);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin: 0;
-    }
-
-    .war-room__clear-prompt {
-        background: none;
-        border: 1px solid var(--oled-border);
-        color: var(--oled-text-muted);
-        padding: 0.25rem 0.75rem;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        font-size: 0.8rem;
-        transition: all var(--transition-fast);
-    }
-
-    .war-room__clear-prompt:hover {
-        border-color: var(--oled-red);
-        color: var(--oled-red);
-    }
-
-    .war-room__templates-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 0.75rem;
-    }
-
-    .war-room__template-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.25rem;
-        padding: 1rem 0.75rem;
-        background: var(--oled-surface-elevated);
-        border: 1px solid var(--oled-border);
-        border-radius: var(--radius-md);
-        cursor: pointer;
-        transition: all var(--transition-fast);
-        text-align: center;
-    }
-
-    .war-room__template-card:hover {
-        border-color: var(--oled-cyan);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
-    }
-
-    .war-room__template-card--selected {
-        border-color: var(--oled-green);
-        background: rgba(34, 197, 94, 0.1);
-        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
-    }
-
-    .war-room__template-icon {
-        font-size: 1.5rem;
-    }
-
-    .war-room__template-name {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--oled-text);
-    }
-
-    .war-room__template-category {
-        font-size: 0.7rem;
-        color: var(--oled-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    /* Prompt section */
-    .war-room__prompt-section { margin-bottom: 1.5rem; }
-
-    .war-room__label {
-        display: block;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--oled-text);
-        margin-bottom: 0.5rem;
-    }
-
-    .war-room__hint {
-        font-size: 0.8rem;
-        color: var(--oled-text-muted);
-        margin-bottom: 0.75rem;
-    }
-
-    .war-room__textarea {
-        width: 100%;
-        background: var(--oled-surface) !important;
-        border: 1px solid var(--oled-border) !important;
-        color: var(--oled-text) !important;
-        border-radius: var(--radius-md) !important;
-        padding: 1rem !important;
-    }
-
-    .war-room__textarea:focus {
-        border-color: var(--oled-blue) !important;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
-    }
-
-    /* Actions */
-    .war-room__actions {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-
-    .war-room__commence-btn {
-        min-width: 200px;
-    }
-
-    .war-room__validation-hint {
-        font-size: 0.85rem;
-        color: var(--oled-text-muted);
-        margin: 0;
-    }
-
-    .war-room__error {
-        color: var(--oled-red);
-        font-size: 0.9rem;
-        margin-top: 1rem;
-    }
-
-    .war-room__loading,
-    .war-room__clash-warning {
-        color: var(--oled-yellow);
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-    }
-
-    /* Inline model edit */
-    .war-room__pool-item {
-        position: relative;
-    }
-
-    .war-room__availability-note {
-        margin: -0.25rem 0 0.5rem 0.25rem;
-        font-size: 0.78rem;
-        color: var(--oled-red);
-    }
-
-    .war-room__edit-btn {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 0.9rem;
-        opacity: 0.4;
-        padding: 0.2rem 0.35rem;
-        border-radius: var(--radius-sm);
-        transition: opacity var(--transition-fast), background var(--transition-fast);
-        z-index: 1;
-    }
-
-    .war-room__edit-btn:hover {
-        opacity: 1;
-        background: rgba(255,255,255,0.07);
-    }
-
-    .war-room__edit-row {
-        grid-column: 1 / -1;
-        background: var(--oled-surface);
-        border: 1px solid var(--oled-cyan);
-        border-radius: var(--radius-md);
-        padding: 0.85rem 1rem;
-        margin-bottom: 0.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-    }
-
-    .war-room__edit-label {
-        font-size: 0.75rem;
-        color: var(--oled-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .war-room__edit-input {
-        background: #111;
-        border: 1px solid var(--oled-border);
-        color: var(--oled-text);
-        border-radius: var(--radius-sm);
-        padding: 0.4rem 0.6rem;
-        font-size: 0.9rem;
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .war-room__edit-input:focus {
-        outline: none;
-        border-color: var(--oled-cyan);
-        box-shadow: 0 0 0 2px rgba(6,182,212,0.2);
-    }
-
-    .war-room__edit-error {
-        color: var(--oled-red);
-        font-size: 0.8rem;
-        margin: 0;
-    }
-
-    .war-room__edit-actions {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 0.25rem;
-    }
-
-    .war-room__edit-save {
-        background: var(--oled-cyan);
-        color: #000;
-        border: none;
-        border-radius: var(--radius-sm);
-        padding: 0.35rem 0.9rem;
-        font-size: 0.85rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: opacity var(--transition-fast);
-    }
-
-    .war-room__edit-save:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .war-room__edit-cancel {
-        background: none;
-        border: 1px solid var(--oled-border);
-        color: var(--oled-text-muted);
-        border-radius: var(--radius-sm);
-        padding: 0.35rem 0.9rem;
-        font-size: 0.85rem;
-        cursor: pointer;
-        transition: border-color var(--transition-fast), color var(--transition-fast);
-    }
-
-    .war-room__edit-cancel:hover {
-        border-color: var(--oled-text-muted);
-        color: var(--oled-text);
-    }
-</style>
