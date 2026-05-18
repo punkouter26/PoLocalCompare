@@ -2,6 +2,7 @@ using Azure.Data.Tables;
 using Azure;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
+using Azure.Monitor.OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -27,7 +28,18 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // ─── Serilog (T018) ─────────────────────────────────────────────────────
+    // ─── Key Vault (T037) — must be FIRST before Serilog/OTel config ────────
+    var keyVaultUri = builder.Configuration["KeyVault:Uri"];
+    if (!string.IsNullOrEmpty(keyVaultUri))
+    {
+        var credential = new DefaultAzureCredential();
+        builder.Configuration.AddAzureKeyVault(
+            new Uri(keyVaultUri),
+            credential,
+            new PrefixKeyVaultSecretManager("PoLocalCompare"));
+    }
+
+    // ─── Serilog (T018) — now has KV-provided connection strings ────────────
     builder.Host.UseSerilog((ctx, services, cfg) =>
     {
         cfg
@@ -47,16 +59,12 @@ try
                 retainedFileCountLimit: 14,
                 restrictedToMinimumLevel: LogEventLevel.Error);
 
-        // Only attach Application Insights sink when the telemetry configuration is available
-        var telemetry = services.GetService<Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration>();
-        if (telemetry is not null)
-        {
-            cfg.WriteTo.ApplicationInsights(telemetry, TelemetryConverter.Traces);
-        }
+        // AppInsights telemetry handled by OTel pipeline (Azure.Monitor.OpenTelemetry.Exporter).
     });
 
-    // ─── OpenTelemetry (T019) ────────────────────────────────────────────────
+    // ─── OpenTelemetry (T019) — now has KV-provided connection strings ──────
     var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+    var aiCs = builder.Configuration["ApplicationInsights:ConnectionString"];
     builder.Services.AddOpenTelemetry()
         .ConfigureResource(r => r.AddService("PoLocalCompare", serviceVersion: "1.0.0"))
         .WithTracing(t =>
@@ -65,6 +73,8 @@ try
              .AddHttpClientInstrumentation();
             if (!string.IsNullOrEmpty(otlpEndpoint))
                 t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+            if (!string.IsNullOrWhiteSpace(aiCs))
+                t.AddAzureMonitorTraceExporter(o => o.ConnectionString = aiCs);
         })
         .WithMetrics(m =>
         {
@@ -72,18 +82,9 @@ try
              .AddHttpClientInstrumentation();
             if (!string.IsNullOrEmpty(otlpEndpoint))
                 m.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+            if (!string.IsNullOrWhiteSpace(aiCs))
+                m.AddAzureMonitorMetricExporter(o => o.ConnectionString = aiCs);
         });
-
-    // ─── Key Vault (T037) ────────────────────────────────────────────────────
-    var keyVaultUri = builder.Configuration["KeyVault:Uri"];
-    if (!string.IsNullOrEmpty(keyVaultUri))
-    {
-        var credential = new DefaultAzureCredential();
-        builder.Configuration.AddAzureKeyVault(
-            new Uri(keyVaultUri),
-            credential,
-            new PrefixKeyVaultSecretManager("PoLocalCompare"));
-    }
 
     // In Development, Key Vault holds production storage connection strings.
     // Override them back to Azurite so local runs don't hit the real storage account.

@@ -297,5 +297,6 @@ Reporting/HtmlLabReportRenderer.cs
  system.clientmodel/1.10.0/analyzers/dotnet/cs/System.ClientModel.SourceGeneration.dll
 
 [analyzerConfigFiles]
+../../.editorconfig
 <DOTNET>/sdk/10.0.204/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/PoLocalCompare.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
