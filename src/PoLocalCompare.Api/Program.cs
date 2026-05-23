@@ -2,6 +2,7 @@ using Azure.Data.Tables;
 using Azure;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
+using Azure.Monitor.OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -27,7 +28,18 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // ─── Serilog (T018) ─────────────────────────────────────────────────────
+    // ─── Key Vault (T037) — must be FIRST before Serilog/OTel config ────────
+    var keyVaultUri = builder.Configuration["KeyVault:Uri"];
+    if (!string.IsNullOrEmpty(keyVaultUri))
+    {
+        var credential = new DefaultAzureCredential();
+        builder.Configuration.AddAzureKeyVault(
+            new Uri(keyVaultUri),
+            credential,
+            new PrefixKeyVaultSecretManager("PoLocalCompare"));
+    }
+
+    // ─── Serilog (T018) — now has KV-provided connection strings ────────────
     builder.Host.UseSerilog((ctx, services, cfg) =>
     {
         cfg
@@ -47,16 +59,12 @@ try
                 retainedFileCountLimit: 14,
                 restrictedToMinimumLevel: LogEventLevel.Error);
 
-        // Only attach Application Insights sink when the telemetry configuration is available
-        var telemetry = services.GetService<Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration>();
-        if (telemetry is not null)
-        {
-            cfg.WriteTo.ApplicationInsights(telemetry, TelemetryConverter.Traces);
-        }
+        // AppInsights telemetry handled by OTel pipeline (Azure.Monitor.OpenTelemetry.Exporter).
     });
 
-    // ─── OpenTelemetry (T019) ────────────────────────────────────────────────
+    // ─── OpenTelemetry (T019) — now has KV-provided connection strings ──────
     var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+    var aiCs = builder.Configuration["ApplicationInsights:ConnectionString"];
     builder.Services.AddOpenTelemetry()
         .ConfigureResource(r => r.AddService("PoLocalCompare", serviceVersion: "1.0.0"))
         .WithTracing(t =>
@@ -65,6 +73,8 @@ try
              .AddHttpClientInstrumentation();
             if (!string.IsNullOrEmpty(otlpEndpoint))
                 t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+            if (!string.IsNullOrWhiteSpace(aiCs))
+                t.AddAzureMonitorTraceExporter(o => o.ConnectionString = aiCs);
         })
         .WithMetrics(m =>
         {
@@ -72,36 +82,9 @@ try
              .AddHttpClientInstrumentation();
             if (!string.IsNullOrEmpty(otlpEndpoint))
                 m.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+            if (!string.IsNullOrWhiteSpace(aiCs))
+                m.AddAzureMonitorMetricExporter(o => o.ConnectionString = aiCs);
         });
-
-    // ─── Key Vault (T037) ────────────────────────────────────────────────────
-    var keyVaultUri = builder.Configuration["KeyVault:Uri"];
-    if (!string.IsNullOrEmpty(keyVaultUri))
-    {
-        try
-        {
-            Log.Information("Loading Key Vault configuration from {KeyVaultUri}...", keyVaultUri);
-            // Short network timeout so the MSI sidecar not-yet-ready condition fails fast
-            // instead of hanging for 3-5 minutes, which would exceed the 230-second App
-            // Service container warmup probe window and cause every cold-start to fail.
-            var credentialOptions = new DefaultAzureCredentialOptions();
-            credentialOptions.Retry.NetworkTimeout = TimeSpan.FromSeconds(15);
-            credentialOptions.Retry.MaxRetries = 1;
-            var credential = new DefaultAzureCredential(credentialOptions);
-            builder.Configuration.AddAzureKeyVault(
-                new Uri(keyVaultUri),
-                credential,
-                new PrefixKeyVaultSecretManager("PoLocalCompare"));
-            Log.Information("Key Vault configuration loaded successfully.");
-        }
-        catch (Exception ex)
-        {
-            // Key Vault is optional — if the managed identity isn't ready yet or the
-            // access policy hasn't propagated, log a warning and continue. The app will
-            // function without Key Vault secrets; AI Foundry features may be unavailable.
-            Log.Warning(ex, "Key Vault configuration could not be loaded from {KeyVaultUri}. Continuing without Key Vault secrets.", keyVaultUri);
-        }
-    }
 
     // In Development, Key Vault holds production storage connection strings.
     // Override them back to Azurite so local runs don't hit the real storage account.
@@ -118,6 +101,16 @@ try
     {
         Log.Warning("AzureAiFoundry:ApiKey is empty. Configure AzureAiFoundry__ApiKey via user-secrets or environment variables for remote model duels.");
     }
+
+    // ─── CORS (T040) ─────────────────────────────────────────────────────────
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+            policy.WithOrigins("http://localhost:5000", "https://localhost:5001", "http://localhost:5100", "https://localhost:5101")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials());
+    });
 
     // ─── SignalR ──────────────────────────────────────────────────────────────
     builder.Services.AddSignalR();
@@ -242,6 +235,8 @@ try
         ctx.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
         await next(ctx);
     });
+
+    app.UseCors();
 
     if (app.Environment.IsDevelopment())
     {
