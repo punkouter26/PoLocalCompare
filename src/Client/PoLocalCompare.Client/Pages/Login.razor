@@ -1,0 +1,53 @@
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using PoLocalCompare.Client.Services
+@inject NavigationManager Nav
+@inject IConfiguration Config
+@inject GuestAuthService GuestAuth
+
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-brand">
+            <span class="login-brand-mark">PL</span>
+            <span class="login-brand-name">PoLocalCompare</span>
+        </div>
+        <p class="login-subtitle">LLM Duel Arena</p>
+
+        <button class="btn-ms-login" @onclick="LoginWithMicrosoft">
+            <svg class="ms-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="20" height="20">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            Sign in with Microsoft
+        </button>
+
+        @if (_allowGuest)
+        {
+            <div class="login-divider"><span>or</span></div>
+            <button class="btn-guest-login" @onclick="LoginAsGuestAsync">
+                Continue as Guest
+            </button>
+            <p class="login-guest-note">Guest sessions are not persisted and reset on tab close.</p>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _allowGuest;
+
+    protected override void OnInitialized()
+    {
+        _allowGuest = Config["Auth:AllowGuest"] == "true";
+    }
+
+    private void LoginWithMicrosoft()
+    {
+        Nav.NavigateTo($"authentication/login?returnUrl={Uri.EscapeDataString(Nav.Uri)}");
+    }
+
+    private async Task LoginAsGuestAsync()
+    {
+        await GuestAuth.LoginAsGuestAsync();
+    }
+}

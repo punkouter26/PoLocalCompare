@@ -4,6 +4,31 @@ Utility scripts for maintaining and managing the PoLocalCompare application.
 
 ## Available Scripts
 
+### `setup.ps1` ⭐ Start here
+
+**Purpose:** One-command setup for a new Windows development machine (standards §9 & §10).
+
+**When to run:** First checkout on any new machine.
+
+**Usage:**
+```powershell
+pwsh SCRIPTS/setup.ps1
+
+# Flags:
+#   -SkipWinget   skip Winget installs (tools already present)
+#   -SkipDocker   skip Docker/Azurite startup
+#   -SkipModels   skip WebLLM model download
+```
+
+**What it does:**
+1. Installs .NET 10 SDK, Docker Desktop, Python 3.12, Azure CLI via Winget
+2. Starts Azurite in Docker (creates container if needed)
+3. Creates `appsettings.Development.json` with Azurite defaults if missing
+4. Restores .NET NuGet packages
+5. Downloads WebLLM models via `download-models.py`
+
+---
+
 ### `download-models.py`
 
 **Purpose:** Downloads WebLLM MLC model files from HuggingFace.

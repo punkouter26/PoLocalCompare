@@ -9,6 +9,19 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
+// ─── Microsoft OAuth via MSAL ─────────────────────────────────────────────────
+builder.Services.AddMsalAuthentication(options =>
+{
+    builder.Configuration.Bind("AzureAd", options.ProviderOptions.Authentication);
+    options.ProviderOptions.DefaultAccessTokenScopes.Add("openid");
+    options.ProviderOptions.DefaultAccessTokenScopes.Add("profile");
+    options.ProviderOptions.DefaultAccessTokenScopes.Add("email");
+    options.ProviderOptions.LoginMode = "redirect";
+});
+
+// ─── Guest authentication (standards §6) ─────────────────────────────────────
+builder.Services.AddScoped<GuestAuthService>();
+
 // ─── DuelApiClient (T098) ────────────────────────────────────────────────────
 builder.Services.AddScoped<DuelApiClient>();
 

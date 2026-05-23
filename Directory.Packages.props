@@ -35,6 +35,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.7" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.7" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Authentication.WebAssembly.Msal" Version="10.0.7" />
     <!-- UI -->
     <PackageVersion Include="Radzen.Blazor" Version="5.4.0" />
     <!-- Testing -->

@@ -140,6 +140,12 @@
     border-radius: 4px;
 }
 
+.home__recent-skeleton {
+    height: 3.2rem;
+    border-radius: 8px;
+    animation-delay: calc(var(--stagger-index, 0) * 80ms);
+}
+
 .home__stat--alert .home__stat-value { color: #fbbf24; }
 
 .home__stat-label {

@@ -98,6 +98,12 @@
 
 .leaderboard__grid--scrollable {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+::deep .leaderboard__grid--scrollable .rz-datalist-body,
+::deep .leaderboard__grid--scrollable .rz-grid-table {
+    min-width: 1100px;
 }
 
 ::deep .leaderboard__grid .rz-data-row {

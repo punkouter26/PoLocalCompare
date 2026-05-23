@@ -1,0 +1,29 @@
+@page "/authentication/{action}"
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+<RemoteAuthenticatorView Action="@Action">
+    <LoggingIn>
+        <div class="auth-spinner">
+            <p>Redirecting to Microsoft login&hellip;</p>
+        </div>
+    </LoggingIn>
+    <CompletingLoggingIn>
+        <div class="auth-spinner">
+            <p>Completing sign-in&hellip;</p>
+        </div>
+    </CompletingLoggingIn>
+    <LogOut>
+        <div class="auth-spinner">
+            <p>Signing out&hellip;</p>
+        </div>
+    </LogOut>
+    <CompletingLogOut>
+        <div class="auth-spinner">
+            <p>Completing sign-out&hellip;</p>
+        </div>
+    </CompletingLogOut>
+</RemoteAuthenticatorView>
+
+@code {
+    [Parameter] public string Action { get; set; } = default!;
+}

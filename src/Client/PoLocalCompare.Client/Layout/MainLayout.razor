@@ -1,13 +1,11 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.WebAssembly.Hosting
-@using PoLocalCompare.Client.Components
 @inject IWebAssemblyHostEnvironment HostEnv
 
 <div class="page">
     <NavMenu />
 
     <main>
-        <MockDataBanner />
         <article class="content app-content">
             <ErrorBoundary @ref="_errorBoundary">
                 <ChildContent>

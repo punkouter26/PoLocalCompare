@@ -7,6 +7,7 @@
 @using Radzen.Blazor
 @inject DuelApiClient ApiClient
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Archive — PoLocalCompare</PageTitle>
 
@@ -101,7 +102,7 @@
 
         @if (_selectedDuel is not null)
         {
-            <div class="archive__detail">
+            <div class="archive__detail" id="archive-detail">
                 <h2 class="archive__detail-title">Duel Details</h2>
 
                 <div class="archive__detail-meta">
@@ -229,7 +230,8 @@
     private async Task OnRowSelect(DuelSummaryDto duel)
     {
         _selectedDuel = duel;
-        await Task.CompletedTask;
+        await InvokeAsync(StateHasChanged);
+        await JS.InvokeVoidAsync("eval", "document.getElementById('archive-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'})");
     }
 
     private static string GetWinnerName(DuelSummaryDto d)

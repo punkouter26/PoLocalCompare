@@ -12,7 +12,7 @@
 <div class="home">
     @* ── Compact Header (C1) ── *@
     <div class="home__header">
-        <h1 class="home__title">LLM Duel Arena</h1>
+        <h1 class="home__title">PoLocalCompare</h1>
         <a href="/war-room" class="rz-button rz-button-md rz-primary">New Duel</a>
     </div>
 
@@ -79,7 +79,16 @@
     </div>
 
     @* ── Recent Duels (O1 — pending links to arena) ── *@
-    @if (_recentDuels.Count > 0)
+    @if (_statsLoading)
+    {
+        <div class="home__recent">
+            <h2 class="home__recent-title">Recent Duels</h2>
+            <div class="home__recent-list">
+                @for (var i = 0; i < 4; i++) { <div class="skeleton home__recent-skeleton" style="--stagger-index: @i;"></div> }
+            </div>
+        </div>
+    }
+    else if (_recentDuels.Count > 0)
     {
         <div class="home__recent">
             <h2 class="home__recent-title">Recent Duels</h2>

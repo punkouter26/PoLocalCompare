@@ -1,6 +1,83 @@
-﻿<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using PoLocalCompare.Client.Pages
+@using PoLocalCompare.Client.Services
+@inject AuthenticationStateProvider AuthState
+@inject GuestAuthService GuestAuth
+@inject IConfiguration Config
+@implements IDisposable
+
+<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        @if (!_gateChecked)
+        {
+            <div class="auth-spinner"><p>Loading&hellip;</p></div>
+        }
+        else if (_allowed || routeData.PageType == typeof(Authentication))
+        {
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        }
+        else
+        {
+            <LayoutView Layout="@typeof(MainLayout)">
+                <Login />
+            </LayoutView>
+        }
     </Found>
 </Router>
+
+@code {
+    private bool _gateChecked;
+    private bool _allowed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthState.AuthenticationStateChanged += OnMsalStateChanged;
+        GuestAuth.OnChange += OnGuestChanged;
+        await CheckGateAsync();
+    }
+
+    private async Task CheckGateAsync()
+    {
+        var allowGuest = Config["Auth:AllowGuest"] == "true";
+
+        // Check MSAL (Microsoft login)
+        var state = await AuthState.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            // Sync display name to GuestAuthService so NavMenu shows the email
+            var email = state.User.FindFirst("preferred_username")?.Value
+                     ?? state.User.FindFirst("email")?.Value
+                     ?? state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                     ?? state.User.Identity.Name;
+            if (email is not null)
+                await GuestAuth.LoginWithEmailAsync(email);
+            _allowed = true;
+        }
+        else if (allowGuest)
+        {
+            var guestIdentity = await GuestAuth.GetIdentityAsync();
+            _allowed = guestIdentity is not null;
+        }
+        else
+        {
+            _allowed = false;
+        }
+
+        _gateChecked = true;
+        StateHasChanged();
+    }
+
+    private void OnMsalStateChanged(Task<AuthenticationState> _)
+        => InvokeAsync(async () => await CheckGateAsync());
+
+    private void OnGuestChanged()
+        => InvokeAsync(async () => await CheckGateAsync());
+
+    public void Dispose()
+    {
+        AuthState.AuthenticationStateChanged -= OnMsalStateChanged;
+        GuestAuth.OnChange -= OnGuestChanged;
+    }
+}

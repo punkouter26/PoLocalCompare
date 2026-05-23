@@ -40,6 +40,8 @@ public static class ModelSeeder
         new Model("01SEED000000000000000000K", "GPT-5 Nano",     ModelType.Remote, apiEndpointRef: "gpt-5-nano",                    inputTokenPricePerMillion: 0.05m,  outputTokenPricePerMillion: 0.40m),
         new Model("01SEED000000000000000000M", "GPT-5.4 Mini",   ModelType.Remote, apiEndpointRef: "gpt-5.4-mini",                  inputTokenPricePerMillion: 0.75m,  outputTokenPricePerMillion: 4.50m),
         new Model("01SEED000000000000000000N", "GPT-5.4 Nano",   ModelType.Remote, apiEndpointRef: "gpt-5.4-nano",                  inputTokenPricePerMillion: 0.20m,  outputTokenPricePerMillion: 1.25m),
+        new Model("01SEED000000000000000000P", "Grok 4 Fast",    ModelType.Remote, apiEndpointRef: "grok-4-fast-non-reasoning",         inputTokenPricePerMillion: 3.00m,  outputTokenPricePerMillion: 15.00m),
+        new Model("01SEED000000000000000000Q", "DeepSeek V4 Flash", ModelType.Remote, apiEndpointRef: "DeepSeek-V4-Flash",             inputTokenPricePerMillion: 0.27m,  outputTokenPricePerMillion: 1.10m),
     ];
 
     public static async Task SeedAsync(IServiceProvider services)

@@ -167,8 +167,16 @@
             </div>
         </section>
 
-        <section class="war-room__section">
-            <p class="section-eyebrow">Step 3</p>
+        @if (ActiveStep == 3)
+        {
+            <div class="war-room__ready-banner">
+                <span class="war-room__ready-icon">✓</span>
+                <span class="war-room__ready-text">Both models selected — ready to launch</span>
+                <button class="war-room__ready-scroll" @onclick="ScrollToLaunchAsync">↓ Go to Step 3</button>
+            </div>
+        }
+
+        <section class="war-room__section" id="launch-section">
             <div class="war-room__actions">
                 <RadzenButton
                     Text="Start Duel"
@@ -236,6 +244,9 @@
     private bool HasPrompt => !string.IsNullOrWhiteSpace(_promptText);
     private bool HasPair => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
     private int ActiveStep => !HasPrompt ? 1 : !HasPair ? 2 : 3;
+
+    private async Task ScrollToLaunchAsync()
+        => await JS.InvokeVoidAsync("eval", "document.getElementById('launch-section')?.scrollIntoView({behavior:'smooth',block:'start'})");
 
     private IEnumerable<ModelDto> FilteredModels(string filter, string search, string sortBy)
     {

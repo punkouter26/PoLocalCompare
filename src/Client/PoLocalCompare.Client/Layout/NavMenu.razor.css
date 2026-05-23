@@ -153,4 +153,84 @@
         padding: 0.75rem 0.5rem;
         border-radius: 0;
     }
+
+    .nav-auth {
+        width: 100%;
+        justify-content: flex-start;
+        padding: 0.5rem 0;
+    }
+}
+
+/* ── USING MOCK DATA banner (standards §7) ─────────────────────────────────── */
+.mock-data-banner {
+    background: #ef4444;
+    color: #ffffff;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.35rem 1rem;
+    letter-spacing: 0.05em;
+    font-size: 0.8rem;
+    width: 100%;
+    display: block;
+}
+
+/* ── Auth / GUEST identity (standards §6) ──────────────────────────────────── */.nav-auth {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.nav-user-badge {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    max-width: clamp(120px, 22vw, 260px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nav-user-badge--guest {
+    background: rgba(234, 179, 8, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.nav-user-badge--oauth {
+    background: rgba(34, 197, 94, 0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.nav-guest-btn {
+    font-size: 0.78rem;
+    padding: 0.25rem 0.75rem;
+    white-space: nowrap;
+}
+
+.btn-ms-nav {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.78rem;
+    padding: 0.25rem 0.75rem;
+    white-space: nowrap;
+    background: #fff;
+    color: #1a1a1a;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-ms-nav:hover {
+    background: #e8e8e8;
+}
+
+.nav-logout {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.55rem;
 }

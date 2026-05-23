@@ -6,7 +6,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Diagnostics — LLM Duel Arena</title>
+    <title>Diagnostics — PoLocalCompare</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -113,7 +113,7 @@
 </head>
 <body>
     <div class="diag-header">
-        <span class="diag-header__title">⚔️ LLM Duel Arena</span>
+        <span class="diag-header__title">PoLocalCompare</span>
         <a class="diag-header__back" href="/">← Back to App</a>
         <a class="diag-header__back" href="/health">Health JSON</a>
     </div>
@@ -188,8 +188,21 @@
             <h2>WebGPU</h2>
             <p id="webgpu-status">Checking...</p>
             <script>
-                document.getElementById('webgpu-status').textContent =
-                    typeof navigator.gpu !== 'undefined' ? 'Available: Yes' : 'Available: No';
+                (async () => {
+                    const el = document.getElementById('webgpu-status');
+                    if (typeof navigator.gpu === 'undefined') {
+                        el.textContent = 'Available: No — WebGPU API not present in this browser';
+                        return;
+                    }
+                    try {
+                        const adapter = await navigator.gpu.requestAdapter();
+                        el.textContent = adapter
+                            ? 'Available: Yes — GPU adapter found'
+                            : 'Available: No — API present but no GPU adapter (driver or permission issue)';
+                    } catch (e) {
+                        el.textContent = 'Available: Error — ' + e.message;
+                    }
+                })();
             </script>
         </section>
     </div>
