@@ -97,7 +97,7 @@
     protected override async Task OnInitializedAsync()
     {
         GuestAuth.OnChange += OnAuthChanged;
-        _allowGuest = Config["Auth:AllowGuest"] == "true";
+        _allowGuest = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
         _identity = await GuestAuth.GetIdentityAsync();
         _isGuest = GuestAuth.IsGuest;
 
