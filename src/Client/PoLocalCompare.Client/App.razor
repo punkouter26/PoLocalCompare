@@ -5,6 +5,7 @@
 @inject AuthenticationStateProvider AuthState
 @inject GuestAuthService GuestAuth
 @inject IConfiguration Config
+@inject NavigationManager Nav
 @implements IDisposable
 
 <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(NotFound)">
@@ -35,6 +36,17 @@
     {
         AuthState.AuthenticationStateChanged += OnMsalStateChanged;
         GuestAuth.OnChange += OnGuestChanged;
+
+        // Skip gate during MSAL callback — calling GetAuthenticationStateAsync here
+        // while MSAL is mid-redirect causes a deadlock ("Completing sign-in..." hang).
+        var uri = new Uri(Nav.Uri).LocalPath;
+        if (uri.StartsWith("/authentication", StringComparison.OrdinalIgnoreCase))
+        {
+            _gateChecked = true;
+            _allowed = true;
+            return;
+        }
+
         await CheckGateAsync();
     }
 

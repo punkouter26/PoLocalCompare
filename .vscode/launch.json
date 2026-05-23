@@ -25,10 +25,10 @@
       }
     },
     {
-      "name": "Watch & Launch PoLocalCompare (Edge)",
+      "name": "Run & Launch PoLocalCompare (Edge)",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "watch",
+      "preLaunchTask": "run",
       "program": "${workspaceFolder}/src/PoLocalCompare.Api/bin/Debug/net10.0/PoLocalCompare.Api.dll",
       "args": [],
       "cwd": "${workspaceFolder}/src/PoLocalCompare.Api",

@@ -29,11 +29,10 @@
       "dependsOn": "kill-dotnet"
     },
     {
-      "label": "watch",
+      "label": "run",
       "command": "dotnet",
       "type": "process",
       "args": [
-        "watch",
         "run",
         "--project",
         "${workspaceFolder}/src/PoLocalCompare.Api/PoLocalCompare.Api.csproj",
