@@ -13,7 +13,7 @@ const MODEL_A = {
   currentElo: 1200,
   duelCount: 0,
   winCount: 0,
-  greenScoreAvg: null,
+  greenScoreAvg: 0.0,
 };
 
 const MODEL_B = {
@@ -23,7 +23,7 @@ const MODEL_B = {
   currentElo: 1200,
   duelCount: 0,
   winCount: 0,
-  greenScoreAvg: null,
+  greenScoreAvg: 0.0,
 };
 
 async function mockModels(page: ReturnType<typeof test.extend>['page'] extends never ? never : Parameters<Parameters<typeof test>[1]>[0]['page']) {
@@ -40,6 +40,11 @@ test.describe('War Room', () => {
   test.beforeEach(async ({ page }) => {
     // Mock the models API before each test
     await page.route('**/api/models', route => {
+      if (route.request().url().includes('/availability')) {
+        // Let availability sub-path fall through to next handler
+        route.continue();
+        return;
+      }
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -47,9 +52,28 @@ test.describe('War Room', () => {
       });
     });
 
+    // Mock availability so Remote models are selectable
+    await page.route('**/api/models/availability', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { modelId: MODEL_A.modelId, isAvailable: true, reason: null },
+          { modelId: MODEL_B.modelId, isAvailable: true, reason: null },
+        ]),
+      });
+    });
+
+    // Inject guest identity so App.razor auth gate allows access (GuestAuthService reads sessionStorage)
+    await page.addInitScript(() => {
+      sessionStorage.setItem('guest_identity', 'GUEST_E2E_TEST');
+    });
+
     await page.goto('/war-room');
-    // Wait for loading spinner to disappear
-    await expect(page.locator('.war-room__loading')).toHaveCount(0, { timeout: 10_000 });
+    // Wait for Blazor WASM to fully load
+    await page.waitForLoadState('networkidle', { timeout: 45_000 });
+    // Wait for loading panel to disappear (class is war-room__loading-panel, not war-room__loading)
+    await expect(page.locator('.war-room__loading-panel')).toHaveCount(0, { timeout: 15_000 });
   });
 
   test('Commence button is disabled when no models are selected', async ({ page }) => {
@@ -59,18 +83,17 @@ test.describe('War Room', () => {
   });
 
   test('Commence button remains disabled when only left model selected', async ({ page }) => {
-    // Select left model card
-    await page.locator('.war-room__column').first().locator('.model-card').first().click();
+    // Select first model card from the flat pool
+    await page.locator('.model-card').first().click();
 
     const commenceBtn = page.locator('.war-room__commence-btn');
     await expect(commenceBtn).toBeDisabled();
   });
 
   test('Commence button enabled after selecting both models and entering prompt', async ({ page }) => {
-    // Select left model
-    await page.locator('.war-room__column').first().locator('.model-card').first().click();
-    // Select right model
-    await page.locator('.war-room__column').last().locator('.model-card').last().click();
+    // Select first and second model cards from the flat pool
+    await page.locator('.model-card').first().click();
+    await page.locator('.model-card').nth(1).click();
 
     // Enter prompt text
     const promptInput = page.locator('#promptInput');
@@ -105,8 +128,8 @@ test.describe('War Room', () => {
     });
 
     // Select both models and enter prompt
-    await page.locator('.war-room__column').first().locator('.model-card').first().click();
-    await page.locator('.war-room__column').last().locator('.model-card').last().click();
+    await page.locator('.model-card').first().click();
+    await page.locator('.model-card').nth(1).click();
     await page.locator('#promptInput').fill('Build a timer.');
 
     // Click Commence

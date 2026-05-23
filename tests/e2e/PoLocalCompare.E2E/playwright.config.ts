@@ -8,10 +8,12 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: 'html',
+  timeout: 90_000,
   use: {
     baseURL: 'https://localhost:5001',
     ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
+    actionTimeout: 15_000,
   },
   projects: [
     {
@@ -19,8 +21,8 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'Microsoft Edge',
-      use: { ...devices['Desktop Edge'], channel: 'msedge' },
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 5'] },
     },
   ],
 });
