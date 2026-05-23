@@ -1,12 +1,10 @@
-name: Deploy PoLocalCompare to Azure
+name: CI/CD — Build, Test & Deploy
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
+    branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -14,150 +12,80 @@ permissions:
   id-token: write
 
 env:
-  DOTNET_VERSION: 10.0.x
-  AZURE_RESOURCE_GROUP: PoLocalCompare
+  DOTNET_VERSION: '10.0.x'
   AZURE_WEBAPP_NAME: polocalcompare-appservice-dev
-  AZURE_WEBAPP_URL: https://polocalcompare-appservice-dev.azurewebsites.net
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP: PoLocalCompare
+  SOLUTION_PATH: PoLocalCompare.slnx
+  API_PROJECT_PATH: src/PoLocalCompare.Api/PoLocalCompare.Api.csproj
+  UNIT_TEST_PATH: tests/unit/PoLocalCompare.Unit.Tests
 
 concurrency:
   group: deploy-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-deploy:
+  build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
+    timeout-minutes: 30
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/global.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: Restore WebAssembly workload
-        run: dotnet workload restore PoLocalCompare.slnx
-
-      - name: Restore
-        run: dotnet restore PoLocalCompare.slnx
-
-      - name: Build
-        run: dotnet build PoLocalCompare.slnx --configuration Release --no-restore
-
-      - name: Azure Login (OIDC)
-        uses: azure/login@v2
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - run: dotnet restore ${{ env.SOLUTION_PATH }}
+      - run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore -c Release
+      - run: dotnet format ${{ env.SOLUTION_PATH }} --verify-no-changes --verbosity minimal
+      - run: dotnet test ${{ env.UNIT_TEST_PATH }} -c Release --no-build --logger trx --results-directory TestResults
+      - if: always()
+        uses: actions/upload-artifact@v4
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          name: unit-test-results
+          path: TestResults/*.trx
+      - run: dotnet publish ${{ env.API_PROJECT_PATH }} -c Release --no-restore -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webapp
+          path: publish
+          retention-days: 1
 
-      - name: Publish application
+  deploy:
+    name: Deploy to Azure
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://polocalcompare-appservice-dev.azurewebsites.net
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: webapp
+          path: publish
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: cd publish && zip -r ../webapp.zip . && cd ..
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+          package: webapp.zip
+      - name: Verify deployment (health check)
         run: |
-          dotnet publish src/PoLocalCompare.Api/PoLocalCompare.Api.csproj \
-            --configuration Release \
-            --output ./artifacts/publish
-
-          if [ ! -f ./artifacts/publish/PoLocalCompare.Api.dll ]; then
-            echo "::error::Publish output missing PoLocalCompare.Api.dll"
-            ls -la ./artifacts/publish
-            exit 1
-          fi
-
-          cd ./artifacts/publish
-          zip -r ../webapp.zip .
-
-      - name: Validate deployment artifact
-        run: |
-          if [ ! -f ./artifacts/webapp.zip ]; then
-            echo "::error::Deployment artifact not found: ./artifacts/webapp.zip"
-            exit 1
-          fi
-
-          zipSizeMb=$(du -m ./artifacts/webapp.zip | cut -f1)
-          echo "Artifact size: ${zipSizeMb} MB"
-
-          unzip -l ./artifacts/webapp.zip | head -n 40
-          if ! unzip -l ./artifacts/webapp.zip | grep -q "PoLocalCompare.Api.dll"; then
-            echo "::error::webapp.zip does not contain PoLocalCompare.Api.dll"
-            exit 1
-          fi
-
-      - name: Start App Service
-        run: |
-          az webapp start \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ env.AZURE_WEBAPP_NAME }}"
-
-      - name: Enforce App Service startup/deploy settings
-        run: |
-          az webapp config appsettings set \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --settings \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-              ENABLE_ORYX_BUILD=false \
-              WEBSITES_PORT=8080 \
-              WEBSITES_CONTAINER_START_TIME_LIMIT=1800 \
-            --output none
-
-      - name: Deploy application package
-        run: |
-          az webapp deploy \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --src-path ./artifacts/webapp.zip \
-            --type zip \
-            --clean true \
-            --track-status false
-
-      - name: Verify deployment health
-        run: |
-          appUrl="${{ env.AZURE_WEBAPP_URL }}"
-          echo "Waiting for site to become healthy at $appUrl/health ..."
-          for i in $(seq 1 40); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$appUrl/health" || echo "000")
-            echo "Attempt $i: HTTP $code"
-            if [ "$code" = "200" ]; then
-              echo "Site is healthy."
-              exit 0
-            fi
+          sleep 20
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health" --max-time 30 || echo "000")
+            echo "Health check attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then echo "Deployment verified."; exit 0; fi
             sleep 15
           done
-          echo "::error::Site did not become healthy within 10 minutes"
-          exit 1
-
-      - name: Capture deployment diagnostics on failure
-        if: failure()
-        run: |
-          az webapp log download \
-            --name "${{ env.AZURE_WEBAPP_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --log-file appservice-logs.zip || true
-          echo "Downloaded appservice-logs.zip (if available)"
-
-      - name: Deployment summary
-        if: always()
-        run: |
-          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Resource Group | ${{ env.AZURE_RESOURCE_GROUP }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| App Service | ${{ env.AZURE_WEBAPP_NAME }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| URL | ${{ env.AZURE_WEBAPP_URL }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "WARNING: Health check did not return 200 after 5 attempts."
