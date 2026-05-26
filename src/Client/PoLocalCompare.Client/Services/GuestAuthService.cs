@@ -4,17 +4,17 @@ namespace PoLocalCompare.Client.Services;
 
 /// <summary>
 /// Manages GUEST authentication for local/dev/E2E usage, persisting the
-/// generated identity in SessionStorage so it survives page refreshes.
+/// generated identity in LocalStorage so it survives page refreshes.
 /// </summary>
 /// <remarks>
 /// Pattern: Service Locator via DI (GoF) — clients inject this singleton to
 /// read/write the active user identity without coupling to a full OIDC stack.
-/// GUEST identities are intentionally ephemeral (SessionStorage, not LocalStorage)
-/// and are cleared when the browser tab closes.
+/// GUEST identities are intentionally limited to non-production mode and are
+/// persisted to LocalStorage for development and E2E resilience.
 /// </remarks>
 public sealed class GuestAuthService
 {
-    private const string SessionKey = "guest_identity";
+    private const string LocalStorageKey = "guest_identity";
 
     private readonly IJSRuntime _js;
     private string? _cachedIdentity;
@@ -26,7 +26,7 @@ public sealed class GuestAuthService
 
     /// <summary>
     /// Returns the current user display name.
-    /// Reads from the in-memory cache first; falls back to SessionStorage.
+    /// Reads from the in-memory cache first; falls back to LocalStorage.
     /// Returns <c>null</c> when not logged in.
     /// </summary>
     public async ValueTask<string?> GetIdentityAsync()
@@ -36,13 +36,13 @@ public sealed class GuestAuthService
 
         try
         {
-            var stored = await _js.InvokeAsync<string?>("sessionStorage.getItem", SessionKey);
+            var stored = await _js.InvokeAsync<string?>("localStorage.getItem", LocalStorageKey);
             _cachedIdentity = stored;
             return _cachedIdentity;
         }
         catch
         {
-            // SessionStorage unavailable (e.g., SSR pre-render) — return null gracefully.
+            // LocalStorage unavailable (e.g., SSR pre-render) — return null gracefully.
             return null;
         }
     }
@@ -54,7 +54,7 @@ public sealed class GuestAuthService
 
     /// <summary>
     /// Creates a new GUEST identity (GUEST + 4-digit random number), persists
-    /// it to SessionStorage, and raises <see cref="OnChange"/>.
+    /// it to LocalStorage, and raises <see cref="OnChange"/>.
     /// </summary>
     public async Task LoginAsGuestAsync()
     {
@@ -64,14 +64,14 @@ public sealed class GuestAuthService
     }
 
     /// <summary>
-    /// Clears the current identity from memory and SessionStorage.
+    /// Clears the current identity from memory and LocalStorage.
     /// </summary>
     public async Task LogoutAsync()
     {
         _cachedIdentity = null;
         try
         {
-            await _js.InvokeVoidAsync("sessionStorage.removeItem", SessionKey);
+            await _js.InvokeVoidAsync("localStorage.removeItem", LocalStorageKey);
         }
         catch { /* ignore if unavailable */ }
         OnChange?.Invoke();
@@ -92,7 +92,7 @@ public sealed class GuestAuthService
         _cachedIdentity = identity;
         try
         {
-            await _js.InvokeVoidAsync("sessionStorage.setItem", SessionKey, identity);
+            await _js.InvokeVoidAsync("localStorage.setItem", LocalStorageKey, identity);
         }
         catch { /* ignore if unavailable */ }
         OnChange?.Invoke();

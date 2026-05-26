@@ -6,6 +6,7 @@
 @inject GuestAuthService GuestAuth
 @inject IConfiguration Config
 @inject NavigationManager Nav
+@inject Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment
 @implements IDisposable
 
 <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(NotFound)">
@@ -39,8 +40,7 @@
 
         // Skip gate during MSAL callback — calling GetAuthenticationStateAsync here
         // while MSAL is mid-redirect causes a deadlock ("Completing sign-in..." hang).
-        var uri = new Uri(Nav.Uri).LocalPath;
-        if (uri.StartsWith("/authentication", StringComparison.OrdinalIgnoreCase))
+        if (IsAuthenticationRoute())
         {
             _gateChecked = true;
             _allowed = true;
@@ -52,28 +52,47 @@
 
     private async Task CheckGateAsync()
     {
-        var allowGuest = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
-
-        // Check MSAL (Microsoft login)
-        var state = await AuthState.GetAuthenticationStateAsync();
-        if (state.User.Identity?.IsAuthenticated == true)
+        // Never evaluate auth gate while MSAL callback is in progress.
+        if (IsAuthenticationRoute())
         {
-            // Sync display name to GuestAuthService so NavMenu shows the email
-            var email = state.User.FindFirst("preferred_username")?.Value
-                     ?? state.User.FindFirst("email")?.Value
-                     ?? state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-                     ?? state.User.Identity.Name;
-            if (email is not null)
-                await GuestAuth.LoginWithEmailAsync(email);
+            _gateChecked = true;
             _allowed = true;
+            StateHasChanged();
+            return;
         }
-        else if (allowGuest)
+
+        try
         {
-            var guestIdentity = await GuestAuth.GetIdentityAsync();
-            _allowed = guestIdentity is not null;
+            var allowGuestByConfig = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
+            var isProduction = string.Equals(HostEnvironment.Environment, "Production", StringComparison.OrdinalIgnoreCase);
+            var allowGuest = allowGuestByConfig && !isProduction;
+
+            // Check MSAL (Microsoft login)
+            var state = await AuthState.GetAuthenticationStateAsync();
+            if (state.User.Identity?.IsAuthenticated == true)
+            {
+                // Sync display name to GuestAuthService so NavMenu shows the email
+                var email = state.User.FindFirst("preferred_username")?.Value
+                         ?? state.User.FindFirst("email")?.Value
+                         ?? state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                         ?? state.User.Identity.Name;
+                if (email is not null)
+                    await GuestAuth.LoginWithEmailAsync(email);
+                _allowed = true;
+            }
+            else if (allowGuest)
+            {
+                var guestIdentity = await GuestAuth.GetIdentityAsync();
+                _allowed = guestIdentity is not null;
+            }
+            else
+            {
+                _allowed = false;
+            }
         }
-        else
+        catch
         {
+            // Fail closed on auth gate checks, but never crash the app shell.
             _allowed = false;
         }
 
@@ -92,4 +111,7 @@
         AuthState.AuthenticationStateChanged -= OnMsalStateChanged;
         GuestAuth.OnChange -= OnGuestChanged;
     }
+
+    private bool IsAuthenticationRoute()
+        => new Uri(Nav.Uri).LocalPath.StartsWith("/authentication", StringComparison.OrdinalIgnoreCase);
 }

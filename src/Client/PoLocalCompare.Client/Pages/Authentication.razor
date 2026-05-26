@@ -1,5 +1,7 @@
 @page "/authentication/{action}"
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Nav
+@implements IDisposable
 
 <RemoteAuthenticatorView Action="@Action">
     <LoggingIn>
@@ -26,4 +28,51 @@
 
 @code {
     [Parameter] public string Action { get; set; } = default!;
+
+    private CancellationTokenSource? _callbackTimeoutCts;
+
+    protected override void OnParametersSet()
+    {
+        _callbackTimeoutCts?.Cancel();
+        _callbackTimeoutCts?.Dispose();
+        _callbackTimeoutCts = null;
+
+        if (string.Equals(Action, "login-callback", StringComparison.OrdinalIgnoreCase))
+        {
+            // MSAL callback must include fragment payload (code/state). Without it,
+            // RemoteAuthenticatorView can remain stuck in "Completing sign-in...".
+            if (string.IsNullOrWhiteSpace(new Uri(Nav.Uri).Fragment))
+            {
+                Nav.NavigateTo("/", forceLoad: true);
+                return;
+            }
+
+            _callbackTimeoutCts = new CancellationTokenSource();
+            _ = RecoverIfCallbackStallsAsync(_callbackTimeoutCts.Token);
+        }
+    }
+
+    private async Task RecoverIfCallbackStallsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(12), cancellationToken);
+
+            if (!cancellationToken.IsCancellationRequested
+                && new Uri(Nav.Uri).LocalPath.StartsWith("/authentication/login-callback", StringComparison.OrdinalIgnoreCase))
+            {
+                Nav.NavigateTo("/", forceLoad: true);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // Normal during successful callback navigation.
+        }
+    }
+
+    public void Dispose()
+    {
+        _callbackTimeoutCts?.Cancel();
+        _callbackTimeoutCts?.Dispose();
+    }
 }

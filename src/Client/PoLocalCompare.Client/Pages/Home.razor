@@ -6,6 +6,7 @@
 @using Radzen
 @using Radzen.Blazor
 @inject DuelApiClient ApiClient
+@inject NavigationManager Nav
 
 <PageTitle>PoLocalCompare</PageTitle>
 
@@ -78,6 +79,59 @@
         }
     </div>
 
+    <div class="home__models">
+        <div class="home__models-head">
+            <h2 class="home__models-title">Model Selector</h2>
+            <span class="home__models-subtitle">Pick from the 3 model categories, then jump to War Room.</span>
+        </div>
+
+        <div class="home__models-grid">
+            <div class="home__models-card">
+                <label class="home__models-label" for="home-remote-model">Remote (Azure OpenAI)</label>
+                <select id="home-remote-model" class="home__models-select" @bind="_selectedRemoteModelId">
+                    <option value="">Select a remote model</option>
+                    @foreach (var model in _remoteModels)
+                    {
+                        <option value="@model.ModelId">@model.DisplayName</option>
+                    }
+                </select>
+                <span class="home__models-meta">@_remoteModels.Count available</span>
+            </div>
+
+            <div class="home__models-card">
+                <label class="home__models-label" for="home-browser-model">Browser (WebLLM)</label>
+                <select id="home-browser-model" class="home__models-select" @bind="_selectedBrowserModelId">
+                    <option value="">Select a browser model</option>
+                    @foreach (var model in _browserModels)
+                    {
+                        <option value="@model.ModelId">@model.DisplayName</option>
+                    }
+                </select>
+                <span class="home__models-meta">@_browserModels.Count available</span>
+            </div>
+
+            <div class="home__models-card">
+                <label class="home__models-label" for="home-ollama-model">Ollama (Local Service)</label>
+                <select id="home-ollama-model" class="home__models-select" @bind="_selectedOllamaModelId" disabled="@(_ollamaModels.Count == 0)">
+                    <option value="">@(_ollamaModels.Count == 0 ? "Unavailable in this environment" : "Select an Ollama model")</option>
+                    @foreach (var model in _ollamaModels)
+                    {
+                        <option value="@model.ModelId">@model.DisplayName</option>
+                    }
+                </select>
+                <span class="home__models-meta">@_ollamaModels.Count available</span>
+            </div>
+        </div>
+
+        <div class="home__models-actions">
+            <button class="home__models-launch" @onclick="OpenWarRoomFromModelPicker">Use Selected Models in War Room</button>
+            @if (!string.IsNullOrWhiteSpace(_modelPickerNote))
+            {
+                <span class="home__models-note">@_modelPickerNote</span>
+            }
+        </div>
+    </div>
+
     @* ── Recent Duels (O1 — pending links to arena) ── *@
     @if (_statsLoading)
     {
@@ -141,34 +195,90 @@
     private bool _systemRefreshing;
     private bool _modelsReady;
 
+    private IReadOnlyList<ModelDto> _remoteModels = [];
+    private IReadOnlyList<ModelDto> _browserModels = [];
+    private IReadOnlyList<ModelDto> _ollamaModels = [];
+    private string? _selectedRemoteModelId;
+    private string? _selectedBrowserModelId;
+    private string? _selectedOllamaModelId;
+    private string? _modelPickerNote;
+
     protected override async Task OnInitializedAsync()
     {
-        // Load recent duels (8) and leaderboard in parallel
-        var duelsTask = ApiClient.ListDuelsAsync(8);
-        var lbTask = ApiClient.GetLeaderboardAsync("Elo");
-
-        await Task.WhenAll(duelsTask, lbTask);
-
-        var duels = duelsTask.Result ?? [];
-        _recentDuels = duels;
-        _unratedCount = duels.Count(d => d.Verdict == DuelVerdict.Pending);
-
-        var lb = lbTask.Result;
-        if (lb is not null)
+        try
         {
-            // Derive true total from leaderboard (each duel counted from 2 model sides)
-            _totalDuels = lb.Sum(e => e.DuelCount) / 2;
-            _activeModels = lb.Count(e => e.DuelCount > 0);
-            _topModel = lb.FirstOrDefault(e => e.Rank == 1)?.DisplayName;
+            // Load recent duels (8), leaderboard, and model catalog in parallel.
+            var duelsTask = ApiClient.ListDuelsAsync(8);
+            var lbTask = ApiClient.GetLeaderboardAsync("Elo");
+            var modelsTask = ApiClient.GetModelsAsync();
+
+            await Task.WhenAll(duelsTask, lbTask, modelsTask);
+
+            var duels = duelsTask.Result ?? [];
+            _recentDuels = duels;
+            _unratedCount = duels.Count(d => d.Verdict == DuelVerdict.Pending);
+
+            var lb = lbTask.Result;
+            if (lb is not null)
+            {
+                // Derive true total from leaderboard (each duel counted from 2 model sides)
+                _totalDuels = lb.Sum(e => e.DuelCount) / 2;
+                _activeModels = lb.Count(e => e.DuelCount > 0);
+                _topModel = lb.FirstOrDefault(e => e.Rank == 1)?.DisplayName;
+            }
+            else
+            {
+                // Fallback: use the page-limited fetch count
+                _totalDuels = duels.Count;
+            }
+
+            var models = modelsTask.Result ?? [];
+            _remoteModels = models.Where(m => m.ModelType == ModelType.Remote).OrderBy(m => m.DisplayName).ToList();
+            _browserModels = models.Where(m => m.ModelType == ModelType.Local).OrderBy(m => m.DisplayName).ToList();
+            _ollamaModels = models.Where(m => m.ModelType == ModelType.LocalService).OrderBy(m => m.DisplayName).ToList();
+
+            _selectedRemoteModelId ??= _remoteModels.FirstOrDefault()?.ModelId;
+            _selectedBrowserModelId ??= _browserModels.FirstOrDefault()?.ModelId;
+            _selectedOllamaModelId ??= _ollamaModels.FirstOrDefault()?.ModelId;
         }
-        else
+        catch
         {
-            // Fallback: use the page-limited fetch count
-            _totalDuels = duels.Count;
+            _recentDuels = [];
+            _totalDuels = 0;
+            _activeModels = 0;
+            _topModel = null;
+            _unratedCount = 0;
+            _remoteModels = [];
+            _browserModels = [];
+            _ollamaModels = [];
+            _modelPickerNote = "Model catalog is temporarily unavailable. You can still access other pages.";
         }
-        _statsLoading = false;
+        finally
+        {
+            _statsLoading = false;
+        }
 
         await RefreshSystemAsync();
+    }
+
+    private void OpenWarRoomFromModelPicker()
+    {
+        var selectedModelIds = new[] { _selectedBrowserModelId, _selectedRemoteModelId, _selectedOllamaModelId }
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+
+        if (selectedModelIds.Length < 2)
+        {
+            _modelPickerNote = "Pick at least two models across the categories before launching War Room.";
+            return;
+        }
+
+        _modelPickerNote = null;
+        var left = Uri.EscapeDataString(selectedModelIds[0]!);
+        var right = Uri.EscapeDataString(selectedModelIds[1]!);
+        Nav.NavigateTo($"/war-room?leftModelId={left}&rightModelId={right}");
     }
 
     private async Task RefreshSystemAsync()

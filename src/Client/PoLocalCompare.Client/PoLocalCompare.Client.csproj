@@ -3,6 +3,9 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <WasmSdkPackageVersion>10.0.7</WasmSdkPackageVersion>
+    <WasmEnableSIMD Condition="'$(Configuration)' == 'Release'">true</WasmEnableSIMD>
+    <WasmEnableSIMD Condition="'$(Configuration)' != 'Release'">false</WasmEnableSIMD>
+    <RunAOTCompilation>false</RunAOTCompilation>
   </PropertyGroup>
 
   <ItemGroup>

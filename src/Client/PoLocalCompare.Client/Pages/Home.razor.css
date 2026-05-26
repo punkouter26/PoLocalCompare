@@ -105,6 +105,100 @@
     font-size: 0.75rem;
 }
 
+.home__models {
+    padding: 1rem;
+    border: 1px solid var(--oled-border);
+    border-radius: var(--radius-md);
+    background: var(--oled-surface);
+    margin-bottom: 1.75rem;
+    animation: fadeIn 0.55s ease-out 0.2s both;
+}
+
+.home__models-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+
+.home__models-title {
+    margin: 0;
+    font-size: 0.84rem;
+    color: var(--oled-text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.home__models-subtitle {
+    font-size: 0.76rem;
+    color: var(--oled-text-muted);
+}
+
+.home__models-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.home__models-card {
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    padding: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.home__models-label {
+    color: var(--oled-text-muted);
+    font-size: 0.67rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.home__models-select {
+    background: #0f172a;
+    color: var(--oled-text);
+    border: 1px solid #223047;
+    border-radius: 8px;
+    padding: 0.42rem 0.48rem;
+    font-size: 0.82rem;
+}
+
+.home__models-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.home__models-meta {
+    font-size: 0.72rem;
+    color: var(--oled-text-muted);
+}
+
+.home__models-actions {
+    margin-top: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.home__models-launch {
+    background: #101827;
+    color: #a7f3d0;
+    border: 1px solid #1f3f2f;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+}
+
+.home__models-note {
+    color: #fbbf24;
+    font-size: 0.74rem;
+}
+
 .home__stat {
     display: flex;
     flex-direction: column;
@@ -158,6 +252,10 @@
 @media (max-width: 500px) {
     .home__stats { grid-template-columns: repeat(2, 1fr); }
     .home__system-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 780px) {
+    .home__models-grid { grid-template-columns: 1fr; }
 }
 
 /* ── Recent Duels ─────────────────────────────────────────────────────── */

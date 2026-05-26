@@ -83,6 +83,7 @@
     [Inject] private IConfiguration Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthState { get; set; } = default!;
+    [Inject] private Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment { get; set; } = default!;
 
     private bool collapseNavMenu = true;
     private string? _identity;
@@ -97,9 +98,20 @@
     protected override async Task OnInitializedAsync()
     {
         GuestAuth.OnChange += OnAuthChanged;
-        _allowGuest = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
-        _identity = await GuestAuth.GetIdentityAsync();
-        _isGuest = GuestAuth.IsGuest;
+        var allowGuestByConfig = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
+        var isProduction = string.Equals(HostEnvironment.Environment, "Production", StringComparison.OrdinalIgnoreCase);
+        _allowGuest = allowGuestByConfig && !isProduction;
+
+        try
+        {
+            _identity = await GuestAuth.GetIdentityAsync();
+            _isGuest = GuestAuth.IsGuest;
+        }
+        catch
+        {
+            _identity = null;
+            _isGuest = false;
+        }
 
         var useRealAi = Config["Features:UseRealAi"];
         _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;
@@ -131,10 +143,26 @@
 
     private void OnAuthChanged()
     {
-        _isGuest = GuestAuth.IsGuest;
+        try
+        {
+            _isGuest = GuestAuth.IsGuest;
+        }
+        catch
+        {
+            _isGuest = false;
+        }
+
         InvokeAsync(async () =>
         {
-            _identity = await GuestAuth.GetIdentityAsync();
+            try
+            {
+                _identity = await GuestAuth.GetIdentityAsync();
+            }
+            catch
+            {
+                _identity = null;
+            }
+
             StateHasChanged();
         });
     }

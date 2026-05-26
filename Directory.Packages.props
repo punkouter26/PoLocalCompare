@@ -13,12 +13,14 @@
     <PackageVersion Include="Azure.AI.Inference" Version="1.0.0-beta.5" />
     <!-- ULID generation -->
     <PackageVersion Include="NUlid" Version="1.7.3" />
+    <!-- Git tag-driven semantic versioning -->
+    <PackageVersion Include="MinVer" Version="6.0.0" />
     <!-- API / SignalR -->
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.14.11" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.4" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.7" />
     <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.5.1" />
     <!-- Observability -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />

@@ -3,6 +3,7 @@
 @inject NavigationManager Nav
 @inject IConfiguration Config
 @inject GuestAuthService GuestAuth
+@inject Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment
 
 <div class="login-page">
     <div class="login-card">
@@ -28,7 +29,7 @@
             <button class="btn-guest-login" @onclick="LoginAsGuestAsync">
                 Continue as Guest
             </button>
-            <p class="login-guest-note">Guest sessions are not persisted and reset on tab close.</p>
+            <p class="login-guest-note">Guest sessions persist across refreshes on this device.</p>
         }
     </div>
 </div>
@@ -38,7 +39,9 @@
 
     protected override void OnInitialized()
     {
-        _allowGuest = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
+        var allowGuestByConfig = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
+        var isProduction = string.Equals(HostEnvironment.Environment, "Production", StringComparison.OrdinalIgnoreCase);
+        _allowGuest = allowGuestByConfig && !isProduction;
     }
 
     private void LoginWithMicrosoft()

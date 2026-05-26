@@ -30,6 +30,38 @@ function Write-Step([string]$Msg) { Write-Host "`n==> $Msg" -ForegroundColor Cya
 function Write-Ok([string]$Msg)   { Write-Host "    [OK] $Msg" -ForegroundColor Green }
 function Write-Warn([string]$Msg) { Write-Host "    [WARN] $Msg" -ForegroundColor Yellow }
 
+function Clear-DotnetPorts {
+    param(
+        [int[]]$Ports = @(5000, 5001)
+    )
+
+    foreach ($port in $Ports) {
+        try {
+            $connections = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            if (-not $connections) {
+                continue
+            }
+
+            $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
+            foreach ($pid in $pids) {
+                try {
+                    $proc = Get-Process -Id $pid -ErrorAction Stop
+                    if ($proc.ProcessName -eq 'dotnet') {
+                        Stop-Process -Id $pid -Force -ErrorAction Stop
+                        Write-Ok "Stopped orphaned dotnet process on port $port (PID: $pid)"
+                    }
+                }
+                catch {
+                    Write-Warn "Could not inspect or stop process PID $pid for port $port"
+                }
+            }
+        }
+        catch {
+            Write-Warn "Could not evaluate listeners on port $port"
+        }
+    }
+}
+
 # ─── 1. Prerequisites via Winget ─────────────────────────────────────────────
 if (-not $SkipWinget) {
     Write-Step "Installing prerequisites via Winget"
@@ -53,6 +85,26 @@ if (-not $SkipWinget) {
         }
     }
 }
+
+# ─── 1.5 Azure CLI login check (Key Vault access) ───────────────────────────
+Write-Step "Checking Azure CLI login"
+try {
+    $accountJson = az account show --output json 2>$null
+    if (-not $accountJson) {
+        Write-Warn "Not logged in to Azure CLI. Running 'az login' for Key Vault access..."
+        az login | Out-Null
+    }
+    else {
+        Write-Ok "Azure CLI is already authenticated"
+    }
+}
+catch {
+    Write-Warn "Azure CLI login check failed. Run 'az login' manually if Key Vault access fails."
+}
+
+# ─── 1.6 Free required local ports (5000/5001) ───────────────────────────────
+Write-Step "Ensuring ports 5000/5001 are free"
+Clear-DotnetPorts -Ports @(5000, 5001)
 
 # ─── 2. Docker + Azurite ──────────────────────────────────────────────────────
 if (-not $SkipDocker) {
@@ -117,6 +169,16 @@ if (-not (Test-Path $devSettings)) {
 Write-Step "Restoring .NET packages"
 Push-Location $RepoRoot
 try {
+    Write-Step "Validating Po* standards baseline"
+    $validateScript = Join-Path $PSScriptRoot 'validate-standards.ps1'
+    if (Test-Path $validateScript) {
+        & $validateScript
+        Write-Ok "Standards validation passed"
+    }
+    else {
+        Write-Warn "validate-standards.ps1 not found — skipping standards validation"
+    }
+
     dotnet restore PoLocalCompare.slnx --verbosity quiet
     Write-Ok "Packages restored"
 } finally {

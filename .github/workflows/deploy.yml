@@ -38,6 +38,9 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
+      - name: Validate Po standards
+        shell: pwsh
+        run: ./SCRIPTS/validate-standards.ps1
       - run: dotnet restore ${{ env.SOLUTION_PATH }}
       - run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore -c Release
       - run: dotnet format ${{ env.SOLUTION_PATH }} --verify-no-changes --verbosity minimal
