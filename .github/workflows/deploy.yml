@@ -49,9 +49,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     timeout-minutes: 20
-    environment:
-      name: production
-      url: https://polocalcompare-appservice-dev.azurewebsites.net
     steps:
       - uses: actions/download-artifact@v4
         with:
