@@ -137,7 +137,8 @@
                         }
                     </Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="ELO Trend (last 20)" Width="170px">
+                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="ELO Trend" Width="170px"
+                    HeaderTooltip="ELO rating trend over the last 20 duels">
                     <Template Context="entry">
                         @if (entry.EloSparkline is not null && entry.EloSparkline.Length > 1)
                         {

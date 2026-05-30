@@ -1,4 +1,5 @@
-﻿<nav class="topnav navbar navbar-expand-md navbar-dark">
+﻿@implements IDisposable
+<nav class="topnav navbar navbar-expand-md navbar-dark">
     @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ── *@
     @if (_usingMockData)
     {
@@ -43,6 +44,11 @@
                         <span class="nav-text">Local Lab</span>
                     </NavLink>
                 </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="lobby">
+                        <span class="nav-text">Lobby</span>
+                    </NavLink>
+                </li>
             </ul>
 
             @* ── User identity / auth (standards §6) ── *@
@@ -51,7 +57,7 @@
                 {
                     <span class="nav-user-badge @(_isGuest ? "nav-user-badge--guest" : "nav-user-badge--oauth")"
                           title="@(_isGuest ? "Guest session — data is not persisted" : "Signed in via Microsoft")">
-                        @(_isGuest ? $"{_identity} LOGGED IN" : _identity)
+                        @_identity
                     </span>
                     <button class="btn btn-sm btn-outline-secondary nav-logout" @onclick="LogoutAsync">Logout</button>
                 }
@@ -98,10 +104,52 @@
     protected override async Task OnInitializedAsync()
     {
         GuestAuth.OnChange += OnAuthChanged;
+        AuthState.AuthenticationStateChanged += OnMsalAuthChanged;
+
         var allowGuestByConfig = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
         var isProduction = string.Equals(HostEnvironment.Environment, "Production", StringComparison.OrdinalIgnoreCase);
         _allowGuest = allowGuestByConfig && !isProduction;
 
+        await RefreshIdentityAsync();
+
+        var useRealAi = Config["Features:UseRealAi"];
+        _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;
+    }
+
+    /// <summary>
+    /// Resolves the current user identity from MSAL (Microsoft OAuth) first,
+    /// then falls back to GuestAuthService (guest / localStorage).
+    /// </summary>
+    private async Task RefreshIdentityAsync()
+    {
+        // Skip GetAuthenticationStateAsync while MSAL callback is in-flight to
+        // avoid the known deadlock described in Authentication.razor.
+        var isAuthRoute = Nav.Uri.Contains("/authentication", StringComparison.OrdinalIgnoreCase);
+        if (!isAuthRoute)
+        {
+            try
+            {
+                var state = await AuthState.GetAuthenticationStateAsync();
+                if (state.User.Identity?.IsAuthenticated == true)
+                {
+                    var email = state.User.FindFirst("preferred_username")?.Value
+                             ?? state.User.FindFirst("email")?.Value
+                             ?? state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                             ?? state.User.Identity.Name;
+                    if (email is not null)
+                    {
+                        _identity = email;
+                        _isGuest = false;
+                        // Persist so GuestAuth / other components see it too
+                        await GuestAuth.LoginWithEmailAsync(email);
+                        return;
+                    }
+                }
+            }
+            catch { /* MSAL not ready — fall through to GuestAuth */ }
+        }
+
+        // Fallback: guest session or already-persisted OAuth email
         try
         {
             _identity = await GuestAuth.GetIdentityAsync();
@@ -112,9 +160,6 @@
             _identity = null;
             _isGuest = false;
         }
-
-        var useRealAi = Config["Features:UseRealAi"];
-        _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;
     }
 
     private void LoginWithMicrosoft()
@@ -142,30 +187,22 @@
     }
 
     private void OnAuthChanged()
-    {
-        try
+        => InvokeAsync(async () =>
         {
-            _isGuest = GuestAuth.IsGuest;
-        }
-        catch
-        {
-            _isGuest = false;
-        }
-
-        InvokeAsync(async () =>
-        {
-            try
-            {
-                _identity = await GuestAuth.GetIdentityAsync();
-            }
-            catch
-            {
-                _identity = null;
-            }
-
+            await RefreshIdentityAsync();
             StateHasChanged();
         });
-    }
 
-    public void Dispose() => GuestAuth.OnChange -= OnAuthChanged;
+    private void OnMsalAuthChanged(Task<AuthenticationState> _)
+        => InvokeAsync(async () =>
+        {
+            await RefreshIdentityAsync();
+            StateHasChanged();
+        });
+
+    public void Dispose()
+    {
+        GuestAuth.OnChange -= OnAuthChanged;
+        AuthState.AuthenticationStateChanged -= OnMsalAuthChanged;
+    }
 }

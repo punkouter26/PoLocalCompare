@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Testcontainers.Azurite;
 
 namespace PoLocalCompare.Integration.Tests;
 
@@ -14,19 +14,21 @@ namespace PoLocalCompare.Integration.Tests;
 /// Integration tests for leaderboard ranking, Green Score sort, and Kill List.
 /// Seed 3 models with 5 duels each to validate aggregation logic.
 /// </summary>
+[Collection("Integration")]
 public sealed class LeaderboardTests : IAsyncLifetime
 {
-    private readonly AzuriteContainer _azurite = new AzuriteBuilder()
-        .WithImage("mcr.microsoft.com/azure-storage/azurite:latest")
-        .Build();
-
+    private readonly string _connectionString;
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
 
+    public LeaderboardTests(AzuriteFixture azurite)
+    {
+        _connectionString = azurite.ConnectionString;
+    }
+
     public async Task InitializeAsync()
     {
-        await _azurite.StartAsync();
-        var connectionString = _azurite.GetConnectionString();
+        var connectionString = _connectionString;
 
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -35,9 +37,17 @@ public sealed class LeaderboardTests : IAsyncLifetime
                 builder.UseSetting("ConnectionStrings:AzureBlobStorage", connectionString);
                 builder.UseSetting("Features:UseRealAi", "false");
                 builder.UseSetting("KeyVault:Uri", "");
+                builder.UseSetting("Testing:SkipSeeding", "true"); // Suppress ModelSeeder noise
 
                 builder.ConfigureServices(services =>
                 {
+                    // Suppress noisy seeder and Testcontainers log output
+                    services.AddLogging(logging =>
+                    {
+                        logging.AddFilter("PoLocalCompare.Infrastructure.Persistence", LogLevel.Warning);
+                        logging.AddFilter("Testcontainers", LogLevel.Warning);
+                    });
+
                     var mockProxy = new Mock<IRemoteInferenceProxy>();
                     mockProxy
                         .Setup(p => p.RunInferenceAsync(
@@ -56,6 +66,7 @@ public sealed class LeaderboardTests : IAsyncLifetime
 
                     services.AddScoped(_ => mockProxy.Object);
                 });
+
             });
 
         _client = _factory.CreateClient();
@@ -65,7 +76,7 @@ public sealed class LeaderboardTests : IAsyncLifetime
     {
         _client.Dispose();
         await _factory.DisposeAsync();
-        await _azurite.DisposeAsync();
+        // Azurite lifetime is managed by AzuriteFixture — do not dispose here.
     }
 
     // ── Helper: register a remote model ───────────────────────────────────

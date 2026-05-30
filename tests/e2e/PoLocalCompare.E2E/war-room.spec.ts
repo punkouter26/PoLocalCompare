@@ -64,12 +64,9 @@ test.describe('War Room', () => {
       });
     });
 
-    // Inject guest identity so App.razor auth gate allows access (GuestAuthService reads sessionStorage)
-    await page.addInitScript(() => {
-      sessionStorage.setItem('guest_identity', 'GUEST_E2E_TEST');
-    });
-
-    await page.goto('/war-room');
+    // Navigate via /e2e/seed-auth which sets localStorage guest_identity then redirects.
+    // This is more explicit and debuggable than addInitScript.
+    await page.goto('/e2e/seed-auth?redirect=/war-room');
     // Wait for Blazor WASM to fully load
     await page.waitForLoadState('networkidle', { timeout: 45_000 });
     // Wait for loading panel to disappear (class is war-room__loading-panel, not war-room__loading)

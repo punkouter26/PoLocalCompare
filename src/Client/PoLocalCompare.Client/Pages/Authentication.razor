@@ -39,9 +39,15 @@
 
         if (string.Equals(Action, "login-callback", StringComparison.OrdinalIgnoreCase))
         {
-            // MSAL callback must include fragment payload (code/state). Without it,
-            // RemoteAuthenticatorView can remain stuck in "Completing sign-in...".
-            if (string.IsNullOrWhiteSpace(new Uri(Nav.Uri).Fragment))
+            // MSAL 10+ uses PKCE authorization-code flow: code & state arrive as
+            // query parameters (?code=...&state=...), not as a fragment. Older implicit
+            // flow used the fragment. Accept either; only bail when there is truly no
+            // auth payload at all (e.g. a stray direct navigation to this URL).
+            var callbackUri = new Uri(Nav.Uri);
+            var hasAuthPayload = !string.IsNullOrWhiteSpace(callbackUri.Fragment)
+                              || callbackUri.Query.Contains("code=", StringComparison.OrdinalIgnoreCase)
+                              || callbackUri.Query.Contains("error=", StringComparison.OrdinalIgnoreCase);
+            if (!hasAuthPayload)
             {
                 Nav.NavigateTo("/", forceLoad: true);
                 return;

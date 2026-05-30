@@ -12,7 +12,7 @@ export default defineConfig({
   use: {
     baseURL: 'https://localhost:5001',
     ignoreHTTPSErrors: true,
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     actionTimeout: 15_000,
   },
   projects: [

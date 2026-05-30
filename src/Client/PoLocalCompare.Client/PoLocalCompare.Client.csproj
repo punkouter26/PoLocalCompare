@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <Content Update="wwwroot\models\**\*" CopyToPublishDirectory="Never" />
+    <!-- Development-only config: enables guest auth in non-Production; never deployed -->
+    <Content Update="wwwroot\appsettings.Development.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

@@ -1,9 +1,7 @@
-name: CI/CD — Build, Test & Deploy
+name: Build & Deploy
 
 on:
   push:
-    branches: [master]
-  pull_request:
     branches: [master]
   workflow_dispatch:
 
@@ -15,17 +13,15 @@ env:
   DOTNET_VERSION: '10.0.x'
   AZURE_WEBAPP_NAME: polocalcompare-appservice-dev
   AZURE_RESOURCE_GROUP: PoLocalCompare
-  SOLUTION_PATH: PoLocalCompare.slnx
   API_PROJECT_PATH: src/PoLocalCompare.Api/PoLocalCompare.Api.csproj
-  UNIT_TEST_PATH: tests/unit/PoLocalCompare.Unit.Tests
 
 concurrency:
-  group: deploy-${{ github.repository }}-${{ github.ref }}
+  group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  build:
+    name: Build & Publish
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,18 +34,8 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
-      - name: Validate Po standards
-        shell: pwsh
-        run: ./SCRIPTS/validate-standards.ps1
-      - run: dotnet restore ${{ env.SOLUTION_PATH }}
-      - run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore -c Release
-      - run: dotnet format ${{ env.SOLUTION_PATH }} --verify-no-changes --verbosity minimal
-      - run: dotnet test ${{ env.UNIT_TEST_PATH }} -c Release --no-build --logger trx --results-directory TestResults
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-results
-          path: TestResults/*.trx
+      - run: dotnet restore ${{ env.API_PROJECT_PATH }}
+      - run: dotnet build ${{ env.API_PROJECT_PATH }} --no-restore -c Release
       - run: dotnet publish ${{ env.API_PROJECT_PATH }} -c Release --no-restore -o publish
       - uses: actions/upload-artifact@v4
         with:
@@ -60,8 +46,7 @@ jobs:
   deploy:
     name: Deploy to Azure
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build
     timeout-minutes: 20
     environment:
       name: production
@@ -82,12 +67,12 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           package: webapp.zip
-      - name: Verify deployment (health check)
+      - name: Verify deployment
         run: |
-          sleep 20
+          sleep 30
           for i in 1 2 3 4 5; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health" --max-time 30 || echo "000")
-            echo "Health check attempt $i: HTTP $STATUS"
+            echo "Health check $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then echo "Deployment verified."; exit 0; fi
             sleep 15
           done

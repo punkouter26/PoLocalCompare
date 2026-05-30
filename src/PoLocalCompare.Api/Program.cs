@@ -158,7 +158,8 @@ try
     if (app.Environment.IsDevelopment())
     {
         await AzuriteSetup.EnsureTablesExistAsync(app.Services);
-        await PoLocalCompare.Infrastructure.Persistence.ModelSeeder.SeedAsync(app.Services);
+        if (!app.Configuration.GetValue<bool>("Testing:SkipSeeding"))
+            await PoLocalCompare.Infrastructure.Persistence.ModelSeeder.SeedAsync(app.Services);
     }
 
     // ─── Middleware pipeline ─────────────────────────────────────────────────
@@ -262,14 +263,19 @@ try
     // ─── Health endpoint (T038) ──────────────────────────────────────────────
     app.MapHealthEndpoints();
 
-    // ─── SignalR hub ─────────────────────────────────────────────────────────
+    // ─── SignalR hubs ────────────────────────────────────────────────────────
     app.MapHub<DuelHub>("/hubs/duel");
+    app.MapHub<LobbyHub>("/hubs/lobby");
 
     // ─── API endpoints ────────────────────────────────────────────────────────
     app.MapModelsEndpoints();
     app.MapDuelsEndpoints();
     app.MapLeaderboardEndpoints();
     app.MapOllamaEndpoints();
+
+    // ─── E2E test helpers (non-Production only) ───────────────────────────────
+    if (!app.Environment.IsProduction())
+        app.MapE2EEndpoints();
 
     // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
     if (app.Environment.IsDevelopment())
@@ -315,6 +321,7 @@ try
 
     // ─── Blazor WASM static assets + fallback (T014) ─────────────────────────
     app.MapStaticAssets();
+    app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.png", permanent: true));
     app.MapFallbackToFile("index.html");
 
     app.Run();

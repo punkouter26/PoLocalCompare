@@ -53,12 +53,12 @@ public sealed class GuestAuthService
     public bool IsGuest => _cachedIdentity?.StartsWith("GUEST", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
-    /// Creates a new GUEST identity (GUEST + 4-digit random number), persists
+    /// Creates a new GUEST identity (GUEST + 8-digit random number), persists
     /// it to LocalStorage, and raises <see cref="OnChange"/>.
     /// </summary>
     public async Task LoginAsGuestAsync()
     {
-        var number = Random.Shared.Next(1000, 9999);
+        var number = Random.Shared.Next(10000000, 99999999);
         var identity = $"GUEST{number}";
         await PersistAsync(identity);
     }

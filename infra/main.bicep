@@ -15,6 +15,9 @@ param sharedAppServicePlanName string = 'asp-poshared-linux'
 @description('Application Insights resource name in PoShared resource group')
 param sharedAppInsightsName string = 'poappideinsights8f9c9a4e'
 
+@description('User-Assigned Managed Identity name in PoShared resource group')
+param sharedManagedIdentityName string = 'id-poshared'
+
 resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: 'kv-poshared'
   scope: resourceGroup(sharedResourceGroupName)
@@ -22,6 +25,11 @@ resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 
 resource sharedAppInsights 'Microsoft.Insights/components@2020-02-02' existing = {
   name: sharedAppInsightsName
+  scope: resourceGroup(sharedResourceGroupName)
+}
+
+resource sharedManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: sharedManagedIdentityName
   scope: resourceGroup(sharedResourceGroupName)
 }
 
@@ -91,7 +99,10 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
   location: location
   kind: 'app,linux'
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${sharedManagedIdentity.id}': {}
+    }
   }
   properties: {
     serverFarmId: sharedAppServicePlan.id
@@ -141,6 +152,11 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: sharedAppInsights.properties.ConnectionString
         }
+        {
+          // Required so DefaultAzureCredential targets the correct UserAssigned identity.
+          name: 'AZURE_CLIENT_ID'
+          value: sharedManagedIdentity.properties.clientId
+        }
       ]
       ftpsState: 'Disabled'
       linuxFxVersion: 'DOTNETCORE|10.0'
@@ -155,11 +171,11 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
 var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 
 resource tableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, appService.id, storageTableDataContributorRoleId)
+  name: guid(storageAccount.id, sharedManagedIdentity.id, storageTableDataContributorRoleId)
   scope: storageAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageTableDataContributorRoleId)
-    principalId: appService.identity.principalId
+    principalId: sharedManagedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -169,11 +185,11 @@ resource tableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 
 resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, appService.id, storageBlobDataContributorRoleId)
+  name: guid(storageAccount.id, sharedManagedIdentity.id, storageBlobDataContributorRoleId)
   scope: storageAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
-    principalId: appService.identity.principalId
+    principalId: sharedManagedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }

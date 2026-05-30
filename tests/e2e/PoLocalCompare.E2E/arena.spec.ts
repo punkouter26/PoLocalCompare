@@ -85,12 +85,9 @@ test.describe('Arena', () => {
       });
     });
 
-    // Inject guest identity so App.razor auth gate allows access (GuestAuthService reads sessionStorage)
-    await page.addInitScript(() => {
-      sessionStorage.setItem('guest_identity', 'GUEST_E2E_TEST');
-    });
-
-    await page.goto(`/arena/${DUEL_ID}`);
+    // Navigate via /e2e/seed-auth which sets localStorage guest_identity then redirects.
+    // This is more explicit and debuggable than addInitScript.
+    await page.goto(`/e2e/seed-auth?redirect=/arena/${DUEL_ID}`);
     // Wait for Blazor WASM to fully load (network becomes idle when all WASM chunks are fetched)
     await page.waitForLoadState('networkidle', { timeout: 45_000 });
     // Wait for async data load to complete (loading spinner disappears)
