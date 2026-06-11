@@ -11,7 +11,7 @@ using PoLocalCompare.Shared.Enums;
 namespace PoLocalCompare.Api.Services;
 
 /// <summary>
-/// Uses GPT-4.1 Nano to judge a completed duel when the user has not picked a winner.
+/// Uses GPT-5.4 Nano to judge a completed duel when the user has not picked a winner.
 /// </summary>
 public sealed class AutoJudgeService
 {
@@ -79,7 +79,7 @@ public sealed class AutoJudgeService
             return DuelVerdict.Left;
         }
 
-        var url = $"{endpoint}/openai/deployments/gpt-4.1-nano/chat/completions?api-version=2024-08-01-preview";
+        var url = $"{endpoint}/openai/deployments/gpt-5.4-nano/chat/completions?api-version=2024-08-01-preview";
 
         // Truncate HTML to stay within token limits (~3000 chars each side)
         var leftSnippet  = Truncate(leftHtml,  3000);
@@ -114,7 +114,7 @@ public sealed class AutoJudgeService
         request.Headers.Add("api-key", apiKey);
         request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        _logger.LogInformation("Auto-judge: Invoking Foundry GPT-4.1-nano for verdict…");
+        _logger.LogInformation("Auto-judge: Invoking Foundry GPT-5.4-nano for verdict…");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         
         try
