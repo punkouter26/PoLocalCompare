@@ -4,44 +4,51 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.42.1.51946",
-      "templateHash": "6873377670354065551"
+      "version": "0.43.8.12551",
+      "templateHash": "6125784219783107868"
     }
   },
   "parameters": {
     "environmentName": {
       "type": "string",
-      "defaultValue": "dev",
+      "defaultValue": "prod",
       "metadata": {
         "description": "Environment name (dev, staging, prod)"
       }
     },
     "location": {
       "type": "string",
-      "defaultValue": "[resourceGroup().location]",
+      "defaultValue": "westus2",
       "metadata": {
         "description": "Azure region for resources"
       }
     },
     "sharedResourceGroupName": {
       "type": "string",
-      "defaultValue": "PoShared",
+      "defaultValue": "rg-platform-shared-prod-eus2",
       "metadata": {
         "description": "Resource group name for PoShared shared resources (App Service Plan)"
       }
     },
     "sharedAppServicePlanName": {
       "type": "string",
-      "defaultValue": "asp-poshared-linux",
+      "defaultValue": "asp-platform-linux-b2-prod-wus2-001",
       "metadata": {
         "description": "App Service Plan name in PoShared resource group"
       }
     },
     "sharedAppInsightsName": {
       "type": "string",
-      "defaultValue": "poappideinsights8f9c9a4e",
+      "defaultValue": "appi-platform-prod-eus2-001",
       "metadata": {
         "description": "Application Insights resource name in PoShared resource group"
+      }
+    },
+    "sharedManagedIdentityName": {
+      "type": "string",
+      "defaultValue": "id-platform-workload-prod-eus2-001",
+      "metadata": {
+        "description": "User-Assigned Managed Identity name in PoShared resource group"
       }
     }
   },
@@ -53,7 +60,7 @@
     {
       "type": "Microsoft.Storage/storageAccounts",
       "apiVersion": "2023-05-01",
-      "name": "[format('polocalcompare{0}sa', parameters('environmentName'))]",
+      "name": "stpolocalcompareprodwus2",
       "location": "[parameters('location')]",
       "sku": {
         "name": "Standard_LRS"
@@ -68,70 +75,73 @@
     {
       "type": "Microsoft.Storage/storageAccounts/tableServices",
       "apiVersion": "2023-05-01",
-      "name": "[format('{0}/{1}', format('polocalcompare{0}sa', parameters('environmentName')), 'default')]",
+      "name": "[format('{0}/{1}', 'stpolocalcompareprodwus2', 'default')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName')))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2')]"
       ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2023-05-01",
-      "name": "[format('{0}/{1}/{2}', format('polocalcompare{0}sa', parameters('environmentName')), 'default', 'Models')]",
+      "name": "[format('{0}/{1}/{2}', 'stpolocalcompareprodwus2', 'default', 'Models')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', format('polocalcompare{0}sa', parameters('environmentName')), 'default')]"
+        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', 'stpolocalcompareprodwus2', 'default')]"
       ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2023-05-01",
-      "name": "[format('{0}/{1}/{2}', format('polocalcompare{0}sa', parameters('environmentName')), 'default', 'Duels')]",
+      "name": "[format('{0}/{1}/{2}', 'stpolocalcompareprodwus2', 'default', 'Duels')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', format('polocalcompare{0}sa', parameters('environmentName')), 'default')]"
+        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', 'stpolocalcompareprodwus2', 'default')]"
       ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2023-05-01",
-      "name": "[format('{0}/{1}/{2}', format('polocalcompare{0}sa', parameters('environmentName')), 'default', 'DuelResults')]",
+      "name": "[format('{0}/{1}/{2}', 'stpolocalcompareprodwus2', 'default', 'DuelResults')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', format('polocalcompare{0}sa', parameters('environmentName')), 'default')]"
+        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', 'stpolocalcompareprodwus2', 'default')]"
       ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
       "apiVersion": "2023-05-01",
-      "name": "[format('{0}/{1}/{2}', format('polocalcompare{0}sa', parameters('environmentName')), 'default', 'EloHistory')]",
+      "name": "[format('{0}/{1}/{2}', 'stpolocalcompareprodwus2', 'default', 'EloHistory')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', format('polocalcompare{0}sa', parameters('environmentName')), 'default')]"
+        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', 'stpolocalcompareprodwus2', 'default')]"
       ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices",
       "apiVersion": "2023-05-01",
-      "name": "[format('{0}/{1}', format('polocalcompare{0}sa', parameters('environmentName')), 'default')]",
+      "name": "[format('{0}/{1}', 'stpolocalcompareprodwus2', 'default')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName')))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2')]"
       ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
       "apiVersion": "2023-05-01",
-      "name": "[format('{0}/{1}/{2}', format('polocalcompare{0}sa', parameters('environmentName')), 'default', 'duel-html-outputs')]",
+      "name": "[format('{0}/{1}/{2}', 'stpolocalcompareprodwus2', 'default', 'duel-html-outputs')]",
       "properties": {
         "publicAccess": "None"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', format('polocalcompare{0}sa', parameters('environmentName')), 'default')]"
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', 'stpolocalcompareprodwus2', 'default')]"
       ]
     },
     {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2023-12-01",
-      "name": "[format('PoLocalCompare-AppService-{0}', parameters('environmentName'))]",
+      "name": "app-polocalcompare-web-prod-wus2-001",
       "location": "[parameters('location')]",
       "kind": "app,linux",
       "identity": {
-        "type": "SystemAssigned"
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.ManagedIdentity/userAssignedIdentities', parameters('sharedManagedIdentityName')))]": {}
+        }
       },
       "properties": {
         "serverFarmId": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.Web/serverfarms', parameters('sharedAppServicePlanName'))]",
@@ -166,75 +176,72 @@
             },
             {
               "name": "KeyVault__Uri",
-              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.KeyVault/vaults', 'kv-poshared'), '2023-07-01').vaultUri]"
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.KeyVault/vaults', 'kv-platform-prod-eus2-00'), '2023-07-01').vaultUri]"
             },
             {
               "name": "AzureStorage__AccountName",
-              "value": "[format('polocalcompare{0}sa', parameters('environmentName'))]"
+              "value": "stpolocalcompareprodwus2"
             },
             {
               "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
               "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.Insights/components', parameters('sharedAppInsightsName')), '2020-02-02').ConnectionString]"
             },
             {
-              "name": "ApplicationInsightsAgent_EXTENSION_VERSION",
-              "value": "~3"
+              "name": "AZURE_CLIENT_ID",
+              "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.ManagedIdentity/userAssignedIdentities', parameters('sharedManagedIdentityName')), '2023-01-31').clientId]"
             }
           ],
           "ftpsState": "Disabled",
-          "healthCheckPath": "/health",
           "linuxFxVersion": "DOTNETCORE|10.0",
           "minTlsVersion": "1.2",
           "http20Enabled": true
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName')))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2')]"
       ]
     },
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName')))]",
-      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName'))), resourceId('Microsoft.Web/sites', format('PoLocalCompare-AppService-{0}', parameters('environmentName'))), variables('storageTableDataContributorRoleId'))]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2')]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2'), extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.ManagedIdentity/userAssignedIdentities', parameters('sharedManagedIdentityName')), variables('storageTableDataContributorRoleId'))]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageTableDataContributorRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('PoLocalCompare-AppService-{0}', parameters('environmentName'))), '2023-12-01', 'full').identity.principalId]",
+        "principalId": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.ManagedIdentity/userAssignedIdentities', parameters('sharedManagedIdentityName')), '2023-01-31').principalId]",
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Web/sites', format('PoLocalCompare-AppService-{0}', parameters('environmentName')))]",
-        "[resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName')))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2')]"
       ]
     },
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName')))]",
-      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName'))), resourceId('Microsoft.Web/sites', format('PoLocalCompare-AppService-{0}', parameters('environmentName'))), variables('storageBlobDataContributorRoleId'))]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2')]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2'), extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.ManagedIdentity/userAssignedIdentities', parameters('sharedManagedIdentityName')), variables('storageBlobDataContributorRoleId'))]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageBlobDataContributorRoleId'))]",
-        "principalId": "[reference(resourceId('Microsoft.Web/sites', format('PoLocalCompare-AppService-{0}', parameters('environmentName'))), '2023-12-01', 'full').identity.principalId]",
+        "principalId": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedResourceGroupName')), 'Microsoft.ManagedIdentity/userAssignedIdentities', parameters('sharedManagedIdentityName')), '2023-01-31').principalId]",
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Web/sites', format('PoLocalCompare-AppService-{0}', parameters('environmentName')))]",
-        "[resourceId('Microsoft.Storage/storageAccounts', format('polocalcompare{0}sa', parameters('environmentName')))]"
+        "[resourceId('Microsoft.Storage/storageAccounts', 'stpolocalcompareprodwus2')]"
       ]
     }
   ],
   "outputs": {
     "storageAccountName": {
       "type": "string",
-      "value": "[format('polocalcompare{0}sa', parameters('environmentName'))]"
+      "value": "stpolocalcompareprodwus2"
     },
     "appServiceName": {
       "type": "string",
-      "value": "[format('PoLocalCompare-AppService-{0}', parameters('environmentName'))]"
+      "value": "app-polocalcompare-web-prod-wus2-001"
     },
     "appServiceUrl": {
       "type": "string",
-      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', format('PoLocalCompare-AppService-{0}', parameters('environmentName'))), '2023-12-01').defaultHostName)]"
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', 'app-polocalcompare-web-prod-wus2-001'), '2023-12-01').defaultHostName)]"
     }
   }
 }

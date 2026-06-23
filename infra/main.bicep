@@ -1,25 +1,25 @@
 targetScope = 'resourceGroup'
 
 @description('Environment name (dev, staging, prod)')
-param environmentName string = 'dev'
+param environmentName string = 'prod'
 
 @description('Azure region for resources')
-param location string = resourceGroup().location
+param location string = 'westus2'
 
 @description('Resource group name for PoShared shared resources (App Service Plan)')
-param sharedResourceGroupName string = 'PoShared'
+param sharedResourceGroupName string = 'rg-platform-shared-prod-eus2'
 
 @description('App Service Plan name in PoShared resource group')
-param sharedAppServicePlanName string = 'asp-poshared-linux'
+param sharedAppServicePlanName string = 'asp-platform-linux-b2-prod-wus2-001'
 
 @description('Application Insights resource name in PoShared resource group')
-param sharedAppInsightsName string = 'poappideinsights8f9c9a4e'
+param sharedAppInsightsName string = 'appi-platform-prod-eus2-001'
 
 @description('User-Assigned Managed Identity name in PoShared resource group')
-param sharedManagedIdentityName string = 'id-poshared'
+param sharedManagedIdentityName string = 'id-platform-workload-prod-eus2-001'
 
 resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
-  name: 'kv-poshared'
+  name: 'kv-platform-prod-eus2-00'
   scope: resourceGroup(sharedResourceGroupName)
 }
 
@@ -35,7 +35,7 @@ resource sharedManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities
 
 // --- Storage Account --------------------------------------------------------------
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'polocalcompare${environmentName}sa'
+  name: 'stpolocalcompareprodwus2'
   location: location
   sku: {
     name: 'Standard_LRS'
@@ -95,7 +95,7 @@ resource sharedAppServicePlan 'Microsoft.Web/serverfarms@2023-12-01' existing = 
 }
 
 resource appService 'Microsoft.Web/sites@2023-12-01' = {
-  name: 'PoLocalCompare-AppService-${environmentName}'
+  name: 'app-polocalcompare-web-prod-wus2-001'
   location: location
   kind: 'app,linux'
   identity: {
