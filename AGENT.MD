@@ -35,8 +35,8 @@
 | **Real-time** | SignalR (`DuelHub`) |
 | **Storage (local)** | Azurite Docker container (ports 10000–10002) |
 | **Storage (Azure)** | Azure Table Storage |
-| **Secrets** | Azure Key Vault (`kv-poshared`) + App Service settings fallback |
-| **Identity** | Managed Identity (Punkouter26 resource group) |
+| **Secrets** | Azure Key Vault (`kv-poshared`, shared, **access-policy mode**) + App Service settings fallback |
+| **Identity** | User-Assigned Managed Identity `mi-poshared-containerapps` (shared `PoShared` RG) |
 | **Auth** | Microsoft OAuth (Prod) + GUEST mode (Dev/Test) |
 | **Logging** | Serilog → File + Console + App Insights |
 | **Telemetry** | OpenTelemetry → Azure Monitor |
@@ -46,6 +46,12 @@
 ---
 
 ## 3. Project Structure (Onion Architecture)
+
+> **Architecture note:** This solution uses Clean/Onion layering, deliberately deviating from the global
+> Vertical Slice Architecture (VSA) mandate. The rationale (and where new code goes) is recorded in
+> [docs/adr/0001-clean-architecture-over-vertical-slices.md](docs/adr/0001-clean-architecture-over-vertical-slices.md).
+> Do not start a VSA migration without revisiting that ADR.
+
 
 ```
 PoLocalCompare.slnx
@@ -81,15 +87,17 @@ PoLocalCompare.slnx
 │   └── Client/
 │       └── PoLocalCompare.Client/      ← Blazor WASM (hosted by Api)
 │           ├── Pages/                  ← Home, WarRoom, Processing, Arena, Leaderboard,
-│           │                             Archive, LocalModelLab, Login, Authentication
+│           │                             Archive, LocalModelLab, Login
 │           ├── Components/
-│           ├── Services/               ← DuelApiClient, GuestAuthService, WebLlmService,
-│           │                             SignalRDuelClient, AudioService, InferenceSessionStore
+│           ├── Services/               ← DuelApiClient, BffAuthenticationStateProvider,
+│           │                             WebLlmService, SignalRDuelClient, AudioService,
+│           │                             InferenceSessionStore
 │           └── Layout/
 ├── tests/
 │   ├── unit/PoLocalCompare.Unit.Tests/
-│   ├── integration/PoLocalCompare.Integration.Tests/
-│   └── e2e/PoLocalCompare.E2E/         ← Playwright TypeScript
+│   ├── integration/PoLocalCompare.Integration.Tests/   ← Testcontainers (Azurite)
+│   ├── e2e-api/PoLocalCompare.E2EAPI/  ← Black-box HTTP journey tests (C#)
+│   └── e2e-ui/PoLocalCompare.E2EUI/    ← Playwright for .NET (C#)
 ├── docs/                               ← PRD.md, architecture diagrams (.mmd), DataModel
 ├── SCRIPTS/                            ← setup.ps1, download-models.py, cleanup-models.py
 ├── infra/                              ← Bicep (main.bicep / main.json)
@@ -126,10 +134,24 @@ Dynamic switching is automatic based on `ASPNETCORE_ENVIRONMENT`.
 | **Browser** | When browser has WebGPU | WebLLM, runs in WASM, first-run download |
 | **Ollama** | Only when running locally | `http://localhost:11434`, checked at runtime |
 
-### 4.4 Authentication
-- **Dev/Test:** GUEST mode (click login → `GUEST{8 random digits}`, persisted to LocalStorage) + Microsoft OAuth
-- **Prod:** Microsoft OAuth required; GUEST button is programmatically hidden/disabled
-- Visual cue: `GUEST12345678 LOGGED IN` shown in nav bar
+### 4.4 Authentication (BFF)
+The API is a **Backend-for-Frontend**: it owns the OIDC code flow and the session. The Blazor WASM
+client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `SameSite=Strict` cookie
+(`PoLocalCompare.Session`) that the browser sends automatically on same-origin calls.
+
+- **Server routes** (`src/PoLocalCompare.Api/Auth/BffAuthentication.cs`):
+  `GET /auth/login/microsoft` (OIDC challenge), `GET /auth/login/fake` (dev/test guest bypass),
+  `POST /auth/logout`, `GET /auth/me` (server auth state for the SPA).
+- **Client** (`BffAuthenticationStateProvider`) reads `/auth/me`; `App.razor` gates every routed page
+  with `<AuthorizeRouteView>` (`@attribute [Authorize]` in `_Imports.razor`), rendering `Login` when
+  unauthenticated. So the user **must** sign in before the home page.
+- **Dev:** Microsoft OAuth **and** "Continue as Guest". **Prod:** Microsoft OAuth only (guest hidden).
+  **Test:** the `FakeAuthHandler` maps `X-Fake-User` / `X-Fake-Roles` headers to a principal — registered
+  only outside Production (throws if constructed in Production).
+- API endpoint groups and SignalR hubs are protected with `.RequireAuthorization()`; `/health`, `/diag`,
+  `/auth/*`, and static assets stay anonymous.
+- **Config:** `AzureAd:{Authority,ClientId,AllowedTenants}` in the API appsettings; `AzureAd:ClientSecret`
+  from Key Vault / App Service settings. Issuer is validated against `AllowedTenants`.
 
 ### 4.5 Real-Time (SignalR)
 - `DuelHub` at `/hubs/duel`
@@ -179,7 +201,7 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 
 ## 7. Development Standards (Quick Reference)
 
-> Full standards are in [docs/PRD.md](docs/PRD.md) and [architecture.md](architecture.md).
+> Full standards are in [docs/PRD.md](docs/PRD.md) and [docs/adr/0001-clean-architecture-over-vertical-slices.md](docs/adr/0001-clean-architecture-over-vertical-slices.md).
 
 - **No AOT.** `RunAOTCompilation=false` — keeps dev builds fast.
 - **Warnings are errors.** `TreatWarningsAsErrors=true` globally.
@@ -187,7 +209,7 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 - **SOLID + GoF.** Use `<remarks>` XML tags to explain pattern choices.
 - **Zero-waste C#.** Delete unused files immediately. Optimize for human readability and LLM context.
 - **Diagnostics endpoints:** `/health` (JSON, automated pings) and `/diag` (dev+prod hidden page). **No UI links to these.**
-- **Mock visibility:** If `IMockable` services are active, display `USING MOCK DATA` in top nav.
+- **Mock visibility:** When `Features:UseRealAi` is disabled (AI responses simulated), display `USING MOCK DATA` in the top nav (see `NavMenu.razor`).
 - **Audio:** Web Audio API for in-app sounds.
 
 ---
@@ -196,12 +218,14 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 
 | Test Type | Project | Notes |
 |---|---|---|
-| Unit | `PoLocalCompare.Unit.Tests` | Uses mock data (no real AI) |
-| Integration | `PoLocalCompare.Integration.Tests` | Testcontainers (Azurite), test env |
-| E2E | `PoLocalCompare.E2E` (Playwright TS) | GUEST auth, test env |
+| Unit | `tests/unit/PoLocalCompare.Unit.Tests` | Pure logic, mock data (no real AI) |
+| Integration | `tests/integration/PoLocalCompare.Integration.Tests` | Testcontainers (Azurite), fake-auth header, dev env |
+| E2E API | `tests/e2e-api/PoLocalCompare.E2EAPI` | Black-box HTTP journeys over Testcontainers + fake auth |
+| E2E UI | `tests/e2e-ui/PoLocalCompare.E2EUI` | C# Playwright; drives a running app via `BASE_URL` |
 
-- Integration and E2E tests run against the **test** environment with non-AI mock data.
-- Run the app locally against **dev** environment for real AI data.
+- Integration / E2E-API tests run in a **non-Production** host so the `X-Fake-User` guest bypass works.
+- E2E-UI needs a running app and `playwright install`; it is **not** run in CI (see policy below).
+- Tests are intentionally **not** executed in CI/CD — the pipeline only builds, publishes, and deploys.
 
 ---
 
@@ -215,10 +239,20 @@ azd provision --preview
 azd up
 ```
 
-- **Resource group:** `Punkouter26`
-- **App Service Plan:** Check `PoShared` resource group if deployment fails
-- **Key Vault:** `kv-poshared` (shared across Po* projects)
-- **Managed Identity:** System-assigned, RBAC to storage and Key Vault
+- **App resources RG:** `PoLocalCompare` (`westus2`) — holds storage `polocalcomparedevsa` and the F1 plan `asp-PoLocalCompare-f1`.
+- **Shared platform RG:** `PoShared` — Key Vault `kv-poshared`, App Insights, and the shared identity live here.
+- **Key Vault:** `kv-poshared` (shared across Po* projects). **Authorization mode: access policies, not RBAC.**
+- **Managed Identity:** **User-Assigned** `mi-poshared-containerapps`, shared from `PoShared`. It already holds a `get`/`list` **access policy** on `kv-poshared`. Storage access is via Storage Table/Blob Data Contributor on the app's storage account. `DefaultAzureCredential` targets it via the `AZURE_CLIENT_ID` app setting.
+- **App-scoped secrets** use the `PoLocalCompare--` prefix (e.g. `PoLocalCompare--AzureAiFoundry--ApiKey`, `PoLocalCompare--ConnectionStrings--AzureTableStorage`); `PrefixKeyVaultSecretManager("PoLocalCompare")` strips the prefix. **A `PoLocalCompare--AzureAd--ClientSecret` must be added for BFF OIDC** (only the unprefixed shared `AzureAd--ClientSecret` exists today, which the prefix manager won't load).
+
+> **Bicep status (reconciled 2026-06-24):** `infra/main.bicep` now references only real resources — it
+> creates a Windows App Service (`app-polocalcompare-win`, .NET 10) on the existing `asp-PoLocalCompare-f1`
+> plan, references the existing `polocalcomparedevsa` storage account, and wires the shared `PoShared`
+> resources (`kv-poshared`, App Insights, `mi-poshared-containerapps`) as `existing`. Key Vault uses access
+> policies (the shared identity already holds get/list), so no role assignment is managed in Bicep. One
+> outstanding prerequisite: add the `PoLocalCompare--AzureAd--ClientSecret` secret to `kv-poshared` for BFF OIDC.
+>
+> **Deviation note (intentional):** The global standard calls for a *system-assigned* identity; this solution deliberately uses the *shared user-assigned* platform identity so all `Po*` workloads share one principal, avoiding per-app role sprawl.
 
 ---
 
@@ -254,9 +288,9 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | [DuelExecutionService.cs](src/PoLocalCompare.Api/Services/DuelExecutionService.cs) | Core duel orchestration |
 | [AutoJudgeService.cs](src/PoLocalCompare.Api/Services/AutoJudgeService.cs) | GPT-4.1 Nano auto-verdict |
 | [AzuriteSetup.cs](src/PoLocalCompare.Infrastructure/Persistence/AzuriteSetup.cs) | Local storage bootstrap |
-| [GuestAuthService.cs](src/Client/PoLocalCompare.Client/Services/GuestAuthService.cs) | GUEST auth (LocalStorage) |
+| [BffAuthentication.cs](src/PoLocalCompare.Api/Auth/BffAuthentication.cs) | BFF OIDC flow, session cookie, dev fake-auth guard |
+| [BffAuthenticationStateProvider.cs](src/Client/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
 | [WebLlmService.cs](src/Client/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |
-| [architecture.md](architecture.md) | Full architecture record |
 | [docs/PRD.md](docs/PRD.md) | Full product requirements |
 | [SCRIPTS/setup.ps1](SCRIPTS/setup.ps1) | First-run machine setup |
 

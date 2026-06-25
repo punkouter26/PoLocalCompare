@@ -6,12 +6,20 @@
     <WasmEnableSIMD Condition="'$(Configuration)' == 'Release'">true</WasmEnableSIMD>
     <WasmEnableSIMD Condition="'$(Configuration)' != 'Release'">false</WasmEnableSIMD>
     <RunAOTCompilation>false</RunAOTCompilation>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
+    <!-- Surface trim diagnostics as warnings without failing the build: Blazor-generated Razor code,
+         Radzen, MSAL, and System.Net.Http.Json emit IL2xxx/IL3xxx trim-analyzer warnings that cannot
+         be fixed in this app (it ships untrimmed-by-default anyway). Scoped to trim codes only —
+         every other warning is still an error per TreatWarningsAsErrors. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);IL2026;IL2046;IL2057;IL2072;IL2075;IL2087;IL2091;IL2104;IL2110;IL2111;IL3050;IL3051;IL3052;IL3053</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Authentication.WebAssembly.Msal" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="Radzen.Blazor" />
     <!-- Force safe version of transitive dependency from Radzen.Blazor -->

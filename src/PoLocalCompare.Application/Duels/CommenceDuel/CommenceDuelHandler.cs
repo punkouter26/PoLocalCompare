@@ -7,24 +7,13 @@ using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Application.Duels.CommenceDuel;
 
-public sealed class CommenceDuelHandler
+public sealed class CommenceDuelHandler(
+    IModelRepository modelRepository,
+    IDuelRepository duelRepository,
+    int verdictDeadlineHours = CommenceDuelCommand.DefaultVerdictDeadlineHours)
 {
     private const string CdnSuffix =
         "\n\nIMPORTANT: Use public CDN links (e.g., cdnjs.cloudflare.com, unpkg.com) for all external libraries. Do not reference npm packages, local paths, or unpublished modules.";
-
-    private readonly IModelRepository _modelRepository;
-    private readonly IDuelRepository _duelRepository;
-    private readonly int _verdictDeadlineHours;
-
-    public CommenceDuelHandler(
-        IModelRepository modelRepository,
-        IDuelRepository duelRepository,
-        int verdictDeadlineHours = CommenceDuelCommand.DefaultVerdictDeadlineHours)
-    {
-        _modelRepository = modelRepository;
-        _duelRepository = duelRepository;
-        _verdictDeadlineHours = verdictDeadlineHours;
-    }
 
     public async Task<DuelDto> HandleAsync(CommenceDuelCommand command)
     {
@@ -40,9 +29,9 @@ public sealed class CommenceDuelHandler
         if (command.PromptText.Length > CommenceDuelCommand.MaxPromptLength)
             throw new ArgumentException($"PromptText cannot exceed {CommenceDuelCommand.MaxPromptLength} characters.", nameof(command.PromptText));
 
-        var leftModel = await _modelRepository.GetByIdAsync(command.LeftModelId)
+        var leftModel = await modelRepository.GetByIdAsync(command.LeftModelId)
             ?? throw new KeyNotFoundException($"Model '{command.LeftModelId}' not found.");
-        var rightModel = await _modelRepository.GetByIdAsync(command.RightModelId)
+        var rightModel = await modelRepository.GetByIdAsync(command.RightModelId)
             ?? throw new KeyNotFoundException($"Model '{command.RightModelId}' not found.");
 
         var duelId = Ulid.NewUlid().ToString();
@@ -54,9 +43,9 @@ public sealed class CommenceDuelHandler
             promptFull,
             command.LeftModelId,
             command.RightModelId,
-            _verdictDeadlineHours);
+            verdictDeadlineHours);
 
-        await _duelRepository.SaveAsync(duel);
+        await duelRepository.SaveAsync(duel);
 
         return new DuelDto
         {

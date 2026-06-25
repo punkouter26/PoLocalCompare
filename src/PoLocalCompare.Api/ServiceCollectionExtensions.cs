@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Hybrid;
 using PoLocalCompare.Api.Services;
 using PoLocalCompare.Application.Archive.ExportLabReport;
 using PoLocalCompare.Application.Duels.CommenceDuel;
@@ -38,6 +39,17 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddSingleton<AutoJudgeService>();
+
+        // HybridCache fronts read-heavy, slow-changing reads (leaderboard, live model-availability probes).
+        // Short TTLs keep staleness bounded; the leaderboard is also tag-invalidated when a verdict lands.
+#pragma warning disable EXTEXP0018 // HybridCache is released but still surfaces an experimental attribute.
+        services.AddHybridCache(options =>
+            options.DefaultEntryOptions = new HybridCacheEntryOptions
+            {
+                Expiration = TimeSpan.FromSeconds(30),
+                LocalCacheExpiration = TimeSpan.FromSeconds(30),
+            });
+#pragma warning restore EXTEXP0018
 
         return services;
     }

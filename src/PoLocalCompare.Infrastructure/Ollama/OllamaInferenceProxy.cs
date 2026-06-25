@@ -14,21 +14,14 @@ namespace PoLocalCompare.Infrastructure.Ollama;
 /// POST {BaseUrl}/v1/chat/completions — no auth required.
 /// ApiEndpointRef on the Model is the Ollama model name (e.g. "llama3.2").
 /// </summary>
-public sealed class OllamaInferenceProxy : IRemoteInferenceProxy
+public sealed class OllamaInferenceProxy(
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration,
+    ILogger<OllamaInferenceProxy> logger) : IRemoteInferenceProxy
 {
-    private readonly HttpClient _http;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<OllamaInferenceProxy> _logger;
-
-    public OllamaInferenceProxy(
-        IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
-        ILogger<OllamaInferenceProxy> logger)
-    {
-        _http = httpClientFactory.CreateClient("Ollama");
-        _configuration = configuration;
-        _logger = logger;
-    }
+    private readonly HttpClient _http = httpClientFactory.CreateClient("Ollama");
+    private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<OllamaInferenceProxy> _logger = logger;
 
     public async Task<DuelResult> RunInferenceAsync(
         Model model,

@@ -2,7 +2,7 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
 @inject DuelApiClient ApiClient
-@inject GuestAuthService GuestAuth
+@inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
 @inject SignalRLobbyClient LobbyClient
 @implements IAsyncDisposable
@@ -17,7 +17,7 @@
     {
         <div class="lobby__auth-gate">
             <p>You must be logged in to join the lobby.</p>
-            <a href="/authentication/login" class="btn-ms-login">Sign in with Microsoft</a>
+            <a href="auth/login/microsoft?returnUrl=/lobby" class="btn-ms-login">Sign in with Microsoft</a>
         </div>
     }
     else if (_connectionError is not null)
@@ -166,7 +166,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _identity = await GuestAuth.GetIdentityAsync();
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _identity = state.User.Identity?.IsAuthenticated == true
+            ? (state.User.FindFirst("preferred_username")?.Value ?? state.User.Identity.Name)
+            : null;
         if (_identity is null) return;
 
         LobbyClient.OnLobbyStateChanged += OnLobbyStateChanged;

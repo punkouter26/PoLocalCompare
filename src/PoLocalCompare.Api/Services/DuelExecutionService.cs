@@ -1,6 +1,4 @@
 // GoF: Strategy — inference execution varies by model type
-using System.Text.RegularExpressions;
-using System.Threading.Channels;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +12,19 @@ using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Api.Services;
+
+/// <summary>Source-generated, allocation-free log messages for the duel execution hot path.</summary>
+internal static partial class DuelExecutionLog
+{
+    [LoggerMessage(EventId = 1100, Level = LogLevel.Warning, Message = "Duel {DuelId} not found for execution.")]
+    public static partial void DuelNotFound(ILogger logger, string duelId);
+
+    [LoggerMessage(EventId = 1101, Level = LogLevel.Error, Message = "One or both models not found for duel {DuelId}.")]
+    public static partial void ModelsNotFound(ILogger logger, string duelId);
+
+    [LoggerMessage(EventId = 1102, Level = LogLevel.Error, Message = "Duel execution failed for {DuelId}.")]
+    public static partial void ExecutionFailed(ILogger logger, Exception ex, string duelId);
+}
 
 public sealed class DuelExecutionService
 {
@@ -66,7 +77,7 @@ public sealed class DuelExecutionService
             duel = await duelRepo.GetByIdAsync(duelId);
             if (duel is null)
             {
-                _logger.LogWarning("Duel {DuelId} not found for execution.", duelId);
+                DuelExecutionLog.DuelNotFound(_logger, duelId);
                 return;
             }
 
@@ -74,7 +85,7 @@ public sealed class DuelExecutionService
             var rightModel = await modelRepo.GetByIdAsync(duel.RightModelId);
             if (leftModel is null || rightModel is null)
             {
-                _logger.LogError("One or both models not found for duel {DuelId}.", duelId);
+                DuelExecutionLog.ModelsNotFound(_logger, duelId);
                 return;
             }
 
@@ -108,7 +119,7 @@ public sealed class DuelExecutionService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Duel execution failed for {DuelId}.", duelId);
+            DuelExecutionLog.ExecutionFailed(_logger, ex, duelId);
         }
     }
 
@@ -179,8 +190,9 @@ public sealed class DuelExecutionService
                 DuelStatus.Done, result.TotalDurationMs, result.TokenCount);
         }
 
-        // T065 — character density + GreenStats enrichment
-        EnrichResult(result, model);
+        // Character density + quality + GreenStats enrichment (shared Domain policy).
+        var electricityRate = _configuration.GetValue("GreenStats:ElectricityRateUsd", 0.12);
+        DuelResultEnricher.Enrich(result, model, electricityRate);
 
         await duelResultRepo.SaveAsync(result);
     }
@@ -276,35 +288,4 @@ public sealed class DuelExecutionService
                 Detail = detail,
                 HtmlPreview = htmlStats?.HtmlPreview,
             });
-
-    /// <summary>
-    /// Computes character density ratio and (for local models) GreenStats.
-    /// Mutates the result in place — called before persisting.
-    /// </summary>
-    private void EnrichResult(DuelResult result, Model model)
-    {
-        // Character density: strip HTML comments, collapse whitespace, count functional chars
-        var html = result.HtmlOutputRaw ?? string.Empty;
-        var noComments = Regex.Replace(html, @"<!--.*?-->", string.Empty, RegexOptions.Singleline);
-        var collapsed = Regex.Replace(noComments, @"\s+", " ").Trim();
-        var totalBytes = System.Text.Encoding.UTF8.GetByteCount(html);
-        if (totalBytes > 0)
-        {
-            var nonWhitespace = collapsed.Replace(" ", string.Empty).Length;
-            result.CharacterDensityRatio = Math.Round((double)nonWhitespace / totalBytes, 4);
-        }
-
-        result.OutputQualityScore = HtmlOutputQualityScorer.Score(html);
-
-        // GreenStats (local models and local-service models with TdpWatts set)
-        if ((model.ModelType == ModelType.Local || model.ModelType == ModelType.LocalService)
-            && model.TdpWatts.HasValue && !result.IsFailure)
-        {
-            var rateUsd = _configuration.GetValue<double>("GreenStats:ElectricityRateUsd", 0.12);
-            var energyWh = GreenStatsCalculator.ComputeEnergyWh(model.TdpWatts.Value, result.TotalDurationMs);
-            result.EnergyWh = energyWh;
-            result.EnergyCostUsd = GreenStatsCalculator.ComputeEnergyCostUsd(energyWh, rateUsd);
-            result.GreenScore = GreenStatsCalculator.ComputeGreenScore(result.TokenCount, energyWh);
-        }
-    }
 }

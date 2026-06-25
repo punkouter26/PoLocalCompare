@@ -3,32 +3,21 @@ using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Application.Leaderboard.GetLeaderboard;
 
-public sealed class GetLeaderboardHandler
+public sealed class GetLeaderboardHandler(
+    IModelRepository modelRepository,
+    IEloHistoryRepository eloHistoryRepository,
+    IDuelResultRepository duelResultRepository)
 {
-    private readonly IModelRepository _modelRepository;
-    private readonly IEloHistoryRepository _eloHistoryRepository;
-    private readonly IDuelResultRepository _duelResultRepository;
-
-    public GetLeaderboardHandler(
-        IModelRepository modelRepository,
-        IEloHistoryRepository eloHistoryRepository,
-        IDuelResultRepository duelResultRepository)
-    {
-        _modelRepository = modelRepository;
-        _eloHistoryRepository = eloHistoryRepository;
-        _duelResultRepository = duelResultRepository;
-    }
-
     public async Task<IReadOnlyList<LeaderboardEntryDto>> HandleAsync(string sortBy = "Elo")
     {
-        var models = (await _modelRepository.GetAllAsync()).ToList();
+        var models = (await modelRepository.GetAllAsync()).ToList();
         var rows = new List<LeaderboardEntryDto>(models.Count);
 
         foreach (var model in models)
         {
-            var history = await _eloHistoryRepository.GetLast20Async(model.ModelId);
+            var history = await eloHistoryRepository.GetLast20Async(model.ModelId);
             var sparkline = history.Select(x => Math.Round(x.EloAfter, 1)).ToArray();
-            var modelResults = (await _duelResultRepository.GetByModelIdAsync(model.ModelId)).ToList();
+            var modelResults = (await duelResultRepository.GetByModelIdAsync(model.ModelId)).ToList();
             var qualityAvg = modelResults.Count > 0
                 ? modelResults.Average(r => r.OutputQualityScore)
                 : (double?)null;

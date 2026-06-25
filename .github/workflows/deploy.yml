@@ -11,7 +11,7 @@ permissions:
 
 env:
   DOTNET_VERSION: '10.0.x'
-  AZURE_WEBAPP_NAME: polocalcompare-appservice-dev
+  AZURE_WEBAPP_NAME: app-polocalcompare-win
   AZURE_RESOURCE_GROUP: PoLocalCompare
   API_PROJECT_PATH: src/PoLocalCompare.Api/PoLocalCompare.Api.csproj
 

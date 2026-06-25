@@ -1,117 +1,20 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using Microsoft.AspNetCore.Components.Authorization
 @using PoLocalCompare.Client.Pages
-@using PoLocalCompare.Client.Services
-@inject AuthenticationStateProvider AuthState
-@inject GuestAuthService GuestAuth
-@inject IConfiguration Config
-@inject NavigationManager Nav
-@inject Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment
-@implements IDisposable
 
-<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(NotFound)">
-    <Found Context="routeData">
-        @if (!_gateChecked)
-        {
-            <div class="auth-spinner"><p>Loading&hellip;</p></div>
-        }
-        else if (_allowed || routeData.PageType == typeof(Authentication))
-        {
-            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(NotFound)">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    @* AuthorizeRouteView already wraps this content in DefaultLayout (MainLayout).
+                       Do NOT add another LayoutView here — it double-nests the nav bar. *@
+                    <Login />
+                </NotAuthorized>
+                <Authorizing>
+                    <div class="auth-spinner"><p>Loading&hellip;</p></div>
+                </Authorizing>
+            </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-        }
-        else
-        {
-            <LayoutView Layout="@typeof(MainLayout)">
-                <Login />
-            </LayoutView>
-        }
-    </Found>
-</Router>
-
-@code {
-    private bool _gateChecked;
-    private bool _allowed;
-
-    protected override async Task OnInitializedAsync()
-    {
-        AuthState.AuthenticationStateChanged += OnMsalStateChanged;
-        GuestAuth.OnChange += OnGuestChanged;
-
-        // Skip gate during MSAL callback — calling GetAuthenticationStateAsync here
-        // while MSAL is mid-redirect causes a deadlock ("Completing sign-in..." hang).
-        if (IsAuthenticationRoute())
-        {
-            _gateChecked = true;
-            _allowed = true;
-            return;
-        }
-
-        await CheckGateAsync();
-    }
-
-    private async Task CheckGateAsync()
-    {
-        // Never evaluate auth gate while MSAL callback is in progress.
-        if (IsAuthenticationRoute())
-        {
-            _gateChecked = true;
-            _allowed = true;
-            StateHasChanged();
-            return;
-        }
-
-        try
-        {
-            var allowGuestByConfig = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
-            var isProduction = string.Equals(HostEnvironment.Environment, "Production", StringComparison.OrdinalIgnoreCase);
-            var allowGuest = allowGuestByConfig && !isProduction;
-
-            // Check MSAL (Microsoft login)
-            var state = await AuthState.GetAuthenticationStateAsync();
-            if (state.User.Identity?.IsAuthenticated == true)
-            {
-                // Sync display name to GuestAuthService so NavMenu shows the email
-                var email = state.User.FindFirst("preferred_username")?.Value
-                         ?? state.User.FindFirst("email")?.Value
-                         ?? state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-                         ?? state.User.Identity.Name;
-                if (email is not null)
-                    await GuestAuth.LoginWithEmailAsync(email);
-                _allowed = true;
-            }
-            else if (allowGuest)
-            {
-                var guestIdentity = await GuestAuth.GetIdentityAsync();
-                _allowed = guestIdentity is not null;
-            }
-            else
-            {
-                _allowed = false;
-            }
-        }
-        catch
-        {
-            // Fail closed on auth gate checks, but never crash the app shell.
-            _allowed = false;
-        }
-
-        _gateChecked = true;
-        StateHasChanged();
-    }
-
-    private void OnMsalStateChanged(Task<AuthenticationState> _)
-        => InvokeAsync(async () => await CheckGateAsync());
-
-    private void OnGuestChanged()
-        => InvokeAsync(async () => await CheckGateAsync());
-
-    public void Dispose()
-    {
-        AuthState.AuthenticationStateChanged -= OnMsalStateChanged;
-        GuestAuth.OnChange -= OnGuestChanged;
-    }
-
-    private bool IsAuthenticationRoute()
-        => new Uri(Nav.Uri).LocalPath.StartsWith("/authentication", StringComparison.OrdinalIgnoreCase);
-}
+        </Found>
+    </Router>
+</CascadingAuthenticationState>

@@ -13,24 +13,16 @@ namespace PoLocalCompare.Api.Services;
 /// <summary>
 /// Uses GPT-5.4 Nano to judge a completed duel when the user has not picked a winner.
 /// </summary>
-public sealed class AutoJudgeService
+public sealed class AutoJudgeService(
+    IServiceScopeFactory scopeFactory,
+    IConfiguration configuration,
+    IHttpClientFactory httpClientFactory,
+    ILogger<AutoJudgeService> logger)
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IConfiguration _configuration;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<AutoJudgeService> _logger;
-
-    public AutoJudgeService(
-        IServiceScopeFactory scopeFactory,
-        IConfiguration configuration,
-        IHttpClientFactory httpClientFactory,
-        ILogger<AutoJudgeService> logger)
-    {
-        _scopeFactory      = scopeFactory;
-        _configuration     = configuration;
-        _httpClientFactory = httpClientFactory;
-        _logger            = logger;
-    }
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly ILogger<AutoJudgeService> _logger = logger;
 
     /// <summary>Returns null if duel not found. Throws InvalidOperationException if verdict already recorded
     /// or results are not yet available.</summary>
@@ -59,12 +51,20 @@ public sealed class AutoJudgeService
             rightResult.HtmlOutputRaw,
             cancellationToken);
 
-        _logger.LogInformation("Auto-judge for duel {DuelId} verdict: {Verdict}", duelId, verdict);
+        // A judge outage must NOT fabricate a winner — that would corrupt ELO. Leave the duel
+        // Pending and signal the caller (→ HTTP 503) so the UI falls back to manual judging.
+        if (verdict is null)
+        {
+            _logger.LogWarning("Auto-judge could not determine a verdict for duel {DuelId}; leaving it pending for manual judgment.", duelId);
+            throw new AutoJudgeUnavailableException("Auto-judge is currently unavailable. Please pick a winner manually.");
+        }
 
-        return await verdictHandler.HandleAsync(new RecordVerdictCommand(duelId, verdict));
+        _logger.LogInformation("Auto-judge for duel {DuelId} verdict: {Verdict}", duelId, verdict.Value);
+
+        return await verdictHandler.HandleAsync(new RecordVerdictCommand(duelId, verdict.Value));
     }
 
-    private async Task<DuelVerdict> CallGptJudgeAsync(
+    private async Task<DuelVerdict?> CallGptJudgeAsync(
         string promptText,
         string? leftHtml,
         string? rightHtml,
@@ -75,8 +75,8 @@ public sealed class AutoJudgeService
 
         if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey))
         {
-            _logger.LogWarning("AzureAiFoundry config missing — auto-judge defaults to Left.");
-            return DuelVerdict.Left;
+            _logger.LogWarning("AzureAiFoundry config missing — auto-judge unavailable.");
+            return null;
         }
 
         var url = $"{endpoint}/openai/deployments/gpt-5.4-nano/chat/completions?api-version=2024-08-01-preview";
@@ -125,8 +125,8 @@ public sealed class AutoJudgeService
             
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Auto-judge call failed ({Status}) — defaulting to Left.", response.StatusCode);
-                return DuelVerdict.Left;
+                _logger.LogWarning("Auto-judge call failed ({Status}) — verdict unavailable.", response.StatusCode);
+                return null;
             }
 
             var json    = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -136,7 +136,13 @@ public sealed class AutoJudgeService
                 .GetProperty("choices")[0]
                 .GetProperty("message")
                 .GetProperty("content")
-                .GetString() ?? "LEFT";
+                .GetString();
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _logger.LogWarning("Auto-judge: Foundry returned an empty verdict — verdict unavailable.");
+                return null;
+            }
 
             return content.Trim().StartsWith("RIGHT", StringComparison.OrdinalIgnoreCase)
                 ? DuelVerdict.Right
@@ -145,14 +151,14 @@ public sealed class AutoJudgeService
         catch (OperationCanceledException ex)
         {
             sw.Stop();
-            _logger.LogWarning(ex, "Auto-judge: Foundry call timed out or was cancelled after {ElapsedMs}ms — defaulting to Left.", sw.ElapsedMilliseconds);
-            return DuelVerdict.Left;
+            _logger.LogWarning(ex, "Auto-judge: Foundry call timed out or was cancelled after {ElapsedMs}ms — verdict unavailable.", sw.ElapsedMilliseconds);
+            return null;
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex, "Auto-judge: Foundry call failed after {ElapsedMs}ms — defaulting to Left.", sw.ElapsedMilliseconds);
-            return DuelVerdict.Left;
+            _logger.LogError(ex, "Auto-judge: Foundry call failed after {ElapsedMs}ms — verdict unavailable.", sw.ElapsedMilliseconds);
+            return null;
         }
     }
 
@@ -162,3 +168,7 @@ public sealed class AutoJudgeService
         return html.Length <= maxChars ? html : html[..maxChars] + "…";
     }
 }
+
+/// <summary>Thrown when the auto-judge model cannot be reached or returns no usable verdict.
+/// Signals the caller to leave the duel pending rather than fabricate a winner.</summary>
+public sealed class AutoJudgeUnavailableException(string message) : Exception(message);

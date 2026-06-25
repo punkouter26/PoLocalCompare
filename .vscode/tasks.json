@@ -16,6 +16,18 @@
       "problemMatcher": []
     },
     {
+      "label": "start-azurite",
+      "type": "shell",
+      "command": "docker compose up -d azurite",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "close": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "build",
       "command": "dotnet",
       "type": "process",
@@ -26,7 +38,7 @@
         "/consoleloggerparameters:NoSummary;ForceNoAlign"
       ],
       "problemMatcher": "$msCompile",
-      "dependsOn": "kill-dotnet"
+      "dependsOn": ["kill-dotnet", "start-azurite"]
     },
     {
       "label": "run",
@@ -40,7 +52,7 @@
         "https"
       ],
       "problemMatcher": "$msCompile",
-      "dependsOn": "kill-dotnet",
+      "dependsOn": ["kill-dotnet", "start-azurite"],
       "isBackground": true,
       "presentation": {
         "reveal": "always",

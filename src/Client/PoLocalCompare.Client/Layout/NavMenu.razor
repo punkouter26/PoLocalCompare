@@ -85,9 +85,9 @@
 </nav>
 
 @code {
-    [Inject] private GuestAuthService GuestAuth { get; set; } = default!;
     [Inject] private IConfiguration Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthState { get; set; } = default!;
     [Inject] private Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment { get; set; } = default!;
 
@@ -103,8 +103,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        GuestAuth.OnChange += OnAuthChanged;
-        AuthState.AuthenticationStateChanged += OnMsalAuthChanged;
+        AuthState.AuthenticationStateChanged += OnAuthStateChanged;
 
         var allowGuestByConfig = string.Equals(Config["Auth:AllowGuest"], "true", StringComparison.OrdinalIgnoreCase);
         var isProduction = string.Equals(HostEnvironment.Environment, "Production", StringComparison.OrdinalIgnoreCase);
@@ -116,44 +115,25 @@
         _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;
     }
 
-    /// <summary>
-    /// Resolves the current user identity from MSAL (Microsoft OAuth) first,
-    /// then falls back to GuestAuthService (guest / localStorage).
-    /// </summary>
+    /// <summary>Resolves the current identity from the BFF session (/auth/me via the state provider).</summary>
     private async Task RefreshIdentityAsync()
     {
-        // Skip GetAuthenticationStateAsync while MSAL callback is in-flight to
-        // avoid the known deadlock described in Authentication.razor.
-        var isAuthRoute = Nav.Uri.Contains("/authentication", StringComparison.OrdinalIgnoreCase);
-        if (!isAuthRoute)
-        {
-            try
-            {
-                var state = await AuthState.GetAuthenticationStateAsync();
-                if (state.User.Identity?.IsAuthenticated == true)
-                {
-                    var email = state.User.FindFirst("preferred_username")?.Value
-                             ?? state.User.FindFirst("email")?.Value
-                             ?? state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-                             ?? state.User.Identity.Name;
-                    if (email is not null)
-                    {
-                        _identity = email;
-                        _isGuest = false;
-                        // Persist so GuestAuth / other components see it too
-                        await GuestAuth.LoginWithEmailAsync(email);
-                        return;
-                    }
-                }
-            }
-            catch { /* MSAL not ready — fall through to GuestAuth */ }
-        }
-
-        // Fallback: guest session or already-persisted OAuth email
         try
         {
-            _identity = await GuestAuth.GetIdentityAsync();
-            _isGuest = GuestAuth.IsGuest;
+            var state = await AuthState.GetAuthenticationStateAsync();
+            if (state.User.Identity?.IsAuthenticated == true)
+            {
+                _identity = state.User.FindFirst("preferred_username")?.Value
+                         ?? state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                         ?? state.User.Identity.Name;
+                _isGuest = _identity?.StartsWith("GUEST", StringComparison.OrdinalIgnoreCase) == true
+                        || state.User.IsInRole("Guest");
+            }
+            else
+            {
+                _identity = null;
+                _isGuest = false;
+            }
         }
         catch
         {
@@ -163,37 +143,20 @@
     }
 
     private void LoginWithMicrosoft()
-    {
-        Nav.NavigateTo($"authentication/login?returnUrl={Uri.EscapeDataString(Nav.Uri)}");
-    }
+        => Nav.NavigateTo($"auth/login/microsoft?returnUrl={Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery)}", forceLoad: true);
 
-    private async Task LoginAsGuestAsync()
-    {
-        await GuestAuth.LoginAsGuestAsync();
-        _identity = await GuestAuth.GetIdentityAsync();
-        _isGuest = GuestAuth.IsGuest;
-    }
+    private void LoginAsGuestAsync()
+        => Nav.NavigateTo($"auth/login/fake?returnUrl={Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery)}", forceLoad: true);
 
     private async Task LogoutAsync()
     {
-        await GuestAuth.LogoutAsync();
-        _identity = null;
-        _isGuest = false;
-
-        // If signed in via Microsoft, also sign out of MSAL
-        var state = await AuthState.GetAuthenticationStateAsync();
-        if (state.User.Identity?.IsAuthenticated == true)
-            Nav.NavigateTo("authentication/logout");
+        try { await Http.PostAsync("auth/logout", null); }
+        catch { /* clear UI regardless */ }
+        // Full reload re-evaluates the (now cleared) session and renders the Login view.
+        Nav.NavigateTo("/", forceLoad: true);
     }
 
-    private void OnAuthChanged()
-        => InvokeAsync(async () =>
-        {
-            await RefreshIdentityAsync();
-            StateHasChanged();
-        });
-
-    private void OnMsalAuthChanged(Task<AuthenticationState> _)
+    private void OnAuthStateChanged(Task<AuthenticationState> _)
         => InvokeAsync(async () =>
         {
             await RefreshIdentityAsync();
@@ -202,7 +165,6 @@
 
     public void Dispose()
     {
-        GuestAuth.OnChange -= OnAuthChanged;
-        AuthState.AuthenticationStateChanged -= OnMsalAuthChanged;
+        AuthState.AuthenticationStateChanged -= OnAuthStateChanged;
     }
 }

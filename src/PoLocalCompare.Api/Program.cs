@@ -5,8 +5,10 @@ using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using Polly;
 using OpenTelemetry.Trace;
 using PoLocalCompare.Api;
+using PoLocalCompare.Api.Auth;
 using PoLocalCompare.Api.Endpoints;
 using PoLocalCompare.Api.Hubs;
 using PoLocalCompare.Api.Infrastructure;
@@ -65,8 +67,11 @@ try
     // ─── OpenTelemetry (T019) — now has KV-provided connection strings ──────
     var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
     var aiCs = builder.Configuration["ApplicationInsights:ConnectionString"];
+    // Map cloud_RoleName to the execution assembly (reflection, API project only) so traces never
+    // surface as "unknown_service:dotnet". With OTel this is the resource service.name.
+    var roleName = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name ?? "PoLocalCompare.Api";
     builder.Services.AddOpenTelemetry()
-        .ConfigureResource(r => r.AddService("PoLocalCompare", serviceVersion: "1.0.0"))
+        .ConfigureResource(r => r.AddService(roleName, serviceVersion: "1.0.0"))
         .WithTracing(t =>
         {
             t.AddAspNetCoreInstrumentation()
@@ -112,6 +117,9 @@ try
                   .AllowCredentials());
     });
 
+    // ─── BFF authentication (cookie session + Microsoft OIDC + dev fake) ────────
+    builder.AddBffAuthentication();
+
     // ─── SignalR ──────────────────────────────────────────────────────────────
     builder.Services.AddSignalR();
 
@@ -128,10 +136,24 @@ try
     });
 
     // ─── Infrastructure (Phase 2 — T032–T037) ────────────────────────────────
-    builder.Services.AddHttpClient("OllamaStatus", client =>
-    {
-        client.Timeout = TimeSpan.FromSeconds(5);
-    });
+    // OllamaStatus issues short, idempotent status pings — safe to wrap in a native
+    // .NET resilience pipeline (retry + per-attempt timeout). The streaming inference
+    // clients (Foundry/Ollama generation) deliberately keep bespoke retry because the
+    // standard handler's total-request timeout would abort long SSE responses.
+    builder.Services.AddHttpClient("OllamaStatus")
+        .AddResilienceHandler("ollama-status", pipeline =>
+        {
+            pipeline.AddRetry(new Polly.Retry.RetryStrategyOptions<HttpResponseMessage>
+            {
+                MaxRetryAttempts = 2,
+                Delay = TimeSpan.FromMilliseconds(200),
+                BackoffType = Polly.DelayBackoffType.Exponential,
+                ShouldHandle = new Polly.PredicateBuilder<HttpResponseMessage>()
+                    .Handle<HttpRequestException>()
+                    .HandleResult(r => (int)r.StatusCode >= 500),
+            });
+            pipeline.AddTimeout(TimeSpan.FromSeconds(5));
+        });
     // Foundry client: cap at 35 s to allow for network latency while preventing indefinite hang
     builder.Services.AddHttpClient("Foundry", client =>
     {
@@ -258,14 +280,20 @@ try
 
     app.UseRouting();
 
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    // ─── BFF auth routes (/auth/login/microsoft, /auth/login/fake, /auth/logout, /auth/me) ──
+    app.MapAuthEndpoints();
+
     app.MapRazorPages();
 
     // ─── Health endpoint (T038) ──────────────────────────────────────────────
     app.MapHealthEndpoints();
 
-    // ─── SignalR hubs ────────────────────────────────────────────────────────
-    app.MapHub<DuelHub>("/hubs/duel");
-    app.MapHub<LobbyHub>("/hubs/lobby");
+    // ─── SignalR hubs (auth required) ──────────────────────────────────────────
+    app.MapHub<DuelHub>("/hubs/duel").RequireAuthorization();
+    app.MapHub<LobbyHub>("/hubs/lobby").RequireAuthorization();
 
     // ─── API endpoints ────────────────────────────────────────────────────────
     app.MapModelsEndpoints();

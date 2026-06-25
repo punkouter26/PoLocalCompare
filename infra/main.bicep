@@ -1,103 +1,48 @@
 targetScope = 'resourceGroup'
 
-@description('Environment name (dev, staging, prod)')
-param environmentName string = 'prod'
-
-@description('Azure region for resources')
+@description('Azure region (matches the PoLocalCompare resource group)')
 param location string = 'westus2'
 
-@description('Resource group name for PoShared shared resources (App Service Plan)')
-param sharedResourceGroupName string = 'rg-platform-shared-prod-eus2'
+@description('Name of the new App Service to create on the existing plan')
+param appServiceName string = 'app-polocalcompare-win'
 
-@description('App Service Plan name in PoShared resource group')
-param sharedAppServicePlanName string = 'asp-platform-linux-b2-prod-wus2-001'
-
-@description('Application Insights resource name in PoShared resource group')
-param sharedAppInsightsName string = 'appi-platform-prod-eus2-001'
-
-@description('User-Assigned Managed Identity name in PoShared resource group')
-param sharedManagedIdentityName string = 'id-platform-workload-prod-eus2-001'
+// ─── Shared platform resources (resource group: PoShared) ──────────────────────────
+@description('Shared resource group holding Key Vault, App Insights, and the workload identity')
+param sharedResourceGroupName string = 'PoShared'
 
 resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
-  name: 'kv-platform-prod-eus2-00'
+  name: 'kv-poshared'
   scope: resourceGroup(sharedResourceGroupName)
 }
 
 resource sharedAppInsights 'Microsoft.Insights/components@2020-02-02' existing = {
-  name: sharedAppInsightsName
+  name: 'poappideinsights8f9c9a4e'
   scope: resourceGroup(sharedResourceGroupName)
 }
 
 resource sharedManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
-  name: sharedManagedIdentityName
+  name: 'mi-poshared-containerapps'
   scope: resourceGroup(sharedResourceGroupName)
 }
 
-// --- Storage Account --------------------------------------------------------------
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'stpolocalcompareprodwus2'
-  location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-  properties: {
-    minimumTlsVersion: 'TLS1_2'
-    allowBlobPublicAccess: false
-    supportsHttpsTrafficOnly: true
-  }
+// ─── Existing resources in this resource group (PoLocalCompare) ─────────────────────
+// Storage already exists; the app creates its tables at runtime (CreateIfNotExists) and
+// connects with the shared-key connection string from Key Vault
+// (PoLocalCompare--ConnectionStrings--AzureTableStorage), so we only reference it here.
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: 'polocalcomparedevsa'
 }
 
-// --- Table Storage Service --------------------------------------------------------
-resource tableService 'Microsoft.Storage/storageAccounts/tableServices@2023-05-01' = {
-  parent: storageAccount
-  name: 'default'
+// Existing Windows Free (F1) plan in this resource group.
+resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' existing = {
+  name: 'asp-PoLocalCompare-f1'
 }
 
-resource modelsTable 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-05-01' = {
-  parent: tableService
-  name: 'Models'
-}
-
-resource duelsTable 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-05-01' = {
-  parent: tableService
-  name: 'Duels'
-}
-
-resource duelResultsTable 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-05-01' = {
-  parent: tableService
-  name: 'DuelResults'
-}
-
-resource eloHistoryTable 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-05-01' = {
-  parent: tableService
-  name: 'EloHistory'
-}
-
-// --- Blob Storage -----------------------------------------------------------------
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
-  parent: storageAccount
-  name: 'default'
-}
-
-resource duelHtmlOutputsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
-  parent: blobService
-  name: 'duel-html-outputs'
-  properties: {
-    publicAccess: 'None'
-  }
-}
-
-// --- Linux App Service (shared plan in PoShared) ----------------------------------
-resource sharedAppServicePlan 'Microsoft.Web/serverfarms@2023-12-01' existing = {
-  name: sharedAppServicePlanName
-  scope: resourceGroup(sharedResourceGroupName)
-}
-
+// ─── App Service (Windows, .NET 10) ────────────────────────────────────────────────
 resource appService 'Microsoft.Web/sites@2023-12-01' = {
-  name: 'app-polocalcompare-web-prod-wus2-001'
+  name: appServiceName
   location: location
-  kind: 'app,linux'
+  kind: 'app'
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -105,96 +50,55 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
     }
   }
   properties: {
-    serverFarmId: sharedAppServicePlan.id
+    serverFarmId: appServicePlan.id
     httpsOnly: true
     siteConfig: {
-      alwaysOn: true
-      appCommandLine: 'dotnet PoLocalCompare.Api.dll'
+      // F1 (Free) does not support AlwaysOn.
+      alwaysOn: false
+      netFrameworkVersion: 'v10.0'
+      ftpsState: 'Disabled'
+      minTlsVersion: '1.2'
+      http20Enabled: true
+      metadata: [
+        {
+          name: 'CURRENT_STACK'
+          value: 'dotnet'
+        }
+      ]
       appSettings: [
         {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: 'Production'
         }
         {
-          name: 'ASPNETCORE_URLS'
-          value: 'http://+:8080'
-        }
-        {
-          name: 'WEBSITES_PORT'
-          value: '8080'
-        }
-        {
-          // Publish output is already built in CI; skip Oryx build on deploy.
+          // CI ships a built publish output; skip Oryx/Kudu build on deploy.
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
           value: 'false'
         }
         {
-          name: 'ENABLE_ORYX_BUILD'
-          value: 'false'
-        }
-        {
-          // Warmup often exceeds 230s when MSI sidecar/container cold-starts.
-          name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
-          value: '1800'
-        }
-        {
           name: 'KeyVault__Uri'
           value: sharedKeyVault.properties.vaultUri
-        }
-        // Storage auth uses managed identity (RBAC roles assigned below).
-        // InfrastructureServiceExtensions uses this name to build the service URI
-        // without needing a connection string or a Key Vault secret.
-        {
-          name: 'AzureStorage__AccountName'
-          value: storageAccount.name
         }
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: sharedAppInsights.properties.ConnectionString
         }
         {
-          // Required so DefaultAzureCredential targets the correct UserAssigned identity.
+          // Targets the shared user-assigned identity for DefaultAzureCredential (Key Vault access).
           name: 'AZURE_CLIENT_ID'
           value: sharedManagedIdentity.properties.clientId
         }
       ]
-      ftpsState: 'Disabled'
-      linuxFxVersion: 'DOTNETCORE|10.0'
-      minTlsVersion: '1.2'
-      http20Enabled: true
     }
   }
 }
 
-// --- RBAC: Storage Table Data Contributor -----------------------------------------
-@description('Storage Table Data Contributor role')
-var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
+// Key Vault access: kv-poshared uses ACCESS POLICIES (not RBAC) and the shared identity already
+// holds a get/list secrets policy — so no role assignment is managed here. Storage uses the
+// Key Vault connection string (shared key), so no Storage RBAC role is needed either.
+// NOTE: add `PoLocalCompare--AzureAd--ClientSecret` to kv-poshared for the BFF OIDC sign-in.
 
-resource tableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, sharedManagedIdentity.id, storageTableDataContributorRoleId)
-  scope: storageAccount
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageTableDataContributorRoleId)
-    principalId: sharedManagedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// --- RBAC: Storage Blob Data Contributor ------------------------------------------
-@description('Storage Blob Data Contributor role')
-var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-
-resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, sharedManagedIdentity.id, storageBlobDataContributorRoleId)
-  scope: storageAccount
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
-    principalId: sharedManagedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// --- Outputs ----------------------------------------------------------------------
-output storageAccountName string = storageAccount.name
+// ─── Outputs ────────────────────────────────────────────────────────────────────────
 output appServiceName string = appService.name
 output appServiceUrl string = 'https://${appService.properties.defaultHostName}'
+output storageAccountName string = storageAccount.name

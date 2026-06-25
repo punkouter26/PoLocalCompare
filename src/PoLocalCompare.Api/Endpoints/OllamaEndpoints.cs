@@ -8,7 +8,7 @@ public static class OllamaEndpoints
 {
     public static IEndpointRouteBuilder MapOllamaEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/ollama").WithTags("Ollama");
+        var group = app.MapGroup("/api/ollama").WithTags("Ollama").RequireAuthorization();
 
         group.MapGet("/gpu-status", async (
             [FromServices] IHttpClientFactory httpClientFactory,
@@ -47,7 +47,8 @@ public static class OllamaEndpoints
         // GET /api/ollama/available-models — all models pulled in Ollama (not just loaded)
         group.MapGet("/available-models", async (
             [FromServices] IHttpClientFactory httpClientFactory,
-            [FromServices] IConfiguration config) =>
+            [FromServices] IConfiguration config,
+            [FromServices] ILogger<OllamaEndpointsMarker> logger) =>
         {
             var http = httpClientFactory.CreateClient("OllamaStatus");
             var baseUrl = (config["Ollama:BaseUrl"] ?? "http://localhost:11434").TrimEnd('/');
@@ -57,8 +58,10 @@ public static class OllamaEndpoints
                 var names = tags?.Models?.Select(m => m.Name).ToArray() ?? [];
                 return Results.Ok(names);
             }
-            catch
+            catch (Exception ex)
             {
+                // Ollama not installed/running locally is expected — log at Debug, return empty.
+                logger.LogDebug(ex, "Failed to query Ollama /api/tags at {BaseUrl}", baseUrl);
                 return Results.Ok(Array.Empty<string>());
             }
         })
@@ -144,7 +147,10 @@ public static class OllamaEndpoints
                             promptEvalDurationNs = chunk.PromptEvalDuration;
                         }
                     }
-                    catch { /* skip malformed lines */ }
+                    catch (System.Text.Json.JsonException ex)
+                    {
+                        logger.LogDebug(ex, "Skipped malformed Ollama chunk for model {Model}", req.ModelName);
+                    }
                 }
             }
             catch (Exception ex)

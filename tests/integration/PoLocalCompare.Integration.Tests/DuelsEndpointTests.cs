@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,6 +35,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                // Non-Production so the BFF fake-auth bypass (X-Fake-User) is available to tests.
+                builder.UseEnvironment("Development");
                 builder.UseSetting("ConnectionStrings:AzureTableStorage", connectionString);
                 builder.UseSetting("ConnectionStrings:AzureBlobStorage", connectionString);
                 builder.UseSetting("Features:UseRealAi", "false");
@@ -74,6 +77,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
         {
             AllowAutoRedirect = false,
         });
+        // Authenticate every request via the dev/test fake-auth scheme.
+        _client.DefaultRequestHeaders.Add("X-Fake-User", "integration-test");
     }
 
     public async Task DisposeAsync()

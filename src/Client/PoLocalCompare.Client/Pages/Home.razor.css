@@ -19,7 +19,7 @@
 /* ── Stat strip ─────────────────────────────────────────────────────── */
 .home__stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.75rem;
     margin-bottom: 2rem;
     animation: fadeIn 0.45s ease-out;
@@ -70,7 +70,7 @@
 
 .home__system-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.6rem;
 }
 
@@ -138,7 +138,7 @@
 
 .home__models-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 0.65rem;
 }
 
@@ -249,13 +249,14 @@
     color: var(--oled-text-muted);
 }
 
-@media (max-width: 500px) {
-    .home__stats { grid-template-columns: repeat(2, 1fr); }
-    .home__system-grid { grid-template-columns: repeat(2, 1fr); }
+/* Mobile-first: base layouts are stacked/2-col above; widen as the viewport grows. */
+@media (min-width: 500px) {
+    .home__stats { grid-template-columns: repeat(4, 1fr); }
+    .home__system-grid { grid-template-columns: repeat(4, 1fr); }
 }
 
-@media (max-width: 780px) {
-    .home__models-grid { grid-template-columns: 1fr; }
+@media (min-width: 780px) {
+    .home__models-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ── Recent Duels ─────────────────────────────────────────────────────── */
@@ -278,9 +279,9 @@
 
 .home__recent-item {
     display: grid;
-    grid-template-columns: 1fr 1fr auto auto;
+    grid-template-columns: 1fr auto;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
     padding: 0.75rem 1rem;
     border: 1px solid var(--oled-border);
     border-radius: var(--radius-md);
@@ -317,6 +318,7 @@
 }
 
 .home__recent-vs {
+    display: none;
     font-size: 0.75rem;
     color: var(--oled-text-muted);
     white-space: nowrap;
@@ -339,18 +341,19 @@
 }
 
 .home__recent-date {
+    display: none;
     font-size: 0.7rem;
     color: var(--oled-text-muted);
     white-space: nowrap;
 }
 
-@media (max-width: 640px) {
+/* Tablet and up: reveal the secondary columns and restore the full row layout. */
+@media (min-width: 640px) {
     .home__recent-item {
-        grid-template-columns: 1fr auto;
-        gap: 0.5rem;
+        grid-template-columns: 1fr 1fr auto auto;
+        gap: 0.75rem;
     }
-    .home__recent-vs, .home__recent-date { display: none; }
-    .home__system-actions { flex-wrap: wrap; justify-content: flex-end; }
+    .home__recent-vs, .home__recent-date { display: block; }
 }
 
 @media (prefers-reduced-motion: reduce) {

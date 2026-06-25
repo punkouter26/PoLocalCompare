@@ -16,4 +16,10 @@
   <Folder Name="/tests/unit/">
     <Project Path="tests/unit/PoLocalCompare.Unit.Tests/PoLocalCompare.Unit.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/e2e-api/">
+    <Project Path="tests/e2e-api/PoLocalCompare.E2EAPI/PoLocalCompare.E2EAPI.csproj" />
+  </Folder>
+  <Folder Name="/tests/e2e-ui/">
+    <Project Path="tests/e2e-ui/PoLocalCompare.E2EUI/PoLocalCompare.E2EUI.csproj" />
+  </Folder>
 </Solution>

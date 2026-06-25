@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Application.Models.ListModels;
+using PoLocalCompare.Infrastructure.AzureAiFoundry;
 using PoLocalCompare.Application.Models.RegisterModel;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
@@ -15,7 +16,7 @@ public static class ModelsEndpoints
 {
     public static IEndpointRouteBuilder MapModelsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/models").WithTags("Models");
+        var group = app.MapGroup("/api/models").WithTags("Models").RequireAuthorization();
 
         group.MapGet("/", async (
             [FromServices] ListModelsHandler handler,
@@ -164,25 +165,18 @@ public static class ModelsEndpoints
 
                 var deploymentName = model.ApiEndpointRef;
 
-                var deploymentUrl = $"{foundryEndpoint}/openai/deployments/{deploymentName}/chat/completions?api-version=2024-08-01-preview";
-                var modelInferenceUrl = $"{foundryEndpoint}/models/chat/completions?api-version=2024-05-01-preview";
+                var deploymentUrl = $"{foundryEndpoint}/openai/deployments/{deploymentName}/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
+                var modelInferenceUrl = $"{foundryEndpoint}/models/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
 
-                var deploymentBody = JsonSerializer.Serialize(new
-                {
-                    messages = new[] { new { role = "user", content = "Say OK." } },
-                    max_tokens = 1,
-                    temperature = 0,
-                    stream = false
-                });
+                var probeMessages = new[] { new { role = "user", content = "Say OK." } };
 
-                var inferenceBody = JsonSerializer.Serialize(new
-                {
-                    model = deploymentName,
-                    messages = new[] { new { role = "user", content = "Say OK." } },
-                    max_tokens = 1,
-                    temperature = 0,
-                    stream = false
-                });
+                // Reasoning models (gpt-5*, o-series) reject max_tokens/temperature with HTTP 400.
+                // Reasoning tokens count against the budget, so probe with enough headroom to return a token.
+                var deploymentBody = JsonSerializer.Serialize(
+                    FoundryChatRequest.Build(deploymentName, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: false));
+
+                var inferenceBody = JsonSerializer.Serialize(
+                    FoundryChatRequest.Build(deploymentName, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: true));
 
                 try
                 {
@@ -400,8 +394,10 @@ public static class ModelsEndpoints
         group.MapPost("/{webLlmModelId}/download", async (
             [FromRoute] string webLlmModelId,
             [FromServices] IModelRepository modelRepo,
-            [FromServices] IWebHostEnvironment env) =>
+            [FromServices] IWebHostEnvironment env,
+            [FromServices] ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("ModelDownload");
             // Validate format — only alphanumeric, dots, hyphens (prevents path traversal)
             if (!System.Text.RegularExpressions.Regex.IsMatch(webLlmModelId, @"^[a-zA-Z0-9._-]+$"))
                 return Results.BadRequest(new { error = "Invalid model ID format." });
@@ -419,22 +415,41 @@ public static class ModelsEndpoints
                     "download-models.py not found. Run from repo root.",
                     statusCode: StatusCodes.Status500InternalServerError);
 
-            // Start download as a detached background process — returns immediately
+            // Start download as a detached background process — returns immediately.
+            // Wrapped so a launch failure or non-zero exit is logged rather than lost.
             _ = Task.Run(async () =>
             {
-                var psi = new System.Diagnostics.ProcessStartInfo
+                try
                 {
-                    FileName = "python",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError  = true,
-                };
-                psi.ArgumentList.Add(scriptPath);
-                psi.ArgumentList.Add("--model");
-                psi.ArgumentList.Add(webLlmModelId);
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "python",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError  = true,
+                    };
+                    psi.ArgumentList.Add(scriptPath);
+                    psi.ArgumentList.Add("--model");
+                    psi.ArgumentList.Add(webLlmModelId);
 
-                using var process = System.Diagnostics.Process.Start(psi);
-                if (process is not null) await process.WaitForExitAsync();
+                    using var process = System.Diagnostics.Process.Start(psi);
+                    if (process is null)
+                    {
+                        logger.LogError("Failed to start python for model download {Model}", webLlmModelId);
+                        return;
+                    }
+
+                    var stderr = await process.StandardError.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+                    if (process.ExitCode != 0)
+                        logger.LogError("Model download for {Model} exited with code {Code}: {Error}", webLlmModelId, process.ExitCode, stderr);
+                    else
+                        logger.LogInformation("Model download for {Model} completed.", webLlmModelId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Model download for {Model} threw.", webLlmModelId);
+                }
             });
 
             return Results.AcceptedAtRoute(null, new { webLlmModelId, status = "Downloading in background. Refresh status in a few minutes." });

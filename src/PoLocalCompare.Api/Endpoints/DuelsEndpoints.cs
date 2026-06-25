@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Configuration;
 using Azure;
 using PoLocalCompare.Application.Archive.ExportLabReport;
 using PoLocalCompare.Application.Duels.CommenceDuel;
@@ -17,7 +19,7 @@ public static class DuelsEndpoints
 {
     public static IEndpointRouteBuilder MapDuelsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/duels").WithTags("Duels");
+        var group = app.MapGroup("/api/duels").WithTags("Duels").RequireAuthorization();
 
         group.MapPost("/", async (
             [FromBody] CommenceDuelRequest request,
@@ -82,7 +84,9 @@ public static class DuelsEndpoints
         group.MapPost("/{duelId}/local-result", async (
             string duelId,
             [FromBody] LocalResultRequest request,
-            [FromServices] IDuelResultRepository duelResultRepo) =>
+            [FromServices] IDuelResultRepository duelResultRepo,
+            [FromServices] IModelRepository modelRepo,
+            [FromServices] IConfiguration configuration) =>
         {
             if (string.IsNullOrWhiteSpace(request.ModelId))
                 return Results.ValidationProblem(new Dictionary<string, string[]>
@@ -90,13 +94,12 @@ public static class DuelsEndpoints
                     ["ModelId"] = ["ModelId is required."]
                 });
 
-                var normalizedHtml = HtmlOutputNormalizer.Normalize(request.HtmlOutputRaw);
+            var normalizedHtml = HtmlOutputNormalizer.Normalize(request.HtmlOutputRaw);
 
             var result = new DuelResult(duelId, request.ModelId)
-                {
-                    HtmlOutputRaw = normalizedHtml,
-                    HtmlOutputSizeBytes = System.Text.Encoding.UTF8.GetByteCount(normalizedHtml),
-                    OutputQualityScore = HtmlOutputQualityScorer.Score(normalizedHtml),
+            {
+                HtmlOutputRaw = normalizedHtml,
+                HtmlOutputSizeBytes = System.Text.Encoding.UTF8.GetByteCount(normalizedHtml),
                 TokenCount = request.TokenCount,
                 TotalDurationMs = request.TotalDurationMs,
                 WarmUpDurationMs = request.WarmUpDurationMs,
@@ -107,6 +110,14 @@ public static class DuelsEndpoints
                 IsFailure = request.IsFailure,
                 FailureReason = request.FailureReason,
             };
+
+            // Apply the shared Domain enrichment policy (density, quality, GreenStats) when the model is known.
+            var model = await modelRepo.GetByIdAsync(request.ModelId);
+            if (model is not null)
+            {
+                var electricityRate = configuration.GetValue("GreenStats:ElectricityRateUsd", 0.12);
+                DuelResultEnricher.Enrich(result, model, electricityRate);
+            }
 
             await duelResultRepo.SaveAsync(result);
 
@@ -121,7 +132,8 @@ public static class DuelsEndpoints
         group.MapPost("/{duelId}/verdict", async (
             string duelId,
             [FromBody] VerdictRequestDto request,
-            [FromServices] RecordVerdictHandler handler) =>
+            [FromServices] RecordVerdictHandler handler,
+            [FromServices] HybridCache cache) =>
         {
             try
             {
@@ -131,6 +143,7 @@ public static class DuelsEndpoints
                 if (response is null)
                     return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
 
+                await cache.RemoveByTagAsync(LeaderboardEndpoints.LeaderboardCacheTag);
                 return Results.Ok(response);
             }
             catch (InvalidOperationException ex)
@@ -157,6 +170,7 @@ public static class DuelsEndpoints
         group.MapPost("/{duelId}/auto-judge", async (
             string duelId,
             [FromServices] AutoJudgeService autoJudgeService,
+            [FromServices] HybridCache cache,
             CancellationToken cancellationToken) =>
         {
             try
@@ -164,7 +178,13 @@ public static class DuelsEndpoints
                 var response = await autoJudgeService.JudgeAsync(duelId, cancellationToken);
                 if (response is null)
                     return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
+                await cache.RemoveByTagAsync(LeaderboardEndpoints.LeaderboardCacheTag, cancellationToken);
                 return Results.Ok(response);
+            }
+            catch (AutoJudgeUnavailableException ex)
+            {
+                // Judge model unreachable — duel left Pending; client falls back to manual judging.
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
             catch (InvalidOperationException ex)
             {
@@ -175,7 +195,8 @@ public static class DuelsEndpoints
         .WithSummary("Uses GPT-4.1 Nano to automatically judge the duel winner when no human verdict is given.")
         .Produces<VerdictResponseDto>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status404NotFound)
-        .Produces(StatusCodes.Status409Conflict);
+        .Produces(StatusCodes.Status409Conflict)
+        .Produces(StatusCodes.Status503ServiceUnavailable);
 
         // T077 — GET /api/duels (archive listing with pagination)
         group.MapGet("/", async (

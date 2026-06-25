@@ -30,6 +30,8 @@ public static class ModelSeeder
         new Model("01SEED000000000000000000B", "Qwen 3.5 (Ollama)", ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "qwen3.5:latest"),
 
         // ── Azure remote models (po-aiservices-shared) ────────────────────
+        // Only deployments that actually exist in the Foundry resource are seeded.
+        new Model("01SEED000000000000000000M", "GPT-5 Nano",     ModelType.Remote, apiEndpointRef: "gpt-5-nano",                    inputTokenPricePerMillion: 0.05m,  outputTokenPricePerMillion: 0.40m),
         new Model("01SEED000000000000000000N", "GPT-5.4 Nano",   ModelType.Remote, apiEndpointRef: "gpt-5.4-nano",                  inputTokenPricePerMillion: 0.20m,  outputTokenPricePerMillion: 1.25m),
     ];
 

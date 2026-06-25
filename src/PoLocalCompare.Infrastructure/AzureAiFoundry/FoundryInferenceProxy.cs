@@ -15,21 +15,14 @@ namespace PoLocalCompare.Infrastructure.AzureAiFoundry;
 /// Calls Azure OpenAI deployment endpoint with streaming SSE.
 /// If deployment lookup returns 404, falls back to Azure AI Foundry model inference endpoint.
 /// </summary>
-public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
+public sealed class FoundryInferenceProxy(
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration,
+    ILogger<FoundryInferenceProxy> logger) : IRemoteInferenceProxy
 {
-    private readonly HttpClient _http;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<FoundryInferenceProxy> _logger;
-
-    public FoundryInferenceProxy(
-        IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
-        ILogger<FoundryInferenceProxy> logger)
-    {
-        _http = httpClientFactory.CreateClient("Foundry");
-        _configuration = configuration;
-        _logger = logger;
-    }
+    private readonly HttpClient _http = httpClientFactory.CreateClient("Foundry");
+    private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<FoundryInferenceProxy> _logger = logger;
 
     public async Task<DuelResult> RunInferenceAsync(
         Model model,
@@ -52,8 +45,8 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
             return result;
         }
 
-        var deploymentUrl = $"{endpoint}/openai/deployments/{deploymentName}/chat/completions?api-version=2024-08-01-preview";
-        var modelInferenceUrl = $"{endpoint}/models/chat/completions?api-version=2024-05-01-preview";
+        var deploymentUrl = $"{endpoint}/openai/deployments/{deploymentName}/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
+        var modelInferenceUrl = $"{endpoint}/models/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
 
         var messages = new[]
         {
@@ -61,22 +54,12 @@ public sealed class FoundryInferenceProxy : IRemoteInferenceProxy
             new { role = "user", content = promptFull }
         };
 
-        var deploymentRequestBody = new
-        {
-            messages,
-            stream = true,
-            max_tokens = 4096,
-            temperature = 0.7
-        };
+        // Reasoning models (gpt-5*, o-series) require max_completion_tokens and reject custom temperature.
+        var deploymentRequestBody = FoundryChatRequest.Build(
+            deploymentName, messages, maxTokens: 4096, temperature: 0.7, stream: true, includeModelField: false);
 
-        var modelInferenceRequestBody = new
-        {
-            model = deploymentName,
-            messages,
-            stream = true,
-            max_tokens = 4096,
-            temperature = 0.7
-        };
+        var modelInferenceRequestBody = FoundryChatRequest.Build(
+            deploymentName, messages, maxTokens: 4096, temperature: 0.7, stream: true, includeModelField: true);
 
         var deploymentJson = JsonSerializer.Serialize(deploymentRequestBody);
         var modelInferenceJson = JsonSerializer.Serialize(modelInferenceRequestBody);

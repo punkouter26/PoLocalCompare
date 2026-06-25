@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Microsoft.Extensions.Logging;
 using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Client.Services;
@@ -13,8 +14,9 @@ public sealed partial class DuelApiClient
                 "/api/ollama/gpu-status", JsonOptions)
                 ?? [];
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Ollama GPU status unavailable");
             return [];
         }
     }
@@ -26,8 +28,9 @@ public sealed partial class DuelApiClient
             return await _http.GetFromJsonAsync<IReadOnlyList<string>>(
                 "/api/ollama/available-models", JsonOptions) ?? [];
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Ollama available-models unavailable");
             return [];
         }
     }
@@ -41,8 +44,9 @@ public sealed partial class DuelApiClient
             if (!response.IsSuccessStatusCode) return null;
             return await response.Content.ReadFromJsonAsync<OllamaBenchmarkResultDto>(JsonOptions);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Ollama benchmark failed for model {Model}", modelName);
             return null;
         }
     }
@@ -53,8 +57,9 @@ public sealed partial class DuelApiClient
         {
             return await _http.GetFromJsonAsync<HealthSnapshotDto>("/health", JsonOptions);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Health snapshot fetch failed");
             return null;
         }
     }
@@ -65,8 +70,9 @@ public sealed partial class DuelApiClient
         {
             return await _http.GetFromJsonAsync<SmokeSnapshotDto>("/api/diag/smoke", JsonOptions);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Smoke snapshot fetch failed");
             return null;
         }
     }
@@ -77,8 +83,9 @@ public sealed partial class DuelApiClient
         {
             return await _http.GetFromJsonAsync<DiagnosticsWarningsDto>($"/api/diag/warnings?limit={limit}", JsonOptions);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Diagnostics warnings fetch failed");
             return null;
         }
     }

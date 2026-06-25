@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using System.Text.Json;
 
 namespace PoLocalCompare.Api.Endpoints;
 
@@ -15,23 +14,14 @@ internal static class E2EEndpoints
 
     internal static IEndpointRouteBuilder MapE2EEndpoints(this IEndpointRouteBuilder app)
     {
-        // Sets localStorage guest_identity and redirects to the requested path.
-        // Replaces page.addInitScript() in Playwright tests with an explicit, debuggable URL.
+        // Establishes a guest BFF session cookie and redirects to the requested path.
+        // Delegates to the canonical /auth/login/fake route so E2E tests exercise the real flow.
         app.MapGet("/e2e/seed-auth", (string? redirect) =>
         {
-            var safeRedirect = string.IsNullOrWhiteSpace(redirect) ? "/" : redirect;
-            // Reject absolute URLs to prevent open redirect
-            if (!Uri.IsWellFormedUriString(safeRedirect, UriKind.Relative))
-                safeRedirect = "/";
-
-            var identityJson = JsonSerializer.Serialize(GuestIdentity);
-            var redirectJson = JsonSerializer.Serialize(safeRedirect);
-            var html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body><script>"
-                + "try { localStorage.setItem('guest_identity'," + identityJson + "); } catch(e) {}"
-                + "location.replace(" + redirectJson + ");"
-                + "</script></body></html>";
-
-            return Results.Content(html, "text/html");
+            var safeRedirect = string.IsNullOrWhiteSpace(redirect) || !Uri.IsWellFormedUriString(redirect, UriKind.Relative)
+                ? "/"
+                : redirect;
+            return Results.Redirect($"/auth/login/fake?user={GuestIdentity}&returnUrl={Uri.EscapeDataString(safeRedirect)}");
         }).ExcludeFromDescription(); // hide from OpenAPI
 
         return app;

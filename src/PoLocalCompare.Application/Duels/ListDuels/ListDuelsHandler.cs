@@ -4,32 +4,21 @@ using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Application.Duels.ListDuels;
 
-public sealed class ListDuelsHandler
+public sealed class ListDuelsHandler(
+    IDuelRepository duelRepository,
+    IModelRepository modelRepository,
+    IDuelResultRepository duelResultRepository)
 {
-    private readonly IDuelRepository _duelRepository;
-    private readonly IModelRepository _modelRepository;
-    private readonly IDuelResultRepository _duelResultRepository;
-
-    public ListDuelsHandler(
-        IDuelRepository duelRepository,
-        IModelRepository modelRepository,
-        IDuelResultRepository duelResultRepository)
-    {
-        _duelRepository = duelRepository;
-        _modelRepository = modelRepository;
-        _duelResultRepository = duelResultRepository;
-    }
-
     public async Task<IReadOnlyList<DuelSummaryDto>> HandleAsync(ListDuelsQuery query)
     {
-        var duels = await _duelRepository.ListAsync(query.Limit, query.BeforeMonth);
+        var duels = await duelRepository.ListAsync(query.Limit, query.BeforeMonth);
 
         var result = new List<DuelSummaryDto>();
         foreach (var duel in duels)
         {
-            var leftModel = await _modelRepository.GetByIdAsync(duel.LeftModelId);
-            var rightModel = await _modelRepository.GetByIdAsync(duel.RightModelId);
-            var duelResults = (await _duelResultRepository.GetByDuelIdAsync(duel.DuelId)).ToList();
+            var leftModel = await modelRepository.GetByIdAsync(duel.LeftModelId);
+            var rightModel = await modelRepository.GetByIdAsync(duel.RightModelId);
+            var duelResults = (await duelResultRepository.GetByDuelIdAsync(duel.DuelId)).ToList();
             var leftResult = duelResults.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
             var rightResult = duelResults.FirstOrDefault(r => r.ModelId == duel.RightModelId);
             var qualitySamples = duelResults.Select(r => r.OutputQualityScore).ToList();
