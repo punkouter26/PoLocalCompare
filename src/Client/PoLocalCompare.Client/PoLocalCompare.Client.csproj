@@ -6,7 +6,11 @@
     <WasmEnableSIMD Condition="'$(Configuration)' == 'Release'">true</WasmEnableSIMD>
     <WasmEnableSIMD Condition="'$(Configuration)' != 'Release'">false</WasmEnableSIMD>
     <RunAOTCompilation>false</RunAOTCompilation>
-    <IsTrimmable>true</IsTrimmable>
+    <!-- Ship untrimmed: the Router's NotFoundPage (and MSAL/Radzen) instantiate components via
+         reflection, which the IL trimmer strips in Release publish (CtorNotLocated at runtime →
+         the Blazor view tree fails to mount). Keep the analyzer on for diagnostics only. -->
+    <IsTrimmable>false</IsTrimmable>
+    <PublishTrimmed>false</PublishTrimmed>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
     <!-- Surface trim diagnostics as warnings without failing the build: Blazor-generated Razor code,
