@@ -102,12 +102,14 @@ public static class BffAuthentication
                 }
                 else
                 {
-                    // Accept any Microsoft Entra (work/school) tenant: https://login.microsoftonline.com/{tenantId}/v2.0
+                    // Accept any Microsoft account issuer: work/school Entra tenants AND personal
+                    // Microsoft accounts (the MSA tenant 9188040d-... is itself a valid GUID), all of
+                    // the form https://login.microsoftonline.com/{tenantId}/v2.0
                     options.TokenValidationParameters.IssuerValidator = (issuer, _, _) =>
                         EntraIssuerPattern.IsMatch(issuer)
                             ? issuer
                             : throw new SecurityTokenInvalidIssuerException(
-                                $"Issuer '{issuer}' is not a recognized Microsoft Entra issuer.");
+                                $"Issuer '{issuer}' is not a recognized Microsoft account issuer.");
                 }
             });
         }
