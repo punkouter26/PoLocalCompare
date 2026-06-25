@@ -50,16 +50,24 @@ try
             .Enrich.FromLogContext()
             .Enrich.WithProperty("App", "PoLocalCompare.Api")
             .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
-            .WriteTo.Console()
-            .WriteTo.File(
-                path: "logs/polocalcompare-.log",
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 7)
-            .WriteTo.File(
-                path: "logs/polocalcompare-errors-.log",
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14,
-                restrictedToMinimumLevel: LogEventLevel.Error);
+            .WriteTo.Console();
+
+        // File sinks are Development-only: on the Free (F1) App Service they consume the
+        // limited app filesystem and don't survive restarts/redeploys. In Production all
+        // logs flow to Application Insights via the OTel pipeline below.
+        if (ctx.HostingEnvironment.IsDevelopment())
+        {
+            cfg
+                .WriteTo.File(
+                    path: "logs/polocalcompare-.log",
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 7)
+                .WriteTo.File(
+                    path: "logs/polocalcompare-errors-.log",
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 14,
+                    restrictedToMinimumLevel: LogEventLevel.Error);
+        }
 
         // AppInsights telemetry handled by OTel pipeline (Azure.Monitor.OpenTelemetry.Exporter).
     });
@@ -74,7 +82,28 @@ try
         .ConfigureResource(r => r.AddService(roleName, serviceVersion: "1.0.0"))
         .WithTracing(t =>
         {
-            t.AddAspNetCoreInstrumentation()
+            // Fixed-rate sampling to cap App Insights ingestion cost (telemetry budget).
+            // ParentBased keeps full traces sampled-in together; the ratio is configurable
+            // via Telemetry:TraceSampleRatio (default 25%).
+            var sampleRatio = builder.Configuration.GetValue<double?>("Telemetry:TraceSampleRatio") ?? 0.25;
+            t.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(sampleRatio)));
+            t.AddAspNetCoreInstrumentation(o =>
+             {
+                 // Strip high-volume, low-value spans: health/diag pings and static SPA assets.
+                 o.Filter = httpContext =>
+                 {
+                     var path = httpContext.Request.Path.Value ?? string.Empty;
+                     return !(path.StartsWith("/health", StringComparison.OrdinalIgnoreCase)
+                         || path.StartsWith("/api/diag", StringComparison.OrdinalIgnoreCase)
+                         || path.StartsWith("/_framework", StringComparison.OrdinalIgnoreCase)
+                         || path.StartsWith("/_content", StringComparison.OrdinalIgnoreCase)
+                         || path.StartsWith("/css", StringComparison.OrdinalIgnoreCase)
+                         || path.StartsWith("/js", StringComparison.OrdinalIgnoreCase)
+                         || path.EndsWith(".wasm", StringComparison.OrdinalIgnoreCase)
+                         || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+                         || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase));
+                 };
+             })
              .AddHttpClientInstrumentation();
             if (!string.IsNullOrEmpty(otlpEndpoint))
                 t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
@@ -107,15 +136,9 @@ try
         Log.Warning("AzureAiFoundry:ApiKey is empty. Configure AzureAiFoundry__ApiKey via user-secrets or environment variables for remote model duels.");
     }
 
-    // ─── CORS (T040) ─────────────────────────────────────────────────────────
-    builder.Services.AddCors(options =>
-    {
-        options.AddDefaultPolicy(policy =>
-            policy.WithOrigins("http://localhost:5000", "https://localhost:5001")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials());
-    });
+    // No CORS: the Blazor WASM client is hosted from this same origin (single-origin
+    // topology — the client assets are served from wwwroot by this API), so cross-origin
+    // sharing is unnecessary and intentionally omitted.
 
     // ─── BFF authentication (cookie session + Microsoft OIDC + dev fake) ────────
     builder.AddBffAuthentication();
@@ -258,8 +281,6 @@ try
         ctx.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
         await next(ctx);
     });
-
-    app.UseCors();
 
     if (app.Environment.IsDevelopment())
     {

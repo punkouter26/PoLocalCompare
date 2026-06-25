@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -19,6 +20,10 @@ public static class BffAuthentication
     public const string MicrosoftScheme = "Microsoft";
     public const string FakeScheme = "Fake";
     public const string SessionCookieName = "PoLocalCompare.Session";
+
+    // Matches a v2.0 Microsoft Entra organizational issuer: https://login.microsoftonline.com/{tenantId}/v2.0
+    private static readonly Regex EntraIssuerPattern =
+        new(@"^https://login\.microsoftonline\.com/[0-9a-fA-F-]{36}/v2\.0$", RegexOptions.Compiled);
 
     public static WebApplicationBuilder AddBffAuthentication(this WebApplicationBuilder builder)
     {
@@ -80,17 +85,29 @@ public static class BffAuthentication
                 options.Scope.Add("profile");
                 options.Scope.Add("email");
 
-                // Validate the issuing tenant against an allow-list when one is provided.
+                // Multi-tenant OIDC: the /organizations authority issues tenant-specific tokens,
+                // so issuer validation is shape-based (any well-formed Entra issuer) unless an
+                // explicit tenant allow-list is configured.
                 options.TokenValidationParameters.ValidateIssuer = true;
                 options.TokenValidationParameters.NameClaimType = "preferred_username";
                 var allowedTenants = config.GetSection("AzureAd:AllowedTenants").Get<string[]>() ?? [];
                 if (allowedTenants.Length > 0)
                 {
+                    // Restrict sign-in to an explicit tenant allow-list.
                     options.TokenValidationParameters.IssuerValidator = (issuer, _, _) =>
                         allowedTenants.Any(t => issuer.Contains(t, StringComparison.OrdinalIgnoreCase))
                             ? issuer
                             : throw new SecurityTokenInvalidIssuerException(
                                 $"Issuer '{issuer}' is not in the allowed tenant list.");
+                }
+                else
+                {
+                    // Accept any Microsoft Entra (work/school) tenant: https://login.microsoftonline.com/{tenantId}/v2.0
+                    options.TokenValidationParameters.IssuerValidator = (issuer, _, _) =>
+                        EntraIssuerPattern.IsMatch(issuer)
+                            ? issuer
+                            : throw new SecurityTokenInvalidIssuerException(
+                                $"Issuer '{issuer}' is not a recognized Microsoft Entra issuer.");
                 }
             });
         }

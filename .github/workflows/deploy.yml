@@ -35,9 +35,8 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
       - run: dotnet workload restore ${{ env.API_PROJECT_PATH }}
-      - run: dotnet restore ${{ env.API_PROJECT_PATH }}
-      - run: dotnet build ${{ env.API_PROJECT_PATH }} --no-restore -c Release
-      - run: dotnet publish ${{ env.API_PROJECT_PATH }} -c Release --no-restore -o publish
+      # publish implies restore + build — no separate steps needed.
+      - run: dotnet publish ${{ env.API_PROJECT_PATH }} -c Release -o publish
       - uses: actions/upload-artifact@v4
         with:
           name: webapp
@@ -50,6 +49,8 @@ jobs:
     needs: build
     timeout-minutes: 20
     steps:
+      # Checkout is required so the infra template is available to the deploy step.
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: webapp
@@ -59,19 +60,37 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      # Provision/converge infra BEFORE pushing code so the App Service always exists
+      # (idempotent — references existing plan/storage/KV/AppInsights, creates only the site).
+      - name: Provision infrastructure
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: infra/main.bicep
+          deploymentName: provision-${{ github.sha }}
       - run: cd publish && zip -r ../webapp.zip . && cd ..
       - uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           package: webapp.zip
-      - name: Verify deployment
+      - name: Verify deployment (health + SPA mount)
         run: |
+          base="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           sleep 30
+          ok=0
           for i in 1 2 3 4 5; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health" --max-time 30 || echo "000")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$base/health" --max-time 30 || echo "000")
             echo "Health check $i: HTTP $STATUS"
-            if [ "$STATUS" = "200" ]; then echo "Deployment verified."; exit 0; fi
+            if [ "$STATUS" = "200" ]; then ok=1; break; fi
             sleep 15
           done
-          echo "WARNING: Health check did not return 200 after 5 attempts."
+          if [ "$ok" != "1" ]; then echo "::error::/health never returned 200"; exit 1; fi
+          # SPA mount guard — catches trimmed/broken WASM publishes that /health can't see.
+          ROOT=$(curl -s "$base/" --max-time 30)
+          echo "$ROOT" | grep -q "blazor.webassembly.js" || { echo "::error::index.html is missing the Blazor bootstrap"; exit 1; }
+          BOOT=$(curl -s -o /dev/null -w "%{http_code}" "$base/_framework/blazor.webassembly.js" --max-time 30 || echo "000")
+          echo "Blazor bootstrap asset: HTTP $BOOT"
+          [ "$BOOT" = "200" ] || { echo "::error::Blazor framework assets are not being served"; exit 1; }
+          echo "Deployment verified: health + SPA assets OK."

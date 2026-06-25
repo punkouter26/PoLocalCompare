@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Domain.Entities;
@@ -38,6 +39,7 @@ public static class ModelSeeder
     public static async Task SeedAsync(IServiceProvider services)
     {
         var logger = services.GetRequiredService<ILogger<ModelSeederMarker>>();
+        var environment = services.GetRequiredService<IHostEnvironment>();
 
         using var scope = services.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IModelRepository>();
@@ -49,9 +51,15 @@ public static class ModelSeeder
             return;
         }
 
-        logger.LogInformation("ModelSeeder: No models found — seeding {Count} default models.", DefaultModels.Count);
+        // Ollama (LocalService) models require a local Ollama daemon that does not exist in the
+        // cloud — only seed them in Development so the Production catalog has no dead entries.
+        var modelsToSeed = environment.IsDevelopment()
+            ? DefaultModels
+            : DefaultModels.Where(m => m.ModelType != ModelType.LocalService).ToList();
 
-        foreach (var model in DefaultModels)
+        logger.LogInformation("ModelSeeder: No models found — seeding {Count} default models.", modelsToSeed.Count);
+
+        foreach (var model in modelsToSeed)
         {
             await repo.SaveAsync(model);
             logger.LogInformation("ModelSeeder: Registered '{DisplayName}'.", model.DisplayName);
