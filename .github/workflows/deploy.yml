@@ -60,15 +60,22 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      # Provision/converge infra BEFORE pushing code so the App Service always exists
-      # (idempotent — references existing plan/storage/KV/AppInsights, creates only the site).
-      - name: Provision infrastructure
-        uses: azure/arm-deploy@v2
-        with:
-          scope: resourcegroup
-          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
-          template: infra/main.bicep
-          deploymentName: provision-${{ github.sha }}
+      # Ensure the App Service exists before pushing code. Steady-state: skip (the CI identity
+      # is scoped to this RG and cannot re-assign the cross-RG shared managed identity, so a
+      # full bicep converge would fail on an already-provisioned site). If the site is missing,
+      # attempt to recreate it from the template — recovery requires the deploy principal to
+      # hold 'Managed Identity Operator' on PoShared/mi-poshared-containerapps.
+      - name: Ensure infrastructure
+        run: |
+          if az webapp show -n "$AZURE_WEBAPP_NAME" -g "$AZURE_RESOURCE_GROUP" >/dev/null 2>&1; then
+            echo "App Service '$AZURE_WEBAPP_NAME' already exists — skipping provisioning."
+          else
+            echo "App Service '$AZURE_WEBAPP_NAME' not found — provisioning from infra/main.bicep."
+            az deployment group create \
+              -g "$AZURE_RESOURCE_GROUP" \
+              -n "provision-${{ github.sha }}" \
+              --template-file infra/main.bicep
+          fi
       - run: cd publish && zip -r ../webapp.zip . && cd ..
       - uses: azure/webapps-deploy@v3
         with:
