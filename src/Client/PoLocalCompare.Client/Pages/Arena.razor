@@ -41,7 +41,7 @@
                 {
                     <div class="arena__failure-card">
                         <div class="arena__failure-title">❌ @(_leftResult.ModelName ?? _duel.LeftModelId) failed</div>
-                        <div class="arena__failure-body">@(_leftResult.FailureReason ?? "No reason provided by the model runtime.")</div>
+                        <div class="arena__failure-body">@(FirstLine(_leftResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
                         <details class="arena__failure-details">
                             <summary>Show technical details</summary>
                             <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
@@ -79,7 +79,7 @@
                 {
                     <div class="arena__failure-card">
                         <div class="arena__failure-title">❌ @(_rightResult.ModelName ?? _duel.RightModelId) failed</div>
-                        <div class="arena__failure-body">@(_rightResult.FailureReason ?? "No reason provided by the model runtime.")</div>
+                        <div class="arena__failure-body">@(FirstLine(_rightResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
                         <details class="arena__failure-details">
                             <summary>Show technical details</summary>
                             <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
@@ -170,6 +170,10 @@
     // Both models failed → there's nothing to judge; the UI prompts a fresh duel instead.
     private bool BothSidesFailed() =>
         _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
+
+    // Failure reasons carry a "[technical] …" second block; show only the clear first
+    // line in the card body (the full block stays in the technical-details expander).
+    private static string? FirstLine(string? reason) => reason?.Split('\n', 2)[0].Trim();
 
     // Live streaming preview while duel is in progress
     private string? _leftStreamingHtml;

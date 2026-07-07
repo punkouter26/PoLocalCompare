@@ -49,6 +49,39 @@ function computeRepetitionScore(text) {
 }
 
 // ---------------------------------------------------------------------------
+// Error classification — turn cryptic WebGPU/Dawn messages into a clear,
+// actionable reason plus the phase it happened in, so failures are legible.
+// ---------------------------------------------------------------------------
+function classifyWebLlmError(rawMessage, phase) {
+    const m = (rawMessage || '').toLowerCase();
+    const where = phase === 'load' ? ' while loading the model'
+                : phase === 'generate' ? ' during generation'
+                : '';
+    if (m.includes('external instance reference') || m.includes('device was lost') || m.includes('device is lost') || m.includes('device lost')) {
+        return `GPU device was lost${where}. This usually means the GPU ran out of memory or a previous model's GPU context is still held. Hard-refresh (Ctrl+Shift+R) to clear WebGPU state, run one model at a time, and try a smaller model if it recurs.`;
+    }
+    if (m.includes('out of memory') || m.includes('oom') || m.includes('vram') || m.includes('failed to allocate') || m.includes('allocation')) {
+        return `Ran out of GPU memory${where}. This model needs more VRAM than is available — pick a smaller model, or close other GPU-heavy tabs and retry.`;
+    }
+    if (m.includes('requestadapter') || m.includes('no adapter') || m.includes('adapter is null') || m.includes('gpu adapter') || (m.includes('webgpu') && m.includes('not'))) {
+        return `WebGPU is not available in this browser${where}. Use desktop Chrome or Edge with hardware acceleration enabled.`;
+    }
+    if (m.includes('shader-f16') || m.includes('shader f16') || m.includes('f16')) {
+        return `Your GPU lacks the shader-f16 feature this model requires${where}. Try a different device or browser.`;
+    }
+    if (m.includes('importscripts') || m.includes('failed to fetch') || m.includes('err_') || m.includes('networkerror') || m.includes('load failed')) {
+        return `Could not download the model files${where}. Models stream from HuggingFace/CDN on first run — check your internet connection and retry.`;
+    }
+    if (m.includes('shader') || m.includes('compil')) {
+        return `GPU shader compilation failed${where}. Your GPU or driver may not support the features this model needs.`;
+    }
+    if (m.includes('model_lib') || m.includes('model lib') || m.includes('cannot find model')) {
+        return `This model isn't supported by the in-browser runner (missing model library)${where}.`;
+    }
+    return `${rawMessage || 'Unknown WebLLM error'}${where}.`;
+}
+
+// ---------------------------------------------------------------------------
 // Main message handler
 // ---------------------------------------------------------------------------
 self.onmessage = async (event) => {
@@ -56,12 +89,35 @@ self.onmessage = async (event) => {
     // wlmId is the actual WebLLM model identifier (e.g. "Phi-3.5-mini-instruct-q4f32_1-MLC");
     // modelId is the internal ULID used only for routing status callbacks back to Blazor.
     const effectiveModelId = wlmId || modelId;
+    let phase = 'init';
 
     console.log(`[WebLLM Worker] ▶ Start inference — modelId="${modelId}" effectiveModelId="${effectiveModelId}" localModelBaseUrl="${localModelBaseUrl}"`);
+
+    // Log the GPU environment up-front so device-loss / OOM failures are diagnosable.
+    try {
+        if (typeof navigator !== 'undefined' && navigator.gpu) {
+            const ad = await navigator.gpu.requestAdapter();
+            if (ad) {
+                let info = {};
+                try { info = ad.info || (ad.requestAdapterInfo ? await ad.requestAdapterInfo() : {}); } catch (_) { /* ignore */ }
+                const lim = ad.limits || {};
+                console.log(`[WebLLM Worker] 🖥 GPU adapter — vendor="${info.vendor || '?'}" arch="${info.architecture || '?'}" device="${info.device || '?'}" ` +
+                    `maxBufferSize=${lim.maxBufferSize ?? '?'} maxStorageBufferBindingSize=${lim.maxStorageBufferBindingSize ?? '?'} ` +
+                    `features=[${ad.features ? [...ad.features].join(', ') : ''}]`);
+            } else {
+                console.warn('[WebLLM Worker] ⚠ navigator.gpu.requestAdapter() returned no adapter.');
+            }
+        } else {
+            console.warn('[WebLLM Worker] ⚠ navigator.gpu not available in this worker context.');
+        }
+    } catch (probeErr) {
+        console.warn(`[WebLLM Worker] ⚠ GPU probe failed: ${probeErr?.message ?? probeErr}`);
+    }
 
     const startMs = performance.now();
 
     try {
+        phase = 'load';
         self.postMessage({ type: 'status', status: 'Initializing', tokenCount: 0, elapsedMs: 0, loadProgress: 0 });
 
         const isAlreadyCached = cachedModelId === effectiveModelId;
@@ -118,6 +174,7 @@ self.onmessage = async (event) => {
             cacheHit, prefillSpeedTps,
         });
 
+        phase = 'generate';
         let tokenCount = 0;
         let generatedContent = '';
         let lastStatusMs = 0;
@@ -189,7 +246,22 @@ self.onmessage = async (event) => {
             cacheHit,
         });
     } catch (err) {
-        console.error(`[WebLLM Worker] ❌ Error — ${err?.message ?? String(err)}`, err);
-        self.postMessage({ type: 'error', reason: err?.message ?? String(err) });
+        const raw = err?.message ?? String(err);
+        const friendly = classifyWebLlmError(raw, phase);
+        const elapsedMs = Math.round(performance.now() - startMs);
+        // Full context to the dev console…
+        console.error(
+            `[WebLLM Worker] ❌ FAILED (phase="${phase}") — model="${effectiveModelId}" ` +
+            `cachedModel="${cachedModelId}" elapsedMs=${elapsedMs}\n` +
+            `  reason: ${friendly}\n  raw: ${raw}`,
+            err);
+        // …and a clear, actionable reason to the UI, with the raw string preserved for
+        // the "Show technical details" expander.
+        self.postMessage({
+            type: 'error',
+            reason: `${friendly}\n\n[technical] phase=${phase} · model=${effectiveModelId} · ${raw}`,
+            rawError: raw,
+            phase,
+        });
     }
 };

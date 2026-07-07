@@ -8,7 +8,7 @@
         @if (Result.IsFailure)
         {
             <div class="telemetry-hud__failure-badge">
-                ❌ FAILED — @(Result.FailureReason ?? "Unknown error")
+                ❌ FAILED — @(FirstLine(Result.FailureReason) ?? "Unknown error")
             </div>
         }
 
@@ -76,6 +76,10 @@
 @code {
     [Parameter] public DuelResultDto? Result { get; set; }
     [Parameter] public bool IsFailure { get; set; }
+
+    // The failure reason may carry a "[technical]" second block; the badge shows only
+    // the clear first line (full detail lives in the Arena's technical-details expander).
+    private static string? FirstLine(string? s) => s?.Split('\n', 2)[0].Trim();
 
     private static string FormatMs(long ms)
     {
