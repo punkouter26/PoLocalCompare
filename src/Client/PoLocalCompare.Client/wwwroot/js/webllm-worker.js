@@ -125,8 +125,14 @@ self.onmessage = async (event) => {
         const repWindow = [];
         const REP_WINDOW_CHARS = 200;
 
+        // Same HTML-forcing system prompt the Foundry/Ollama proxies use — without it,
+        // small local models answer conversationally ("I'm sorry, but as an AI…") instead
+        // of emitting a page.
         const stream = await engine.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
+            messages: [
+                { role: 'system', content: 'You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS. No markdown, no explanation, no code fences.' },
+                { role: 'user', content: prompt },
+            ],
             stream: true,
             max_tokens: 8000,
         });

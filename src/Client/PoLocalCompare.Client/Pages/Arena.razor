@@ -29,7 +29,6 @@
         <div class="arena__viewports">
             <div class="arena__viewport-panel">
                 <SandboxedViewport
-                    @key="_refreshKey"
                     HtmlContent="@(_leftStreamingHtml ?? _leftResult?.HtmlOutputRaw ?? string.Empty)"
                     ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
                     IsLoser="@(_loserModelId == _duel.LeftModelId)"
@@ -47,7 +46,7 @@
                             <summary>Show technical details</summary>
                             <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
                         </details>
-                        <div class="arena__failure-hint">Try Re-Challenge with a different model pairing.</div>
+                        <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
                     </div>
                 }
                 @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
@@ -68,7 +67,6 @@
 
             <div class="arena__viewport-panel">
                 <SandboxedViewport
-                    @key="_refreshKey"
                     HtmlContent="@(_rightStreamingHtml ?? _rightResult?.HtmlOutputRaw ?? string.Empty)"
                     ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
                     IsLoser="@(_loserModelId == _duel.RightModelId)"
@@ -86,7 +84,7 @@
                             <summary>Show technical details</summary>
                             <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
                         </details>
-                        <div class="arena__failure-hint">Try Re-Challenge with a different model pairing.</div>
+                        <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
                     </div>
                 }
                 @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
@@ -123,7 +121,7 @@
             @if (BothSidesFailed())
             {
                 <div class="arena__judge-note arena__judge-note--error">
-                    Both models failed — Re-Challenge with a different pairing.
+                    Both models failed — start a new duel with a different pairing.
                 </div>
             }
             else if (_leftResult is not null || _rightResult is not null)
@@ -150,32 +148,6 @@
                 class="arena__action-btn"
             />
         </div>
-
-        <div class="arena__secondary-actions">
-            <button class="arena__source-btn" @onclick="ToggleSecondaryActions">
-                @(_showSecondaryActions ? "Hide extras" : "More actions")
-            </button>
-            @if (_showSecondaryActions)
-            {
-                <div class="arena__actions">
-                    <RadzenButton
-                        Text="🔄 Restart"
-                        ButtonStyle="ButtonStyle.Info"
-                        Size="ButtonSize.Medium"
-                        Click="@RestartViewports"
-                        class="arena__action-btn"
-                    />
-                    <RadzenButton
-                        Text="Re-Challenge"
-                        ButtonStyle="ButtonStyle.Secondary"
-                        Size="ButtonSize.Medium"
-                        Disabled="@_submitting"
-                        Click="@ReChallengeAsync"
-                        class="arena__action-btn"
-                    />
-                </div>
-            }
-        </div>
     }
 </div>
 
@@ -191,16 +163,11 @@
 
     private string? _winnerModelId;
     private string? _winnerDisplayName;
-    private int _refreshKey;
-
-    private void RestartViewports() => _refreshKey++;
     private string? _loserModelId;
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
 
-    private bool _showSecondaryActions;
-
-    // Both models failed → there's nothing to judge; the UI offers Re-Challenge instead.
+    // Both models failed → there's nothing to judge; the UI prompts a fresh duel instead.
     private bool BothSidesFailed() =>
         _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
 
@@ -289,20 +256,6 @@
             _submitting = false;
         }
     }
-
-    private async Task ReChallengeAsync()
-    {
-        if (_duel is null) return;
-
-        // Record verdict if not already done (caller may not have picked a winner before re-challenging)
-        // Navigation only — no forced verdict
-        var prompt = Uri.EscapeDataString(_duel.PromptText);
-        var leftId = Uri.EscapeDataString(_duel.LeftModelId);
-        var rightId = Uri.EscapeDataString(_duel.RightModelId);
-        Nav.NavigateTo($"/?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
-    }
-
-    private void ToggleSecondaryActions() => _showSecondaryActions = !_showSecondaryActions;
 
     private void ApplyEloShifts(DuelDto duel)
     {
