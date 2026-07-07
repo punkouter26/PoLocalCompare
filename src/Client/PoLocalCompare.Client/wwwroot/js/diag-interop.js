@@ -1,5 +1,5 @@
 /**
- * diag-interop.js — JS bridge for LocalModelLab.razor <-> webllm-worker.js
+ * diag-interop.js — JS bridge for ModelHealthPanel.razor <-> webllm-worker.js
  */
 
 const _diagWorkers = {};
@@ -46,11 +46,29 @@ window.checkWebNn = async function () {
 };
 
 // ── Model file detection ─────────────────────────────────────────────────────
+// Local presence is checked via the server API (a 200 JSON response) rather than a
+// static HEAD on mlc-chat-config.json, which logged a 404 in the browser console for
+// every not-yet-downloaded model. Only the CDN fallback uses a network probe (the
+// HuggingFace HEAD returns 200), so a fresh machine no longer floods the console.
 window.checkModelFile = async function (webLlmModelId, cdnBaseUrlTemplates) {
+    if (webLlmModelId) {
+        try {
+            const r = await fetch(`/api/models/download-status/${encodeURIComponent(webLlmModelId)}`,
+                { credentials: 'include', cache: 'no-store' });
+            if (r.ok) {
+                const status = await r.json();
+                if (status && status.downloaded) {
+                    return { available: true, source: 'local', baseUrl: `${window.location.origin}/models/${webLlmModelId}/` };
+                }
+            }
+        } catch { /* fall through to CDN probe */ }
+    }
+    // Not present locally → probe the configured CDN templates (skip the noisy local HEAD).
     return window.resolveBrowserModelAvailability(
         webLlmModelId,
         window.location.origin + '/models/',
-    cdnBaseUrlTemplates);
+        cdnBaseUrlTemplates,
+        /* skipLocalProbe */ true);
 };
 
 // ── Diagnostic runner ────────────────────────────────────────────────────────

@@ -1,13 +1,38 @@
 /* ════════════════════════════════════════════════════════════════
-   LocalModelLab.razor.css — scoped styles for the Local Model Lab
+   ModelHealthPanel.razor.css — collapsible model-health section
+   (consolidated from the former standalone Local Model Lab page)
    ════════════════════════════════════════════════════════════════ */
 
-/* ── Page shell ───────────────────────────────────────────────── */
-.lab {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 1.5rem 1rem 4rem;
+/* ── Collapsible panel shell ──────────────────────────────────── */
+.lab--panel {
+    border: 1px solid #1e2a44;
+    border-radius: 12px;
+    background: #070b14;
+    overflow: hidden;
 }
+
+.lab__panel-toggle {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    min-height: 52px;
+    background: transparent;
+    border: none;
+    color: #e8e8e8;
+    cursor: pointer;
+    text-align: left;
+}
+
+.lab__panel-toggle:hover { background: #0c1322; }
+.lab__panel-toggle-main { display: flex; flex-direction: column; gap: 0.15rem; }
+.lab__panel-toggle-title { font-weight: 700; font-size: 1rem; }
+.lab__panel-toggle-summary { font-size: 0.78rem; color: #8a8a9a; letter-spacing: 0.02em; }
+.lab__panel-toggle-chevron { color: #6b7280; font-size: 0.8rem; }
+.lab__panel-body { padding: 0 1rem 1.25rem; }
 
 .lab__title {
     font-size: 1.75rem;
@@ -38,7 +63,8 @@
     background: transparent;
     color: #96a4be;
     border-radius: 999px;
-    padding: 0.35rem 0.8rem;
+    padding: 0.55rem 1rem;
+    min-height: 40px;
     font-size: 0.76rem;
     font-weight: 600;
     cursor: pointer;
@@ -254,7 +280,8 @@
 
 /* ── Buttons ─────────────────────────────────────────────────── */
 .lab__btn {
-    padding: 0.4rem 0.9rem;
+    padding: 0.55rem 0.9rem;
+    min-height: 40px;
     font-size: 0.8rem;
     font-weight: 600;
     border-radius: 6px;
@@ -360,6 +387,7 @@
 .lab__vram-badge--caution { color: #c0a040; border-color: #3a3010; background: #1a1800; }
 .lab__vram-badge--warn  { color: #c06060; border-color: #4a2020; background: #1e0e0e; }
 .lab__vram-badge--ollama { color: #fb923c; border-color: #4a2a0a; background: #1e0e00; }
+.lab__vram-badge--remote { color: #7fb0ff; border-color: #1d3a6a; background: #0a1428; }
 
 .lab__vram-warn {
     font-size: 0.75rem;
@@ -518,12 +546,12 @@
 .lab__card-actions { flex-shrink: 0; }
 
 .lab__btn-sm {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     border-radius: 6px;
     border: none;
     cursor: pointer;
-    font-size: 0.7rem;
+    font-size: 0.85rem;
     font-weight: 700;
     transition: background 0.15s;
 }

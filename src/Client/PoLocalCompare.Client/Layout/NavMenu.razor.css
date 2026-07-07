@@ -8,6 +8,10 @@
     top: 0;
     z-index: 100;
     width: 100%;
+    /* Include the 1rem inline padding in the 100% width; without border-box the
+       header overflowed the viewport by 2rem and MainLayout's overflow-x:clip
+       sheared the right edge off the nav toggle on mobile portrait. */
+    box-sizing: border-box;
 }
 
 .container-fluid {

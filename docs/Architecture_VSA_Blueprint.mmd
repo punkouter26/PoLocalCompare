@@ -3,8 +3,8 @@
 %% Shared is restricted to DTOs/enums; the mobile-first Client talks only HTTP+SignalR.
 graph TD
     subgraph ClientProj["PoLocalCompare.Client — Blazor WASM (mobile-portrait-first, hosted by Api)"]
-        PAGES["Pages: Home · WarRoom · Processing · Arena<br/>Leaderboard · Archive · Lobby · LocalModelLab · Login"]
-        SVCS["Services: DuelApiClient (typed) · BffAuthenticationStateProvider<br/>WebLlmService (WebGPU) · SignalRDuelClient · SignalRLobbyClient<br/>CorrelationHandler · InferenceSessionStore · AudioService"]
+        PAGES["Pages: Home (+ ModelHealthPanel) · WarRoom · Processing<br/>Arena · Leaderboard · Archive · Login"]
+        SVCS["Services: DuelApiClient (typed) · BffAuthenticationStateProvider<br/>WebLlmService (WebGPU) · SignalRDuelClient<br/>CorrelationHandler · InferenceSessionStore · AudioService"]
     end
 
     subgraph SharedProj["PoLocalCompare.Shared — RESTRICTED assembly"]
@@ -18,7 +18,6 @@ graph TD
             MODELS["Models<br/>registry CRUD · availability probes<br/>ModelSeeder"]
             ARCH["Archive<br/>lab-report export + HTML renderer"]
             OLLA["Ollama<br/>gpu-status · tags · benchmark"]
-            LOBBY["Lobby<br/>LobbyHub"]
             DIAG["Diagnostics<br/>/health · /api/diag/*"]
         end
         subgraph Cross["Common/ (cross-slice only)"]
@@ -43,8 +42,7 @@ graph TD
 
     PAGES --> SVCS
     SVCS -->|"same-origin HTTPS + session cookie<br/>X-Session-ID / X-Correlation-ID"| ROOT
-    SVCS -->|"WebSocket /hubs/duel /hubs/lobby"| DUELS
-    SVCS -->|"WebSocket"| LOBBY
+    SVCS -->|"WebSocket /hubs/duel"| DUELS
     SVCS -.->|"references DTOs"| DTOS
     Slices -.->|"references DTOs"| DTOS
 

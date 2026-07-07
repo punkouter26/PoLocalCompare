@@ -200,11 +200,13 @@ public static class DuelsEndpoints
 
         // T077 — GET /api/duels (archive listing with pagination)
         group.MapGet("/", async (
-            [FromQuery] int limit,
+            [FromQuery] int? limit,
             [FromQuery] string? before,
             [FromServices] ListDuelsHandler handler) =>
         {
-            var clampedLimit = Math.Clamp(limit == 0 ? 20 : limit, 1, 100);
+            // `limit` is optional: an absent (or 0) value defaults to 20. Declaring it
+            // non-nullable/required previously returned 500 when callers omitted it.
+            var clampedLimit = Math.Clamp(limit is null or 0 ? 20 : limit.Value, 1, 100);
             var results = await handler.HandleAsync(new ListDuelsQuery(clampedLimit, before));
             return Results.Ok(results);
         })

@@ -23,7 +23,6 @@ All server code lives in `PoLocalCompare.Api` (VSA). Each slice is flat: endpoin
 | **Models** | `Features/Models/` | `Model` entity, registry CRUD, availability probes, WebLLM download status/trigger, `ModelSeeder` |
 | **Archive** | `Features/Archive/` | Lab-report export (`ExportLabReportHandler` + `HtmlLabReportRenderer`) |
 | **Ollama** | `Features/Ollama/` | GPU status, available-models, benchmark endpoints (dev-only value) |
-| **Lobby** | `Features/Lobby/` | `LobbyHub` — single shared room, server-validated host |
 | **Diagnostics** | `Features/Diagnostics/` | `/health`, `/api/diag/*`, E2E helpers (non-prod) |
 | *(cross-slice)* | `Common/` | Domain calculators, inference proxies, background queue, Key Vault, Azurite bootstrap, `RateLimitedSampler` |
 | *(cross-slice)* | `Auth/` | BFF cookie session, Microsoft OIDC, `FakeAuthHandler` (non-prod) |
@@ -53,7 +52,7 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 | `GET /api/ollama/gpu-status` · `/available-models` · `POST /benchmark` | Ollama | Local-only value; failures return empty/failure DTOs |
 | `GET /auth/me` · `/auth/login/microsoft` · `/auth/login/fake`¹ · `POST /auth/logout` | Auth | Anonymous; ¹non-Production only |
 | `GET /health` · `/api/diag/smoke` · `/api/diag/warnings` · `/diag` (Razor) | Diagnostics | Anonymous; no UI links |
-| `/hubs/duel` · `/hubs/lobby` | SignalR | `RequireAuthorization()` |
+| `/hubs/duel` | SignalR | `RequireAuthorization()` |
 | `POST /api/dev/reset` · `/scalar` · `/openapi` | Dev-only | Development host only |
 
 ## 4. Data (Azure Table Storage — see DatabaseSchema.mmd)
@@ -106,7 +105,6 @@ Each `.mmd` has a `*_simplified.mmd` twin and a rendered `.svg`.
 | `UI_Screen_Matrix` | stateDiagram-v2 | Routes, `AuthorizeRouteView` gating, layout-flash mitigations |
 | `Flow_Identity_BFF` | graph TD | OIDC challenge, cookie loop, `/auth/me` gates |
 | `Flow_Validation_Failures` | graph TD | Duels-slice validation pipeline UI→domain→storage |
-| `Flow_RealTime_Lobby` | graph LR | Lobby SignalR lifecycle, server-validated host |
 | `Architecture_VSA_Blueprint` | graph TD | Slice isolation, Client bounds, restricted Shared |
 | `Interaction_Trace` | sequenceDiagram | Razor → typed HttpClient → BFF cookie → handler → Table Storage |
 | `DatabaseSchema` | erDiagram | Tables, partition/row keys, relations |

@@ -44,6 +44,14 @@
         </li>
     </ol>
 
+    @* ── Model health (collapsible; replaces the standalone Local Model Lab) ── *@
+    @if (!_loading && _models.Count > 0)
+    {
+        <div class="wizard__health-panel">
+            <ModelHealthPanel Models="_models" />
+        </div>
+    }
+
     @* ── Step 1: Pick two models ─────────────────────────────────────── *@
     <section id="wizard-step-1" class="wizard__panel" aria-labelledby="step-1-heading">
         <div class="wizard__panel-head">
@@ -101,24 +109,45 @@
         }
         else
         {
-            <div class="wizard__grid">
-                @foreach (var model in _models)
+            <div class="wizard__filters" role="group" aria-label="Filter models by type">
+                @foreach (var f in _filters)
                 {
-                    var isLeft = model.ModelId == _leftModel?.ModelId;
-                    var isRight = model.ModelId == _rightModel?.ModelId;
-                    var isDisabled = _health is not null && !_healthHasRemotes && model.ModelType == ModelType.Remote;
-                    <div class="@(isDisabled ? "wizard__card-disabled" : "")">
-                        <ModelCard Model="model"
-                                   IsSelected="@(isLeft || isRight)"
-                                   Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
-                                   OnSelected="@(isDisabled ? EventCallback<ModelDto>.Empty : EventCallback.Factory.Create<ModelDto>(this, AssignModel))" />
-                        @if (isDisabled)
-                        {
-                            <span class="wizard__card-badge">Unavailable</span>
-                        }
-                    </div>
+                    <button class="wizard__btn wizard__btn--sm @(_modelFilter == f.Key ? "wizard__btn--primary" : "wizard__btn--ghost")"
+                            @onclick="@(() => _modelFilter = f.Key)">
+                        @f.Label (@ModelCountFor(f.Key))
+                    </button>
                 }
             </div>
+            @* Grouped by type (Remote / Browser / Ollama) to mirror the Model Health panel. *@
+            @foreach (var _group in FilteredModels.GroupBy(m => m.ModelType).OrderBy(g => ModelTypeGroup.Order(g.Key)))
+            {
+                <div class="wizard__group-header">
+                    <span class="wizard__group-name">@ModelTypeGroup.Label(_group.Key)</span>
+                    <span class="wizard__group-count">@_group.Count() model@(_group.Count() == 1 ? "" : "s")</span>
+                </div>
+                <div class="wizard__grid">
+                    @foreach (var model in _group)
+                    {
+                        var isLeft = model.ModelId == _leftModel?.ModelId;
+                        var isRight = model.ModelId == _rightModel?.ModelId;
+                        var isDisabled = _health is not null && !_healthHasRemotes && model.ModelType == ModelType.Remote;
+                        <div class="@(isDisabled ? "wizard__card-disabled" : "")">
+                            <ModelCard Model="model"
+                                       IsSelected="@(isLeft || isRight)"
+                                       Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
+                                       OnSelected="@(isDisabled ? EventCallback<ModelDto>.Empty : EventCallback.Factory.Create<ModelDto>(this, AssignModel))" />
+                            @if (isDisabled)
+                            {
+                                <span class="wizard__card-badge">Unavailable</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            @if (!FilteredModels.Any())
+            {
+                <p class="wizard__hint">No models of this type are available.</p>
+            }
         }
     </section>
 
@@ -184,9 +213,9 @@
                         <a class="wizard__recent-item @(d.Verdict == DuelVerdict.Pending ? "wizard__recent-item--pending" : "")" href="@href">
                             <span class="wizard__recent-prompt">@d.PromptSummary</span>
                             <span class="wizard__recent-meta">
-                                @d.LeftModelName <em>vs</em> @d.RightModelName ·
-                                @if (d.Verdict == DuelVerdict.Left) { <span class="wizard__recent-winner">🏆 @d.LeftModelName</span> }
-                                else if (d.Verdict == DuelVerdict.Right) { <span class="wizard__recent-winner">🏆 @d.RightModelName</span> }
+                                @CleanName(d.LeftModelName) <em>vs</em> @CleanName(d.RightModelName) ·
+                                @if (d.Verdict == DuelVerdict.Left) { <span class="wizard__recent-winner">🏆 @CleanName(d.LeftModelName)</span> }
+                                else if (d.Verdict == DuelVerdict.Right) { <span class="wizard__recent-winner">🏆 @CleanName(d.RightModelName)</span> }
                                 else { <span class="wizard__recent-pending">⚖ Judge</span> }
                             </span>
                         </a>
@@ -251,6 +280,44 @@
         (true, false) => "Write a prompt above to enable Compare.",
         _ => $"Ready: {_leftModel!.DisplayName} vs {_rightModel!.DisplayName}."
     };
+
+    // ── Model-type filter for the Step 1 list (keeps the mobile list scannable) ──
+    private string _modelFilter = "all";
+    private static readonly (string Key, string Label)[] _filters =
+    [
+        ("all", "All"),
+        ("remote", "Remote"),
+        ("browser", "Browser"),
+        ("ollama", "Ollama"),
+    ];
+
+    private IEnumerable<ModelDto> FilteredModels => _models.Where(MatchesFilter);
+
+    private bool MatchesFilter(ModelDto m) => _modelFilter switch
+    {
+        "remote"  => m.ModelType == ModelType.Remote,
+        "browser" => m.ModelType == ModelType.Local,
+        "ollama"  => m.ModelType == ModelType.LocalService,
+        _         => true,
+    };
+
+    private int ModelCountFor(string key) => key switch
+    {
+        "remote"  => _models.Count(m => m.ModelType == ModelType.Remote),
+        "browser" => _models.Count(m => m.ModelType == ModelType.Local),
+        "ollama"  => _models.Count(m => m.ModelType == ModelType.LocalService),
+        _         => _models.Count,
+    };
+
+    // Older/seed duel records stored a raw model ID in the name field (26-char ULIDs
+    // and 25-char "01SEED…" seeds). Show a neutral label instead of leaking the ID.
+    // Matches an unbroken run of 16+ uppercase letters/digits (no spaces, dashes or
+    // dots — real display names like "GPT-5.4 Nano" always have one) or a GUID.
+    private static readonly System.Text.RegularExpressions.Regex _idLike =
+        new(@"^([0-9A-Z]{16,}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$");
+
+    private static string CleanName(string? name)
+        => string.IsNullOrWhiteSpace(name) || _idLike.IsMatch(name.Trim()) ? "Unknown model" : name;
 
     protected override async Task OnInitializedAsync()
     {

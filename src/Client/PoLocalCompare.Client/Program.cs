@@ -29,7 +29,6 @@ try
     builder.Services.AddScoped<AudioService>();
     builder.Services.AddScoped<WebLlmService>();
     builder.Services.AddTransient<SignalRDuelClient>();
-    builder.Services.AddTransient<SignalRLobbyClient>();
     await builder.Build().RunAsync();
 }
 catch (Exception ex)

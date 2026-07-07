@@ -6,7 +6,7 @@ graph TD
 
     subgraph API_Slices["Api Features/ — isolated vertical slices"]
         D["Duels"] --- L["Leaderboard"] --- M["Models"]
-        A["Archive"] --- O["Ollama"] --- LB["Lobby"] --- DG["Diagnostics"]
+        A["Archive"] --- O["Ollama"] --- DG["Diagnostics"]
     end
     API --> API_Slices
     API --> COMMON["Common/ + Auth/<br/>cross-slice only"]

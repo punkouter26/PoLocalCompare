@@ -39,21 +39,18 @@ stateDiagram-v2
     state "Arena  route /arena/{DuelId}" as Arena
     state "Leaderboard  route /leaderboard" as Leaderboard
     state "Archive  route /archive" as Archive
-    state "Lobby  route /lobby" as Lobby
-    state "LocalModelLab  route /local-model-lab" as Lab
+    state "Model health (collapsible section on Home)" as Lab
     state "NotFound  route /not-found" as NotFound
 
     Home --> WarRoom : Start a duel
-    Home --> Lobby : Multiplayer lobby
     WarRoom --> Processing : POST /api/duels → 202
-    Lobby --> Processing : DuelStarting broadcast
     Processing --> Arena : DuelComplete via /hubs/duel
     Arena --> Leaderboard : verdict recorded
     Arena --> Archive : browse history
     Archive --> Arena : re-open duel
     Home --> Leaderboard
     Home --> Archive
-    Home --> Lab : benchmark WebLLM / Ollama
+    Home --> Lab : expand model-health panel
     Home --> NotFound : unknown route (Router NotFoundPage)
 
     Home --> LoginView : POST /auth/logout (any screen)

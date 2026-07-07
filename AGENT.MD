@@ -67,7 +67,6 @@ PoLocalCompare.slnx
 │   │   │   ├── Models/                 ← endpoints, handlers, Model entity, ModelRepository, ModelSeeder
 │   │   │   ├── Archive/                ← lab-report export handler + HTML renderer
 │   │   │   ├── Ollama/                 ← status/pull endpoints
-│   │   │   ├── Lobby/                  ← LobbyHub (SignalR)
 │   │   │   └── Diagnostics/            ← /health, /api/diag/*, E2E helpers
 │   │   ├── Common/
 │   │   │   ├── Domain/                 ← cross-slice calculators & value objects
@@ -88,7 +87,7 @@ PoLocalCompare.slnx
 │   └── Client/
 │       └── PoLocalCompare.Client/      ← Blazor WASM (hosted by Api)
 │           ├── Pages/                  ← Home, WarRoom, Processing, Arena, Leaderboard,
-│           │                             Archive, LocalModelLab, Login
+│           │                             Archive, Login (model-health is a Home section)
 │           ├── Components/
 │           ├── Services/               ← DuelApiClient, BffAuthenticationStateProvider,
 │           │                             WebLlmService, SignalRDuelClient, AudioService,

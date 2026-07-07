@@ -322,7 +322,6 @@ try
 
     // ─── SignalR hubs (auth required) ──────────────────────────────────────────
     app.MapHub<DuelHub>("/hubs/duel").RequireAuthorization();
-    app.MapHub<LobbyHub>("/hubs/lobby").RequireAuthorization();
 
     // ─── API endpoints ────────────────────────────────────────────────────────
     app.MapModelsEndpoints();

@@ -34,26 +34,6 @@
                         <span class="nav-text">Archive</span>
                     </NavLink>
                 </li>
-                <li class="nav-item nav-item--kebab" @onclick="ToggleToolsMenu" @onclick:stopPropagation="true">
-                    <button class="nav-link nav-kebab" aria-label="More tools" aria-expanded="@_toolsMenuOpen">
-                        <span aria-hidden="true">⋯</span>
-                    </button>
-                    @if (_toolsMenuOpen)
-                    {
-                        <ul class="nav-kebab-menu" role="menu">
-                            <li role="menuitem">
-                                <NavLink class="nav-kebab-link" href="local-model-lab" @onclick="CloseToolsMenu">
-                                    🧪 Local Lab
-                                </NavLink>
-                            </li>
-                            <li role="menuitem">
-                                <NavLink class="nav-kebab-link" href="lobby" @onclick="CloseToolsMenu">
-                                    🎮 Lobby
-                                </NavLink>
-                            </li>
-                        </ul>
-                    }
-                </li>
             </ul>
 
             @* ── User identity / auth (standards §6) ── *@
@@ -101,13 +81,10 @@
     private bool _isGuest;
     private bool _usingMockData;
     private bool _allowGuest;
-    private bool _toolsMenuOpen;
 
     private string NavMenuCssClass => collapseNavMenu ? "navbar-collapse" : "navbar-collapse nav-open";
 
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
-    private void ToggleToolsMenu() => _toolsMenuOpen = !_toolsMenuOpen;
-    private void CloseToolsMenu() => _toolsMenuOpen = false;
 
     protected override async Task OnInitializedAsync()
     {

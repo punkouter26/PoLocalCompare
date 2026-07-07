@@ -34,6 +34,7 @@ public sealed class ModelDiagState
         Model.WebLlmModelId?.StartsWith("SmolLM2", StringComparison.OrdinalIgnoreCase) == true;
 
     public bool IsOllamaModel => Model.ModelType == PoLocalCompare.Shared.Enums.ModelType.LocalService;
+    public bool IsRemoteModel => Model.ModelType == PoLocalCompare.Shared.Enums.ModelType.Remote;
     public bool UsesCdnAssets => AssetSource.StartsWith("cdn", StringComparison.OrdinalIgnoreCase);
 
     private static readonly Dictionary<string, (int Mb, string Label)> _vramTable = new()

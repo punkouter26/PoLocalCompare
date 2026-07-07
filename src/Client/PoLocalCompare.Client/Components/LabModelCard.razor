@@ -13,7 +13,11 @@
                 }
             </div>
             <div class="lab__card-title-meta">
-                @if (State.IsOllamaModel)
+                @if (State.IsRemoteModel)
+                {
+                    <span class="lab__vram-badge lab__vram-badge--remote" title="Runs on Azure AI Foundry">☁ Remote</span>
+                }
+                else if (State.IsOllamaModel)
                 {
                     <span class="lab__vram-badge lab__vram-badge--ollama" title="Runs via local Ollama daemon">🦙 Ollama</span>
                 }
@@ -29,22 +33,26 @@
             }
         </div>
         <div class="lab__card-actions">
-            @if (State.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
+            @* Remote models are verified by reachability (no in-browser run). *@
+            @if (!State.IsRemoteModel)
             {
-                <button class="lab__btn-sm lab__btn-sm--run"
-                        title="Run diagnostic"
-                        @onclick="HandleRun"
-                        disabled="@(State.IsDownloaded != true || (!State.IsOllamaModel && WebGpuSupported != true))">
-                    ▶
-                </button>
-            }
-            else
-            {
-                <button class="lab__btn-sm lab__btn-sm--cancel"
-                        title="Cancel"
-                        @onclick="HandleCancel">
-                    ■
-                </button>
+                @if (State.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
+                {
+                    <button class="lab__btn-sm lab__btn-sm--run"
+                            title="Run diagnostic"
+                            @onclick="HandleRun"
+                            disabled="@(State.IsDownloaded != true || (!State.IsOllamaModel && WebGpuSupported != true))">
+                        ▶
+                    </button>
+                }
+                else
+                {
+                    <button class="lab__btn-sm lab__btn-sm--cancel"
+                            title="Cancel"
+                            @onclick="HandleCancel">
+                        ■
+                    </button>
+                }
             }
         </div>
     </div>
@@ -52,9 +60,24 @@
     @* Model ID chip — show ApiEndpointRef for Ollama, WebLlmModelId for browser *@
     <div class="lab__model-id">@(State.IsOllamaModel ? State.Model.ApiEndpointRef : State.Model.WebLlmModelId)</div>
 
-    @* Download status — Ollama models show availability instead *@
+    @* Download status — Ollama & Remote models show availability instead *@
     <div class="lab__download-row">
-        @if (State.IsOllamaModel)
+        @if (State.IsRemoteModel)
+        {
+            @if (State.IsDownloaded is null)
+            {
+                <span class="lab__badge lab__badge--checking">⏳ Checking deployment…</span>
+            }
+            else if (State.IsDownloaded == true)
+            {
+                <span class="lab__badge lab__badge--ok">✅ Deployment reachable</span>
+            }
+            else
+            {
+                <span class="lab__badge lab__badge--missing">⚠ Azure deployment unreachable</span>
+            }
+        }
+        else if (State.IsOllamaModel)
         {
             @if (State.IsDownloaded is null)
             {
@@ -85,7 +108,7 @@
             }
         }
     </div>
-    @if (!State.IsOllamaModel && State.IsDownloaded == false)
+    @if (!State.IsOllamaModel && !State.IsRemoteModel && State.IsDownloaded == false)
     {
         <div class="lab__download-hint">
             @if (State.Downloading)
@@ -101,12 +124,6 @@
                 </button>
             }
             <span class="lab__download-note">Asset: /models/@State.Model.WebLlmModelId/mlc-chat-config.json</span>
-        </div>
-    }
-    else if (!State.IsOllamaModel && State.UsesCdnAssets)
-    {
-        <div class="lab__download-hint">
-            <span class="lab__download-note">Downloads on first run from the configured CDN.</span>
         </div>
     }
 

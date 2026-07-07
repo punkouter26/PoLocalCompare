@@ -255,6 +255,38 @@
 }
 
 /* ── Model grid + disabled card overlay (Finding #1/#5) ─────────────── */
+.wizard__health-panel {
+    margin-bottom: 1rem;
+}
+
+.wizard__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.wizard__group-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.35rem 0.1rem;
+    margin: 0.85rem 0 0.5rem;
+    border-bottom: 1px solid var(--oled-border, #2a2a3a);
+}
+
+.wizard__group-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--oled-text, #e8e8e8);
+}
+
+.wizard__group-count {
+    font-size: 0.72rem;
+    color: var(--oled-text-muted, #8a8a9a);
+}
+
 .wizard__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

@@ -62,8 +62,8 @@ function getCdnTemplates(cdnBaseUrlTemplates) {
     return [cdnBaseUrlTemplates];
 }
 
-window.resolveBrowserModelAvailability = async function (webLlmModelId, localModelBaseUrl, cdnBaseUrlTemplates) {
-    const cacheKey = `${webLlmModelId}|${localModelBaseUrl}|${getCdnTemplates(cdnBaseUrlTemplates).join('|')}`;
+window.resolveBrowserModelAvailability = async function (webLlmModelId, localModelBaseUrl, cdnBaseUrlTemplates, skipLocalProbe = false) {
+    const cacheKey = `${webLlmModelId}|${localModelBaseUrl}|${getCdnTemplates(cdnBaseUrlTemplates).join('|')}|${skipLocalProbe ? 'nolocal' : 'local'}`;
     const cached = availabilityCache.get(cacheKey);
     if (cached && Date.now() - cached.at < AVAILABILITY_TTL_MS) {
         return cached.value;
@@ -75,7 +75,10 @@ window.resolveBrowserModelAvailability = async function (webLlmModelId, localMod
 
     const resolvePromise = (async () => {
     const localBaseUrl = normalizeModelBaseUrl(`${normalizeModelBaseUrl(localModelBaseUrl)}${webLlmModelId}`);
-    if (await canReachModelConfig(localBaseUrl)) {
+    // Callers that have already determined local presence out-of-band (e.g. the Lab's
+    // quiet server-side check) pass skipLocalProbe to avoid a static HEAD that logs a
+    // 404 in the console for every not-yet-downloaded model.
+    if (!skipLocalProbe && await canReachModelConfig(localBaseUrl)) {
         return { available: true, source: 'local', baseUrl: localBaseUrl };
     }
 
