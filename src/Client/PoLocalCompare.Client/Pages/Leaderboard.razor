@@ -112,15 +112,15 @@
                     </Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="OutputQualityAvg" Title="🧪 Output Quality" Width="160px"
-                    HeaderTooltip="Average persisted HTML quality score (0-100).">
+                    HeaderTooltip="0–100 score from automated renderability + structure checks on each model's HTML output. Higher = more polished, self-contained HTML.">
                     <Template Context="entry">
                         @if (entry.OutputQualityAvg.HasValue)
                         {
-                            <span title="@($"{entry.OutputQualityAvg.Value:F1}")">@entry.OutputQualityAvg.Value.ToString("F1")</span>
+                            <span title="@($"Last quality score: {entry.OutputQualityAvg.Value:F1} / 100")">@entry.OutputQualityAvg.Value.ToString("F1")</span>
                         }
                         else
                         {
-                            <span style="color: var(--rz-text-secondary-color);">—</span>
+                            <span style="color: var(--rz-text-secondary-color);" title="No scored outputs yet — run a duel to generate one">—</span>
                         }
                     </Template>
                 </RadzenDataGridColumn>

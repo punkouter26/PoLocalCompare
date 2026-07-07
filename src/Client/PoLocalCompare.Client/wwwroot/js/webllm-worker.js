@@ -70,8 +70,10 @@ self.onmessage = async (event) => {
         if (!engine || !isAlreadyCached) {
             // Look up model_lib (WASM URL) from prebuilt config so local models get the correct WASM library
             const prebuiltEntry = webllm.prebuiltAppConfig?.model_list?.find(m => m.model_id === effectiveModelId);
+            // localModelBaseUrl already points at this model's root (resolveBrowserModelAvailability
+            // probed <baseUrl>mlc-chat-config.json) — do not append the model id again.
             const appConfig = localModelBaseUrl
-                ? { model_list: [{ model: localModelBaseUrl + effectiveModelId + '/', model_id: effectiveModelId, model_lib: prebuiltEntry?.model_lib }] }
+                ? { model_list: [{ model: localModelBaseUrl, model_id: effectiveModelId, model_lib: prebuiltEntry?.model_lib }] }
                 : undefined;
 
             console.log(`[WebLLM Worker] Creating MLCEngine — effectiveModelId="${effectiveModelId}" appConfig=`, appConfig ?? '(none, using CDN)');

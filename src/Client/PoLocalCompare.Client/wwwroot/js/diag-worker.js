@@ -21,9 +21,11 @@ self.onmessage = async (event) => {
 
         // Look up model_lib (WASM URL) from prebuilt config so local models get the correct WASM library
         const prebuiltEntry = webllm.prebuiltAppConfig?.model_list?.find(m => m.model_id === webLlmModelId);
+        // localModelBaseUrl already points at this model's root (resolveBrowserModelAvailability
+        // probed <baseUrl>mlc-chat-config.json) — do not append the model id again.
         const appConfig = {
             model_list: [{
-                model: localModelBaseUrl + webLlmModelId + '/',
+                model: localModelBaseUrl,
                 model_id: webLlmModelId,
                 model_lib: prebuiltEntry?.model_lib,
             }],

@@ -111,7 +111,7 @@
                         <ModelCard Model="model"
                                    IsSelected="@(isLeft || isRight)"
                                    Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
-                                   OnSelected="@(isDisabled ? EventCallback<ModelDto>.Empty : AssignModel)" />
+                                   OnSelected="@(isDisabled ? EventCallback<ModelDto>.Empty : EventCallback.Factory.Create<ModelDto>(this, AssignModel))" />
                         @if (isDisabled)
                         {
                             <span class="wizard__card-badge">Unavailable</span>

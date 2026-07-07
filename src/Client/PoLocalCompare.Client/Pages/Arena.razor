@@ -78,14 +78,14 @@
                     <TelemetryHud Result="_rightResult" />
                 </div>
                 @if (_rightResult?.IsFailure == true)
-                {etails class="arena__failure-details">
-                            <summary>Show technical details</summary>
-                            <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
-                        </details>
-                        <d
+                {
                     <div class="arena__failure-card">
                         <div class="arena__failure-title">❌ @(_rightResult.ModelName ?? _duel.RightModelId) failed</div>
                         <div class="arena__failure-body">@(_rightResult.FailureReason ?? "No reason provided by the model runtime.")</div>
+                        <details class="arena__failure-details">
+                            <summary>Show technical details</summary>
+                            <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
+                        </details>
                         <div class="arena__failure-hint">Try Re-Challenge with a different model pairing.</div>
                     </div>
                 }
