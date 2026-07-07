@@ -1,7 +1,7 @@
 // SOLID: Single Responsibility
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Application.Models.RegisterModel;
+namespace PoLocalCompare.Api.Features.Models;
 
 public sealed record RegisterModelCommand(
     string DisplayName,

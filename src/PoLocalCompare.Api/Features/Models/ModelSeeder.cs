@@ -1,11 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Infrastructure.Persistence;
+namespace PoLocalCompare.Api.Features.Models;
 
 /// <summary>
 /// Seeds the default set of models into the Model Registry on first run.

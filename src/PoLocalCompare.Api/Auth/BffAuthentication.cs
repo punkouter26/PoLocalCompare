@@ -130,6 +130,9 @@ public static class BffAuthentication
             options.DefaultPolicy = new AuthorizationPolicyBuilder(schemes)
                 .RequireAuthenticatedUser()
                 .Build();
+            // Deny-by-default (standards §4.5): every endpoint requires auth unless it
+            // explicitly opts out with AllowAnonymous.
+            options.FallbackPolicy = options.DefaultPolicy;
         });
 
         return builder;

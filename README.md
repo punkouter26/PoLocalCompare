@@ -58,22 +58,20 @@ pip install huggingface_hub
 ```
 PoLocalCompare.slnx
 ├─ src/
-│  ├─ PoLocalCompare.Domain/          # Entities, Value Objects, Domain Services
-│  │   └─ Services/EloCalculator.cs  # Pure ELO formula (testable in isolation)
-│  ├─ PoLocalCompare.Application/     # Use-case handlers, Application interfaces
-│  │   └─ Handlers: CommenceDuel, RecordVerdict, GetLeaderboard, ExportLabReport
-│  ├─ PoLocalCompare.Infrastructure/  # Azure Table Storage repos, Foundry proxy
-│  │   └─ Persistence/TableStorage/  # ModelRepository, DuelRepository, etc.
+│  ├─ PoLocalCompare.Api/             # Minimal API + SignalR + Blazor host — VSA slices
+│  │   ├─ Features/                   # Duels, Leaderboard, Models, Archive, Ollama, Lobby, Diagnostics
+│  │   │   └─ (endpoint + handlers + entities + repository per feature, flat)
+│  │   ├─ Common/                     # Domain calculators, Inference proxies, KeyVault, Background, Telemetry
+│  │   └─ Auth/                       # BFF cookie session + Microsoft OIDC + dev fake scheme
 │  ├─ PoLocalCompare.Shared/          # DTOs and Enums shared with WASM client
 │  │   └─ DTOs/, Enums/
-│  ├─ PoLocalCompare.Api/             # ASP.NET Core minimal API + SignalR + Blazor host
-│  │   └─ Endpoints/, Hubs/, Services/, Infrastructure/
 │  └─ Client/PoLocalCompare.Client/   # Blazor WASM — 5 pages + Web Worker
 │      └─ Pages/: WarRoom, Processing, Arena, Leaderboard, Archive, LocalModelLab
 ├─ tests/
-│  ├─ unit/                           # xUnit + Moq (Domain, Application)
-│  ├─ integration/                    # WebApplicationFactory + Testcontainers.Azurite
-│  └─ e2e/                            # Playwright TypeScript
+│  ├─ PoLocalCompare.UnitTests/       # xUnit + Moq (pure logic)
+│  ├─ PoLocalCompare.IntegrationTests/# WebApplicationFactory + Testcontainers.Azurite
+│  ├─ PoLocalCompare.E2EAPI/          # Full client-server journeys over HTTP
+│  └─ PoLocalCompare.E2EUI/           # C# Playwright UI tests
 ├─ infra/main.bicep                   # Azure resource definitions
 └─ docs/                              # Consolidated documentation (this folder)
 ```
@@ -156,9 +154,10 @@ EnergyCostUsd = EnergyWh * ElectricityRateUsd
 
 | Layer | Command | Location |
 |---|---|---|
-| **Unit** | `dotnet test tests/unit/` | `tests/unit/PoLocalCompare.Unit.Tests/` |
-| **Integration** | `dotnet test tests/integration/` | `tests/integration/PoLocalCompare.Integration.Tests/` |
-| **E2E** | `npx playwright test` | `tests/e2e/PoLocalCompare.E2E/` |
+| **Unit** | `dotnet test tests/PoLocalCompare.UnitTests` | `tests/PoLocalCompare.UnitTests/` |
+| **Integration** | `dotnet test tests/PoLocalCompare.IntegrationTests` | `tests/PoLocalCompare.IntegrationTests/` |
+| **E2E API** | `dotnet test tests/PoLocalCompare.E2EAPI` | `tests/PoLocalCompare.E2EAPI/` |
+| **E2E UI** | `dotnet test tests/PoLocalCompare.E2EUI` | `tests/PoLocalCompare.E2EUI/` |
 
 ### Key Test Coverage
 
@@ -173,19 +172,17 @@ EnergyCostUsd = EnergyWh * ElectricityRateUsd
 
 See [`docs/Architecture_MASTER.mmd`](docs/Architecture_MASTER.mmd) for the hybrid C4 Level 1/2 diagram.
 
-### Onion / Clean Architecture
+### Vertical Slice Architecture (VSA)
 
 ```
-Dependency arrow points inward:
-Domain ← Application ← Infrastructure ← Api
-                    ↑
-                 Client (WASM)
+PoLocalCompare.Api/Features/<Feature>/   ← endpoint + handlers + entities + repository, flat per feature
+PoLocalCompare.Api/Common/               ← cross-slice domain services, inference proxies, host plumbing
 ```
 
-- **Domain** has zero external dependencies
-- **Application** only knows domain interfaces (DIP)
-- **Infrastructure** implements repository interfaces
-- **Api** orchestrates HTTP + SignalR + background tasks
+- Each **feature slice** owns its endpoint, command/query handlers, entities, and Table Storage repository
+- **Common/** holds only genuinely cross-slice code (Elo/green-score calculators, Foundry/Ollama proxies, Key Vault, background queue)
+- **Api** hosts HTTP + SignalR + background tasks and serves the WASM client from the same origin
+- See ADR 0002 (`docs/adr/`) for the migration record
 
 ### Azure Table Storage Schema
 

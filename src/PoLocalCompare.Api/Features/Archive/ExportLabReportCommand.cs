@@ -1,3 +1,3 @@
-namespace PoLocalCompare.Application.Archive.ExportLabReport;
+namespace PoLocalCompare.Api.Features.Archive;
 
 public sealed record ExportLabReportCommand(string DuelId);

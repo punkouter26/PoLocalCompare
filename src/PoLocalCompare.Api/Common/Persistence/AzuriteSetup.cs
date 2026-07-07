@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace PoLocalCompare.Infrastructure.Persistence;
+namespace PoLocalCompare.Api.Common.Persistence;
 
 /// <summary>
 /// Creates Azure Table Storage tables required by the application if they don't already exist.

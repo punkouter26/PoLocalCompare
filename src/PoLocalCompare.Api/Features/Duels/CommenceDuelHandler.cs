@@ -1,11 +1,9 @@
 // SOLID: Open/Closed — new model types extend without modifying handler
 using NUlid;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Application.Duels.CommenceDuel;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class CommenceDuelHandler(
     IModelRepository modelRepository,

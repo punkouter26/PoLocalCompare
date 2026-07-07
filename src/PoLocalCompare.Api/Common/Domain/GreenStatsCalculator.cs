@@ -1,5 +1,5 @@
 // SOLID: Single Responsibility
-namespace PoLocalCompare.Domain.Services;
+namespace PoLocalCompare.Api.Common.Domain;
 
 /// <summary>
 /// Pure arithmetic Green Stats calculator — no I/O, no external dependencies.

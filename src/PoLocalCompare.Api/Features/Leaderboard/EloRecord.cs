@@ -1,5 +1,5 @@
 // GoF: Entity (immutable)
-namespace PoLocalCompare.Domain.Entities;
+namespace PoLocalCompare.Api.Features.Leaderboard;
 
 public sealed class EloRecord
 {

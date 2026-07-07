@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 
-namespace PoLocalCompare.Api.Endpoints;
+namespace PoLocalCompare.Api.Features.Diagnostics;
 
 /// <summary>
 /// Dev/test-only endpoints that support E2E test setup.
@@ -22,7 +22,7 @@ internal static class E2EEndpoints
                 ? "/"
                 : redirect;
             return Results.Redirect($"/auth/login/fake?user={GuestIdentity}&returnUrl={Uri.EscapeDataString(safeRedirect)}");
-        }).ExcludeFromDescription(); // hide from OpenAPI
+        }).ExcludeFromDescription().AllowAnonymous(); // hide from OpenAPI
 
         return app;
     }

@@ -1,7 +1,6 @@
 // SOLID: Single Responsibility — lab report export coordinates data loading + rendering only
-using PoLocalCompare.Application.Interfaces;
 
-namespace PoLocalCompare.Application.Archive.ExportLabReport;
+namespace PoLocalCompare.Api.Features.Archive;
 
 public sealed class ExportLabReportHandler
 {

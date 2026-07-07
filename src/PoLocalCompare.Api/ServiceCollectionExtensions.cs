@@ -1,15 +1,4 @@
 using Microsoft.Extensions.Caching.Hybrid;
-using PoLocalCompare.Api.Services;
-using PoLocalCompare.Application.Archive.ExportLabReport;
-using PoLocalCompare.Application.Duels.CommenceDuel;
-using PoLocalCompare.Application.Duels.GetDuel;
-using PoLocalCompare.Application.Duels.ListDuels;
-using PoLocalCompare.Application.Duels.RecordVerdict;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Application.Leaderboard.GetKillList;
-using PoLocalCompare.Application.Leaderboard.GetLeaderboard;
-using PoLocalCompare.Application.Models.ListModels;
-using PoLocalCompare.Application.Models.RegisterModel;
 
 namespace PoLocalCompare.Api;
 

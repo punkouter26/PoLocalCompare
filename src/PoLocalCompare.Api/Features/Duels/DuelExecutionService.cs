@@ -4,14 +4,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using PoLocalCompare.Api.Hubs;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Services;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Api.Services;
+namespace PoLocalCompare.Api.Features.Duels;
 
 /// <summary>Source-generated, allocation-free log messages for the duel execution hot path.</summary>
 internal static partial class DuelExecutionLog
@@ -100,7 +96,22 @@ public sealed class DuelExecutionService
             await Task.WhenAll(leftTask, rightTask);
 
             duel.CompletedAt = DateTimeOffset.UtcNow;
-            await duelRepo.UpdateAsync(duel);
+            try
+            {
+                await duelRepo.UpdateAsync(duel);
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 412)
+            {
+                // A verdict landed while inference ran (standards §5.5): re-read and
+                // reapply only the completion timestamp instead of clobbering the verdict.
+                var fresh = await duelRepo.GetByIdAsync(duelId);
+                if (fresh is not null)
+                {
+                    fresh.CompletedAt ??= duel.CompletedAt;
+                    await duelRepo.UpdateAsync(fresh);
+                    duel = fresh;
+                }
+            }
 
             await _hubContext.Clients
                 .Group($"duel:{duelId}")

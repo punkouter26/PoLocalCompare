@@ -1,5 +1,5 @@
 // GoF: Entity
-namespace PoLocalCompare.Domain.Entities;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class DuelResult
 {

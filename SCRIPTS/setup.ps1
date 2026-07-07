@@ -185,6 +185,45 @@ try {
     Pop-Location
 }
 
+# ─── 4.5 Ecosystem repos + absolute tool (standards §3.4) ───────────────────
+Write-Step "Ensuring ecosystem repositories and tools"
+
+$ecosystemRoot = Split-Path -Parent $RepoRoot
+$ecosystemRepos = @(
+    @{ Name = 'gstack';              Url = 'https://github.com/punkouter26/gstack.git' },
+    @{ Name = 'Understand-Anything'; Url = 'https://github.com/punkouter26/Understand-Anything.git' },
+    @{ Name = 'graphify';            Url = 'https://github.com/punkouter26/graphify.git' }
+)
+foreach ($repo in $ecosystemRepos) {
+    $target = Join-Path $ecosystemRoot $repo.Name
+    if (Test-Path $target) {
+        Write-Ok "$($repo.Name) already present at $target"
+    } else {
+        try {
+            git clone --depth 1 $repo.Url $target 2>$null | Out-Null
+            Write-Ok "$($repo.Name) cloned to $target"
+        }
+        catch {
+            Write-Warn "Could not clone $($repo.Name) from $($repo.Url) — clone it manually if needed"
+        }
+    }
+}
+
+# absolute (https://github.com/maddhruv/absolute) — installed globally via npm.
+if (Get-Command absolute -ErrorAction SilentlyContinue) {
+    Write-Ok "absolute tool already installed"
+} elseif (Get-Command npm -ErrorAction SilentlyContinue) {
+    try {
+        npm install --global github:maddhruv/absolute | Out-Null
+        Write-Ok "absolute tool installed"
+    }
+    catch {
+        Write-Warn "npm install of absolute failed — install manually: npm i -g github:maddhruv/absolute"
+    }
+} else {
+    Write-Warn "npm not found — install Node.js, then: npm i -g github:maddhruv/absolute"
+}
+
 # ─── 5. Download local LLM models (optional) ─────────────────────────────────
 if (-not $SkipModels) {
     Write-Step "Downloading WebLLM models (this may take a while; skip with -SkipModels)"

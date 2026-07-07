@@ -6,16 +6,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PoLocalCompare.Infrastructure\PoLocalCompare.Infrastructure.csproj" />
     <ProjectReference Include="..\PoLocalCompare.Shared\PoLocalCompare.Shared.csproj" />
     <ProjectReference Include="..\Client\PoLocalCompare.Client\PoLocalCompare.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI" />
+    <PackageReference Include="Azure.AI.Inference" />
+    <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="NUlid" />
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Serilog.AspNetCore" />

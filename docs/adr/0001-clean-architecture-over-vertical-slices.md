@@ -1,6 +1,6 @@
 # ADR 0001 — Clean/Onion layering instead of Vertical Slice Architecture
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0002](0002-migrate-to-vertical-slices.md)
 - **Date:** 2026-06-24
 - **Deciders:** PoLocalCompare maintainers
 

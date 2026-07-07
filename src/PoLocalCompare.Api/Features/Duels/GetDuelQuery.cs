@@ -1,3 +1,3 @@
-namespace PoLocalCompare.Application.Duels.GetDuel;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed record GetDuelQuery(string DuelId);

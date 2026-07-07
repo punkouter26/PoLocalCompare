@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\PoLocalCompare.Api\PoLocalCompare.Api.csproj" />
+    <ProjectReference Include="..\..\src\PoLocalCompare.Api\PoLocalCompare.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

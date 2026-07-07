@@ -36,7 +36,7 @@
 | **Storage (local)** | Azurite Docker container (ports 10000–10002) |
 | **Storage (Azure)** | Azure Table Storage |
 | **Secrets** | Azure Key Vault (`kv-poshared`, shared, **access-policy mode**) + App Service settings fallback |
-| **Identity** | User-Assigned Managed Identity `mi-poshared-containerapps` (shared `PoShared` RG) |
+| **Identity** | System-assigned Managed Identity (per §5.4); Bicep grants Storage Table/Blob RBAC + kv-poshared access |
 | **Auth** | Microsoft OAuth (Prod) + GUEST mode (Dev/Test) |
 | **Logging** | Serilog → File + Console + App Insights |
 | **Telemetry** | OpenTelemetry → Azure Monitor |
@@ -45,42 +45,43 @@
 
 ---
 
-## 3. Project Structure (Onion Architecture)
+## 3. Project Structure (Vertical Slice Architecture)
 
-> **Architecture note:** This solution uses Clean/Onion layering, deliberately deviating from the global
-> Vertical Slice Architecture (VSA) mandate. The rationale (and where new code goes) is recorded in
-> [docs/adr/0001-clean-architecture-over-vertical-slices.md](docs/adr/0001-clean-architecture-over-vertical-slices.md).
-> Do not start a VSA migration without revisiting that ADR.
+> **Architecture note:** This solution uses **Vertical Slice Architecture (VSA)** per the global
+> `Po*` mandate (§2.1). The former Clean/Onion layout (Domain/Application/Infrastructure projects)
+> was collapsed into `PoLocalCompare.Api` on 2026-07-06 — see
+> [docs/adr/0002-migrate-to-vertical-slices.md](docs/adr/0002-migrate-to-vertical-slices.md).
+> New server code goes in `src/PoLocalCompare.Api/Features/<Feature>/` (flat: endpoint + handlers +
+> entities + repository together); only genuinely cross-slice code goes in `Common/`.
 
 
 ```
 PoLocalCompare.slnx
 ├── src/
-│   ├── PoLocalCompare.Domain/          ← Entities, Value Objects, Domain Services
-│   │   ├── Entities/                   ← Duel, DuelResult, EloRecord, Model
-│   │   ├── Services/
-│   │   └── ValueObjects/
-│   ├── PoLocalCompare.Application/     ← Use Cases (CQRS-style handlers), Interfaces
-│   │   ├── Duels/                      ← CommenceDuel, GetDuel, ListDuels, RecordVerdict
-│   │   ├── Leaderboard/                ← GetLeaderboard, GetKillList
-│   │   ├── Archive/
-│   │   ├── Interfaces/                 ← IDuelRepository, IModelRepository, IRemoteInferenceProxy, etc.
-│   │   └── Models/
-│   ├── PoLocalCompare.Infrastructure/  ← External systems, repos, Azurite/Table Storage
-│   │   ├── AzureAiFoundry/             ← FoundryInferenceProxy.cs
-│   │   ├── Ollama/
-│   │   ├── Persistence/                ← AzuriteSetup, ModelSeeder, TableStorage/
-│   │   ├── KeyVault/
-│   │   └── Reporting/
-│   ├── PoLocalCompare.Api/             ← ASP.NET Minimal API, SignalR hub, hosted Blazor WASM
-│   │   ├── Endpoints/                  ← DuelsEndpoints, LeaderboardEndpoints, ModelsEndpoints,
-│   │   │                                 OllamaEndpoints, HealthEndpoints
-│   │   ├── Hubs/                       ← DuelHub.cs (SignalR)
-│   │   ├── Services/                   ← AutoJudgeService, DuelExecutionService, BackgroundTaskService
-│   │   ├── Infrastructure/
-│   │   ├── Pages/
+│   ├── PoLocalCompare.Api/             ← ASP.NET Minimal API, SignalR, hosted Blazor WASM (VSA)
+│   │   ├── Features/
+│   │   │   ├── Duels/                  ← endpoints, commence/get/list/record-verdict handlers,
+│   │   │   │                             Duel + DuelResult entities & repositories,
+│   │   │   │                             DuelExecutionService, AutoJudgeService, DuelHub
+│   │   │   ├── Leaderboard/            ← endpoints, handlers, EloRecord, EloCalculator, EloHistoryRepository
+│   │   │   ├── Models/                 ← endpoints, handlers, Model entity, ModelRepository, ModelSeeder
+│   │   │   ├── Archive/                ← lab-report export handler + HTML renderer
+│   │   │   ├── Ollama/                 ← status/pull endpoints
+│   │   │   ├── Lobby/                  ← LobbyHub (SignalR)
+│   │   │   └── Diagnostics/            ← /health, /api/diag/*, E2E helpers
+│   │   ├── Common/
+│   │   │   ├── Domain/                 ← cross-slice calculators & value objects
+│   │   │   ├── Inference/              ← IRemoteInferenceProxy + Foundry/Ollama typed-HttpClient proxies
+│   │   │   ├── Background/             ← background task queue + hosted service
+│   │   │   ├── KeyVault/               ← prefix-scoped Key Vault configuration
+│   │   │   ├── Persistence/            ← Azurite table bootstrap
+│   │   │   └── Telemetry/              ← RateLimitedSampler (§6.3)
+│   │   ├── Auth/                       ← BFF cookie session + Microsoft OIDC + dev fake scheme
+│   │   ├── Pages/                      ← /diag Razor page
+│   │   ├── GlobalUsings.cs             ← all slice namespaces project-wide
 │   │   ├── Program.cs                  ← Composition root
-│   │   └── ServiceCollectionExtensions.cs
+│   │   ├── ServiceCollectionExtensions.cs
+│   │   └── InfrastructureServiceExtensions.cs
 │   ├── PoLocalCompare.Shared/          ← DTOs and Enums shared between WASM and API
 │   │   ├── DTOs/                       ← DuelDto, ModelDto, LeaderboardEntryDto, VerdictRequestDto, etc.
 │   │   └── Enums/
@@ -91,16 +92,16 @@ PoLocalCompare.slnx
 │           ├── Components/
 │           ├── Services/               ← DuelApiClient, BffAuthenticationStateProvider,
 │           │                             WebLlmService, SignalRDuelClient, AudioService,
-│           │                             InferenceSessionStore
+│           │                             InferenceSessionStore, CorrelationHandler
 │           └── Layout/
 ├── tests/
-│   ├── unit/PoLocalCompare.Unit.Tests/
-│   ├── integration/PoLocalCompare.Integration.Tests/   ← Testcontainers (Azurite)
-│   ├── e2e-api/PoLocalCompare.E2EAPI/  ← Black-box HTTP journey tests (C#)
-│   └── e2e-ui/PoLocalCompare.E2EUI/    ← Playwright for .NET (C#)
-├── docs/                               ← PRD.md, architecture diagrams (.mmd), DataModel
+│   ├── PoLocalCompare.UnitTests/       ← xUnit + Moq (pure logic)
+│   ├── PoLocalCompare.IntegrationTests/← Testcontainers (Azurite)
+│   ├── PoLocalCompare.E2EAPI/          ← Black-box HTTP journey tests (C#)
+│   └── PoLocalCompare.E2EUI/           ← Playwright for .NET (C#)
+├── docs/                               ← PRD.md, adr/, architecture diagrams (.mmd), DataModel
 ├── SCRIPTS/                            ← setup.ps1, download-models.py, cleanup-models.py
-├── infra/                              ← Bicep (main.bicep / main.json)
+├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep / main.json)
 ├── Directory.Build.props               ← Global: TreatWarningsAsErrors, Nullable, LangVersion=14
 ├── Directory.Packages.props            ← Central Package Management
 ├── global.json                         ← .NET 10 SDK pin
@@ -111,11 +112,20 @@ PoLocalCompare.slnx
 
 ## 4. Key Architecture Decisions
 
-### 4.1 Onion / Clean Architecture
-- **Domain** has zero external dependencies.
-- **Application** depends only on Domain.
-- **Infrastructure** implements Application interfaces (Repository pattern).
-- **Api** is the composition root; it wires everything via DI.
+### 4.1 Vertical Slice Architecture
+- Each `Features/<Feature>/` folder owns its endpoint, handlers, entities, and repository (flat).
+- `Common/` holds only genuinely cross-slice code; `GlobalUsings.cs` exposes every slice namespace.
+- Server authorization is deny-by-default: `FallbackPolicy = RequireAuthenticatedUser` (§4.5);
+  public endpoints opt out explicitly with `.AllowAnonymous()`.
+- Table Storage writes are idempotent + ETag-safe (§5.5): creates swallow 409, updates are
+  If-Match conditional (entities carry `ETag`), and duel writers re-read + reapply on 412.
+- Telemetry (§6.3): 100% sampling outside Production; Production caps traces via
+  `Common/Telemetry/RateLimitedSampler` (`Telemetry:MaxTracesPerSecond`, default 10/s);
+  Error+ log events ship to App Insights unsampled through a Serilog sink.
+- HttpClients (§5.4/§5.6): Foundry/Ollama proxies are typed clients with retry-only resilience
+  (no per-attempt timeout — it would abort SSE streams); named "Foundry"/"Ollama"/"OllamaStatus"
+  clients cover the remaining callers. Non-dev startup fail-fasts on unreachable Table Storage.
+- The client stamps `X-Session-ID`/`X-Correlation-ID` on every request (§6.9) via `CorrelationHandler`.
 
 ### 4.2 Storage Strategy
 ```csharp
@@ -218,10 +228,10 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 
 | Test Type | Project | Notes |
 |---|---|---|
-| Unit | `tests/unit/PoLocalCompare.Unit.Tests` | Pure logic, mock data (no real AI) |
-| Integration | `tests/integration/PoLocalCompare.Integration.Tests` | Testcontainers (Azurite), fake-auth header, dev env |
-| E2E API | `tests/e2e-api/PoLocalCompare.E2EAPI` | Black-box HTTP journeys over Testcontainers + fake auth |
-| E2E UI | `tests/e2e-ui/PoLocalCompare.E2EUI` | C# Playwright; drives a running app via `BASE_URL` |
+| Unit | `tests/PoLocalCompare.UnitTests` | Pure logic, mock data (no real AI) |
+| Integration | `tests/PoLocalCompare.IntegrationTests` | Testcontainers (Azurite), fake-auth header, dev env |
+| E2E API | `tests/PoLocalCompare.E2EAPI` | Black-box HTTP journeys over Testcontainers + fake auth |
+| E2E UI | `tests/PoLocalCompare.E2EUI` | C# Playwright; drives a running app via `BASE_URL` |
 
 - Integration / E2E-API tests run in a **non-Production** host so the `X-Fake-User` guest bypass works.
 - E2E-UI needs a running app and `playwright install`; it is **not** run in CI (see policy below).
@@ -242,17 +252,16 @@ azd up
 - **App resources RG:** `PoLocalCompare` (`westus2`) — holds storage `polocalcomparedevsa` and the F1 plan `asp-PoLocalCompare-f1`.
 - **Shared platform RG:** `PoShared` — Key Vault `kv-poshared`, App Insights, and the shared identity live here.
 - **Key Vault:** `kv-poshared` (shared across Po* projects). **Authorization mode: access policies, not RBAC.**
-- **Managed Identity:** **User-Assigned** `mi-poshared-containerapps`, shared from `PoShared`. It already holds a `get`/`list` **access policy** on `kv-poshared`. Storage access is via Storage Table/Blob Data Contributor on the app's storage account. `DefaultAzureCredential` targets it via the `AZURE_CLIENT_ID` app setting.
+- **Managed Identity:** **System-assigned** on the App Service (standards §5.4, reconciled 2026-07-06). Bicep grants it Storage Table/Blob Data Contributor on `polocalcomparedevsa` (the app connects via `AzureStorage__AccountName`, no shared-key string) and both a `Key Vault Secrets User` role assignment and a get/list access policy on `kv-poshared` (`infra/keyvault-access.bicep`) — the policy is what authorizes today; the role becomes effective if the vault ever moves to RBAC mode. `AZURE_CLIENT_ID` is no longer set.
 - **App-scoped secrets** use the `PoLocalCompare--` prefix (e.g. `PoLocalCompare--AzureAiFoundry--ApiKey`, `PoLocalCompare--ConnectionStrings--AzureTableStorage`); `PrefixKeyVaultSecretManager("PoLocalCompare")` strips the prefix. **A `PoLocalCompare--AzureAd--ClientSecret` must be added for BFF OIDC** (only the unprefixed shared `AzureAd--ClientSecret` exists today, which the prefix manager won't load).
 
-> **Bicep status (reconciled 2026-06-24):** `infra/main.bicep` now references only real resources — it
-> creates a Windows App Service (`app-polocalcompare-win`, .NET 10) on the existing `asp-PoLocalCompare-f1`
-> plan, references the existing `polocalcomparedevsa` storage account, and wires the shared `PoShared`
-> resources (`kv-poshared`, App Insights, `mi-poshared-containerapps`) as `existing`. Key Vault uses access
-> policies (the shared identity already holds get/list), so no role assignment is managed in Bicep. One
-> outstanding prerequisite: add the `PoLocalCompare--AzureAd--ClientSecret` secret to `kv-poshared` for BFF OIDC.
->
-> **Deviation note (intentional):** The global standard calls for a *system-assigned* identity; this solution deliberately uses the *shared user-assigned* platform identity so all `Po*` workloads share one principal, avoiding per-app role sprawl.
+> **Bicep status (reconciled 2026-07-06):** `infra/main.bicep` creates a Windows App Service
+> (`app-polocalcompare-win`, .NET 10, **SystemAssigned** identity) on the existing `asp-PoLocalCompare-f1`
+> plan, assigns Storage Table/Blob Data Contributor on `polocalcomparedevsa`, and grants Key Vault access
+> via the `infra/keyvault-access.bicep` module in `PoShared`. Two operational notes: (1) the CI workflow
+> only runs Bicep when the App Service is missing — the identity switch needs a **one-time manual**
+> `az deployment group create -g PoLocalCompare --template-file infra/main.bicep`; (2) add the
+> `PoLocalCompare--AzureAd--ClientSecret` secret to `kv-poshared` for BFF OIDC.
 
 ---
 
@@ -283,11 +292,11 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 |---|---|
 | [Program.cs](src/PoLocalCompare.Api/Program.cs) | Composition root, Key Vault bootstrap, Serilog, OTel |
 | [ServiceCollectionExtensions.cs](src/PoLocalCompare.Api/ServiceCollectionExtensions.cs) | DI registrations |
-| [InfrastructureServiceExtensions.cs](src/PoLocalCompare.Infrastructure/InfrastructureServiceExtensions.cs) | Infrastructure DI |
-| [DuelHub.cs](src/PoLocalCompare.Api/Hubs/DuelHub.cs) | SignalR hub |
-| [DuelExecutionService.cs](src/PoLocalCompare.Api/Services/DuelExecutionService.cs) | Core duel orchestration |
-| [AutoJudgeService.cs](src/PoLocalCompare.Api/Services/AutoJudgeService.cs) | GPT-4.1 Nano auto-verdict |
-| [AzuriteSetup.cs](src/PoLocalCompare.Infrastructure/Persistence/AzuriteSetup.cs) | Local storage bootstrap |
+| [InfrastructureServiceExtensions.cs](src/PoLocalCompare.Api/InfrastructureServiceExtensions.cs) | Storage clients, typed HttpClients + resilience, repository DI |
+| [DuelHub.cs](src/PoLocalCompare.Api/Features/Duels/DuelHub.cs) | SignalR hub |
+| [DuelExecutionService.cs](src/PoLocalCompare.Api/Features/Duels/DuelExecutionService.cs) | Core duel orchestration |
+| [AutoJudgeService.cs](src/PoLocalCompare.Api/Features/Duels/AutoJudgeService.cs) | GPT-4.1 Nano auto-verdict |
+| [AzuriteSetup.cs](src/PoLocalCompare.Api/Common/Persistence/AzuriteSetup.cs) | Local storage bootstrap |
 | [BffAuthentication.cs](src/PoLocalCompare.Api/Auth/BffAuthentication.cs) | BFF OIDC flow, session cookie, dev fake-auth guard |
 | [BffAuthenticationStateProvider.cs](src/Client/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
 | [WebLlmService.cs](src/Client/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |

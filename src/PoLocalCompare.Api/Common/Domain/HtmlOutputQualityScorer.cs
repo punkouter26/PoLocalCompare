@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace PoLocalCompare.Domain.Services;
+namespace PoLocalCompare.Api.Common.Domain;
 
 public static class HtmlOutputQualityScorer
 {

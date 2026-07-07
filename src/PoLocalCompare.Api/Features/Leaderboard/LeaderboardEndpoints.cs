@@ -1,10 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Hybrid;
-using PoLocalCompare.Application.Leaderboard.GetLeaderboard;
-using PoLocalCompare.Application.Leaderboard.GetKillList;
 using PoLocalCompare.Shared.DTOs;
 
-namespace PoLocalCompare.Api.Endpoints;
+namespace PoLocalCompare.Api.Features.Leaderboard;
 
 public static class LeaderboardEndpoints
 {

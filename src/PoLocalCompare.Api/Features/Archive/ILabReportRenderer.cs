@@ -1,7 +1,6 @@
 // SOLID: Dependency Inversion
-using PoLocalCompare.Domain.Entities;
 
-namespace PoLocalCompare.Application.Interfaces;
+namespace PoLocalCompare.Api.Features.Archive;
 
 /// <summary>
 /// Renders a self-contained HTML Lab Report for a completed duel.

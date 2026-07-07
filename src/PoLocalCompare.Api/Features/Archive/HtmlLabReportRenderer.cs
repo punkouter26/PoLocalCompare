@@ -1,10 +1,8 @@
 // GoF: Template Method — HTML string builder defines report skeleton
 using System.Text;
 using System.Text.RegularExpressions;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 
-namespace PoLocalCompare.Infrastructure.Reporting;
+namespace PoLocalCompare.Api.Features.Archive;
 
 public sealed class HtmlLabReportRenderer : ILabReportRenderer
 {

@@ -1,16 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Application.Models.ListModels;
-using PoLocalCompare.Infrastructure.AzureAiFoundry;
-using PoLocalCompare.Application.Models.RegisterModel;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 using System.Net;
 using System.Text;
 using System.Text.Json;
 
-namespace PoLocalCompare.Api.Endpoints;
+namespace PoLocalCompare.Api.Features.Models;
 
 public static class ModelsEndpoints
 {
@@ -334,7 +330,7 @@ public static class ModelsEndpoints
             var model = await repository.GetByIdAsync(modelId);
             if (model is null) return Results.NotFound();
 
-            var updated = new PoLocalCompare.Domain.Entities.Model
+            var updated = new Model
             {
                 ModelId = model.ModelId,
                 DisplayName = request.DisplayName ?? model.DisplayName,
@@ -346,6 +342,7 @@ public static class ModelsEndpoints
                 TdpWatts = model.TdpWatts,
                 WebLlmModelId = model.WebLlmModelId,
                 ApiEndpointRef = request.ApiEndpointRef ?? model.ApiEndpointRef,
+                ETag = model.ETag,
                 InputTokenPricePerMillion = model.InputTokenPricePerMillion,
                 OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
                 CreatedAt = model.CreatedAt

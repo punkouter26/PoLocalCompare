@@ -1,4 +1,4 @@
-namespace PoLocalCompare.Infrastructure.AzureAiFoundry;
+namespace PoLocalCompare.Api.Common.Inference;
 
 /// <summary>
 /// Builds Azure AI Foundry / Azure OpenAI chat-completion request bodies that are

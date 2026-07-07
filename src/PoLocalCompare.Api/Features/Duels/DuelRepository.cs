@@ -2,11 +2,9 @@
 using Azure;
 using Azure.Data.Tables;
 using NUlid;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class DuelRepository : IDuelRepository
 {
@@ -46,7 +44,14 @@ public sealed class DuelRepository : IDuelRepository
         await _tableClient.CreateIfNotExistsAsync();
 
         var entity = MapToEntity(duel);
-        await _tableClient.AddEntityAsync(entity);
+        try
+        {
+            await _tableClient.AddEntityAsync(entity);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 409)
+        {
+            // Idempotent create (standards §5.5): the duel already exists, e.g. a retried request.
+        }
     }
 
     public async Task UpdateAsync(Duel duel)
@@ -54,7 +59,9 @@ public sealed class DuelRepository : IDuelRepository
         await _tableClient.CreateIfNotExistsAsync();
 
         var entity = MapToEntity(duel);
-        await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace);
+        // ETag-conditional replace (standards §5.5): a concurrent writer surfaces as 412 instead of a lost update.
+        var etag = string.IsNullOrEmpty(duel.ETag) ? ETag.All : new ETag(duel.ETag);
+        await _tableClient.UpdateEntityAsync(entity, etag, TableUpdateMode.Replace);
     }
 
     public async Task<IEnumerable<Duel>> ListAsync(int limit, string? beforeMonth)
@@ -136,6 +143,7 @@ public sealed class DuelRepository : IDuelRepository
             EloShiftLoser = entity.GetDouble("EloShiftLoser"),
             VerdictDeadline = entity.GetDateTimeOffset("VerdictDeadline") ?? DateTimeOffset.MinValue,
             IsPartial = entity.GetBoolean("IsPartial") ?? false,
+            ETag = entity.ETag.ToString(),
         };
         return duel;
     }

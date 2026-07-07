@@ -1,8 +1,6 @@
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Application.Models.RegisterModel;
 using PoLocalCompare.Shared.DTOs;
 
-namespace PoLocalCompare.Application.Models.ListModels;
+namespace PoLocalCompare.Api.Features.Models;
 
 public sealed class ListModelsHandler
 {

@@ -11,7 +11,10 @@ try
     builder.RootComponents.Add<App>("#app");
     builder.RootComponents.Add<HeadOutlet>("head::after");
 
-    builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+    builder.Services.AddScoped(sp => new HttpClient(new CorrelationHandler { InnerHandler = new HttpClientHandler() })
+    {
+        BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
+    });
 
     // ─── BFF auth: server owns the session; client only reads /auth/me. No tokens in WASM. ──
     builder.Services.AddAuthorizationCore();

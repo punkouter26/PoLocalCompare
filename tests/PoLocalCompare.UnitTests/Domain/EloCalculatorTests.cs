@@ -1,6 +1,6 @@
-using PoLocalCompare.Domain.Services;
+using PoLocalCompare.Api.Features.Leaderboard;
 
-namespace PoLocalCompare.Unit.Tests.Domain;
+namespace PoLocalCompare.UnitTests.Domain;
 
 public class EloCalculatorTests
 {

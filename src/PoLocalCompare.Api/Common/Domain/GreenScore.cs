@@ -1,5 +1,5 @@
 // GoF: Value Object
-namespace PoLocalCompare.Domain.ValueObjects;
+namespace PoLocalCompare.Api.Common.Domain;
 
 /// <summary>
 /// Represents the green efficiency score: tokens generated per watt-hour of energy consumed.

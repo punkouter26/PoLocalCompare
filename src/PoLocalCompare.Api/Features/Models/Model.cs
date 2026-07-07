@@ -1,7 +1,7 @@
 // GoF: Entity
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Domain.Entities;
+namespace PoLocalCompare.Api.Features.Models;
 
 public sealed class Model
 {
@@ -23,6 +23,9 @@ public sealed class Model
     public decimal? OutputTokenPricePerMillion { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>Storage concurrency token; set when loaded from Table Storage (standards §5.5).</summary>
+    public string? ETag { get; set; }
 
     public Model(
         string modelId,

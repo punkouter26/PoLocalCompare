@@ -1,9 +1,7 @@
 // GoF: Repository pattern
 using Azure.Data.Tables;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 
-namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
+namespace PoLocalCompare.Api.Features.Leaderboard;
 
 public sealed class EloHistoryRepository : IEloHistoryRepository
 {
@@ -19,7 +17,14 @@ public sealed class EloHistoryRepository : IEloHistoryRepository
     public async Task SaveAsync(EloRecord record)
     {
         var entity = MapToEntity(record);
-        await _tableClient.AddEntityAsync(entity);
+        try
+        {
+            await _tableClient.AddEntityAsync(entity);
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 409)
+        {
+            // Idempotent append (standards §5.5): the history point already landed.
+        }
     }
 
     /// <summary>Returns the most recent 20 ELO records for sparkline display (inverted-tick RowKey gives descending order).</summary>

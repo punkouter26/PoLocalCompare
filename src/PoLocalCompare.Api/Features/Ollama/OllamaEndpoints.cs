@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using PoLocalCompare.Shared.DTOs;
 
-namespace PoLocalCompare.Api.Endpoints;
+namespace PoLocalCompare.Api.Features.Ollama;
 
 public static class OllamaEndpoints
 {

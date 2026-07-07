@@ -1,7 +1,6 @@
 // SOLID: Dependency Inversion
-using PoLocalCompare.Domain.Entities;
 
-namespace PoLocalCompare.Application.Interfaces;
+namespace PoLocalCompare.Api.Features.Models;
 
 public interface IModelRepository
 {

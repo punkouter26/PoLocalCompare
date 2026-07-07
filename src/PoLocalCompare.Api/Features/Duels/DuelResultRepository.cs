@@ -1,11 +1,8 @@
 // GoF: Repository pattern
 using Azure.Data.Tables;
 using Azure.Storage.Blobs;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Services;
 
-namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class DuelResultRepository : IDuelResultRepository
 {

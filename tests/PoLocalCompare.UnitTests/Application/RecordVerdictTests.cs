@@ -1,10 +1,11 @@
 using Moq;
-using PoLocalCompare.Application.Duels.RecordVerdict;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
+using PoLocalCompare.Api.Features.Duels;
+using PoLocalCompare.Api.Features.Leaderboard;
+using PoLocalCompare.Api.Features.Models;
+
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Unit.Tests.Application;
+namespace PoLocalCompare.UnitTests.Application;
 
 public class RecordVerdictTests
 {

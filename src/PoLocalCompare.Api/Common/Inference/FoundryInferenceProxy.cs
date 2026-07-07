@@ -5,22 +5,19 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Services;
 
-namespace PoLocalCompare.Infrastructure.AzureAiFoundry;
+namespace PoLocalCompare.Api.Common.Inference;
 
 /// <summary>
 /// Calls Azure OpenAI deployment endpoint with streaming SSE.
 /// If deployment lookup returns 404, falls back to Azure AI Foundry model inference endpoint.
 /// </summary>
 public sealed class FoundryInferenceProxy(
-    IHttpClientFactory httpClientFactory,
+    HttpClient http,
     IConfiguration configuration,
     ILogger<FoundryInferenceProxy> logger) : IRemoteInferenceProxy
 {
-    private readonly HttpClient _http = httpClientFactory.CreateClient("Foundry");
+    private readonly HttpClient _http = http;
     private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<FoundryInferenceProxy> _logger = logger;
 

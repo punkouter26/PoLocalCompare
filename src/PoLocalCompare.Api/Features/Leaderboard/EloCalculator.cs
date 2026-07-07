@@ -1,5 +1,5 @@
 // SOLID: Single Responsibility — pure ELO formula only
-namespace PoLocalCompare.Domain.Services;
+namespace PoLocalCompare.Api.Features.Leaderboard;
 
 public static class EloCalculator
 {

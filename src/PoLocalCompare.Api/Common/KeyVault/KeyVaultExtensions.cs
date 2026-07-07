@@ -3,7 +3,7 @@ using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace PoLocalCompare.Infrastructure.KeyVault;
+namespace PoLocalCompare.Api.Common.KeyVault;
 
 public static class KeyVaultExtensions
 {

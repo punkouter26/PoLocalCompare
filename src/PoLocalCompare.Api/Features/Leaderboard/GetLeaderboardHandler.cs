@@ -1,7 +1,6 @@
-using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Shared.DTOs;
 
-namespace PoLocalCompare.Application.Leaderboard.GetLeaderboard;
+namespace PoLocalCompare.Api.Features.Leaderboard;
 
 public sealed class GetLeaderboardHandler(
     IModelRepository modelRepository,

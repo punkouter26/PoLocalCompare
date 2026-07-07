@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
+using PoLocalCompare.Api.Common.Inference;
+using PoLocalCompare.Api.Features.Duels;
+using PoLocalCompare.Api.Features.Leaderboard;
+using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.DTOs;
 using Testcontainers.Azurite;
 
@@ -40,7 +42,7 @@ public sealed class ApiAppFixture : IAsyncLifetime
             {
                 services.AddLogging(l =>
                 {
-                    l.AddFilter("PoLocalCompare.Infrastructure.Persistence", LogLevel.Warning);
+                    l.AddFilter("PoLocalCompare.Api.Common.Persistence", LogLevel.Warning);
                     l.AddFilter("Testcontainers", LogLevel.Warning);
                 });
 

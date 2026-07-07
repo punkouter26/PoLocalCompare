@@ -1,16 +1,9 @@
 using Azure.Data.Tables;
-using Azure.Storage.Blobs;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Azure.Identity;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Infrastructure.AzureAiFoundry;
-using PoLocalCompare.Infrastructure.KeyVault;
-using PoLocalCompare.Infrastructure.Ollama;
-using PoLocalCompare.Infrastructure.Persistence.TableStorage;
-using PoLocalCompare.Infrastructure.Reporting;
+using Azure.Storage.Blobs;
+using Polly;
 
-namespace PoLocalCompare.Infrastructure;
+namespace PoLocalCompare.Api;
 
 public static class InfrastructureServiceExtensions
 {
@@ -48,17 +41,29 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IEloHistoryRepository, EloHistoryRepository>();
         services.AddScoped<IDuelResultRepository, DuelResultRepository>();
 
-        // Named HttpClient registrations — managed by IHttpClientFactory for proper socket lifecycle
-        services.AddHttpClient("Ollama", client =>
+        // Typed HttpClients (standards §5.4) with uniform resilience (§5.6). Retries cover
+        // connection-level failures and 5xx/408/429 before the SSE stream starts; there is
+        // deliberately no per-attempt timeout because it would abort long streaming responses.
+        services.AddHttpClient<FoundryInferenceProxy>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(35);
+        }).AddResilienceHandler("foundry-inference", AddStreamingRetry);
+
+        services.AddHttpClient<OllamaInferenceProxy>(client =>
         {
             // Timeout is controlled by the CancellationToken watchdog; HttpClient.Timeout must not fire first.
             client.Timeout = Timeout.InfiniteTimeSpan;
-        });
-        services.AddHttpClient("Foundry");
+        }).AddResilienceHandler("ollama-inference", AddStreamingRetry);
+
+        // Named clients remain for callers outside the typed proxies (AutoJudgeService, Ollama pulls).
+        services.AddHttpClient("Foundry", client => client.Timeout = TimeSpan.FromSeconds(35))
+            .AddResilienceHandler("foundry-judge", AddStreamingRetry);
+        services.AddHttpClient("Ollama", client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .AddResilienceHandler("ollama-ops", AddStreamingRetry);
 
         // Remote inference proxies — keyed by ModelType name so DuelExecutionService can resolve the right one
-        services.AddKeyedScoped<IRemoteInferenceProxy, FoundryInferenceProxy>("Remote");
-        services.AddKeyedScoped<IRemoteInferenceProxy, OllamaInferenceProxy>("LocalService");
+        services.AddKeyedTransient<IRemoteInferenceProxy>("Remote", (sp, _) => sp.GetRequiredService<FoundryInferenceProxy>());
+        services.AddKeyedTransient<IRemoteInferenceProxy>("LocalService", (sp, _) => sp.GetRequiredService<OllamaInferenceProxy>());
 
         // Lab report renderer
         services.AddScoped<ILabReportRenderer, HtmlLabReportRenderer>();
@@ -68,4 +73,15 @@ public static class InfrastructureServiceExtensions
 
         return services;
     }
+
+    private static void AddStreamingRetry(ResiliencePipelineBuilder<HttpResponseMessage> pipeline) =>
+        pipeline.AddRetry(new Polly.Retry.RetryStrategyOptions<HttpResponseMessage>
+        {
+            MaxRetryAttempts = 2,
+            Delay = TimeSpan.FromMilliseconds(250),
+            BackoffType = Polly.DelayBackoffType.Exponential,
+            ShouldHandle = new Polly.PredicateBuilder<HttpResponseMessage>()
+                .Handle<HttpRequestException>()
+                .HandleResult(r => (int)r.StatusCode is >= 500 or 408 or 429),
+        });
 }

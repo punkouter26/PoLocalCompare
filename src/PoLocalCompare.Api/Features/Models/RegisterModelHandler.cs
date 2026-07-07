@@ -1,11 +1,9 @@
 // SOLID: Single Responsibility
 using NUlid;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Application.Models.RegisterModel;
+namespace PoLocalCompare.Api.Features.Models;
 
 public sealed class RegisterModelHandler
 {

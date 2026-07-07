@@ -5,10 +5,9 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Api.Endpoints;
+namespace PoLocalCompare.Api.Features.Diagnostics;
 
 public static class HealthEndpoints
 {
@@ -17,6 +16,7 @@ public static class HealthEndpoints
         app.MapGet("/health", async (
             TableServiceClient tableServiceClient,
             IConfiguration configuration,
+            IHttpClientFactory httpClientFactory,
             HttpContext context) =>
         {
             var checks = new Dictionary<string, object>();
@@ -47,7 +47,7 @@ public static class HealthEndpoints
                 try
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                    var httpClient = httpClientFactory.CreateClient("OllamaStatus");
                     var response = await httpClient.GetAsync(foundryEndpoint);
                     sw.Stop();
                     checks["azureAiFoundry"] = new { status = "Healthy", latencyMs = sw.ElapsedMilliseconds };
@@ -70,7 +70,7 @@ public static class HealthEndpoints
                 try
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                    var httpClient = httpClientFactory.CreateClient("OllamaStatus");
                     var response = await httpClient.GetAsync(keyVaultUri);
                     sw.Stop();
                     checks["keyVault"] = new { status = "Healthy", latencyMs = sw.ElapsedMilliseconds };
@@ -92,7 +92,8 @@ public static class HealthEndpoints
         })
         .WithName("Health")
         .WithTags("Health")
-        .WithSummary("Health check for all dependencies");
+        .WithSummary("Health check for all dependencies")
+        .AllowAnonymous();
 
         app.MapGet("/api/diag/smoke", async (
             TableServiceClient tableServiceClient,
@@ -135,7 +136,8 @@ public static class HealthEndpoints
         })
         .WithName("DiagnosticsSmoke")
         .WithTags("Health")
-        .WithSummary("Quick smoke check for runtime dependencies and model source behavior");
+        .WithSummary("Quick smoke check for runtime dependencies and model source behavior")
+        .AllowAnonymous();
 
         app.MapGet("/api/diag/warnings", (
             IWebHostEnvironment env,
@@ -220,7 +222,8 @@ public static class HealthEndpoints
         })
         .WithName("DiagnosticsWarnings")
         .WithTags("Health")
-        .WithSummary("Returns recent warning and error events from server logs");
+        .WithSummary("Returns recent warning and error events from server logs")
+        .AllowAnonymous();
 
         return app;
     }

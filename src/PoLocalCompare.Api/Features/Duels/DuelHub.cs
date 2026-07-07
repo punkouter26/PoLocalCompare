@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.SignalR;
 using PoLocalCompare.Shared.DTOs;
 
-namespace PoLocalCompare.Api.Hubs;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class DuelHub : Hub
 {

@@ -1,7 +1,7 @@
 // GoF: Aggregate Root
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Domain.Entities;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class Duel
 {
@@ -21,6 +21,9 @@ public sealed class Duel
     public DateTimeOffset VerdictDeadline { get; init; }
     /// <summary>True when only one model completed (partial duel).</summary>
     public bool IsPartial { get; set; }
+
+    /// <summary>Storage concurrency token; set when loaded from Table Storage (standards §5.5).</summary>
+    public string? ETag { get; set; }
 
     public Duel(
         string duelId,

@@ -3,14 +3,17 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
+using PoLocalCompare.Api.Common.Inference;
+using PoLocalCompare.Api.Features.Duels;
+using PoLocalCompare.Api.Features.Leaderboard;
+using PoLocalCompare.Api.Features.Models;
+
 using PoLocalCompare.Shared.DTOs;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.Integration.Tests;
+namespace PoLocalCompare.IntegrationTests;
 
 /// <summary>
 /// Integration tests for the Duels API endpoints.
@@ -48,7 +51,7 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
                     // Suppress noisy seeder and Testcontainers log output
                     services.AddLogging(logging =>
                     {
-                        logging.AddFilter("PoLocalCompare.Infrastructure.Persistence", LogLevel.Warning);
+                        logging.AddFilter("PoLocalCompare.Api.Common.Persistence", LogLevel.Warning);
                         logging.AddFilter("Testcontainers", LogLevel.Warning);
                     });
                     // Replace Foundry proxy with a mock that returns immediately

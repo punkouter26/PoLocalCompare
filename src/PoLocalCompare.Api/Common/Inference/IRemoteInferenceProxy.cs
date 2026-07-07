@@ -1,7 +1,6 @@
 // SOLID: Dependency Inversion
-using PoLocalCompare.Domain.Entities;
 
-namespace PoLocalCompare.Application.Interfaces;
+namespace PoLocalCompare.Api.Common.Inference;
 
 /// <summary>Stats derived from scanning the HTML content stream during generation.</summary>
 public sealed record HtmlStreamStats(

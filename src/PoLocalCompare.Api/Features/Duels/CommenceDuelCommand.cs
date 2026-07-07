@@ -1,5 +1,5 @@
 // SOLID: Single Responsibility
-namespace PoLocalCompare.Application.Duels.CommenceDuel;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed record CommenceDuelCommand(
     string LeftModelId,

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace PoLocalCompare.Api.Services;
+namespace PoLocalCompare.Api.Common.Background;
 
 /// <summary>
 /// Hosted service that processes queued background tasks.

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 using PoLocalCompare.Shared.DTOs;
 using System.Collections.Concurrent;
 
-namespace PoLocalCompare.Api.Hubs;
+namespace PoLocalCompare.Api.Features.Lobby;
 
 /// <summary>
 /// Single shared lobby hub. The first player to connect is designated Host.

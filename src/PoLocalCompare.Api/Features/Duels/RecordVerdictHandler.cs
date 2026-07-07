@@ -1,11 +1,8 @@
 // SOLID: Single Responsibility — verdict recording coordinates ELO + persistence only
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Services;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Application.Duels.RecordVerdict;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class RecordVerdictHandler
 {

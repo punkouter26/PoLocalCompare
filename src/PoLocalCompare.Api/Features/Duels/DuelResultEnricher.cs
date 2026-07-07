@@ -1,11 +1,9 @@
 // SOLID: Single Responsibility — one home for post-inference result metrics
 using System.Text;
 using System.Text.RegularExpressions;
-using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.ValueObjects;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Domain.Services;
+namespace PoLocalCompare.Api.Features.Duels;
 
 /// <summary>
 /// Centralizes post-inference enrichment of a <see cref="DuelResult"/>: character density,

@@ -1,5 +1,5 @@
 // GoF: Value Object
-namespace PoLocalCompare.Domain.ValueObjects;
+namespace PoLocalCompare.Api.Common.Domain;
 
 /// <summary>
 /// Represents the ratio of functional (non-whitespace, non-comment) characters to total character count

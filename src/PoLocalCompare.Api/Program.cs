@@ -9,12 +9,6 @@ using Polly;
 using OpenTelemetry.Trace;
 using PoLocalCompare.Api;
 using PoLocalCompare.Api.Auth;
-using PoLocalCompare.Api.Endpoints;
-using PoLocalCompare.Api.Hubs;
-using PoLocalCompare.Api.Infrastructure;
-using PoLocalCompare.Api.Services;
-using PoLocalCompare.Infrastructure;
-using PoLocalCompare.Infrastructure.Persistence;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -69,7 +63,16 @@ try
                     restrictedToMinimumLevel: LogEventLevel.Error);
         }
 
-        // AppInsights telemetry handled by OTel pipeline (Azure.Monitor.OpenTelemetry.Exporter).
+        // Exceptions bypass trace sampling (standards §6.3): Error+ events (with stack traces)
+        // ship to Application Insights at 100% regardless of the trace sampler's verdict.
+        var serilogAiCs = ctx.Configuration["ApplicationInsights:ConnectionString"];
+        if (!string.IsNullOrWhiteSpace(serilogAiCs))
+        {
+            cfg.WriteTo.ApplicationInsights(
+                serilogAiCs,
+                TelemetryConverter.Traces,
+                restrictedToMinimumLevel: LogEventLevel.Error);
+        }
     });
 
     // ─── OpenTelemetry (T019) — now has KV-provided connection strings ──────
@@ -82,11 +85,12 @@ try
         .ConfigureResource(r => r.AddService(roleName, serviceVersion: "1.0.0"))
         .WithTracing(t =>
         {
-            // Fixed-rate sampling to cap App Insights ingestion cost (telemetry budget).
-            // ParentBased keeps full traces sampled-in together; the ratio is configurable
-            // via Telemetry:TraceSampleRatio (default 25%).
-            var sampleRatio = builder.Configuration.GetValue<double?>("Telemetry:TraceSampleRatio") ?? 0.25;
-            t.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(sampleRatio)));
+            // Standards §6.3: 100% sampling outside Production; Production caps traces at
+            // Telemetry:MaxTracesPerSecond (default 10/s). ParentBased keeps full traces together.
+            Sampler rootSampler = builder.Environment.IsProduction()
+                ? new RateLimitedSampler(builder.Configuration.GetValue("Telemetry:MaxTracesPerSecond", 10d))
+                : new AlwaysOnSampler();
+            t.SetSampler(new ParentBasedSampler(rootSampler));
             t.AddAspNetCoreInstrumentation(o =>
              {
                  // Strip high-volume, low-value spans: health/diag pings and static SPA assets.
@@ -161,8 +165,8 @@ try
     // ─── Infrastructure (Phase 2 — T032–T037) ────────────────────────────────
     // OllamaStatus issues short, idempotent status pings — safe to wrap in a native
     // .NET resilience pipeline (retry + per-attempt timeout). The streaming inference
-    // clients (Foundry/Ollama generation) deliberately keep bespoke retry because the
-    // standard handler's total-request timeout would abort long SSE responses.
+    // clients (typed Foundry/Ollama proxies in AddInfrastructure) get retry-only pipelines
+    // because a per-attempt timeout would abort long SSE responses.
     builder.Services.AddHttpClient("OllamaStatus")
         .AddResilienceHandler("ollama-status", pipeline =>
         {
@@ -177,11 +181,6 @@ try
             });
             pipeline.AddTimeout(TimeSpan.FromSeconds(5));
         });
-    // Foundry client: cap at 35 s to allow for network latency while preventing indefinite hang
-    builder.Services.AddHttpClient("Foundry", client =>
-    {
-        client.Timeout = TimeSpan.FromSeconds(35);
-    });
     builder.Services.AddInfrastructure(builder.Configuration);
 
     // ─── Application use cases (Phase 3 + 4 + 6) ────────────────────────────
@@ -204,7 +203,15 @@ try
     {
         await AzuriteSetup.EnsureTablesExistAsync(app.Services);
         if (!app.Configuration.GetValue<bool>("Testing:SkipSeeding"))
-            await PoLocalCompare.Infrastructure.Persistence.ModelSeeder.SeedAsync(app.Services);
+            await ModelSeeder.SeedAsync(app.Services);
+    }
+    else
+    {
+        // Fail-fast startup (standards §5.6): an unreachable storage dependency should stop
+        // the process now, not surface as request-time 500s later.
+        var tables = app.Services.GetRequiredService<TableServiceClient>();
+        using var startupCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await tables.GetTableClient("Models").CreateIfNotExistsAsync(startupCts.Token);
     }
 
     // ─── Middleware pipeline ─────────────────────────────────────────────────
@@ -232,12 +239,13 @@ try
 
         opts.EnrichDiagnosticContext = (diagCtx, httpCtx) =>
         {
-            diagCtx.Set("CorrelationId", httpCtx.TraceIdentifier);
-            diagCtx.Set("UserId", "anonymous");
+            // Client-stamped correlation headers (standards §6.9); server ids are the fallback.
+            diagCtx.Set("CorrelationId", httpCtx.Request.Headers["X-Correlation-ID"].FirstOrDefault() ?? httpCtx.TraceIdentifier);
+            diagCtx.Set("UserId", httpCtx.User.Identity?.Name ?? "anonymous");
             diagCtx.Set("RequestPath", httpCtx.Request.Path.Value ?? string.Empty);
             diagCtx.Set("RequestMethod", httpCtx.Request.Method);
-            // SessionId: read from cookie or generate a new one for traceability
-            var sessionId = httpCtx.Request.Cookies["X-Session-Id"]
+            var sessionId = httpCtx.Request.Headers["X-Session-ID"].FirstOrDefault()
+                ?? httpCtx.Request.Cookies["X-Session-Id"]
                 ?? httpCtx.TraceIdentifier;
             diagCtx.Set("SessionId", sessionId);
         };
@@ -284,8 +292,8 @@ try
 
     if (app.Environment.IsDevelopment())
     {
-        app.MapOpenApi();
-        app.MapScalarApiReference("/scalar");
+        app.MapOpenApi().AllowAnonymous();
+        app.MapScalarApiReference("/scalar").AllowAnonymous();
     }
 
     // Force browsers to revalidate WASM framework assets on every load (UX #9)
@@ -307,7 +315,7 @@ try
     // ─── BFF auth routes (/auth/login/microsoft, /auth/login/fake, /auth/logout, /auth/me) ──
     app.MapAuthEndpoints();
 
-    app.MapRazorPages();
+    app.MapRazorPages().AllowAnonymous();
 
     // ─── Health endpoint (T038) ──────────────────────────────────────────────
     app.MapHealthEndpoints();
@@ -365,13 +373,13 @@ try
                 await mc.UpsertEntityAsync(e, TableUpdateMode.Replace);
             }
             return Results.Ok(new { reset = true, message = "Duels/results/elo cleared; model ELO reset to 1200" });
-        });
+        }).AllowAnonymous();
     }
 
     // ─── Blazor WASM static assets + fallback (T014) ─────────────────────────
-    app.MapStaticAssets();
-    app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.png", permanent: true));
-    app.MapFallbackToFile("index.html");
+    app.MapStaticAssets().AllowAnonymous();
+    app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.png", permanent: true)).AllowAnonymous();
+    app.MapFallbackToFile("index.html").AllowAnonymous();
 
     app.Run();
 }

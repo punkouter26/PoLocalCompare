@@ -2,18 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Azure;
-using PoLocalCompare.Application.Archive.ExportLabReport;
-using PoLocalCompare.Application.Duels.CommenceDuel;
-using PoLocalCompare.Application.Duels.GetDuel;
-using PoLocalCompare.Application.Duels.ListDuels;
-using PoLocalCompare.Application.Duels.RecordVerdict;
-using PoLocalCompare.Api.Services;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
-using PoLocalCompare.Domain.Services;
 using PoLocalCompare.Shared.DTOs;
 
-namespace PoLocalCompare.Api.Endpoints;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public static class DuelsEndpoints
 {
@@ -137,8 +128,17 @@ public static class DuelsEndpoints
         {
             try
             {
-                var response = await handler.HandleAsync(
-                    new PoLocalCompare.Application.Duels.RecordVerdict.RecordVerdictCommand(duelId, request.Verdict));
+                VerdictResponseDto? response;
+                try
+                {
+                    response = await handler.HandleAsync(new RecordVerdictCommand(duelId, request.Verdict));
+                }
+                catch (RequestFailedException ex) when (ex.Status == 412)
+                {
+                    // Lost an optimistic-concurrency race (standards §5.5) — the handler re-reads
+                    // everything, so one retry resolves against the fresh state.
+                    response = await handler.HandleAsync(new RecordVerdictCommand(duelId, request.Verdict));
+                }
 
                 if (response is null)
                     return Results.NotFound(new { error = $"Duel '{duelId}' not found." });

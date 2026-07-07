@@ -3,12 +3,10 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using PoLocalCompare.Application.Duels.RecordVerdict;
-using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Api.Services;
+namespace PoLocalCompare.Api.Features.Duels;
 
 /// <summary>
 /// Uses GPT-5.4 Nano to judge a completed duel when the user has not picked a winner.

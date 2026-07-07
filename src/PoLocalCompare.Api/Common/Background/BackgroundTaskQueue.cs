@@ -1,6 +1,6 @@
 using System.Threading.Channels;
 
-namespace PoLocalCompare.Api.Services;
+namespace PoLocalCompare.Api.Common.Background;
 
 /// <summary>
 /// Background task queue for reliable duel execution (replaces fire-and-forget Task.Run).

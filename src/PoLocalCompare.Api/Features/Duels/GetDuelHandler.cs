@@ -1,8 +1,7 @@
-using PoLocalCompare.Application.Interfaces;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Application.Duels.GetDuel;
+namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class GetDuelHandler
 {

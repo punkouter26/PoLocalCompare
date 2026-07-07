@@ -4,10 +4,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 
-namespace PoLocalCompare.Infrastructure.Ollama;
+namespace PoLocalCompare.Api.Common.Inference;
 
 /// <summary>
 /// Calls a local Ollama instance via its OpenAI-compatible streaming SSE endpoint.
@@ -15,11 +13,11 @@ namespace PoLocalCompare.Infrastructure.Ollama;
 /// ApiEndpointRef on the Model is the Ollama model name (e.g. "llama3.2").
 /// </summary>
 public sealed class OllamaInferenceProxy(
-    IHttpClientFactory httpClientFactory,
+    HttpClient http,
     IConfiguration configuration,
     ILogger<OllamaInferenceProxy> logger) : IRemoteInferenceProxy
 {
-    private readonly HttpClient _http = httpClientFactory.CreateClient("Ollama");
+    private readonly HttpClient _http = http;
     private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<OllamaInferenceProxy> _logger = logger;
 

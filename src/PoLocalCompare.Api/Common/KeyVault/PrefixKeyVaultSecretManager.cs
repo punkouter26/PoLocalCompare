@@ -2,7 +2,7 @@ using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.Configuration;
 
-namespace PoLocalCompare.Api.Infrastructure;
+namespace PoLocalCompare.Api.Common.KeyVault;
 
 /// <summary>
 /// Filters Key Vault secrets to those matching the app prefix and strips the prefix

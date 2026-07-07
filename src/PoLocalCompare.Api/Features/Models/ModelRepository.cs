@@ -1,11 +1,9 @@
 // GoF: Repository pattern
 using Azure;
 using Azure.Data.Tables;
-using PoLocalCompare.Application.Interfaces;
-using PoLocalCompare.Domain.Entities;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Infrastructure.Persistence.TableStorage;
+namespace PoLocalCompare.Api.Features.Models;
 
 public sealed class ModelRepository : IModelRepository
 {
@@ -45,19 +43,36 @@ public sealed class ModelRepository : IModelRepository
     public async Task SaveAsync(Model model)
     {
         var entity = MapToEntity(model);
-        await _tableClient.AddEntityAsync(entity);
+        try
+        {
+            await _tableClient.AddEntityAsync(entity);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 409)
+        {
+            // Idempotent create (standards §5.5): the entity already exists, e.g. a retried request.
+        }
     }
 
     public async Task UpdateAsync(Model model)
     {
         var entity = MapToEntity(model);
-        await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace);
+        // ETag-conditional replace (standards §5.5): a concurrent writer surfaces as 412 instead of a lost update.
+        await _tableClient.UpdateEntityAsync(entity, ParseETag(model.ETag), TableUpdateMode.Replace);
     }
 
     public async Task DeleteAsync(string modelId)
     {
-        await _tableClient.DeleteEntityAsync(PartitionKey, modelId);
+        try
+        {
+            await _tableClient.DeleteEntityAsync(PartitionKey, modelId);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // Idempotent delete: already gone.
+        }
     }
+
+    private static ETag ParseETag(string? etag) => string.IsNullOrEmpty(etag) ? ETag.All : new ETag(etag);
 
     private static TableEntity MapToEntity(Model model)
     {
@@ -103,7 +118,8 @@ public sealed class ModelRepository : IModelRepository
             OutputTokenPricePerMillion = entity.GetDouble("OutputTokenPricePerMillion").HasValue
                 ? (decimal?)Convert.ToDecimal(entity.GetDouble("OutputTokenPricePerMillion")!.Value)
                 : null,
-            CreatedAt = entity.GetDateTimeOffset("CreatedAt") ?? DateTimeOffset.MinValue
+            CreatedAt = entity.GetDateTimeOffset("CreatedAt") ?? DateTimeOffset.MinValue,
+            ETag = entity.ETag.ToString()
         };
         return model;
     }
