@@ -49,8 +49,8 @@
 
 > **Architecture note:** This solution uses **Vertical Slice Architecture (VSA)** per the global
 > `Po*` mandate (§2.1). The former Clean/Onion layout (Domain/Application/Infrastructure projects)
-> was collapsed into `PoLocalCompare.Api` on 2026-07-06 — see
-> [docs/adr/0002-migrate-to-vertical-slices.md](docs/adr/0002-migrate-to-vertical-slices.md).
+> was collapsed into `PoLocalCompare.Api` on 2026-07-06 — see the decision log in
+> [docs/PRD_Master.md](docs/PRD_Master.md) §9.
 > New server code goes in `src/PoLocalCompare.Api/Features/<Feature>/` (flat: endpoint + handlers +
 > entities + repository together); only genuinely cross-slice code goes in `Common/`.
 
@@ -99,7 +99,7 @@ PoLocalCompare.slnx
 │   ├── PoLocalCompare.IntegrationTests/← Testcontainers (Azurite)
 │   ├── PoLocalCompare.E2EAPI/          ← Black-box HTTP journey tests (C#)
 │   └── PoLocalCompare.E2EUI/           ← Playwright for .NET (C#)
-├── docs/                               ← PRD.md, adr/, architecture diagrams (.mmd), DataModel
+├── docs/                               ← PRD_Master.md + Mermaid diagrams (.mmd, *_simplified.mmd, .svg)
 ├── SCRIPTS/                            ← setup.ps1, download-models.py, cleanup-models.py
 ├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep / main.json)
 ├── Directory.Build.props               ← Global: TreatWarningsAsErrors, Nullable, LangVersion=14
@@ -211,7 +211,7 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 
 ## 7. Development Standards (Quick Reference)
 
-> Full standards are in [docs/PRD.md](docs/PRD.md) and [docs/adr/0001-clean-architecture-over-vertical-slices.md](docs/adr/0001-clean-architecture-over-vertical-slices.md).
+> Full standards, endpoint map, schema, and decision log are in [docs/PRD_Master.md](docs/PRD_Master.md).
 
 - **No AOT.** `RunAOTCompilation=false` — keeps dev builds fast.
 - **Warnings are errors.** `TreatWarningsAsErrors=true` globally.
@@ -300,7 +300,7 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | [BffAuthentication.cs](src/PoLocalCompare.Api/Auth/BffAuthentication.cs) | BFF OIDC flow, session cookie, dev fake-auth guard |
 | [BffAuthenticationStateProvider.cs](src/Client/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
 | [WebLlmService.cs](src/Client/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |
-| [docs/PRD.md](docs/PRD.md) | Full product requirements |
+| [docs/PRD_Master.md](docs/PRD_Master.md) | Project source of truth — slices, endpoints, schema, ADR log |
 | [SCRIPTS/setup.ps1](SCRIPTS/setup.ps1) | First-run machine setup |
 
 ---

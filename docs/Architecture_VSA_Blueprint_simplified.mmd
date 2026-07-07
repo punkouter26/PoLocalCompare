@@ -1,0 +1,15 @@
+%% Simplified VSA topology.
+graph TD
+    CLIENT["PoLocalCompare.Client<br/>Blazor WASM (mobile-first)"] -->|"cookie'd HTTP + SignalR<br/>(single origin)"| API["PoLocalCompare.Api"]
+    CLIENT -.-> SHARED["PoLocalCompare.Shared<br/>DTOs + enums ONLY"]
+    API -.-> SHARED
+
+    subgraph API_Slices["Api Features/ — isolated vertical slices"]
+        D["Duels"] --- L["Leaderboard"] --- M["Models"]
+        A["Archive"] --- O["Ollama"] --- LB["Lobby"] --- DG["Diagnostics"]
+    end
+    API --> API_Slices
+    API --> COMMON["Common/ + Auth/<br/>cross-slice only"]
+
+    API_Slices --> TS[("Azure Table Storage")]
+    COMMON --> EXT["Entra ID · Key Vault · App Insights<br/>Foundry · Ollama"]

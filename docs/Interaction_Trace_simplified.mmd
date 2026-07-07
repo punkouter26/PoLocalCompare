@@ -1,0 +1,21 @@
+%% Simplified duel transaction trace.
+sequenceDiagram
+    autonumber
+    actor Judge
+    participant C as Blazor WASM
+    participant B as BFF (cookie check)
+    participant F as Duels feature handler
+    participant T as Table Storage
+    participant S as DuelHub (SignalR)
+
+    Judge->>C: models + prompt
+    C->>B: POST /api/duels (cookie + correlation headers)
+    B->>F: authenticated
+    F->>T: insert Duel
+    F-->>C: 202 Accepted
+    F->>S: background inference streams tokens
+    S-->>C: ModelStatusUpdate ... DuelComplete
+    Judge->>B: POST verdict
+    B->>F: authenticated
+    F->>T: Elo update (ETag-safe)
+    F-->>Judge: 200 + Elo shift

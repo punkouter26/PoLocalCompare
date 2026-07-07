@@ -1,0 +1,28 @@
+%% PoLocalCompare — mobile-portrait duel journey.
+%% Score = perceived system performance impact (5 = instant, 1 = heavy wait/cognitive load).
+journey
+    title Duel Journey — Mobile Portrait Judge vs System Load
+    section Sign In
+      Open app and download WASM payload: 2: Judge, System
+      Wait for auth state from auth me probe: 4: System
+      Tap Sign in with Microsoft: 4: Judge
+      Complete Entra consent on login.microsoftonline.com: 3: Judge
+      Land on Home with session cookie set: 5: System
+    section Stage the Duel (War Room)
+      Scan model cards and availability badges: 4: Judge
+      Wait for Foundry and Ollama availability probes: 2: System
+      Pick left and right fighters: 5: Judge
+      Type or reuse an HTML prompt: 4: Judge
+      Submit duel and get 202 accepted: 5: System
+    section Watch Inference (Processing)
+      Join duel SignalR group: 5: System
+      Watch tokens stream for both models: 3: Judge, System
+      First-run WebLLM shader compile stall: 1: System
+      See telemetry HUD update velocity and energy: 4: System
+    section Judge (Arena)
+      Compare sandboxed HTML viewports side by side: 3: Judge
+      Pick winner or let Auto-Judge decide on timeout: 4: Judge
+      See Elo shift confirmation: 5: System
+    section Review
+      Check Leaderboard ranking and sparklines: 4: Judge
+      Export lab report from Archive: 4: Judge

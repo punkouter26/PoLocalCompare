@@ -237,7 +237,7 @@
 
     private void OnDuelStarting(string leftModelId, string rightModelId, string prompt)
     {
-        var url = $"/war-room?leftModelId={Uri.EscapeDataString(leftModelId)}" +
+        var url = $"/?leftModelId={Uri.EscapeDataString(leftModelId)}" +
                   $"&rightModelId={Uri.EscapeDataString(rightModelId)}" +
                   $"&prompt={Uri.EscapeDataString(prompt)}";
         InvokeAsync(() => Nav.NavigateTo(url));

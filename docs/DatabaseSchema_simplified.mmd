@@ -1,0 +1,29 @@
+%% Simplified Table Storage schema — keys only.
+erDiagram
+    MODELS ||--o{ DUELS : "fighters"
+    DUELS ||--o{ DUEL_RESULTS : "2 rows per duel"
+    MODELS ||--o{ ELO_HISTORY : "rating ledger"
+
+    MODELS {
+        string PartitionKey PK "constant 'model'"
+        string RowKey PK "ModelId"
+        double CurrentElo
+        string ModelType "Local | Remote | LocalService"
+    }
+    DUELS {
+        string PartitionKey PK "YYYYMM"
+        string RowKey PK "DuelId (ULID)"
+        string Verdict
+        datetime VerdictDeadline
+    }
+    DUEL_RESULTS {
+        string PartitionKey PK "DuelId"
+        string RowKey PK "ModelId"
+        double TokenVelocity
+        double GreenScore
+    }
+    ELO_HISTORY {
+        string PartitionKey PK "ModelId"
+        string RowKey PK "invertedTicks_DuelId"
+        double EloShift
+    }

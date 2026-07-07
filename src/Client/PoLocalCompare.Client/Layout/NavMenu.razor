@@ -21,12 +21,7 @@
             <ul class="navbar-nav me-auto mb-2 mb-md-0">
                 <li class="nav-item">
                     <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                        <span class="nav-text">Dashboard</span>
-                    </NavLink>
-                </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="war-room">
-                        <span class="nav-text">War Room</span>
+                        <span class="nav-text">Compare</span>
                     </NavLink>
                 </li>
                 <li class="nav-item">
@@ -39,15 +34,25 @@
                         <span class="nav-text">Archive</span>
                     </NavLink>
                 </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="local-model-lab">
-                        <span class="nav-text">Local Lab</span>
-                    </NavLink>
-                </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="lobby">
-                        <span class="nav-text">Lobby</span>
-                    </NavLink>
+                <li class="nav-item nav-item--kebab" @onclick="ToggleToolsMenu" @onclick:stopPropagation="true">
+                    <button class="nav-link nav-kebab" aria-label="More tools" aria-expanded="@_toolsMenuOpen">
+                        <span aria-hidden="true">⋯</span>
+                    </button>
+                    @if (_toolsMenuOpen)
+                    {
+                        <ul class="nav-kebab-menu" role="menu">
+                            <li role="menuitem">
+                                <NavLink class="nav-kebab-link" href="local-model-lab" @onclick="CloseToolsMenu">
+                                    🧪 Local Lab
+                                </NavLink>
+                            </li>
+                            <li role="menuitem">
+                                <NavLink class="nav-kebab-link" href="lobby" @onclick="CloseToolsMenu">
+                                    🎮 Lobby
+                                </NavLink>
+                            </li>
+                        </ul>
+                    }
                 </li>
             </ul>
 
@@ -96,10 +101,13 @@
     private bool _isGuest;
     private bool _usingMockData;
     private bool _allowGuest;
+    private bool _toolsMenuOpen;
 
     private string NavMenuCssClass => collapseNavMenu ? "navbar-collapse" : "navbar-collapse nav-open";
 
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+    private void ToggleToolsMenu() => _toolsMenuOpen = !_toolsMenuOpen;
+    private void CloseToolsMenu() => _toolsMenuOpen = false;
 
     protected override async Task OnInitializedAsync()
     {

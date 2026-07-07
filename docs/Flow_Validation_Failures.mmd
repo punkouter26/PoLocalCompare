@@ -1,0 +1,68 @@
+%% Validation & failure mapping inside the Duels vertical slice —
+%% UI component rules through endpoint guards, domain invariants, and storage races,
+%% each mapped to its HTTP contract. RFC 7807 problem+json is the terminal net.
+graph TD
+    subgraph UI["WarRoom.razor / Arena.razor (client-side rules)"]
+        U1["Prompt textarea — non-empty before submit"]
+        U2["Model pickers — two distinct, availability-badged models"]
+        U3["Verdict buttons — enabled only while duel Pending"]
+    end
+
+    subgraph EP["DuelsEndpoints (input processing)"]
+        G1{"PromptText blank?"}
+        G2["CommenceDuelHandler"]
+        G3["RecordVerdictHandler"]
+        G4["AutoJudgeService"]
+    end
+
+    subgraph DOM["Domain invariants (Duel aggregate)"]
+        D1["Duel ctor: PromptText required"]
+        D2["Duel ctor: Left != Right — a model cannot duel itself"]
+        D3["Verdict rules: duel must exist, be Pending, not past deadline"]
+    end
+
+    subgraph STORE["Table Storage outcomes"]
+        S1["Table missing on first hit"]
+        S2["ETag mismatch — verdict raced duel completion"]
+        S3["Unhandled exception"]
+    end
+
+    subgraph HTTP["HTTP contract"]
+        R400["400 ValidationProblem"]
+        R404["404 Not Found (model/duel id unknown)"]
+        R409["409 Conflict (verdict already recorded / judge race)"]
+        R422["422 Unprocessable (bad verdict argument)"]
+        R503["503 Storage not ready / Auto-Judge unavailable"]
+        R500["500 RFC 7807 problem+json<br/>correlationId echoed; stack trace Dev-only"]
+        R202["202 Accepted + Location /api/duels/{id}"]
+        R200["200 VerdictResponse + leaderboard cache invalidated"]
+    end
+
+    U1 --> G1
+    U2 --> G2
+    U3 --> G3
+
+    G1 -->|"yes"| R400
+    G1 -->|"no"| G2
+    G2 --> D1
+    G2 --> D2
+    G2 -->|"model id lookup fails → KeyNotFoundException"| R404
+    D1 -->|"ArgumentException"| R400
+    D2 -->|"ArgumentException"| R400
+    D1 -->|"ok"| S1
+    S1 -->|"RequestFailedException 404"| R503
+    S1 -->|"created"| R202
+
+    G3 --> D3
+    D3 -->|"InvalidOperationException"| R409
+    D3 -->|"ArgumentException"| R422
+    D3 -->|"KeyNotFoundException"| R404
+    D3 -->|"ok → Elo write"| S2
+    S2 -->|"412 → handler re-reads, retries ONCE"| G3
+    S2 -->|"clean write"| R200
+
+    G4 -->|"judge model unreachable → AutoJudgeUnavailableException"| R503
+    G4 -->|"already judged"| R409
+    G4 -->|"verdict recorded"| R200
+
+    S3 -->|"UseExceptionHandler"| R500

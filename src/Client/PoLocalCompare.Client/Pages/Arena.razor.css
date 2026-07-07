@@ -79,6 +79,40 @@
     color: #fda4af;
 }
 
+/* Finding #10: collapse raw error JSON behind a disclosure */
+.arena__failure-details {
+    margin-top: 0.45rem;
+    font-size: 0.78rem;
+}
+
+.arena__failure-details summary {
+    cursor: pointer;
+    color: #fda4af;
+    font-weight: 600;
+    user-select: none;
+    padding: 0.15rem 0;
+}
+
+.arena__failure-details summary:hover {
+    color: #fff;
+}
+
+.arena__failure-raw {
+    margin: 0.4rem 0 0;
+    padding: 0.55rem;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid #7f1d1d;
+    border-radius: 4px;
+    color: #fecaca;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 8rem;
+    overflow-y: auto;
+}
+
 .arena__elo-badge {
     text-align: center;
     font-size: 1.1rem;

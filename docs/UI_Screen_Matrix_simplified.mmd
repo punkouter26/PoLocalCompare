@@ -1,0 +1,15 @@
+%% Simplified screen matrix — auth gate plus the five core screens.
+stateDiagram-v2
+    [*] --> AuthGate : WASM boot → /auth/me
+    AuthGate --> Login : unauthenticated
+    AuthGate --> Home : authenticated
+    Login --> Home : Microsoft OIDC (or Guest in Dev)
+
+    Home --> WarRoom : stage duel
+    WarRoom --> Processing : duel accepted
+    Processing --> Arena : duel complete
+    Arena --> Leaderboard : verdict + Elo
+    Home --> Archive : past duels
+
+    Leaderboard --> Home
+    Archive --> Home

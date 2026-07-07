@@ -28,7 +28,7 @@
             <h2>No duels recorded yet</h2>
             <p>Archive snapshots, verdicts, and lab reports will appear here once a duel completes.</p>
             <div class="archive__empty-actions">
-                <a class="archive__empty-cta" href="/war-room">⚔ Start a New Duel</a>
+                <a class="archive__empty-cta" href="/">⚔ Start a New Duel</a>
                 <a class="archive__empty-link" href="/local-model-lab">🧪 Run Local Lab Diagnostics</a>
             </div>
         </div>
@@ -274,6 +274,6 @@
         var prompt = Uri.EscapeDataString(_selectedDuel.PromptSummary);
         var leftId = Uri.EscapeDataString(_selectedDuel.LeftModelId);
         var rightId = Uri.EscapeDataString(_selectedDuel.RightModelId);
-        Nav.NavigateTo($"/war-room?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
+        Nav.NavigateTo($"/?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
     }
 }

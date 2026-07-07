@@ -1,9 +1,0 @@
-stateDiagram-v2
-    [*] --> Pending
-    Pending --> Initializing: Start
-    Initializing --> Generating: Tokens
-    Generating --> Done: Complete
-    Generating --> Failed: Error
-    Done --> Verdict: Judge
-    Verdict --> [*]: Finish
-    Failed --> [*]: End

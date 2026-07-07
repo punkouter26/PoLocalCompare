@@ -1,0 +1,14 @@
+%% Simplified validation ladder for the Duels slice.
+graph TD
+    UI["Client-side form rules<br/>(prompt required, two distinct models)"] --> EP["Endpoint guards"]
+    EP -->|"blank prompt"| R400["400"]
+    EP -->|"unknown model/duel"| R404["404"]
+    EP --> DOM["Domain invariants<br/>(Duel ctor, verdict state machine)"]
+    DOM -->|"same-model duel / bad args"| R400
+    DOM -->|"already judged"| R409["409"]
+    DOM -->|"invalid verdict value"| R422["422"]
+    DOM --> ST["Table Storage write"]
+    ST -->|"table not ready"| R503["503"]
+    ST -->|"ETag race → one retry"| ST
+    ST -->|"success"| OK["202 / 200"]
+    EP -->|"anything unhandled"| R500["500 problem+json + correlationId"]

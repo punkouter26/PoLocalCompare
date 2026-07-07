@@ -1,0 +1,47 @@
+%% Real-time lobby — client-side processing vs async backend state propagation.
+%% LobbyHub is the authoritative source (Server-Validated Host pattern): the Host drives
+%% UI decisions but cannot bypass server preconditions (>=2 players, all ready).
+graph LR
+    subgraph Client["Client side (per player, Lobby.razor)"]
+        PAGE["Lobby.razor<br/>renders LobbyStateDto"]
+        SLC["SignalRLobbyClient<br/>connect /hubs/lobby (cookie auth)"]
+        READY["Ready toggle UI"]
+        HOSTUI["Host-only Start button<br/>enabled by CanStart flag from server"]
+        NAV["Navigate to /processing/{DuelId}"]
+    end
+
+    subgraph Hub["LobbyHub (server, single shared room)"]
+        JOIN["JoinLobby(userId)<br/>first joiner becomes Host"]
+        STATE["Static lobby state<br/>ConcurrentDictionary + SemaphoreSlim<br/>connection→user, players, hostUserId"]
+        TOGGLE["ToggleReady(userId)"]
+        START["StartDuel(left, right, prompt)<br/>server re-checks: caller is Host AND CanStart"]
+        DISC["OnDisconnectedAsync<br/>remove player; promote earliest joiner to Host"]
+        BCAST["BroadcastStateAsync<br/>LobbyStateChanged → group 'lobby'<br/>CanStart = players >= 2 AND all ready"]
+    end
+
+    subgraph Downstream["Duel pipeline (async backend)"]
+        COMMENCE["POST /api/duels → 202"]
+        QUEUE["BackgroundTaskQueue<br/>DuelExecutionService (900s watchdog)"]
+        DUELHUB["DuelHub /hubs/duel<br/>ModelStatusUpdate / DuelComplete"]
+    end
+
+    PAGE --> SLC
+    SLC -->|"on connect"| JOIN
+    JOIN --> STATE
+    READY -->|"invoke"| TOGGLE
+    TOGGLE --> STATE
+    STATE --> BCAST
+    BCAST -->|"push to ALL lobby clients"| SLC
+    SLC -->|"re-render roster + ready flags"| PAGE
+
+    HOSTUI -->|"invoke"| START
+    START -->|"caller not host OR not all ready → silently ignored"| STATE
+    START -->|"validated"| BCAST2["DuelStarting(left, right, prompt)<br/>broadcast to group"]
+    BCAST2 --> SLC
+    SLC --> NAV
+    NAV --> COMMENCE
+    COMMENCE --> QUEUE
+    QUEUE --> DUELHUB
+
+    SLC -.->|"connection drop / tab close"| DISC
+    DISC --> STATE

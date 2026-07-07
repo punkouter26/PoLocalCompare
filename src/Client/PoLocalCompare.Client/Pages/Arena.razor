@@ -43,6 +43,10 @@
                     <div class="arena__failure-card">
                         <div class="arena__failure-title">❌ @(_leftResult.ModelName ?? _duel.LeftModelId) failed</div>
                         <div class="arena__failure-body">@(_leftResult.FailureReason ?? "No reason provided by the model runtime.")</div>
+                        <details class="arena__failure-details">
+                            <summary>Show technical details</summary>
+                            <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
+                        </details>
                         <div class="arena__failure-hint">Try Re-Challenge with a different model pairing.</div>
                     </div>
                 }
@@ -74,7 +78,11 @@
                     <TelemetryHud Result="_rightResult" />
                 </div>
                 @if (_rightResult?.IsFailure == true)
-                {
+                {etails class="arena__failure-details">
+                            <summary>Show technical details</summary>
+                            <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
+                        </details>
+                        <d
                     <div class="arena__failure-card">
                         <div class="arena__failure-title">❌ @(_rightResult.ModelName ?? _duel.RightModelId) failed</div>
                         <div class="arena__failure-body">@(_rightResult.FailureReason ?? "No reason provided by the model runtime.")</div>
@@ -112,7 +120,8 @@
 
         @if (!_verdictRecorded && !_duelStillRunning && !_autoJudging
              && _duel.Verdict == DuelVerdict.Pending
-             && (_leftResult is not null || _rightResult is not null))
+             && (_leftResult is not null || _rightResult is not null)
+             && !BothSidesFailed())
         {
             <div class="arena__auto-judge-bar">
                 <span>⚖ Auto-judging with GPT-4.1 Nano in <strong>@_countdownSeconds</strong>s — or pick a winner below</span>
@@ -120,6 +129,14 @@
                     <div class="arena__auto-judge-fill" style="width: @(_countdownSeconds * 10)%"></div>
                 </div>
                 <button class="arena__auto-judge-pause" @onclick="PauseAutoJudgeAsync">Pause</button>
+            </div>
+        }
+        @if (!_verdictRecorded && !_duelStillRunning && !_autoJudging
+             && _duel.Verdict == DuelVerdict.Pending
+             && BothSidesFailed())
+        {
+            <div class="arena__auto-judge-error">
+                Auto-judge skipped — both models failed. Re-Challenge with a different pairing.
             </div>
         }
 
@@ -205,6 +222,10 @@
     private bool _autoJudging;
     private string? _autoJudgeError;
     private bool _showSecondaryActions;
+
+    // Finding #2: skip auto-judge when both models failed.
+    private bool BothSidesFailed() =>
+        _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
 
     // Live streaming preview while duel is in progress
     private string? _leftStreamingHtml;
@@ -309,7 +330,7 @@
         var prompt = Uri.EscapeDataString(_duel.PromptText);
         var leftId = Uri.EscapeDataString(_duel.LeftModelId);
         var rightId = Uri.EscapeDataString(_duel.RightModelId);
-        Nav.NavigateTo($"/war-room?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
+        Nav.NavigateTo($"/?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
     }
 
     private void ToggleSecondaryActions() => _showSecondaryActions = !_showSecondaryActions;

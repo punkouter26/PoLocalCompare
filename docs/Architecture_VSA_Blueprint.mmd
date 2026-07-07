@@ -1,0 +1,64 @@
+%% Vertical Slice Architecture topology. Each Features/<Slice> folder is flat and isolated:
+%% endpoint + handlers + entities + repository together. Common/ holds only cross-slice code.
+%% Shared is restricted to DTOs/enums; the mobile-first Client talks only HTTP+SignalR.
+graph TD
+    subgraph ClientProj["PoLocalCompare.Client — Blazor WASM (mobile-portrait-first, hosted by Api)"]
+        PAGES["Pages: Home · WarRoom · Processing · Arena<br/>Leaderboard · Archive · Lobby · LocalModelLab · Login"]
+        SVCS["Services: DuelApiClient (typed) · BffAuthenticationStateProvider<br/>WebLlmService (WebGPU) · SignalRDuelClient · SignalRLobbyClient<br/>CorrelationHandler · InferenceSessionStore · AudioService"]
+    end
+
+    subgraph SharedProj["PoLocalCompare.Shared — RESTRICTED assembly"]
+        DTOS["DTOs + Enums only<br/>IsTrimmable + EnableTrimAnalyzer<br/>no logic, no entities"]
+    end
+
+    subgraph ApiProj["PoLocalCompare.Api — Minimal API host (single origin, no CORS)"]
+        subgraph Slices["Features/ (vertical slices)"]
+            DUELS["Duels<br/>endpoints · handlers · Duel/DuelResult<br/>repos · DuelExecutionService<br/>AutoJudgeService · DuelHub"]
+            LEAD["Leaderboard<br/>endpoints · EloCalculator K=32<br/>EloRecord · EloHistoryRepository"]
+            MODELS["Models<br/>registry CRUD · availability probes<br/>ModelSeeder"]
+            ARCH["Archive<br/>lab-report export + HTML renderer"]
+            OLLA["Ollama<br/>gpu-status · tags · benchmark"]
+            LOBBY["Lobby<br/>LobbyHub"]
+            DIAG["Diagnostics<br/>/health · /api/diag/*"]
+        end
+        subgraph Cross["Common/ (cross-slice only)"]
+            DOMC["Domain calculators<br/>GreenScore · density · quality"]
+            INF["Inference proxies<br/>Foundry · Ollama (typed HttpClients,<br/>retry-only — SSE-safe)"]
+            BG["Background queue + hosted service"]
+            KV["Key Vault prefix loader"]
+            TEL["RateLimitedSampler"]
+        end
+        AUTH["Auth/ — BFF cookie + Microsoft OIDC + FakeAuthHandler"]
+        ROOT["Program.cs composition root<br/>deny-by-default authorization"]
+    end
+
+    subgraph External["External systems"]
+        TS[("Azure Table Storage<br/>(Azurite locally)")]
+        FOUNDRY["Azure AI Foundry"]
+        OLLAMASRV["Ollama localhost:11434"]
+        ENTRA["Microsoft Entra ID"]
+        AKV["Key Vault kv-poshared"]
+        AI["App Insights (OTel + Serilog Error+)"]
+    end
+
+    PAGES --> SVCS
+    SVCS -->|"same-origin HTTPS + session cookie<br/>X-Session-ID / X-Correlation-ID"| ROOT
+    SVCS -->|"WebSocket /hubs/duel /hubs/lobby"| DUELS
+    SVCS -->|"WebSocket"| LOBBY
+    SVCS -.->|"references DTOs"| DTOS
+    Slices -.->|"references DTOs"| DTOS
+
+    ROOT --> AUTH
+    ROOT --> Slices
+    Slices --> Cross
+
+    DUELS --> TS
+    LEAD --> TS
+    MODELS --> TS
+    ARCH --> TS
+    INF --> FOUNDRY
+    INF --> OLLAMASRV
+    OLLA --> OLLAMASRV
+    AUTH --> ENTRA
+    KV --> AKV
+    TEL --> AI
