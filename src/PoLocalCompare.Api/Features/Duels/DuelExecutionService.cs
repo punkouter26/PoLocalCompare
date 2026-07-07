@@ -113,6 +113,29 @@ public sealed class DuelExecutionService
                 }
             }
 
+            // Forfeit rule: if exactly one model produced no output, auto-award the
+            // survivor so the duel resolves without asking a human to "judge" a no-contest.
+            // Both-succeeded (needs a human verdict) and both-failed stay Pending.
+            if (duel.Verdict == DuelVerdict.Pending)
+            {
+                var leftResult  = await duelResultRepo.GetAsync(duelId, duel.LeftModelId);
+                var rightResult = await duelResultRepo.GetAsync(duelId, duel.RightModelId);
+                if (leftResult is not null && rightResult is not null && (leftResult.IsFailure ^ rightResult.IsFailure))
+                {
+                    var forfeitVerdict = leftResult.IsFailure ? DuelVerdict.Right : DuelVerdict.Left;
+                    try
+                    {
+                        var verdictHandler = services.GetRequiredService<RecordVerdictHandler>();
+                        await verdictHandler.HandleAsync(new RecordVerdictCommand(duelId, forfeitVerdict));
+                        _logger.LogInformation("Duel {DuelId}: one model failed — auto-awarded {Verdict} by forfeit.", duelId, forfeitVerdict);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Duel {DuelId}: forfeit auto-award failed; leaving pending for manual judgment.", duelId);
+                    }
+                }
+            }
+
             await _hubContext.Clients
                 .Group($"duel:{duelId}")
                 .SendAsync("DuelComplete", new DuelDto

@@ -162,22 +162,17 @@
     box-shadow: 0 2px 8px #00000088;
 }
 
-.arena__auto-judge-pause {
-    margin-top: 0.4rem;
-    border: 1px solid #4b5563;
-    background: #111827;
+.arena__judge-note {
+    text-align: center;
     color: #cbd5e1;
-    border-radius: 4px;
-    padding: 0.2rem 0.6rem;
-    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.4rem 0.75rem;
+    margin-bottom: 0.5rem;
 }
 
-.arena__auto-judge-error {
+.arena__judge-note--error {
     color: #f87171;
-    font-size: 0.875rem;
-    padding: 0.4rem 0.75rem;
     border: 1px solid #7f1d1d;
     background: #1f0a0a;
     border-radius: 4px;
-    margin-bottom: 0.5rem;
 }

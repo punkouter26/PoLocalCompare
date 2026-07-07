@@ -3,9 +3,11 @@
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
+@using Microsoft.JSInterop
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Compare - PoLocalCompare</PageTitle>
 
@@ -118,6 +120,12 @@
                     </button>
                 }
             </div>
+            @if (_webGpuSupported == false && _models.Any(m => m.ModelType == ModelType.Local))
+            {
+                <p class="wizard__health-warning">
+                    ⚠ Browser models need WebGPU (desktop Chrome or Edge) — they're disabled on this device. Use a Remote or Ollama model.
+                </p>
+            }
             @* Grouped by type (Remote / Browser / Ollama) to mirror the Model Health panel. *@
             @foreach (var _group in FilteredModels.GroupBy(m => m.ModelType).OrderBy(g => ModelTypeGroup.Order(g.Key)))
             {
@@ -130,7 +138,9 @@
                     {
                         var isLeft = model.ModelId == _leftModel?.ModelId;
                         var isRight = model.ModelId == _rightModel?.ModelId;
-                        var isDisabled = _health is not null && !_healthHasRemotes && model.ModelType == ModelType.Remote;
+                        var remoteOffline = _health is not null && !_healthHasRemotes && model.ModelType == ModelType.Remote;
+                        var browserNoGpu = model.ModelType == ModelType.Local && _webGpuSupported == false;
+                        var isDisabled = remoteOffline || browserNoGpu;
                         <div class="@(isDisabled ? "wizard__card-disabled" : "")">
                             <ModelCard Model="model"
                                        IsSelected="@(isLeft || isRight)"
@@ -138,7 +148,7 @@
                                        OnSelected="@(isDisabled ? EventCallback<ModelDto>.Empty : EventCallback.Factory.Create<ModelDto>(this, AssignModel))" />
                             @if (isDisabled)
                             {
-                                <span class="wizard__card-badge">Unavailable</span>
+                                <span class="wizard__card-badge">@(browserNoGpu ? "Needs WebGPU" : "Unavailable")</span>
                             }
                         </div>
                     }
@@ -198,7 +208,7 @@
     </section>
 
     @* ── Recent duels (or onboarding example when empty) ──────────────── *@
-    @if (_recentDuels.Count > 0)
+    @if (VisibleRecentDuels.Any())
     {
         <section class="wizard__recent">
             <div class="wizard__recent-head">
@@ -206,7 +216,7 @@
                 <a href="/archive" class="wizard__recent-link">View all →</a>
             </div>
             <ul class="wizard__recent-list">
-                @foreach (var d in _recentDuels)
+                @foreach (var d in VisibleRecentDuels)
                 {
                     var href = d.Verdict == DuelVerdict.Pending ? $"/arena/{d.DuelId}" : "/archive";
                     <li>
@@ -265,6 +275,9 @@
     private DuelApiClient.SmokeSnapshotDto? _health;
     private bool _healthHasRemotes;
     private ModelDto? _replacePopoverModel;
+    private bool? _webGpuSupported;   // null = not yet probed
+
+    private sealed class WebGpuProbe { public bool Supported { get; set; } }
 
     private bool HasModels => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
     private bool HasPrompt => !string.IsNullOrWhiteSpace(_prompt);
@@ -319,10 +332,30 @@
     private static string CleanName(string? name)
         => string.IsNullOrWhiteSpace(name) || _idLike.IsMatch(name.Trim()) ? "Unknown model" : name;
 
+    private static bool IsIdLike(string? name)
+        => !string.IsNullOrWhiteSpace(name) && _idLike.IsMatch(name.Trim());
+
+    // Hide legacy/seed duels whose model names are both unresolved IDs — they're noise.
+    private IEnumerable<DuelSummaryDto> VisibleRecentDuels =>
+        _recentDuels.Where(d => !(IsIdLike(d.LeftModelName) && IsIdLike(d.RightModelName)));
+
     protected override async Task OnInitializedAsync()
     {
         _prompt = Prompt ?? string.Empty;
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Probe real WebGPU capability so Browser models can be gated when they can't run.
+        try
+        {
+            var probe = await JS.InvokeAsync<WebGpuProbe>("checkWebGpu");
+            _webGpuSupported = probe.Supported;
+        }
+        catch { _webGpuSupported = false; }
+        StateHasChanged();
     }
 
     private async Task LoadAsync()
@@ -397,10 +430,13 @@
 
     private void LoadStarterDuel()
     {
-        var left = _models.FirstOrDefault(m => m.DisplayName.Contains("SmolLM2 1.7B", StringComparison.OrdinalIgnoreCase));
-        var right = _models.FirstOrDefault(m => m.DisplayName.Contains("Qwen3 1.7B", StringComparison.OrdinalIgnoreCase));
-        _leftModel ??= left ?? _models.FirstOrDefault();
-        _rightModel ??= right ?? _models.Skip(1).FirstOrDefault();
+        // Prefer Remote models — they run server-side and need no WebGPU, so a first-run
+        // duel works on any device. Fall back to Ollama, then whatever is available.
+        var ordered = _models
+            .OrderBy(m => m.ModelType switch { ModelType.Remote => 0, ModelType.LocalService => 1, _ => 2 })
+            .ToList();
+        _leftModel ??= ordered.ElementAtOrDefault(0);
+        _rightModel ??= ordered.FirstOrDefault(m => m.ModelId != _leftModel?.ModelId);
         _prompt = "Build a self-contained single HTML file with a click-counter app: a centered card showing a large number and a button. Clicking increments the count. Use a clean modern design with rounded corners and a gradient background.";
     }
 

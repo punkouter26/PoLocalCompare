@@ -29,6 +29,7 @@
 
 .leaderboard__sort-btn {
     min-width: 6rem;
+    min-height: 40px;   /* ≥40px touch target on mobile */
 }
 
 .leaderboard__divider {

@@ -63,19 +63,4 @@ public sealed partial class DuelApiClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsByteArrayAsync();
     }
-
-    public async Task<VerdictResponseDto?> AutoJudgeAsync(string duelId)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-        try
-        {
-            var response = await _http.PostAsync($"/api/duels/{duelId}/auto-judge", null, cts.Token);
-            if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadFromJsonAsync<VerdictResponseDto>(JsonOptions, cts.Token);
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }

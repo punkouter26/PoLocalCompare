@@ -29,6 +29,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-height: 44px;           /* ≥44px touch target */
     text-decoration: none;
     color: #f0f0f0 !important;
     font-weight: 700;

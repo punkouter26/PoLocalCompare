@@ -146,11 +146,24 @@ window.startWebLlmInference = async function (dotnetRef, modelId, webLlmModelId,
         delete workers[modelId];
     };
 
-    // Pass the origin-relative models base so the worker can self-host models
-    const availability = await window.resolveBrowserModelAvailability(
-        webLlmModelId,
-        window.location.origin + '/models/',
-        cdnBaseUrlTemplates);
+    // Resolve where the worker should load weights from. Check local presence via the
+    // server API (a 200 JSON) instead of a static HEAD that logs a 404 for every model
+    // not downloaded locally; fall back to the CDN templates (skipping the noisy probe).
+    let availability = null;
+    try {
+        const r = await fetch(`/api/models/download-status/${encodeURIComponent(webLlmModelId)}`,
+            { credentials: 'include', cache: 'no-store' });
+        if (r.ok && (await r.json())?.downloaded) {
+            availability = { available: true, source: 'local', baseUrl: `${window.location.origin}/models/${webLlmModelId}/` };
+        }
+    } catch { /* fall through to CDN resolution */ }
+    if (!availability) {
+        availability = await window.resolveBrowserModelAvailability(
+            webLlmModelId,
+            window.location.origin + '/models/',
+            cdnBaseUrlTemplates,
+            /* skipLocalProbe */ true);
+    }
 
     worker.postMessage({ modelId, webLlmModelId, prompt, localModelBaseUrl: availability.baseUrl });
 };

@@ -55,9 +55,9 @@ public static class InfrastructureServiceExtensions
             client.Timeout = Timeout.InfiniteTimeSpan;
         }).AddResilienceHandler("ollama-inference", AddStreamingRetry);
 
-        // Named clients remain for callers outside the typed proxies (AutoJudgeService, Ollama pulls).
+        // Named clients remain for callers outside the typed proxies (Foundry availability probe, Ollama pulls).
         services.AddHttpClient("Foundry", client => client.Timeout = TimeSpan.FromSeconds(35))
-            .AddResilienceHandler("foundry-judge", AddStreamingRetry);
+            .AddResilienceHandler("foundry-named", AddStreamingRetry);
         services.AddHttpClient("Ollama", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .AddResilienceHandler("ollama-ops", AddStreamingRetry);
 

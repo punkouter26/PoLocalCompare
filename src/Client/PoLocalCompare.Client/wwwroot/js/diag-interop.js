@@ -19,11 +19,31 @@ window.checkWebGpu = async function () {
         }
         let vendor = '', architecture = '', device = '';
         try {
-            const info = await adapter.requestAdapterInfo();
+            const info = adapter.info || (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : {});
             vendor = info.vendor || '';
             architecture = info.architecture || '';
             device = info.device || '';
-        } catch (_) { /* requestAdapterInfo not available in all browsers */ }
+        } catch (_) { /* adapter info not available in all browsers */ }
+
+        // "Has an adapter" is not enough — WebLLM needs real hardware plus the shader-f16
+        // feature, so a software adapter (SwiftShader/lavapipe) reports as unsupported here.
+        // Otherwise the readiness badge is a false positive and every browser duel fails.
+        const descriptor = `${vendor} ${architecture} ${device}`.toLowerCase();
+        if (/swiftshader|software|lavapipe|llvmpipe|microsoft basic/.test(descriptor)) {
+            return { supported: false, vendor, architecture, device, reason: 'Only a software GPU adapter is available — in-browser models need hardware acceleration.' };
+        }
+        if (!(adapter.features && adapter.features.has('shader-f16'))) {
+            return { supported: false, vendor, architecture, device, reason: 'GPU lacks the shader-f16 feature required to run in-browser models.' };
+        }
+        try {
+            const dev = await adapter.requestDevice({ requiredFeatures: ['shader-f16'] });
+            if (!dev) {
+                return { supported: false, vendor, architecture, device, reason: 'Could not create a WebGPU device with shader-f16.' };
+            }
+            if (dev.destroy) dev.destroy();
+        } catch (e) {
+            return { supported: false, vendor, architecture, device, reason: 'WebGPU device (shader-f16) could not be created: ' + (e.message || '') };
+        }
         return { supported: true, vendor, architecture, device, reason: '' };
     } catch (e) {
         return { supported: false, vendor: '', architecture: '', device: '', reason: e.message };

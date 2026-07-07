@@ -6,7 +6,7 @@
 
 ## 1. Product Definition
 
-**PoLocalCompare** is a real-time LLM benchmarking arena. Two models — **Local** (WebLLM/WebGPU in the browser), **Remote** (Azure AI Foundry), or **LocalService** (Ollama, dev-only) — race to generate HTML from the same prompt. Output streams live over SignalR; a human judge (or GPT-4.1 Nano Auto-Judge on timeout) picks the winner; Elo ratings (K=32, start 1200) update in Azure Table Storage.
+**PoLocalCompare** is a real-time LLM benchmarking arena. Two models — **Local** (WebLLM/WebGPU in the browser), **Remote** (Azure AI Foundry), or **LocalService** (Ollama, dev-only) — race to generate HTML from the same prompt. Output streams live over SignalR; a human judge picks the winner (or the surviving model wins by forfeit when one fails); Elo ratings (K=32, start 1200) update in Azure Table Storage.
 
 - **Live:** https://polocalcompare.azurewebsites.net (Azure App Service F1, Windows, single origin)
 - **Who:** a single hobbyist operator plus invited guests; mobile-portrait-first UX.
@@ -18,7 +18,7 @@ All server code lives in `PoLocalCompare.Api` (VSA). Each slice is flat: endpoin
 
 | Slice | Folder | Owns |
 |---|---|---|
-| **Duels** | `Features/Duels/` | `Duel`, `DuelResult`, commence/get/list/verdict handlers, `DuelExecutionService`, `AutoJudgeService`, `DuelHub`, repositories |
+| **Duels** | `Features/Duels/` | `Duel`, `DuelResult`, commence/get/list/verdict handlers, `DuelExecutionService` (forfeit auto-award), `DuelHub`, repositories |
 | **Leaderboard** | `Features/Leaderboard/` | `EloRecord`, `EloCalculator` (K=32), kill-list + leaderboard handlers, `EloHistoryRepository`, HybridCache tag `leaderboard` |
 | **Models** | `Features/Models/` | `Model` entity, registry CRUD, availability probes, WebLLM download status/trigger, `ModelSeeder` |
 | **Archive** | `Features/Archive/` | Lab-report export (`ExportLabReportHandler` + `HtmlLabReportRenderer`) |
@@ -40,7 +40,6 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 | `GET /api/duels/{duelId}` | Duels | Full telemetry DTO |
 | `POST /api/duels/{duelId}/local-result` | Duels | WebLLM browser result ingest + Domain enrichment |
 | `POST /api/duels/{duelId}/verdict` | Duels | Elo update; ETag 412 retry-once; invalidates leaderboard cache |
-| `POST /api/duels/{duelId}/auto-judge` | Duels | GPT-4.1 Nano; 503 when judge unreachable |
 | `GET /api/duels/{duelId}/report` | Archive | Self-contained HTML download |
 | `GET /api/leaderboard?sortBy=` | Leaderboard | HybridCache, tag-invalidated |
 | `GET /api/leaderboard/{modelId}/killlist` | Leaderboard | Head-to-head aggregates |
@@ -84,7 +83,7 @@ Server owns the OIDC code flow (PKCE, authority `login.microsoftonline.com/commo
 
 - **Zero-waste hosting:** F1 App Service, single origin, no CORS, tag-invalidated HybridCache, telemetry rate cap.
 - **Fail-fast startup:** non-dev host verifies Table Storage reachability within 15 s or exits.
-- **Duel watchdog:** 900 s inference cap (WebGPU shader JIT headroom); verdict deadline 24 h, then Auto-Judge eligible.
+- **Duel watchdog:** 900 s inference cap (WebGPU shader JIT headroom). A duel where one model fails is auto-awarded to the survivor; otherwise it stays Pending until a human picks a winner.
 - **Errors:** RFC 7807 `problem+json` globally; correlation id echoed.
 - **Mock visibility:** `USING MOCK DATA` banner when `Features:UseRealAi` is off.
 

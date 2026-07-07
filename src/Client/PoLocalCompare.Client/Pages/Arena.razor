@@ -118,36 +118,18 @@
             <div class="arena__generating-notice">⚡ Duel in progress — previewing output as it streams…</div>
         }
 
-        @if (!_verdictRecorded && !_duelStillRunning && !_autoJudging
-             && _duel.Verdict == DuelVerdict.Pending
-             && (_leftResult is not null || _rightResult is not null)
-             && !BothSidesFailed())
+        @if (!_verdictRecorded && !_duelStillRunning && _duel.Verdict == DuelVerdict.Pending)
         {
-            <div class="arena__auto-judge-bar">
-                <span>⚖ Auto-judging with GPT-4.1 Nano in <strong>@_countdownSeconds</strong>s — or pick a winner below</span>
-                <div class="arena__auto-judge-track">
-                    <div class="arena__auto-judge-fill" style="width: @(_countdownSeconds * 10)%"></div>
+            @if (BothSidesFailed())
+            {
+                <div class="arena__judge-note arena__judge-note--error">
+                    Both models failed — Re-Challenge with a different pairing.
                 </div>
-                <button class="arena__auto-judge-pause" @onclick="PauseAutoJudgeAsync">Pause</button>
-            </div>
-        }
-        @if (!_verdictRecorded && !_duelStillRunning && !_autoJudging
-             && _duel.Verdict == DuelVerdict.Pending
-             && BothSidesFailed())
-        {
-            <div class="arena__auto-judge-error">
-                Auto-judge skipped — both models failed. Re-Challenge with a different pairing.
-            </div>
-        }
-
-        @if (_autoJudging)
-        {
-            <div class="arena__auto-judging">⚖ Auto-judging in progress…</div>
-        }
-
-        @if (_autoJudgeError is not null)
-        {
-            <div class="arena__auto-judge-error">@_autoJudgeError</div>
+            }
+            else if (_leftResult is not null || _rightResult is not null)
+            {
+                <div class="arena__judge-note">⚖ Pick the winner below.</div>
+            }
         }
 
         <div class="arena__actions">
@@ -155,7 +137,7 @@
                 Text="👈 Winner: Left"
                 ButtonStyle="ButtonStyle.Success"
                 Size="ButtonSize.Large"
-                Disabled="@(_verdictRecorded || _submitting)"
+                Disabled="@(_verdictRecorded || _submitting || BothSidesFailed())"
                 Click="@(() => RecordVerdictAsync(DuelVerdict.Left))"
                 class="arena__action-btn"
             />
@@ -163,7 +145,7 @@
                 Text="Winner: Right 👉"
                 ButtonStyle="ButtonStyle.Success"
                 Size="ButtonSize.Large"
-                Disabled="@(_verdictRecorded || _submitting)"
+                Disabled="@(_verdictRecorded || _submitting || BothSidesFailed())"
                 Click="@(() => RecordVerdictAsync(DuelVerdict.Right))"
                 class="arena__action-btn"
             />
@@ -216,14 +198,9 @@
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
 
-    // Auto-judge countdown
-    private int _countdownSeconds = 10;
-    private CancellationTokenSource _countdownCts = new();
-    private bool _autoJudging;
-    private string? _autoJudgeError;
     private bool _showSecondaryActions;
 
-    // Finding #2: skip auto-judge when both models failed.
+    // Both models failed → there's nothing to judge; the UI offers Re-Challenge instead.
     private bool BothSidesFailed() =>
         _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
 
@@ -264,12 +241,6 @@
                     _signalR.OnDuelComplete += OnDuelComplete;
                     await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), DuelId);
                 }
-                else if (_duel.Verdict == DuelVerdict.Pending && _leftResult is not null && _rightResult is not null)
-                {
-                    // Results are in, start auto-judge countdown
-                    _ = StartCountdownAsync(_countdownCts.Token);
-                }
-
                 // If verdict already recorded, restore state
                 if (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null)
                 {
@@ -290,8 +261,6 @@
     private async Task RecordVerdictAsync(DuelVerdict verdict)
     {
         if (_verdictRecorded || _submitting || _duel is null) return;
-        // Cancel auto-judge countdown
-        await _countdownCts.CancelAsync();
         _submitting = true;
 
         try
@@ -386,85 +355,15 @@
                 _rightResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.RightModelId);
                 _leftStreamingHtml  = null;
                 _rightStreamingHtml = null;
-
-                if (_duel.Verdict == DuelVerdict.Pending && _leftResult is not null && _rightResult is not null)
-                    _ = StartCountdownAsync(_countdownCts.Token);
             }
             StateHasChanged();
         }));
     }
 
-    // ── Auto-judge countdown ─────────────────────────────────────────────────
-    private async Task StartCountdownAsync(CancellationToken ct)
-    {
-        for (_countdownSeconds = 10; _countdownSeconds >= 0; _countdownSeconds--)
-        {
-            await InvokeAsync(StateHasChanged);
-            if (_countdownSeconds == 0)
-            {
-                await InvokeAsync(AutoJudgeAsync);
-                return;
-            }
-            try { await Task.Delay(1000, ct); }
-            catch (OperationCanceledException) { return; }
-        }
-    }
-
-    private async Task AutoJudgeAsync()
-    {
-        if (_verdictRecorded || _submitting || _duel is null) return;
-        _autoJudging = true;
-        _submitting  = true;
-        _autoJudgeError = null;
-        StateHasChanged();
-        try
-        {
-            var response = await ApiClient.AutoJudgeAsync(DuelId);
-            if (response is not null)
-            {
-                _verdictRecorded    = true;
-                _winnerModelId      = response.WinnerModelId;
-                _winnerDisplayName  = ResolveDisplayName(response.WinnerModelId);
-                _loserModelId       = response.LoserModelId;
-                _eloShiftLeft  = _duel.LeftModelId  == response.WinnerModelId ? response.EloShiftWinner : response.EloShiftLoser;
-                _eloShiftRight = _duel.RightModelId == response.WinnerModelId ? response.EloShiftWinner : response.EloShiftLoser;
-                await AudioService.PlaySuccessAsync();
-            }
-            else
-            {
-                _autoJudgeError = "Auto-judge timed out — pick a winner manually.";
-            }
-        }
-        catch
-        {
-            _autoJudgeError = "Auto-judge failed — pick a winner manually.";
-        }
-        finally
-        {
-            _autoJudging = false;
-            _submitting  = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task PauseAutoJudgeAsync()
-    {
-        if (_autoJudging || _verdictRecorded || _duelStillRunning)
-            return;
-
-        await _countdownCts.CancelAsync();
-        _countdownCts.Dispose();
-        _countdownCts = new CancellationTokenSource();
-        _countdownSeconds = 0;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    // UX#7: Dispose location-changing handler and countdown
+    // UX#7: Dispose location-changing handler and SignalR connection.
     public async ValueTask DisposeAsync()
     {
         _locationChangingReg?.Dispose();
-        await _countdownCts.CancelAsync();
-        _countdownCts.Dispose();
         if (_signalR is not null)
             await _signalR.DisposeAsync();
     }

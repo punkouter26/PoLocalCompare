@@ -27,8 +27,6 @@ public static class ServiceCollectionExtensions
                 kFactor);
         });
 
-        services.AddSingleton<AutoJudgeService>();
-
         // HybridCache fronts read-heavy, slow-changing reads (leaderboard, live model-availability probes).
         // Short TTLs keep staleness bounded; the leaderboard is also tag-invalidated when a verdict lands.
 #pragma warning disable EXTEXP0018 // HybridCache is released but still surfaces an experimental attribute.

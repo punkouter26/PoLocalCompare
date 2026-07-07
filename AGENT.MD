@@ -16,7 +16,7 @@
 1. User selects two models (Local WebLLM / Remote Azure Foundry / Ollama)
 2. User enters a prompt — models race to generate HTML
 3. Both outputs stream live via SignalR
-4. Human or Auto-Judge (GPT-4.1 Nano) picks the winner
+4. A human judge picks the winner; if one model fails, the survivor wins by forfeit automatically
 5. Elo ratings update, stored in Azure Table Storage
 
 ---
@@ -62,7 +62,7 @@ PoLocalCompare.slnx
 │   │   ├── Features/
 │   │   │   ├── Duels/                  ← endpoints, commence/get/list/record-verdict handlers,
 │   │   │   │                             Duel + DuelResult entities & repositories,
-│   │   │   │                             DuelExecutionService, AutoJudgeService, DuelHub
+│   │   │   │                             DuelExecutionService (forfeit auto-award), DuelHub
 │   │   │   ├── Leaderboard/            ← endpoints, handlers, EloRecord, EloCalculator, EloHistoryRepository
 │   │   │   ├── Models/                 ← endpoints, handlers, Model entity, ModelRepository, ModelSeeder
 │   │   │   ├── Archive/                ← lab-report export handler + HTML renderer
@@ -165,7 +165,7 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 ### 4.5 Real-Time (SignalR)
 - `DuelHub` at `/hubs/duel`
 - Client: `SignalRDuelClient.cs` in WASM
-- Token streaming, model status updates, auto-judge results all flow through SignalR
+- Token streaming and model status updates flow through SignalR
 
 ### 4.6 Elo System
 - K-factor: 32, Starting rating: 1200
@@ -294,7 +294,6 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | [InfrastructureServiceExtensions.cs](src/PoLocalCompare.Api/InfrastructureServiceExtensions.cs) | Storage clients, typed HttpClients + resilience, repository DI |
 | [DuelHub.cs](src/PoLocalCompare.Api/Features/Duels/DuelHub.cs) | SignalR hub |
 | [DuelExecutionService.cs](src/PoLocalCompare.Api/Features/Duels/DuelExecutionService.cs) | Core duel orchestration |
-| [AutoJudgeService.cs](src/PoLocalCompare.Api/Features/Duels/AutoJudgeService.cs) | GPT-4.1 Nano auto-verdict |
 | [AzuriteSetup.cs](src/PoLocalCompare.Api/Common/Persistence/AzuriteSetup.cs) | Local storage bootstrap |
 | [BffAuthentication.cs](src/PoLocalCompare.Api/Auth/BffAuthentication.cs) | BFF OIDC flow, session cookie, dev fake-auth guard |
 | [BffAuthenticationStateProvider.cs](src/Client/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
