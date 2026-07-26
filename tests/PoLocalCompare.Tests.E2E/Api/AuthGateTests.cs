@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.E2EAPI;
+namespace PoLocalCompare.Tests.E2E.Api;
 
 /// <summary>
 /// Black-box checks on the BFF auth gate: protected endpoints reject anonymous callers,

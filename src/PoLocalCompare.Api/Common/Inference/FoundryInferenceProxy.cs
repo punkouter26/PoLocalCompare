@@ -176,9 +176,7 @@ public sealed class FoundryInferenceProxy(
         var sb = new StringBuilder();
         int tokenCount = 0;
         long? firstTokenMs = null; // time-to-first-token (actual warm-up per PRD)
-        int tagCount = 0;
-        int openDepth = 0;
-        int styleRules = 0;
+        var counters = new HtmlStreamCounters();
         long lastCallbackAt = -500; // trigger first callback immediately
 
         try
@@ -225,19 +223,19 @@ public sealed class FoundryInferenceProxy(
                 if (firstTokenMs is null) firstTokenMs = elapsed;
 
                 // Update HTML stats incrementally
-                tagCount += Regex.Matches(token, @"<[a-zA-Z]").Count;
-                openDepth += token.Count(c => c == '<') - token.Count(c => c == '>');
-                styleRules += Regex.Matches(token, @"\{[^}]*\}").Count;
+                counters.Accumulate(token);
 
                 // Throttle callback to ~500ms
                 if (elapsed - lastCallbackAt >= 500)
                 {
                     lastCallbackAt = elapsed;
                     // Send partial HTML preview every 25 tokens (max 5000 chars) for live streaming
+                    // ToString(0, n) copies only the prefix; ToString()[..n] materialised the
+                    // whole accumulated document first, twice a second, just to slice it.
                     string? preview = tokenCount % 25 == 0
-                        ? sb.ToString()[..Math.Min(5000, sb.Length)]
+                        ? sb.ToString(0, Math.Min(5000, sb.Length))
                         : null;
-                    var stats = new HtmlStreamStats(tagCount, Math.Max(0, openDepth), styleRules, 0.0, preview);
+                    var stats = counters.ToStats(preview);
                     await onTokenUpdate(tokenCount, elapsed, stats);
                 }
             }
@@ -258,7 +256,8 @@ public sealed class FoundryInferenceProxy(
 
         sw.Stop();
 
-        var html = HtmlOutputNormalizer.Normalize(sb.ToString());
+        // Normalization + density/size are applied centrally by DuelResultEnricher.
+        var html = sb.ToString();
         result.HtmlOutputRaw = html;
         result.HtmlOutputSizeBytes = Encoding.UTF8.GetByteCount(html);
         result.TokenCount = tokenCount;
@@ -267,9 +266,6 @@ public sealed class FoundryInferenceProxy(
         result.GenerationDurationMs = Math.Max(0L, result.TotalDurationMs - result.WarmUpDurationMs);
         result.TokenVelocity = result.GenerationDurationMs > 0
             ? Math.Round(tokenCount / (result.GenerationDurationMs / 1000.0), 1)
-            : 0;
-        result.CharacterDensityRatio = html.Length > 0
-            ? (double)Regex.Matches(html, @"<[^>]+>").Count / html.Length
             : 0;
 
         // Estimate API cost (if pricing is set on the model)

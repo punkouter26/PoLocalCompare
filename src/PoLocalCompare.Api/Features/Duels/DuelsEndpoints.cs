@@ -123,8 +123,7 @@ public static class DuelsEndpoints
         group.MapPost("/{duelId}/verdict", async (
             string duelId,
             [FromBody] VerdictRequestDto request,
-            [FromServices] RecordVerdictHandler handler,
-            [FromServices] HybridCache cache) =>
+            [FromServices] RecordVerdictHandler handler) =>
         {
             try
             {
@@ -143,7 +142,6 @@ public static class DuelsEndpoints
                 if (response is null)
                     return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
 
-                await cache.RemoveByTagAsync(LeaderboardEndpoints.LeaderboardCacheTag);
                 return Results.Ok(response);
             }
             catch (InvalidOperationException ex)

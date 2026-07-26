@@ -9,7 +9,7 @@
                 <span class="lab__model-name">@FormatDisplayName(State.Model.DisplayName)</span>
                 @if (!State.IsOllamaModel && State.VramTier == "warn")
                 {
-                    <span class="lab__vram-warn" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
+                    <span class="lab__vram-warn" aria-hidden="true" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
                 }
             </div>
             <div class="lab__card-title-meta">
@@ -40,17 +40,19 @@
                 {
                     <button class="lab__btn-sm lab__btn-sm--run"
                             title="Run diagnostic"
+                            aria-label="Run diagnostic for @FormatDisplayName(State.Model.DisplayName)"
                             @onclick="HandleRun"
                             disabled="@(State.IsDownloaded != true || (!State.IsOllamaModel && WebGpuSupported != true))">
-                        ▶
+                        <span aria-hidden="true">▶</span>
                     </button>
                 }
                 else
                 {
                     <button class="lab__btn-sm lab__btn-sm--cancel"
                             title="Cancel"
+                            aria-label="Cancel diagnostic for @FormatDisplayName(State.Model.DisplayName)"
                             @onclick="HandleCancel">
-                        ■
+                        <span aria-hidden="true">■</span>
                     </button>
                 }
             }

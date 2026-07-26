@@ -1,4 +1,5 @@
 // SOLID: Single Responsibility — verdict recording coordinates ELO + persistence only
+using Microsoft.Extensions.Caching.Hybrid;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -9,18 +10,27 @@ public sealed class RecordVerdictHandler
     private readonly IDuelRepository _duelRepository;
     private readonly IModelRepository _modelRepository;
     private readonly IEloHistoryRepository _eloHistoryRepository;
+    private readonly HybridCache? _cache;
     private readonly double _kFactor;
 
+    /// <param name="cache">
+    /// Optional so pure-logic unit tests can construct the handler without a cache.
+    /// When supplied (always, under DI) the leaderboard is invalidated here rather than at
+    /// the HTTP endpoint — the forfeit path in <see cref="DuelExecutionService"/> calls this
+    /// handler directly and would otherwise leave a stale leaderboard behind.
+    /// </param>
     public RecordVerdictHandler(
         IDuelRepository duelRepository,
         IModelRepository modelRepository,
         IEloHistoryRepository eloHistoryRepository,
-        double kFactor = 32.0)
+        double kFactor = 32.0,
+        HybridCache? cache = null)
     {
         _duelRepository = duelRepository;
         _modelRepository = modelRepository;
         _eloHistoryRepository = eloHistoryRepository;
         _kFactor = kFactor;
+        _cache = cache;
     }
 
     /// <summary>
@@ -127,6 +137,10 @@ public sealed class RecordVerdictHandler
 
         await _eloHistoryRepository.SaveAsync(winnerRecord);
         await _eloHistoryRepository.SaveAsync(loserRecord);
+
+        // ELO moved ⇒ every cached leaderboard projection is stale.
+        if (_cache is not null)
+            await _cache.RemoveByTagAsync(CacheTags.Leaderboard);
 
         return new VerdictResponseDto
         {

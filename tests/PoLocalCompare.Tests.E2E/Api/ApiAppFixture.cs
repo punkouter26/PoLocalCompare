@@ -10,7 +10,7 @@ using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.DTOs;
 using Testcontainers.Azurite;
 
-namespace PoLocalCompare.E2EAPI;
+namespace PoLocalCompare.Tests.E2E.Api;
 
 /// <summary>
 /// Boots the real API (Blazor host) over an ephemeral Azurite container with AI inference mocked,

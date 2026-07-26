@@ -12,7 +12,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.IntegrationTests;
+namespace PoLocalCompare.Tests.Integration;
 
 /// <summary>
 /// Integration tests for leaderboard ranking, Green Score sort, and Kill List.

@@ -151,7 +151,10 @@ try
     builder.Services.AddSignalR();
 
     // ─── OpenAPI (T020) ───────────────────────────────────────────────────────
-    builder.Services.AddOpenApi();
+    // Standards mandate OpenAPI 3.1; pinned explicitly rather than relying on the
+    // SDK default so an SDK change can't silently downgrade the document version.
+    builder.Services.AddOpenApi(options =>
+        options.OpenApiVersion = Microsoft.OpenApi.OpenApiSpecVersion.OpenApi3_1);
 
     // ─── Razor pages (for /diag) ─────────────────────────────────────────────
     builder.Services.AddRazorPages();

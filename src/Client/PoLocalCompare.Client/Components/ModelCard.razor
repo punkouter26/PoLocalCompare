@@ -2,9 +2,19 @@
 @using PoLocalCompare.Shared.Enums
 @using System.Text.RegularExpressions
 
-<div class="@_cardClass" @onclick="OnCardClick" style="@_cardStyle">
+@* SC 2.1.1 Keyboard / 4.1.2 Name-Role-Value: the card is a toggle button, so it is
+   focusable, Enter/Space operable, and exposes its selected + disabled state. *@
+<div class="@_cardClass"
+     role="button"
+     tabindex="@(IsDisabled ? -1 : 0)"
+     aria-pressed="@IsSelected"
+     aria-disabled="@IsDisabled"
+     aria-label="@AriaLabel"
+     @onclick="OnCardClick"
+     @onkeydown="OnCardKeyDown"
+     style="@_cardStyle">
     <div class="model-card__header">
-        <span class="model-card__name">@(LabelOverride ?? Model.DisplayName)</span>
+        <span class="model-card__name">@Model.DisplayName</span>
         <div style="display:flex;align-items:center;gap:0.4rem;">
             @if (Slot == "Left")
             {
@@ -21,12 +31,6 @@
     </div>
     <div class="model-card__elo">
         ELO: <strong>@Model.CurrentElo.ToString("F0")</strong>
-        @if (ProjectedEloGain.HasValue)
-        {
-            <span class="model-card__elo-gain @(ProjectedEloGain >= 0 ? "positive" : "negative")">
-                @(ProjectedEloGain >= 0 ? "+" : "")@ProjectedEloGain.Value.ToString("F1")
-            </span>
-        }
     </div>
     <div class="model-card__stats">
         Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Model.DuelCount - Model.WinCount)
@@ -44,12 +48,10 @@
 
 @code {
     [Parameter, EditorRequired] public ModelDto Model { get; set; } = null!;
-    [Parameter] public string? LabelOverride { get; set; }
     [Parameter] public bool IsSelected { get; set; }
     [Parameter] public string? Slot { get; set; }  // "Left", "Right", or null
     [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
-    [Parameter] public double? ProjectedEloGain { get; set; }
 
     private string _cardClass => IsSelected ? "model-card model-card--selected" : "model-card";
 
@@ -57,10 +59,22 @@
     {
         get
         {
-            var cursor = IsDisabled ? "cursor:not-allowed;opacity:0.45;" : "cursor:pointer;";
+            // Dimming is owned by the caller's .wizard__card-disabled wrapper; only the
+            // cursor is set here so the two don't compound into an unreadable opacity.
+            var cursor = IsDisabled ? "cursor:not-allowed;" : "cursor:pointer;";
             if (IsSelected)
                 return cursor + "border:2px solid #22c55e !important;box-shadow:0 0 0 2px rgba(34,197,94,0.4),0 0 24px rgba(34,197,94,0.2) !important;background:linear-gradient(135deg,rgba(34,197,94,0.08) 0%,#0a0a0a 100%) !important;";
             return cursor;
+        }
+    }
+
+    private string AriaLabel
+    {
+        get
+        {
+            var slot = Slot is null ? string.Empty : $", assigned to {Slot}";
+            var unavailable = IsDisabled ? ", unavailable" : string.Empty;
+            return $"{Model.DisplayName}, {Model.ModelType} model, ELO {Model.CurrentElo:F0}{slot}{unavailable}";
         }
     }
 
@@ -68,6 +82,12 @@
     {
         if (!IsDisabled)
             await OnSelected.InvokeAsync(Model);
+    }
+
+    private async Task OnCardKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " " or "Spacebar")
+            await OnCardClick();
     }
 
     private static string FormatPrice(decimal price) =>
@@ -224,21 +244,6 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
-    }
-
-    .model-card__elo-gain {
-        font-weight: 700;
-        transition: all var(--transition-fast);
-    }
-
-    .model-card__elo-gain.positive { 
-        color: var(--oled-green);
-        text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
-    }
-    
-    .model-card__elo-gain.negative { 
-        color: var(--oled-red);
-        text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
     }
 
     .model-card__stats {

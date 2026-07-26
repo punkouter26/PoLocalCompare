@@ -31,7 +31,9 @@
     </div>
 
     <div class="processing-panel__status">
-        <span class="processing-panel__status-label">
+        @* SC 4.1.3 Status Messages — announce phase changes without stealing focus.
+           Scoped to the label so the per-token counter isn't read on every tick. *@
+        <span class="processing-panel__status-label" role="status" aria-live="polite">
             @if (Status == DuelStatus.Generating)
             {
                 <span class="processing-panel__pulse"></span>
@@ -90,7 +92,7 @@
             </div>
         }
 
-        @if (ShowAdvanced && WarmUpMs.HasValue)
+        @if (WarmUpMs.HasValue)
         {
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">Warm-up</span>
@@ -98,7 +100,6 @@
             </div>
         }
 
-        @* ETA always visible (P2) — moved out of ShowAdvanced guard *@
         @if (Status == DuelStatus.Generating && TokenVelocity.HasValue && TokenVelocity.Value > 0)
         {
             var remainingTokens = 8000 - TokenCount;
@@ -119,7 +120,7 @@
             </div>
         }
 
-        @if (ShowAdvanced && PeakTokenVelocity.HasValue && PeakTokenVelocity.Value > 0)
+        @if (PeakTokenVelocity.HasValue && PeakTokenVelocity.Value > 0)
         {
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">Peak speed</span>
@@ -127,7 +128,7 @@
             </div>
         }
 
-        @if (ShowAdvanced && PrefillSpeedTps.HasValue && PrefillSpeedTps.Value > 0)
+        @if (PrefillSpeedTps.HasValue && PrefillSpeedTps.Value > 0)
         {
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">Prefill</span>
@@ -136,7 +137,7 @@
         }
 
         @* --- Output size + rate --- *@
-        @if (ShowAdvanced && TokenCount > 0)
+        @if (TokenCount > 0)
         {
             var outputBytes = (long)(TokenCount * 4.5);
             var genElapsedMs = WarmUpMs.HasValue ? Math.Max(1, ElapsedMs - WarmUpMs.Value) : Math.Max(1, ElapsedMs);
@@ -162,7 +163,7 @@
         }
 
         @* --- HTML structure (stats 5, 6, 7) --- *@
-        @if (ShowAdvanced && HtmlTagCount.HasValue && HtmlTagCount.Value > 0)
+        @if (HtmlTagCount.HasValue && HtmlTagCount.Value > 0)
         {
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">HTML tags</span>
@@ -170,7 +171,7 @@
             </div>
         }
 
-        @if (ShowAdvanced && OpenTagDepth.HasValue)
+        @if (OpenTagDepth.HasValue)
         {
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">Tag depth</span>
@@ -178,7 +179,7 @@
             </div>
         }
 
-        @if (ShowAdvanced && StyleRuleCount.HasValue && StyleRuleCount.Value > 0)
+        @if (StyleRuleCount.HasValue && StyleRuleCount.Value > 0)
         {
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">CSS rules</span>
@@ -187,7 +188,7 @@
         }
 
         @* --- Repetition score (stat 8) — only show when non-trivial --- *@
-        @if (ShowAdvanced && RepetitionScore.HasValue && RepetitionScore.Value > 0.05)
+        @if (RepetitionScore.HasValue && RepetitionScore.Value > 0.05)
         {
             <div class="processing-panel__metric @(RepetitionScore.Value > 0.3 ? "processing-panel__metric--danger" : "")">
                 <span class="processing-panel__metric-label">Loop risk</span>
@@ -219,7 +220,6 @@
     [Parameter] public double? PrefillSpeedTps { get; set; }
     [Parameter] public bool? CacheHit { get; set; }
     [Parameter] public string? Detail { get; set; }
-    [Parameter] public bool ShowAdvanced { get; set; }
 
     private string SourceBadgeClass => SourceType switch
     {

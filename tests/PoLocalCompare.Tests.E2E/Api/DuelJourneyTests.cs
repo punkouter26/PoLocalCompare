@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.E2EAPI;
+namespace PoLocalCompare.Tests.E2E.Api;
 
 /// <summary>
 /// End-to-end API journey emulating the core product loop over HTTP:

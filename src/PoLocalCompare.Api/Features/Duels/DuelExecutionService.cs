@@ -113,28 +113,9 @@ public sealed class DuelExecutionService
                 }
             }
 
-            // Forfeit rule: if exactly one model produced no output, auto-award the
-            // survivor so the duel resolves without asking a human to "judge" a no-contest.
-            // Both-succeeded (needs a human verdict) and both-failed stay Pending.
-            if (duel.Verdict == DuelVerdict.Pending)
-            {
-                var leftResult  = await duelResultRepo.GetAsync(duelId, duel.LeftModelId);
-                var rightResult = await duelResultRepo.GetAsync(duelId, duel.RightModelId);
-                if (leftResult is not null && rightResult is not null && (leftResult.IsFailure ^ rightResult.IsFailure))
-                {
-                    var forfeitVerdict = leftResult.IsFailure ? DuelVerdict.Right : DuelVerdict.Left;
-                    try
-                    {
-                        var verdictHandler = services.GetRequiredService<RecordVerdictHandler>();
-                        await verdictHandler.HandleAsync(new RecordVerdictCommand(duelId, forfeitVerdict));
-                        _logger.LogInformation("Duel {DuelId}: one model failed — auto-awarded {Verdict} by forfeit.", duelId, forfeitVerdict);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Duel {DuelId}: forfeit auto-award failed; leaving pending for manual judgment.", duelId);
-                    }
-                }
-            }
+            // No automatic verdicts. Every duel — including one where a model failed —
+            // stays Pending until a human judges it in the Arena. ELO must only ever move
+            // on a human decision.
 
             await _hubContext.Clients
                 .Group($"duel:{duelId}")
@@ -256,6 +237,11 @@ public sealed class DuelExecutionService
         var lastSignalAt = DateTimeOffset.UtcNow;
         const int retryIntervalMs = 5_000;
 
+        // One scope for the whole poll, not one per 500ms tick — this loop can run for the
+        // full 15-minute watchdog, which was ~1,800 scope creations and repository resolutions.
+        using var pollScope = _scopeFactory.CreateScope();
+        var duelResultRepo = pollScope.ServiceProvider.GetRequiredService<IDuelResultRepository>();
+
         while (!cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(500, cancellationToken);
@@ -273,8 +259,6 @@ public sealed class DuelExecutionService
             }
 
             // Check if result was posted by client
-            using var scope = _scopeFactory.CreateScope();
-            var duelResultRepo = scope.ServiceProvider.GetRequiredService<IDuelResultRepository>();
             var stored = await duelResultRepo.GetAsync(duelId, model.ModelId);
             if (stored is not null)
                 return stored;
@@ -294,7 +278,6 @@ public sealed class DuelExecutionService
         DuelStatus status,
         long elapsedMs,
         int tokenCount,
-        string? detail = null,
         long? warmUpMs = null,
         double? peakVelocity = null,
         bool isStalled = false,
@@ -319,7 +302,6 @@ public sealed class DuelExecutionService
                 OpenTagDepth = htmlStats?.OpenDepth,
                 StyleRuleCount = htmlStats?.StyleRules,
                 RepetitionScore = htmlStats?.RepetitionScore,
-                Detail = detail,
                 HtmlPreview = htmlStats?.HtmlPreview,
             });
 }

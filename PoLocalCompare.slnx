@@ -7,9 +7,7 @@
     <Project Path="src/Client/PoLocalCompare.Client/PoLocalCompare.Client.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/PoLocalCompare.UnitTests/PoLocalCompare.UnitTests.csproj" />
-    <Project Path="tests/PoLocalCompare.IntegrationTests/PoLocalCompare.IntegrationTests.csproj" />
-    <Project Path="tests/PoLocalCompare.E2EAPI/PoLocalCompare.E2EAPI.csproj" />
-    <Project Path="tests/PoLocalCompare.E2EUI/PoLocalCompare.E2EUI.csproj" />
+    <Project Path="tests/PoLocalCompare.Tests/PoLocalCompare.Tests.csproj" />
+    <Project Path="tests/PoLocalCompare.Tests.E2E/PoLocalCompare.Tests.E2E.csproj" />
   </Folder>
 </Solution>

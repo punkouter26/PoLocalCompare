@@ -13,7 +13,7 @@
             <span class="brand-text">PoLocalCompare</span>
         </a>
 
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu" aria-expanded="@(!collapseNavMenu)" aria-controls="navbarLinks">
+        <button title="Navigation menu" aria-label="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu" aria-expanded="@(!collapseNavMenu)" aria-controls="navbarLinks">
             <span class="navbar-toggler-icon"></span>
         </button>
 
@@ -49,7 +49,7 @@
                 else
                 {
                     <button class="btn btn-sm btn-ms-nav" @onclick="LoginWithMicrosoft">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="14" height="14" style="margin-right:0.35rem;vertical-align:middle">
+                        <svg class="nav-ms-logo" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="14" height="14">
                             <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
                             <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
                             <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>

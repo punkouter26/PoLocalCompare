@@ -24,7 +24,12 @@ public static partial class DuelResultEnricher
     /// <summary>Mutates <paramref name="result"/> in place; safe to call more than once (idempotent).</summary>
     public static void Enrich(DuelResult result, Model model, double electricityRateUsdPerKwh)
     {
-        var html = result.HtmlOutputRaw ?? string.Empty;
+        // Normalize here rather than per-runner: every inference path funnels through this
+        // method, so stripping markdown fences once keeps stored output — and everything
+        // scored from it — identical no matter where the model ran.
+        var html = HtmlOutputNormalizer.Normalize(result.HtmlOutputRaw ?? string.Empty);
+        result.HtmlOutputRaw = html;
+        result.HtmlOutputSizeBytes = Encoding.UTF8.GetByteCount(html);
 
         result.CharacterDensityRatio = ComputeCharacterDensity(html);
         result.OutputQualityScore = HtmlOutputQualityScorer.Score(html);

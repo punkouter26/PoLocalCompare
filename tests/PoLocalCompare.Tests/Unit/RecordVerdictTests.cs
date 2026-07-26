@@ -5,7 +5,7 @@ using PoLocalCompare.Api.Features.Models;
 
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.UnitTests.Application;
+namespace PoLocalCompare.Tests.Unit;
 
 public class RecordVerdictTests
 {

@@ -350,23 +350,7 @@ public static class ModelsEndpoints
 
             await repository.UpdateAsync(updated);
 
-            var dto = new PoLocalCompare.Shared.DTOs.ModelDto
-            {
-                ModelId = updated.ModelId,
-                DisplayName = updated.DisplayName,
-                ModelType = updated.ModelType,
-                CurrentElo = updated.CurrentElo,
-                DuelCount = updated.DuelCount,
-                WinCount = updated.WinCount,
-                GreenScoreAvg = updated.GreenScoreAvg,
-                TdpWatts = updated.TdpWatts,
-                WebLlmModelId = updated.WebLlmModelId,
-                ApiEndpointRef = updated.ApiEndpointRef,
-                InputTokenPricePerMillion = updated.InputTokenPricePerMillion,
-                OutputTokenPricePerMillion = updated.OutputTokenPricePerMillion,
-                CreatedAt = updated.CreatedAt
-            };
-            return Results.Ok(dto);
+            return Results.Ok(RegisterModelHandler.MapToDto(updated));
         })
         .WithName("PatchModel")
         .WithSummary("Updates DisplayName and/or ApiEndpointRef for an existing model.")

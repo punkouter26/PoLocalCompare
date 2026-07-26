@@ -4,17 +4,17 @@
    sandbox="allow-scripts" permits JS execution required by generated HTML apps.
    allow-same-origin is deliberately omitted so scripts cannot access parent frame, cookies, or localStorage. *@
 
-<div class="sandboxed-viewport @(_isLoser ? "sandboxed-viewport--loser" : "")">
+<div class="sandboxed-viewport @(IsLoser ? "sandboxed-viewport--loser" : "")">
     <div class="sandboxed-viewport__header">
         <span class="sandboxed-viewport__model-name">@ModelName</span>
         <span class="sandboxed-viewport__score" title="Heuristic quality score based on renderability checks">
             Quality @_qualityScore/100
         </span>
-        @if (_isLoser)
+        @if (IsLoser)
         {
             <span class="sandboxed-viewport__badge sandboxed-viewport__badge--loser">LOSER</span>
         }
-        else if (IsLoser == false && ShowWinner)
+        else if (ShowWinner)
         {
             <span class="sandboxed-viewport__badge sandboxed-viewport__badge--winner">WINNER</span>
         }
@@ -31,7 +31,7 @@
     @if (string.IsNullOrWhiteSpace(_normalizedHtml))
     {
         <div class="sandboxed-viewport__empty">
-            <span class="sandboxed-viewport__empty-icon">🚫</span>
+            <span class="sandboxed-viewport__empty-icon" aria-hidden="true">🚫</span>
             <span>Model produced no renderable output</span>
         </div>
     }
@@ -57,7 +57,6 @@
     private readonly List<string> _diagnosticItems = [];
     private string _normalizedHtml = string.Empty;
     private int _qualityScore = 100;
-    private bool _isLoser => IsLoser;
 
     protected override void OnParametersSet()
     {

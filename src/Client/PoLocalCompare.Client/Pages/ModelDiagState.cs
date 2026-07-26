@@ -30,9 +30,6 @@ public sealed class ModelDiagState
     public void ResetCompletion() =>
         _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public bool IsSmolLM2 =>
-        Model.WebLlmModelId?.StartsWith("SmolLM2", StringComparison.OrdinalIgnoreCase) == true;
-
     public bool IsOllamaModel => Model.ModelType == PoLocalCompare.Shared.Enums.ModelType.LocalService;
     public bool IsRemoteModel => Model.ModelType == PoLocalCompare.Shared.Enums.ModelType.Remote;
     public bool UsesCdnAssets => AssetSource.StartsWith("cdn", StringComparison.OrdinalIgnoreCase);

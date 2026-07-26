@@ -104,28 +104,6 @@
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.skeleton-text {
-    height: 1em;
-    margin-bottom: 0.5em;
-}
-
-.skeleton-title {
-    height: 1.5em;
-    width: 60%;
-    margin-bottom: 0.75em;
-}
-
-.skeleton-card {
-    height: 120px;
-    margin-bottom: 0.5rem;
-}
-
-.skeleton-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-full);
-}
-
 html, body {
     font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
     background-color: var(--oled-bg);
@@ -411,4 +389,78 @@ code {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+/* ── Accessibility — WCAG 2.2 Level AA ────────────────────────────────────── */
+
+:root {
+    --focus-ring: 0 0 0 2px var(--oled-bg), 0 0 0 4px var(--oled-blue);
+    --focus-ring-offset: 2px;
+    /* Sticky topnav is 3.5rem tall; keep focused targets clear of it (SC 2.4.11). */
+    --sticky-nav-clearance: 4.5rem;
+    /* SC 2.5.8 Target Size (Minimum). */
+    --target-min: 24px;
+}
+
+/* SC 2.4.7 Focus Visible + SC 1.4.11 Non-text Contrast — one ring everywhere,
+   keyboard-only so pointer users keep the unringed look. */
+:focus-visible {
+    outline: 2px solid var(--oled-blue);
+    outline-offset: var(--focus-ring-offset);
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius-sm);
+}
+
+/* h1 gets programmatic focus on navigation; the ring would be noise there. */
+h1:focus, h1:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
+/* SC 2.4.11 Focus Not Obscured (Minimum) — scrolling a focused control into
+   view must not tuck it under the sticky navbar. */
+a, button, [role="button"], input, select, textarea, summary, [tabindex]:not([tabindex="-1"]) {
+    scroll-margin-block-start: var(--sticky-nav-clearance);
+}
+
+/* SC 2.5.8 Target Size (Minimum) — 24×24 CSS px for pointer targets.
+   Inline links in prose are exempt, so they opt out below. */
+button, [role="button"], input[type="button"], input[type="submit"],
+input[type="reset"], input[type="checkbox"], input[type="radio"], summary {
+    min-block-size: var(--target-min);
+    min-inline-size: var(--target-min);
+}
+
+p a, li a, td a, .prose a {
+    min-block-size: auto;
+    min-inline-size: auto;
+}
+
+/* SC 2.4.1 Bypass Blocks — keyboard escape hatch past the nav. */
+.skip-link {
+    position: absolute;
+    inset-block-start: -100vh;
+    inset-inline-start: var(--space-sm);
+    z-index: 200;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    background-color: var(--oled-surface-elevated);
+    border: 1px solid var(--oled-blue);
+    color: var(--oled-text);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.skip-link:focus, .skip-link:focus-visible {
+    inset-block-start: var(--space-sm);
+}
+
+/* Honour the OS motion preference — this UI leans on continuous animation. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

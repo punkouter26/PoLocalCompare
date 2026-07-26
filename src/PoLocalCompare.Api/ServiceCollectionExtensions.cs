@@ -24,7 +24,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IDuelRepository>(),
                 sp.GetRequiredService<IModelRepository>(),
                 sp.GetRequiredService<IEloHistoryRepository>(),
-                kFactor);
+                kFactor,
+                sp.GetRequiredService<HybridCache>());
         });
 
         // HybridCache fronts read-heavy, slow-changing reads (leaderboard, live model-availability probes).

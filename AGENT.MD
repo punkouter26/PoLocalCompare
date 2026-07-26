@@ -16,7 +16,7 @@
 1. User selects two models (Local WebLLM / Remote Azure Foundry / Ollama)
 2. User enters a prompt — models race to generate HTML
 3. Both outputs stream live via SignalR
-4. A human judge picks the winner; if one model fails, the survivor wins by forfeit automatically
+4. A human judge picks the winner — always. No verdict is ever awarded automatically, even when one model fails
 5. Elo ratings update, stored in Azure Table Storage
 
 ---
@@ -26,7 +26,7 @@
 | Layer | Technology |
 |---|---|
 | **Runtime** | .NET 10 (pinned via `global.json`) |
-| **Language** | C# 14 (`LangVersion=14` in `Directory.Build.props`) |
+| **Language** | C# `latest` (`Directory.Build.props`) — standards mandate C# 15; SDK 10 tops out at 14, so `latest` rolls forward automatically |
 | **Client** | Blazor WASM hosted in `PoLocalCompare.Api` |
 | **UI library** | Radzen Blazor |
 | **In-browser AI** | WebLLM (WebGPU) via JS interop |
@@ -62,7 +62,7 @@ PoLocalCompare.slnx
 │   │   ├── Features/
 │   │   │   ├── Duels/                  ← endpoints, commence/get/list/record-verdict handlers,
 │   │   │   │                             Duel + DuelResult entities & repositories,
-│   │   │   │                             DuelExecutionService (forfeit auto-award), DuelHub
+│   │   │   │                             DuelExecutionService, DuelHub
 │   │   │   ├── Leaderboard/            ← endpoints, handlers, EloRecord, EloCalculator, EloHistoryRepository
 │   │   │   ├── Models/                 ← endpoints, handlers, Model entity, ModelRepository, ModelSeeder
 │   │   │   ├── Archive/                ← lab-report export handler + HTML renderer
@@ -94,14 +94,12 @@ PoLocalCompare.slnx
 │           │                             InferenceSessionStore, CorrelationHandler
 │           └── Layout/
 ├── tests/
-│   ├── PoLocalCompare.UnitTests/       ← xUnit + Moq (pure logic)
-│   ├── PoLocalCompare.IntegrationTests/← Testcontainers (Azurite)
-│   ├── PoLocalCompare.E2EAPI/          ← Black-box HTTP journey tests (C#)
-│   └── PoLocalCompare.E2EUI/           ← Playwright for .NET (C#)
+│   ├── PoLocalCompare.Tests/           ← Unit/ (xUnit + Moq, no I/O) + Integration/ (Testcontainers Azurite)
+│   └── PoLocalCompare.Tests.E2E/       ← Api/ (black-box HTTP journeys) + Ui/ (Playwright, Category=UI)
 ├── docs/                               ← PRD_Master.md + Mermaid diagrams (.mmd, *_simplified.mmd, .svg)
 ├── SCRIPTS/                            ← setup.ps1, download-models.py, cleanup-models.py
 ├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep / main.json)
-├── Directory.Build.props               ← Global: TreatWarningsAsErrors, Nullable, LangVersion=14
+├── Directory.Build.props               ← Global: TreatWarningsAsErrors, Nullable, LangVersion=latest
 ├── Directory.Packages.props            ← Central Package Management
 ├── global.json                         ← .NET 10 SDK pin
 └── docker-compose.yml                  ← Azurite container
@@ -220,20 +218,37 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 - **Diagnostics endpoints:** `/health` (JSON, automated pings) and `/diag` (dev+prod hidden page). **No UI links to these.**
 - **Mock visibility:** When `Features:UseRealAi` is disabled (AI responses simulated), display `USING MOCK DATA` in the top nav (see `NavMenu.razor`).
 - **Audio:** Web Audio API for in-app sounds.
+- **API docs:** OpenAPI **3.1** (pinned explicitly in `Program.cs`) + Scalar UI at `/scalar`; both dev-only and anonymous. Guarded by `Tests.E2E/Api/OpenApiContractTests`.
+- **Caching & resilience:** `HybridCache` (30s TTL, tag-invalidated on verdict) fronts leaderboard and model-availability reads; HTTP callers use `AddResilienceHandler` pipelines (retry-only for SSE streams).
+- **Accessibility: WCAG 2.2 Level AA.** Enforced in `wwwroot/css/app.css` (`:focus-visible` ring, 24×24 minimum target size, skip link, `scroll-margin` clearance under the sticky nav, `prefers-reduced-motion`) and in markup: clickable cards/steps are keyboard-operable with `role`/`aria-pressed`, decorative glyphs are `aria-hidden`, and status changes use `role="status"`. Colour-contrast ratios are **not** automatically verified — check new palette tokens by hand.
 
 ---
 
 ## 8. Testing Strategy
 
-| Test Type | Project | Notes |
+Two test projects (standards §6). Each holds its slices in folders, not separate assemblies.
+
+| Test Type | Location | Notes |
 |---|---|---|
-| Unit | `tests/PoLocalCompare.UnitTests` | Pure logic, mock data (no real AI) |
-| Integration | `tests/PoLocalCompare.IntegrationTests` | Testcontainers (Azurite), fake-auth header, dev env |
-| E2E API | `tests/PoLocalCompare.E2EAPI` | Black-box HTTP journeys over Testcontainers + fake auth |
-| E2E UI | `tests/PoLocalCompare.E2EUI` | C# Playwright; drives a running app via `BASE_URL` |
+| Unit | `tests/PoLocalCompare.Tests/Unit` | Pure logic, no I/O, mock data (no real AI) |
+| Integration | `tests/PoLocalCompare.Tests/Integration` | Testcontainers (Azurite), fake-auth header, dev env |
+| E2E API | `tests/PoLocalCompare.Tests.E2E/Api` | Black-box HTTP journeys over Testcontainers + fake auth |
+| E2E UI | `tests/PoLocalCompare.Tests.E2E/Ui` | Playwright, headed Chrome, mobile + desktop viewports |
+
+**Ratio contract (100 / 50 / 25 / 25).** Unit is the baseline; integration ≈ 50% of unit, each
+E2E tier ≈ 25%. Current: 15 unit / 8 integration / 8 E2E-API test methods, plus 2 E2E-UI methods
+run across both viewports (4 cases). Keep new work inside those proportions.
+
+```bash
+dotnet test tests/PoLocalCompare.Tests                              # unit + integration (needs Docker)
+dotnet test tests/PoLocalCompare.Tests --filter FullyQualifiedName~Unit   # unit only, no Docker
+dotnet test tests/PoLocalCompare.Tests.E2E --filter Category!=UI    # API journeys only
+dotnet test tests/PoLocalCompare.Tests.E2E --filter Category=UI     # Playwright (app must be running)
+```
 
 - Integration / E2E-API tests run in a **non-Production** host so the `X-Fake-User` guest bypass works.
-- E2E-UI needs a running app and `playwright install`; it is **not** run in CI (see policy below).
+- E2E-UI needs a running app and `playwright install`; it runs **headed** by default (`HEADLESS=1` to
+  suppress) across a 390×844 mobile and 1440×900 desktop viewport, and is **not** run in CI.
 - Tests are intentionally **not** executed in CI/CD — the pipeline only builds, publishes, and deploys.
 
 ---

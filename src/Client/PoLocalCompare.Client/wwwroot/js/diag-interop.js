@@ -98,7 +98,7 @@ window.runModelDiag = async function (dotnetRef, diagId, webLlmModelId, prompt, 
         delete _diagWorkers[diagId];
     }
 
-    const worker = new Worker('/js/webllm-worker.js?v=6', { type: 'module' });
+    const worker = new Worker('/js/webllm-worker.js?v=7', { type: 'module' });
     _diagWorkers[diagId] = worker;
 
     let firstTokenMs = -1;
@@ -208,11 +208,3 @@ window.loadLabResults = function () {
     return out;
 };
 
-// ── Tested-count pulse animation ─────────────────────────────────────────────
-window.pulseTestedCount = function () {
-    const el = document.querySelector('.lab__env-stat--tested');
-    if (!el) return;
-    el.classList.remove('lab__env-stat--pulse');
-    void el.offsetWidth;
-    el.classList.add('lab__env-stat--pulse');
-};

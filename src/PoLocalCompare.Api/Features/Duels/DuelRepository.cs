@@ -1,4 +1,5 @@
 // GoF: Repository pattern
+using System.Collections.Concurrent;
 using Azure;
 using Azure.Data.Tables;
 using NUlid;
@@ -10,6 +11,14 @@ public sealed class DuelRepository : IDuelRepository
 {
     private const string TableName = "Duels";
 
+    /// <summary>
+    /// One create-check per table endpoint for the life of the process. The table is already
+    /// provisioned at startup (AzuriteSetup in dev, the storage bootstrap in Production); doing
+    /// it per operation cost an extra round-trip on every duel read, write and list.
+    /// Keyed by endpoint so a test host pointed at a different Azurite instance still ensures its own.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, Task> TableEnsured = new();
+
     private readonly TableClient _tableClient;
 
     public DuelRepository(TableServiceClient tableServiceClient)
@@ -17,9 +26,12 @@ public sealed class DuelRepository : IDuelRepository
         _tableClient = tableServiceClient.GetTableClient(TableName);
     }
 
+    private Task EnsureTableAsync() =>
+        TableEnsured.GetOrAdd(_tableClient.Uri.ToString(), _ => _tableClient.CreateIfNotExistsAsync());
+
     public async Task<Duel?> GetByIdAsync(string duelId)
     {
-        await _tableClient.CreateIfNotExistsAsync();
+        await EnsureTableAsync();
 
         // PartitionKey is YYYYMM derived from ULID timestamp
         var partitionKey = GetPartitionKey(duelId);
@@ -41,7 +53,7 @@ public sealed class DuelRepository : IDuelRepository
 
     public async Task SaveAsync(Duel duel)
     {
-        await _tableClient.CreateIfNotExistsAsync();
+        await EnsureTableAsync();
 
         var entity = MapToEntity(duel);
         try
@@ -56,7 +68,7 @@ public sealed class DuelRepository : IDuelRepository
 
     public async Task UpdateAsync(Duel duel)
     {
-        await _tableClient.CreateIfNotExistsAsync();
+        await EnsureTableAsync();
 
         var entity = MapToEntity(duel);
         // ETag-conditional replace (standards §5.5): a concurrent writer surfaces as 412 instead of a lost update.
@@ -66,7 +78,7 @@ public sealed class DuelRepository : IDuelRepository
 
     public async Task<IEnumerable<Duel>> ListAsync(int limit, string? beforeMonth)
     {
-        await _tableClient.CreateIfNotExistsAsync();
+        await EnsureTableAsync();
 
         limit = Math.Clamp(limit, 1, 100);
         var duels = new List<Duel>();

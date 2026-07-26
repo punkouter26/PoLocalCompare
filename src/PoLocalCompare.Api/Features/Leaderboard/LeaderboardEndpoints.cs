@@ -6,9 +6,6 @@ namespace PoLocalCompare.Api.Features.Leaderboard;
 
 public static class LeaderboardEndpoints
 {
-    /// <summary>Cache tag invalidated whenever a verdict updates ELO (see DuelsEndpoints verdict handler).</summary>
-    internal const string LeaderboardCacheTag = "leaderboard";
-
     public static IEndpointRouteBuilder MapLeaderboardEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/leaderboard").WithTags("Leaderboard").RequireAuthorization();
@@ -23,7 +20,7 @@ public static class LeaderboardEndpoints
             var rows = await cache.GetOrCreateAsync(
                 $"leaderboard:{sort}",
                 async ct => (await handler.HandleAsync(sort)).ToArray(),
-                tags: [LeaderboardCacheTag],
+                tags: [CacheTags.Leaderboard],
                 cancellationToken: cancellationToken);
             return Results.Ok(rows);
         })

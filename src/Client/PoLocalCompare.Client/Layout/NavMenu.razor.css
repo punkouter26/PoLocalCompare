@@ -238,6 +238,12 @@
     background: #e8e8e8;
 }
 
+/* Decorative Microsoft mark inside the sign-in button (aria-hidden). */
+.nav-ms-logo {
+    margin-right: 0.35rem;
+    vertical-align: middle;
+}
+
 .nav-logout {
     font-size: 0.75rem;
     padding: 0.2rem 0.55rem;

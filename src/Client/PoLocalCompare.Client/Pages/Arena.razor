@@ -106,14 +106,15 @@
 
         @if (_verdictRecorded)
         {
-            <div class="arena__verdict-recorded">
+            @* SC 4.1.3 Status Messages — announced without moving focus. *@
+            <div class="arena__verdict-recorded" role="status">
                 Verdict recorded ✓ — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
             </div>
         }
 
         @if (_duelStillRunning)
         {
-            <div class="arena__generating-notice">⚡ Duel in progress — previewing output as it streams…</div>
+            <div class="arena__generating-notice" role="status"><span aria-hidden="true">⚡</span> Duel in progress — previewing output as it streams…</div>
         }
 
         @if (!_verdictRecorded && !_duelStillRunning && _duel.Verdict == DuelVerdict.Pending)
@@ -135,7 +136,7 @@
                 Text="👈 Winner: Left"
                 ButtonStyle="ButtonStyle.Success"
                 Size="ButtonSize.Large"
-                Disabled="@(_verdictRecorded || _submitting || BothSidesFailed())"
+                Disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
                 Click="@(() => RecordVerdictAsync(DuelVerdict.Left))"
                 class="arena__action-btn"
             />
@@ -143,11 +144,26 @@
                 Text="Winner: Right 👉"
                 ButtonStyle="ButtonStyle.Success"
                 Size="ButtonSize.Large"
-                Disabled="@(_verdictRecorded || _submitting || BothSidesFailed())"
+                Disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
                 Click="@(() => RecordVerdictAsync(DuelVerdict.Right))"
                 class="arena__action-btn"
             />
+            @* Re-runs the same pairing and prompt as a brand-new duel — useful when a
+               model failed for a transient reason (model load, cache, rate limit). *@
+            <RadzenButton
+                Text="@(_retrying ? "Starting…" : "🔄 Retry duel")"
+                ButtonStyle="ButtonStyle.Secondary"
+                Size="ButtonSize.Large"
+                Disabled="@(_retrying || _submitting || _duelStillRunning)"
+                Click="RetryDuelAsync"
+                class="arena__action-btn"
+            />
         </div>
+
+        @if (_retryError is not null)
+        {
+            <p class="arena__error" role="status">@_retryError</p>
+        }
     }
 </div>
 
@@ -160,9 +176,10 @@
     private bool _loading = true;
     private bool _submitting;
     private bool _verdictRecorded;
+    private bool _retrying;
+    private string? _retryError;
 
     private string? _winnerModelId;
-    private string? _winnerDisplayName;
     private string? _loserModelId;
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
@@ -188,7 +205,8 @@
         // UX#7: Block navigation away when verdict is still pending
         _locationChangingReg = Nav.RegisterLocationChangingHandler(async ctx =>
         {
-            if (_duel?.Verdict == DuelVerdict.Pending && !_verdictRecorded)
+            // A retry navigates deliberately to the new duel — don't nag about the old one.
+            if (_duel?.Verdict == DuelVerdict.Pending && !_verdictRecorded && !_retrying)
             {
                 var confirmed = await JS.InvokeAsync<bool>("confirm", "You haven't picked a winner yet. Leave without voting?");
                 if (!confirmed) ctx.PreventNavigation();
@@ -217,7 +235,6 @@
                 {
                     _verdictRecorded = true;
                     _winnerModelId = _duel.WinnerModelId;
-                    _winnerDisplayName = ResolveDisplayName(_duel.WinnerModelId);
                     _loserModelId = _duel.LoserModelId;
                     ApplyEloShifts(_duel);
                 }
@@ -227,6 +244,39 @@
         {
             _loading = false;
         }
+    }
+
+    /// <summary>
+    /// Starts a fresh duel with the same pairing and prompt. Model failures here are usually
+    /// transient (model load, browser cache, rate limit), so re-running beats rebuilding the
+    /// selection by hand. The original duel is left untouched and still judgeable.
+    /// </summary>
+    private async Task RetryDuelAsync()
+    {
+        if (_duel is null || _retrying || _submitting) return;
+
+        _retrying = true;
+        _retryError = null;
+
+        try
+        {
+            var prompt = string.IsNullOrWhiteSpace(_duel.PromptFull) ? _duel.PromptText : _duel.PromptFull;
+            var rerun = await ApiClient.CommenceDuelAsync(_duel.LeftModelId, _duel.RightModelId, prompt);
+
+            if (rerun is not null)
+            {
+                Nav.NavigateTo($"/processing/{rerun.DuelId}");
+                return;
+            }
+
+            _retryError = "Could not start the re-run. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            _retryError = $"Failed to start the re-run: {ex.Message}";
+        }
+
+        _retrying = false;
     }
 
     private async Task RecordVerdictAsync(DuelVerdict verdict)
@@ -241,7 +291,6 @@
             {
                 _verdictRecorded = true;
                 _winnerModelId = response.WinnerModelId;
-                _winnerDisplayName = ResolveDisplayName(response.WinnerModelId);
                 _loserModelId = response.LoserModelId;
 
                 // Apply ELO shifts to display badges

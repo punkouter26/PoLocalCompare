@@ -2,8 +2,28 @@ using System.Text.RegularExpressions;
 
 namespace PoLocalCompare.Api.Common.Domain;
 
-public static class HtmlOutputQualityScorer
+/// <remarks>
+/// Patterns are source-generated: <c>Score</c> runs per enriched result and again for every
+/// legacy row read during leaderboard/archive aggregation, and the previous interpolated
+/// <c>Regex.IsMatch</c> allocated and re-hashed a fresh pattern string on each of its four calls.
+/// </remarks>
+public static partial class HtmlOutputQualityScorer
 {
+    [GeneratedRegex(@"<\s*!doctype\b", RegexOptions.IgnoreCase)]
+    private static partial Regex DoctypeRegex();
+
+    [GeneratedRegex(@"<\s*html\b", RegexOptions.IgnoreCase)]
+    private static partial Regex HtmlTagRegex();
+
+    [GeneratedRegex(@"<\s*body\b", RegexOptions.IgnoreCase)]
+    private static partial Regex BodyTagRegex();
+
+    [GeneratedRegex(@"<\s*script\b", RegexOptions.IgnoreCase)]
+    private static partial Regex ScriptTagRegex();
+
+    [GeneratedRegex(@"<(?:!doctype|html|head|body|canvas|div|script|style)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex LooksLikeHtmlRegex();
+
     public static int Score(string? html)
     {
         if (string.IsNullOrWhiteSpace(html))
@@ -12,26 +32,15 @@ public static class HtmlOutputQualityScorer
         }
 
         var text = html.Trim();
-        var hasDoctype = ContainsTag(text, "!doctype");
-        var hasHtml = ContainsTag(text, "html");
-        var hasBody = ContainsTag(text, "body");
-        var hasScript = ContainsTag(text, "script");
-        var looksLikeHtml = LooksLikeHtml(text);
 
         var score = 100;
-        if (!looksLikeHtml) score -= 40;
-        if (!hasDoctype) score -= 10;
-        if (!hasHtml) score -= 10;
-        if (!hasBody) score -= 10;
-        if (!hasScript) score -= 10;
+        if (!LooksLikeHtmlRegex().IsMatch(text)) score -= 40;
+        if (!DoctypeRegex().IsMatch(text)) score -= 10;
+        if (!HtmlTagRegex().IsMatch(text)) score -= 10;
+        if (!BodyTagRegex().IsMatch(text)) score -= 10;
+        if (!ScriptTagRegex().IsMatch(text)) score -= 10;
         if (text.Length < 200) score -= 10;
 
         return Math.Clamp(score, 0, 100);
     }
-
-    private static bool ContainsTag(string html, string tagName) =>
-        Regex.IsMatch(html, $@"<\s*{Regex.Escape(tagName)}\b", RegexOptions.IgnoreCase);
-
-    private static bool LooksLikeHtml(string html) =>
-        Regex.IsMatch(html, @"<(?:!doctype|html|head|body|canvas|div|script|style)\b", RegexOptions.IgnoreCase);
 }

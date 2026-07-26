@@ -1,4 +1,5 @@
 global using PoLocalCompare.Api.Common.Background;
+global using PoLocalCompare.Api.Common.Caching;
 global using PoLocalCompare.Api.Common.Domain;
 global using PoLocalCompare.Api.Common.Inference;
 global using PoLocalCompare.Api.Common.KeyVault;

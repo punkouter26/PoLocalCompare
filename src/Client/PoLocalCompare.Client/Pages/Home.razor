@@ -31,18 +31,25 @@
     </header>
 
     @* ── Stepper ─────────────────────────────────────────────────────── *@
+    @* SC 2.1.1 Keyboard: each step is a real button so it is tabbable and Enter/Space operable. *@
     <ol class="wizard__steps" aria-label="Setup progress">
-        <li class="wizard__step @StepClass(1)" @onclick="@(() => ScrollToAsync("wizard-step-1"))">
-            <span class="wizard__step-num">1</span>
-            <span class="wizard__step-label">Models</span>
+        <li>
+            <button type="button" class="wizard__step @StepClass(1)" @onclick="@(() => ScrollToAsync("wizard-step-1"))">
+                <span class="wizard__step-num">1</span>
+                <span class="wizard__step-label">Models</span>
+            </button>
         </li>
-        <li class="wizard__step @StepClass(2)" @onclick="@(() => ScrollToAsync("wizard-step-2"))">
-            <span class="wizard__step-num">2</span>
-            <span class="wizard__step-label">Prompt</span>
+        <li>
+            <button type="button" class="wizard__step @StepClass(2)" @onclick="@(() => ScrollToAsync("wizard-step-2"))">
+                <span class="wizard__step-num">2</span>
+                <span class="wizard__step-label">Prompt</span>
+            </button>
         </li>
-        <li class="wizard__step @StepClass(3)" @onclick="@(() => ScrollToAsync("wizard-step-3"))">
-            <span class="wizard__step-num">3</span>
-            <span class="wizard__step-label">Compare</span>
+        <li>
+            <button type="button" class="wizard__step @StepClass(3)" @onclick="@(() => ScrollToAsync("wizard-step-3"))">
+                <span class="wizard__step-num">3</span>
+                <span class="wizard__step-label">Compare</span>
+            </button>
         </li>
     </ol>
 
@@ -142,10 +149,13 @@
                         var browserNoGpu = model.ModelType == ModelType.Local && _webGpuSupported == false;
                         var isDisabled = remoteOffline || browserNoGpu;
                         <div class="@(isDisabled ? "wizard__card-disabled" : "")">
+                            @* IsDisabled drives tabindex/aria-disabled — the wrapper's
+                               pointer-events:none blocks the mouse but not the keyboard. *@
                             <ModelCard Model="model"
                                        IsSelected="@(isLeft || isRight)"
+                                       IsDisabled="@isDisabled"
                                        Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
-                                       OnSelected="@(isDisabled ? EventCallback<ModelDto>.Empty : EventCallback.Factory.Create<ModelDto>(this, AssignModel))" />
+                                       OnSelected="AssignModel" />
                             @if (isDisabled)
                             {
                                 <span class="wizard__card-badge">@(browserNoGpu ? "Needs WebGPU" : "Unavailable")</span>

@@ -9,22 +9,44 @@ import * as webllm from '/js/web-llm.js';
 let engine = null;
 let cachedModelId = null;
 
+/**
+ * Tears down the live engine and drops the cache marker.
+ * Safe to call when nothing is loaded. Failures are swallowed: a device that is already
+ * lost throws on unload, and we still need the references cleared so the next run starts
+ * from a clean slate rather than reusing a dead GPU context.
+ */
+async function releaseEngine(why) {
+    if (!engine) return;
+    try {
+        console.log(`[WebLLM Worker] Releasing engine for "${cachedModelId}" — ${why}`);
+        await engine.unload();
+    } catch (err) {
+        console.warn('[WebLLM Worker] Engine unload failed (device may already be lost):', err);
+    } finally {
+        engine = null;
+        cachedModelId = null;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // HTML stats helpers
 // ---------------------------------------------------------------------------
+// Scans with bounded lookahead only. Slicing the remainder of the document at every
+// '<' made this O(n²) — on the same worker thread that drives WebGPU inference, and
+// re-run every 500ms over the whole accumulated output.
 function computeHtmlStats(text) {
     let tagCount = 0, depth = 0, styleRules = 0;
     let inStyle = false;
     for (let i = 0; i < text.length; i++) {
         if (text[i] === '<') {
-            const rest = text.slice(i + 1);
-            if (rest.startsWith('/')) {
+            const next = text[i + 1];
+            if (next === '/') {
                 depth--;
-                if (/^\/style/i.test(rest)) inStyle = false;
-            } else if (!rest.startsWith('!')) {
+                if (text.slice(i + 1, i + 7).toLowerCase() === '/style') inStyle = false;
+            } else if (next !== '!') {
                 tagCount++;
                 depth++;
-                if (/^style/i.test(rest)) inStyle = true;
+                if (text.slice(i + 1, i + 6).toLowerCase() === 'style') inStyle = true;
             }
         } else if (inStyle && text[i] === '{') {
             styleRules++;
@@ -124,6 +146,12 @@ self.onmessage = async (event) => {
         console.log(`[WebLLM Worker] Cache check — cachedModelId="${cachedModelId}" isAlreadyCached=${isAlreadyCached}`);
 
         if (!engine || !isAlreadyCached) {
+            // Release the previous model's GPU memory FIRST. Reassigning `engine` does not
+            // free anything — the old MLCEngine keeps its WebGPU device and multi-GB weight
+            // buffers alive, so switching models used to stack VRAM until an allocation
+            // failed with "device was lost while loading".
+            await releaseEngine('switching model');
+
             // Look up model_lib (WASM URL) from prebuilt config so local models get the correct WASM library
             const prebuiltEntry = webllm.prebuiltAppConfig?.model_list?.find(m => m.model_id === effectiveModelId);
             // localModelBaseUrl already points at this model's root (resolveBrowserModelAvailability
@@ -181,6 +209,7 @@ self.onmessage = async (event) => {
         // Rolling window of last 200 chars for repetition detection
         const repWindow = [];
         const REP_WINDOW_CHARS = 200;
+        const PREVIEW_MAX_CHARS = 5000;
 
         // Same HTML-forcing system prompt the Foundry/Ollama proxies use — without it,
         // small local models answer conversationally ("I'm sorry, but as an AI…") instead
@@ -205,7 +234,6 @@ self.onmessage = async (event) => {
                 if (elapsedMs - lastStatusMs >= 500) {
                     lastStatusMs = elapsedMs;
 
-                    // HTML stats on full content (fast for typical page sizes)
                     const htmlStats = computeHtmlStats(generatedContent);
 
                     // Repetition on last ~200 chars
@@ -221,7 +249,11 @@ self.onmessage = async (event) => {
                         repetitionScore,
                         cacheHit,
                         prefillSpeedTps,
-                        htmlPreview: generatedContent,
+                        // Preview only — the pane renders a screenful. Shipping the whole
+                        // document twice a second structured-clones it across the worker
+                        // boundary and marshals it through JS interop. Matches the 5000-char
+                        // cap the server-side proxies use.
+                        htmlPreview: generatedContent.slice(0, PREVIEW_MAX_CHARS),
                     });
                 }
             }
@@ -263,5 +295,10 @@ self.onmessage = async (event) => {
             rawError: raw,
             phase,
         });
+
+        // A failed load can leave `engine` pointing at the PREVIOUS model (the assignment
+        // never happened), and a device lost mid-generation leaves a dead engine whose
+        // cache marker still matches. Either way the next run must not reuse it.
+        await releaseEngine(`run failed in phase=${phase}`);
     }
 };

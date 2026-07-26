@@ -6,7 +6,7 @@
 
 ## 1. Product Definition
 
-**PoLocalCompare** is a real-time LLM benchmarking arena. Two models — **Local** (WebLLM/WebGPU in the browser), **Remote** (Azure AI Foundry), or **LocalService** (Ollama, dev-only) — race to generate HTML from the same prompt. Output streams live over SignalR; a human judge picks the winner (or the surviving model wins by forfeit when one fails); Elo ratings (K=32, start 1200) update in Azure Table Storage.
+**PoLocalCompare** is a real-time LLM benchmarking arena. Two models — **Local** (WebLLM/WebGPU in the browser), **Remote** (Azure AI Foundry), or **LocalService** (Ollama, dev-only) — race to generate HTML from the same prompt. Output streams live over SignalR; a human judge always picks the winner (no automatic verdicts, even when a model fails); Elo ratings (K=32, start 1200) update in Azure Table Storage.
 
 - **Live:** https://polocalcompare.azurewebsites.net (Azure App Service F1, Windows, single origin)
 - **Who:** a single hobbyist operator plus invited guests; mobile-portrait-first UX.
@@ -18,7 +18,7 @@ All server code lives in `PoLocalCompare.Api` (VSA). Each slice is flat: endpoin
 
 | Slice | Folder | Owns |
 |---|---|---|
-| **Duels** | `Features/Duels/` | `Duel`, `DuelResult`, commence/get/list/verdict handlers, `DuelExecutionService` (forfeit auto-award), `DuelHub`, repositories |
+| **Duels** | `Features/Duels/` | `Duel`, `DuelResult`, commence/get/list/verdict handlers, `DuelExecutionService`, `DuelHub`, repositories |
 | **Leaderboard** | `Features/Leaderboard/` | `EloRecord`, `EloCalculator` (K=32), kill-list + leaderboard handlers, `EloHistoryRepository`, HybridCache tag `leaderboard` |
 | **Models** | `Features/Models/` | `Model` entity, registry CRUD, availability probes, WebLLM download status/trigger, `ModelSeeder` |
 | **Archive** | `Features/Archive/` | Lab-report export (`ExportLabReportHandler` + `HtmlLabReportRenderer`) |
@@ -83,7 +83,7 @@ Server owns the OIDC code flow (PKCE, authority `login.microsoftonline.com/commo
 
 - **Zero-waste hosting:** F1 App Service, single origin, no CORS, tag-invalidated HybridCache, telemetry rate cap.
 - **Fail-fast startup:** non-dev host verifies Table Storage reachability within 15 s or exits.
-- **Duel watchdog:** 900 s inference cap (WebGPU shader JIT headroom). A duel where one model fails is auto-awarded to the survivor; otherwise it stays Pending until a human picks a winner.
+- **Duel watchdog:** 900 s inference cap (WebGPU shader JIT headroom). Every duel stays Pending until a human picks a winner — a failed model is never auto-awarded against.
 - **Errors:** RFC 7807 `problem+json` globally; correlation id echoed.
 - **Mock visibility:** `USING MOCK DATA` banner when `Features:UseRealAi` is off.
 
@@ -93,6 +93,10 @@ Server owns the OIDC code flow (PKCE, authority `login.microsoftonline.com/commo
 2. **0002 (2026-07-06, active):** collapsed to Vertical Slice Architecture per the global Po* mandate — Domain/Application/Infrastructure merged into `Api/Features/*` + `Api/Common/*`; only `.API`/`.Client`/`.Shared` src projects remain.
 3. **Managed identity (2026-07-06):** system-assigned MI; Bicep grants Storage Table/Blob RBAC + `kv-poshared` access policy; secrets use the `PoLocalCompare--` Key Vault prefix.
 4. **CI policy:** pipeline builds/publishes/deploys only — tests are never run in CI; infra Bicep runs only when the App Service is missing.
+5. **Test consolidation (2026-07-26):** the four test assemblies (UnitTests / IntegrationTests / E2EAPI / E2EUI) collapsed into the two the standards mandate — `PoLocalCompare.Tests` (`Unit/`, `Integration/`) and `PoLocalCompare.Tests.E2E` (`Api/`, `Ui/`). UI tests carry `[Trait("Category","UI")]` so the API journeys can still run alone. The 100/50/25/25 ratio is tracked in AGENT.MD §8.
+6. **Language version (2026-07-26):** `LangVersion=latest` rather than a pinned `15` — the standards mandate C# 15, but SDK 10.0.301 rejects it (CS1617); `latest` picks it up as soon as the toolchain ships it.
+7. **Human-only verdicts (2026-07-26):** the forfeit auto-award was removed from `DuelExecutionService`. No code path may record a verdict or move ELO without a human decision in the Arena; a failed model is judged, not auto-resolved. The Arena gained a **Retry duel** action that re-runs the same pairing and prompt as a new duel, since most failures are transient.
+8. **Accessibility (2026-07-26):** WCAG 2.2 Level AA adopted as the UI contract — global focus-visible ring, 24×24 minimum target size (SC 2.5.8), skip link (SC 2.4.1), sticky-nav scroll clearance (SC 2.4.11), keyboard-operable model cards and wizard steps (SC 2.1.1), and `role="status"` live regions (SC 4.1.3). Contrast ratios remain a manual check.
 
 ## 10. Diagram Index (this folder)
 

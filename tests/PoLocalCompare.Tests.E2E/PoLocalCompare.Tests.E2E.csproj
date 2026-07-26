@@ -10,10 +10,13 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Moq" />
+    <!-- Api/ slice: black-box HTTP journeys over Testcontainers + fake auth. -->
     <PackageReference Include="Testcontainers" />
     <PackageReference Include="Testcontainers.Azurite" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <PackageReference Include="Moq" />
+    <!-- Ui/ slice: Playwright against a running app; Category=UI, opt-in only. -->
+    <PackageReference Include="Microsoft.Playwright" />
   </ItemGroup>
 
   <ItemGroup>

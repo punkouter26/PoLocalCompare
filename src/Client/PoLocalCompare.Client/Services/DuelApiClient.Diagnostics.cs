@@ -51,19 +51,6 @@ public sealed partial class DuelApiClient
         }
     }
 
-    public async Task<HealthSnapshotDto?> GetHealthSnapshotAsync()
-    {
-        try
-        {
-            return await _http.GetFromJsonAsync<HealthSnapshotDto>("/health", JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Health snapshot fetch failed");
-            return null;
-        }
-    }
-
     public async Task<SmokeSnapshotDto?> GetSmokeSnapshotAsync()
     {
         try
@@ -75,30 +62,6 @@ public sealed partial class DuelApiClient
             _logger.LogWarning(ex, "Smoke snapshot fetch failed");
             return null;
         }
-    }
-
-    public async Task<DiagnosticsWarningsDto?> GetDiagnosticsWarningsAsync(int limit = 5)
-    {
-        try
-        {
-            return await _http.GetFromJsonAsync<DiagnosticsWarningsDto>($"/api/diag/warnings?limit={limit}", JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Diagnostics warnings fetch failed");
-            return null;
-        }
-    }
-
-    public async Task DevResetAsync()
-    {
-        var response = await _http.PostAsync("/api/dev/reset", null);
-        response.EnsureSuccessStatusCode();
-    }
-
-    public sealed class HealthSnapshotDto
-    {
-        public string Status { get; set; } = "Unknown";
     }
 
     public sealed class SmokeSnapshotDto
@@ -113,19 +76,5 @@ public sealed partial class DuelApiClient
         public int Total { get; set; }
         public int LocalService { get; set; }
         public bool CloudMode { get; set; }
-    }
-
-    public sealed class DiagnosticsWarningsDto
-    {
-        public DateTimeOffset GeneratedAtUtc { get; set; }
-        public IReadOnlyList<DiagnosticsWarningEntryDto> Entries { get; set; } = [];
-    }
-
-    public sealed class DiagnosticsWarningEntryDto
-    {
-        public string Level { get; set; } = "Warning";
-        public string Timestamp { get; set; } = string.Empty;
-        public string Message { get; set; } = string.Empty;
-        public string Source { get; set; } = string.Empty;
     }
 }

@@ -39,7 +39,6 @@
             PrefillSpeedTps="@_leftPrefillSpeedTps"
             CacheHit="@_leftCacheHit"
             Detail="@(_leftDetail ?? _leftDiagDetail)"
-            ShowAdvanced="@_showAdvanced"
             GpuAccelerated="@_leftGpuAccelerated"
         />
         <ProcessingPanel
@@ -62,7 +61,6 @@
             PrefillSpeedTps="@_rightPrefillSpeedTps"
             CacheHit="@_rightCacheHit"
             Detail="@(_rightDetail ?? _rightDiagDetail)"
-            ShowAdvanced="@_showAdvanced"
             GpuAccelerated="@_rightGpuAccelerated"
         />
     </div>
@@ -155,7 +153,6 @@
     private string? _rightHtmlPreview;
     private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
     private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
-    private bool _showAdvanced = true;
 
     // Track in-flight local inference tasks to avoid double-starting
     private readonly HashSet<string> _runningLocalModels = [];

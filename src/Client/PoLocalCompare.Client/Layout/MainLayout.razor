@@ -3,9 +3,12 @@
 @inject IWebAssemblyHostEnvironment HostEnv
 
 <div class="page">
+    @* SC 2.4.1 Bypass Blocks — first tab stop skips the nav. *@
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
     <NavMenu />
 
-    <main>
+    <main id="main-content" tabindex="-1">
         <article class="content app-content">
             <ErrorBoundary @ref="_errorBoundary">
                 <ChildContent>
