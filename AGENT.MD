@@ -141,6 +141,15 @@ Dynamic switching is automatic based on `ASPNETCORE_ENVIRONMENT`.
 | **Browser** | When browser has WebGPU | WebLLM, runs in WASM, first-run download |
 | **Ollama** | Only when running locally | `http://localhost:11434`, checked at runtime |
 
+**Browser models on a filtered network.** `resolveBrowserModelAvailability` probes
+`wwwroot/models/<webLlmModelId>/mlc-chat-config.json` first and only falls back to the CDN, so a
+populated `wwwroot/models/` keeps weights off the network entirely. Weights are *not* the whole
+story: `prebuiltAppConfig` resolves `model_lib` against **raw.githubusercontent.com**, a separate
+host, so both fetch paths also vendor the `.wasm` libraries into `wwwroot/models/_libs/` and
+`webllm-worker.js` prefers them. Populate both with `SCRIPTS/download-models.py`, or with the
+`Fetch WebLLM artifacts` workflow (§6) if egress is blocked outright; PRD §9 item 8 has the
+rationale, including why the downloader drives `curl` instead of `huggingface_hub`.
+
 ### 4.4 Authentication (BFF)
 The API is a **Backend-for-Frontend**: it owns the OIDC code flow and the session. The Blazor WASM
 client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `SameSite=Strict` cookie
@@ -192,8 +201,14 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 # 1. Start Azurite
 docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
 
-# 2. (Optional) Download browser model assets
+# 2. (Optional) Download browser model assets - weights + .wasm libs, ~5 GB.
+#     Retries/resumes through the reset-prone TLS path; MODELS=small for a 1 GB subset.
 python SCRIPTS/download-models.py
+
+# 2b. ...or, on a network that blocks HuggingFace outright: run the "Fetch WebLLM artifacts"
+#     workflow, then install what it publishes (weights + WebGPU .wasm libraries)
+gh release download webllm-artifacts -D C:\hf-artifacts
+pwsh SCRIPTS/receive-artifacts.ps1 -PartsDir C:\hf-artifacts
 
 # 3. (Optional) Set Azure AI Foundry key
 dotnet user-secrets set "AzureAiFoundry:ApiKey" "your-key" --project src/PoLocalCompare.Api
@@ -315,6 +330,8 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | [WebLlmService.cs](src/Client/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |
 | [docs/PRD_Master.md](docs/PRD_Master.md) | Project source of truth — slices, endpoints, schema, ADR log |
 | [SCRIPTS/setup.ps1](SCRIPTS/setup.ps1) | First-run machine setup |
+| [SCRIPTS/receive-artifacts.ps1](SCRIPTS/receive-artifacts.ps1) | Installs browser-model weights + `.wasm` libs into `wwwroot/models/` |
+| [SCRIPTS/plan-webllm-artifacts.py](SCRIPTS/plan-webllm-artifacts.py) | Single source of the browser-model list for CI and local fetch |
 
 ---
 

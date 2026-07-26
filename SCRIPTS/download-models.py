@@ -1,67 +1,176 @@
 """
-Download WebLLM MLC model files from HuggingFace to wwwroot/models/.
-Run from repo root: python SCRIPTS/download-models.py
+Download WebLLM MLC model weights + model libraries directly from the internet.
 
-Models are stored at src/Client/PoLocalCompare.Client/wwwroot/models/{modelId}/
-and served as static files at https://localhost:5001/models/{modelId}/
+Run from repo root on a machine with egress to huggingface.co and
+raw.githubusercontent.com:
+
+    python SCRIPTS/download-models.py            # every seeded model
+    MODELS=small python SCRIPTS/download-models.py
+    MODELS=Qwen3-1.7B-q4f16_1-MLC python SCRIPTS/download-models.py
+
+The model list is derived from ModelSeeder.cs + web-llm.js by
+plan-webllm-artifacts.py, so there is no second list to keep in sync. MODELS is
+passed straight through to the planner and accepts the same values.
+
+Weights land in src/Client/PoLocalCompare.Client/wwwroot/models/{webLlmId}/ and
+libraries in .../models/_libs/, served as static files from
+https://localhost:5001/models/.
+
+Why curl.exe instead of huggingface_hub: on this network TLS handshakes to
+huggingface.co are reset at random -- schannel cannot reach the certificate
+revocation responder (CRYPT_E_REVOCATION_OFFLINE), and something upstream resets
+roughly half of new connections regardless. Python's own TLS stack fails the same
+way and huggingface_hub gives up immediately, so we shell out to curl with
+aggressive retries and byte-range resume. Established connections run at full
+speed; it is only connection setup that is unreliable.
+
+Integrity does not depend on that: every LFS file is verified against the sha256
+that the Hub advertises in its tree listing, and a file that fails is re-fetched.
+
+If this machine cannot reach huggingface.co at all, use the air-gapped route
+instead: the "Fetch WebLLM artifacts" GitHub Actions workflow plus
+receive-artifacts.ps1. See SCRIPTS/README.md.
 """
 
+import hashlib
+import json
+import os
+import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from huggingface_hub import snapshot_download
 
-MODELS = [
-    "mlc-ai/Qwen2.5-0.5B-Instruct-q4f32_1-MLC",
-    "mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC",
-    "mlc-ai/Phi-3.5-mini-instruct-q4f32_1-MLC",
-    "mlc-ai/Llama-3.2-3B-Instruct-q4f16_1-MLC",
-    "mlc-ai/Llama-3.1-8B-Instruct-q4f16_1-MLC",
-    "mlc-ai/gemma-2-2b-it-q4f16_1-MLC",
-    "mlc-ai/Phi-4-mini-instruct-q4f16_1-MLC",
-    "mlc-ai/Mistral-7B-Instruct-v0.3-q4f16_1-MLC",
-    "mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC",
-    "mlc-ai/SmolLM2-135M-Instruct-q0f32-MLC",
-    "mlc-ai/SmolLM2-360M-Instruct-q4f32_1-MLC",
-    "mlc-ai/SmolLM2-1.7B-Instruct-q4f16_1-MLC",
-    "mlc-ai/Qwen3-1.7B-q4f16_1-MLC",
+ROOT = Path(__file__).resolve().parents[1]
+BASE_DIR = ROOT / "src" / "Client" / "PoLocalCompare.Client" / "wwwroot" / "models"
+LIB_DIR = BASE_DIR / "_libs"
+
+IGNORE = {".gitattributes", "README.md", "ndarray-cache-b16.json"}
+
+# Connection setup is the unreliable part, so retry hard and resume in place.
+CURL = [
+    "curl.exe", "-sSL", "--ssl-no-revoke",
+    "--retry", "20", "--retry-all-errors", "--retry-delay", "1",
+    "--connect-timeout", "20",
 ]
-
-IGNORE = [
-    ".gitattributes",
-    "README.md",
-    "ndarray-cache-b16.json",
-]
-
-BASE_DIR = Path(__file__).resolve().parents[1] / "src" / "Client" / "PoLocalCompare.Client" / "wwwroot" / "models"
+PARALLEL = 4
 
 
-def download(repo_id: str) -> None:
-    model_id = repo_id.split("/")[1]
-    local_dir = BASE_DIR / model_id
-    local_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\n{'=' * 60}")
-    print(f"  Downloading: {model_id}")
-    print(f"  Destination: {local_dir}")
-    print(f"{'=' * 60}")
-    snapshot_download(
-        repo_id=repo_id,
-        local_dir=str(local_dir),
-        repo_type="model",
-        ignore_patterns=IGNORE,
+def curl_bytes(url: str) -> bytes:
+    proc = subprocess.run(CURL + ["--max-time", "120", url], capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"curl {url} failed: {proc.stderr.decode(errors='replace').strip()}")
+    return proc.stdout
+
+
+def curl_file(url: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(CURL + ["-C", "-", "-o", str(dest), url], capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"curl {url} failed: {proc.stderr.decode(errors='replace').strip()}")
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while chunk := fh.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def plan() -> tuple[list[dict], str]:
+    """Ask plan-webllm-artifacts.py which models and libraries are in scope."""
+    proc = subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("plan-webllm-artifacts.py"))],
+        cwd=str(ROOT), capture_output=True, text=True,
+        env={**os.environ, "GITHUB_OUTPUT": ""},
     )
-    size_mb = sum(f.stat().st_size for f in local_dir.rglob("*") if f.is_file()) / (1024 * 1024)
-    print(f"  Done - {size_mb:.0f} MB on disk")
+    sys.stderr.write(proc.stderr)
+    if proc.returncode != 0:
+        sys.exit(proc.returncode)
+    entries = lib_base = None
+    for line in proc.stdout.splitlines():
+        if line.startswith("matrix="):
+            entries = json.loads(line[len("matrix="):])
+        elif line.startswith("lib_base="):
+            lib_base = line[len("lib_base="):]
+    if entries is None or lib_base is None:
+        sys.exit("planner did not emit matrix/lib_base")
+    return entries, lib_base
+
+
+def list_repo_files(repo: str) -> list[dict]:
+    tree = json.loads(curl_bytes(f"https://huggingface.co/api/models/{repo}/tree/main?recursive=1"))
+    files = []
+    for e in tree:
+        if e.get("type") != "file" or Path(e["path"]).name in IGNORE:
+            continue
+        files.append({
+            "path": e["path"],
+            "size": e.get("size", 0),
+            "sha": (e.get("lfs") or {}).get("oid"),
+        })
+    if not files:
+        raise RuntimeError(f"no files listed for {repo}")
+    return files
+
+
+def up_to_date(dest: Path, meta: dict) -> bool:
+    if not dest.exists():
+        return False
+    if meta["sha"]:
+        return sha256(dest) == meta["sha"]
+    return dest.stat().st_size == meta["size"]
+
+
+def fetch_one(repo: str, local_dir: Path, meta: dict) -> str:
+    dest = local_dir / meta["path"]
+    if up_to_date(dest, meta):
+        return f"    skip  {meta['path']}"
+    url = f"https://huggingface.co/{repo}/resolve/main/{meta['path']}"
+    curl_file(url, dest)
+    if meta["sha"] and sha256(dest) != meta["sha"]:
+        # A reset mid-transfer can leave a resumed file inconsistent; one clean retry.
+        dest.unlink()
+        curl_file(url, dest)
+        if sha256(dest) != meta["sha"]:
+            raise RuntimeError(f"sha256 mismatch after retry: {meta['path']}")
+    return f"    got   {meta['path']} ({dest.stat().st_size / 1048576:.1f} MB)"
+
+
+def download_weights(entry: dict) -> float:
+    local_dir = BASE_DIR / entry["dir"]
+    local_dir.mkdir(parents=True, exist_ok=True)
+    files = list_repo_files(entry["repo"])
+    print(f"    {len(files)} files, {sum(f['size'] for f in files) / 1048576:.0f} MB")
+    with ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        for line in pool.map(lambda m: fetch_one(entry["repo"], local_dir, m), files):
+            print(line)
+    return sum(f.stat().st_size for f in local_dir.rglob("*") if f.is_file()) / 1048576
+
+
+def download_lib(entry: dict, lib_base: str) -> float:
+    dest = LIB_DIR / entry["lib"]
+    if not (dest.exists() and dest.stat().st_size > 0):
+        curl_file(f"{lib_base}/{entry['lib']}", dest)
+    return dest.stat().st_size / 1048576
 
 
 def main() -> None:
+    entries, lib_base = plan()
     print(f"Model output directory: {BASE_DIR}")
-    for repo_id in MODELS:
+    failed = []
+    for entry in entries:
+        print(f"\n{'=' * 60}\n  {entry['dir']}\n{'=' * 60}")
         try:
-            download(repo_id)
-        except Exception as exc:
-            print(f"ERROR downloading {repo_id}: {exc}", file=sys.stderr)
-            sys.exit(1)
-    print(f"\nAll models downloaded to: {BASE_DIR}")
+            lib_mb = download_lib(entry, lib_base)
+            weights_mb = download_weights(entry)
+            print(f"  Done - {weights_mb:.0f} MB weights, {lib_mb:.0f} MB library")
+        except Exception as exc:  # noqa: BLE001 - report every failure, fail at the end
+            print(f"ERROR {entry['dir']}: {exc}", file=sys.stderr)
+            failed.append(entry["dir"])
+    if failed:
+        sys.exit("\nFailed: " + ", ".join(failed))
+    print(f"\nAll {len(entries)} models downloaded to: {BASE_DIR}")
 
 
 if __name__ == "__main__":

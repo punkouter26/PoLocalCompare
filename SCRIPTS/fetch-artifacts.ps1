@@ -38,8 +38,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$planner  = Join-Path $PSScriptRoot 'plan-webllm-artifacts.py'
+$planner = Join-Path $PSScriptRoot 'plan-webllm-artifacts.py'
 
 Write-Output '[1/4] Verifying Python + huggingface_hub'
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {

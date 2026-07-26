@@ -67,7 +67,6 @@ if (-not $PartsDir -and -not $ZipPath) {
 }
 
 New-Item -ItemType Directory -Path $target -Force | Out-Null
-$installed = [System.Collections.Generic.List[string]]::new()
 
 function Install-FromParts {
   param([string]$Dir)
@@ -121,7 +120,6 @@ function Install-FromParts {
       if ($LASTEXITCODE -ne 0) { throw "tar failed to extract $name (exit $LASTEXITCODE)" }
       Remove-Item -Force $tar
 
-      $installed.Add($name)
       Write-ModelSummary -Name $name
     }
   } finally {
@@ -146,7 +144,6 @@ function Install-FromZip {
       robocopy $src.FullName $dst /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
       # robocopy uses exit codes 0-7 for success; 8+ is a real failure.
       if ($LASTEXITCODE -ge 8) { throw "robocopy failed for $($src.Name) (exit $LASTEXITCODE)" }
-      if ($src.Name -ne '_libs') { $installed.Add($src.Name) }
       Write-ModelSummary -Name $src.Name
     }
   } finally {
