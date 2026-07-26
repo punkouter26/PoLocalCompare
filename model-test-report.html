@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PoLocalCompare - Model Test Report (2026-07-26)</title>
+<style>
+  :root {
+    --bg: #0e0f12; --panel: #15171c; --panel-2: #1c1f26;
+    --text: #e7ecf3; --muted: #8c93a3; --border: #2a2e36;
+    --ok: #2cb27a; --ok-dim: rgba(44,178,122,0.15);
+    --fail: #e35d6a; --fail-dim: rgba(227,93,106,0.15);
+    --info: #5da3e3; --info-dim: rgba(93,163,227,0.15);
+    --blocked-dim: rgba(140,147,163,0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  .container { max-width: 1180px; margin: 0 auto; padding: 32px 28px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  h1 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  h1 small { display: block; font-size: 13px; color: var(--muted); font-weight: 500; margin-top: 4px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; font-weight: 700; }
+  h3 { font-size: 15px; margin: 0 0 12px; font-weight: 700; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0 32px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
+  .stat .ok { color: var(--ok); }
+  .stat .fail { color: var(--fail); }
+  .stat .blocked { color: var(--muted); }
+  .stat .info { color: var(--info); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 12px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-weight: 700; }
+  tbody td { padding: 12px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+  tbody tr.failed td { background: var(--fail-dim); }
+  tbody tr.blocked td { background: var(--blocked-dim); }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; font-feature-settings: "tnum"; }
+  code { background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .badge.ok { background: var(--ok-dim); color: var(--ok); border: 1px solid var(--ok); }
+  .badge.fail { background: var(--fail-dim); color: var(--fail); border: 1px solid var(--fail); }
+  .badge.blocked { background: var(--blocked-dim); color: var(--muted); border: 1px solid var(--border); }
+  .badge.type-remote, .badge.type-localservice, .badge.type-local { background: var(--info-dim); color: var(--info); border: 1px solid var(--info); }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .meta-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .meta-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .meta-card ul { margin: 6px 0 0 18px; padding: 0; color: var(--text); }
+  .meta-card ul li { margin: 2px 0; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 12px; text-align: center; }
+  a { color: var(--info); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>PoLocalCompare - Model Test Report <small>Generated 2026-07-26 from <code>https://localhost:5001</code></small></h1>
+    <span class="badge type-local" style="font-size:12px; padding:6px 12px;">prompt: <code style="background:none; padding:0">rotating cube</code></span>
+  </header>
+
+  <h2>Summary</h2>
+  <div class="summary">
+    <div class="stat"><div class="label">Models registered</div><div class="value info">15</div></div>
+    <div class="stat"><div class="label">Verified WORKS</div><div class="value ok">7</div></div>
+    <div class="stat"><div class="label">Verified FAILS</div><div class="value fail">0</div></div>
+    <div class="stat"><div class="label">Blocked (network)</div><div class="value blocked">8</div></div>
+  </div>
+
+  <h2>Run configuration</h2>
+  <div class="meta-grid">
+    <div class="meta-card">
+      <div class="label">Execution paths</div>
+      <ul>
+        <li><strong>Server-executable</strong> (Remote + LocalService): driven via <code>/api/duels</code> with prompt <code>rotating cube</code>; outcome read from <code>/api/duels/{id}</code> after the SignalR broadcast.</li>
+        <li><strong>Browser-executable</strong> (Local): runs inside the Blazor WASM worker (<code>webllm-worker.js</code>) on the user's GPU; the worker posts back to <code>POST /api/duels/{id}/local-result</code>.</li>
+      </ul>
+    </div>
+    <div class="meta-card">
+      <div class="label">Auth</div>
+      <ul>
+        <li>Server calls used the dev <code>FakeAuthHandler</code> (<code>X-Fake-User: copilot-test</code>, <code>X-Fake-Roles: User</code>).</li>
+        <li>Browser session: <code>Guest</code> (no Microsoft account configured in <code>AzureAd:ClientId</code>).</li>
+      </ul>
+    </div>
+    <div class="meta-card">
+      <div class="label">Live data sources</div>
+      <ul>
+        <li><code>GET /api/models</code> - registry (15 entries).</li>
+        <li><code>GET /api/leaderboard?sortBy=elo</code> - ELO + W/L.</li>
+        <li><code>GET /api/duels/{id}</code> - per-duel telemetry.</li>
+      </ul>
+    </div>
+    <div class="meta-card">
+      <div class="label">Key outcome</div>
+      <ul>
+        <li>6 server-runnable models tested: <strong>7 WORKS</strong>.</li>
+        <li>9 browser-only models: <strong>1 WORKS</strong> (<code>SmolLM2 135M</code>, browser cache hit); <strong>8 BLOCKED</strong> by corporate proxy blocking HuggingFace egress.</li>
+        <li><strong>1 bug found &amp; fixed</strong>: <code>FoundryInferenceProxy</code> 35s timeout raised to 120s via <code>AzureAiFoundry:RemoteTimeoutSeconds</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Remote (server-side inference via Azure AI Foundry)</h2>
+  <table>
+    <thead><tr><th>Model</th><th>Result</th><th>ELO</th><th>W / L</th><th>Tokens</th><th>Duration (ms)</th><th>Notes</th></tr></thead>
+    <tbody><tr class='works'><td>Phi-4</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1156.1</td><td class='num'>2 / 5</td><td class='num'>517</td><td class='num'>11693</td><td>Full 3D cube HTML, quality 90/100.</td></tr>
+<tr class='works'><td>GPT-5 Nano</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1188.4</td><td class='num'>1 / 2</td><td class='num'>784</td><td class='num'>19808</td><td>Used as opponent in browser-side duels.</td></tr>
+<tr class='works'><td>GPT-5.4 Mini</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1219.3</td><td class='num'>1 / 0</td><td class='num'>625</td><td class='num'>2995</td><td>Fastest response in the test matrix.</td></tr>
+<tr class='works'><td>GPT-5.4 Nano</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1254.4</td><td class='num'>5 / 1</td><td class='num'>1688</td><td class='num'>8720</td><td>Current ELO leader.</td></tr>
+<tr class='works'><td>Phi-4 Mini</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1201.5</td><td class='num'>1 / 1</td><td class='num'>577</td><td class='num'>12835</td><td>Initially FAILED with 35s HttpClient.Timeout. Fix applied:</td></tr></tbody>
+  </table>
+
+  <h2>Local service (server-side inference via Ollama daemon)</h2>
+  <table>
+    <thead><tr><th>Model</th><th>Result</th><th>ELO</th><th>W / L</th><th>Tokens</th><th>Duration (ms)</th><th>Notes</th></tr></thead>
+    <tbody><tr class='works'><td>Gemma 4 (Ollama)</td><td><span class="badge type-localservice">LocalService</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1229.4</td><td class='num'>2 / 0</td><td class='num'>723</td><td class='num'>10824</td><td>Ollama daemon present, gemma4:latest resolves in /api/tags.</td></tr></tbody>
+  </table>
+
+  <h2>Local (browser-only WebLLM via WebGPU)</h2>
+  <table>
+    <thead><tr><th>Model</th><th>Type</th><th>Result</th><th>ELO</th><th>W / L</th><th>Params</th><th>WebLLM id</th><th>Blocker</th></tr></thead>
+    <tbody><tr class='blocked'><td>SmolLM2 360M</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1184</td><td class='num'>0 / 1</td><td>360M</td><td><code>SmolLM2-360M-Instruct-q4f32_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
+<tr class='blocked'><td>SmolLM2 1.7B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1184.2</td><td class='num'>0 / 1</td><td>1.7B</td><td><code>SmolLM2-1.7B-Instruct-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
+<tr class='blocked'><td>Qwen2.5 0.5B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1183.3</td><td class='num'>0 / 1</td><td>0.5B</td><td><code>Qwen2.5-0.5B-Instruct-q4f32_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
+<tr class='blocked'><td>Qwen3 1.7B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td>1.7B</td><td><code>Qwen3-1.7B-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
+<tr class='blocked'><td>Llama 3.2 1B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200.7</td><td class='num'>1 / 1</td><td>1B</td><td><code>Llama-3.2-1B-Instruct-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
+<tr class='blocked'><td>Llama 3.2 3B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1172.1</td><td class='num'>0 / 2</td><td>3B</td><td><code>Llama-3.2-3B-Instruct-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
+<tr class='blocked'><td>Phi-3.5 Mini</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td>3.8B</td><td><code>Phi-3.5-mini-instruct-q4f32_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
+<tr class='blocked'><td>Gemma 2 2B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td>2B</td><td><code>gemma-2-2b-it-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr></tbody>
+  </table>
+
+  <h2>Bug fixed during this run</h2>
+  <div class="meta-card">
+    <div class="label">Phi-4 Mini failed with HTTP 35s timeout; fix landed.</div>
+    <ul>
+      <li><strong>Symptom</strong>: <code>HTTP request failed: The request was canceled due to the configured HttpClient.Timeout of 35 seconds elapsing</code>.</li>
+      <li><strong>Root cause</strong>: <code>FoundryInferenceProxy</code> typed client hard-coded <code>client.Timeout = TimeSpan.FromSeconds(35)</code> in <code>InfrastructureServiceExtensions.cs</code>. Phi-4 Mini cold-start exceeds 35s and the request aborted before any token streamed.</li>
+      <li><strong>Fix</strong>: read <code>AzureAiFoundry:RemoteTimeoutSeconds</code> from configuration (default <code>120</code>, clamped 30-900). Streaming is still guarded by the duel watchdog cancellation token, so SSE behaviour is unchanged.</li>
+      <li><strong>Verified after fix</strong>: Phi-4 Mini returns 577 tokens in 12.8s.</li>
+    </ul>
+  </div>
+
+  <h2>How to unblock the 8 browser-only models</h2>
+  <div class="meta-card">
+    <ul>
+      <li>Drop each model artifact into <code>src/Client/PoLocalCompare.Client/wwwroot/models/&lt;webLlmId&gt;/</code> (folders already created).</li>
+      <li>The WebLLM worker already supports a local static-files base URL: <code>https://localhost:5001/models/&lt;webLlmId&gt;/</code>. No HuggingFace egress at runtime.</li>
+      <li>Outstanding folders: <code>SmolLM2-360M-Instruct-q4f32_1-MLC</code>, <code>SmolLM2-1.7B-Instruct-q4f16_1-MLC</code>, <code>Qwen2.5-0.5B-Instruct-q4f32_1-MLC</code>, <code>Qwen3-1.7B-q4f16_1-MLC</code>, <code>Llama-3.2-1B-Instruct-q4f16_1-MLC</code>, <code>Llama-3.2-3B-Instruct-q4f16_1-MLC</code>, <code>Phi-3.5-mini-instruct-q4f32_1-MLC</code>, <code>gemma-2-2b-it-q4f16_1-MLC</code>.</li>
+      <li>After dropping them in, rerun <code>SCRIPTS/build_html_report.py</code>; it will refresh the data from <code>/api/models</code> and <code>/api/leaderboard</code>.</li>
+    </ul>
+  </div>
+
+  <footer>Report generated by Copilot agent from /api/models, /api/leaderboard, and duel telemetry.</footer>
+</div>
+</body>
+</html>

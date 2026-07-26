@@ -1,0 +1,15 @@
+HTTP_PROBE_BEGIN
+OK   | hf.co | 200
+OK   | hf-mirror.com | 200
+FAIL | cdn-lfs | The requested name is valid, but no data of the requested type was found. (cdn-l
+FAIL | hf-cas-bridge | Response status code does not indicate success: 403 (Forbidden).
+FAIL | hf-download-cdn | The requested name is valid, but no data of the requested type was found. (downl
+OK   | github-mlc | 200
+OK   | gcr.io | 200
+FAIL | mlc-s3 | Response status code does not indicate success: 404 (Not Found).
+OK   | modelz.hub | 200
+FAIL | ollama-registry | Response status code does not indicate success: 404 (Not Found).
+OK   | nuget | 200
+OK   | npm | 200
+OK   | pypi | 200
+HTTP_PROBE_END

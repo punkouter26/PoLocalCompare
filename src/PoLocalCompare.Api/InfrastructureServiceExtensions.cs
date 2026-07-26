@@ -44,9 +44,15 @@ public static class InfrastructureServiceExtensions
         // Typed HttpClients (standards §5.4) with uniform resilience (§5.6). Retries cover
         // connection-level failures and 5xx/408/429 before the SSE stream starts; there is
         // deliberately no per-attempt timeout because it would abort long streaming responses.
+        //
+        // Foundry timeout: cold-start first-token latency on some smaller deployments (e.g. Phi-4 Mini)
+        // exceeds the previous 35 s ceiling, aborting the request before any token can stream. The
+        // override key `AzureAiFoundry:RemoteTimeoutSeconds` lets ops tune per environment without a
+        // code change. Streaming responses are still guarded by the duel watchdog via CancellationToken.
+        var foundryTimeoutSeconds = configuration.GetValue<int?>("AzureAiFoundry:RemoteTimeoutSeconds") ?? 120;
         services.AddHttpClient<FoundryInferenceProxy>(client =>
         {
-            client.Timeout = TimeSpan.FromSeconds(35);
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(foundryTimeoutSeconds, 30, 900));
         }).AddResilienceHandler("foundry-inference", AddStreamingRetry);
 
         services.AddHttpClient<OllamaInferenceProxy>(client =>
