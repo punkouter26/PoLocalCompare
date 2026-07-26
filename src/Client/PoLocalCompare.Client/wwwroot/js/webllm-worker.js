@@ -103,6 +103,38 @@ function classifyWebLlmError(rawMessage, phase) {
     return `${rawMessage || 'Unknown WebLLM error'}${where}.`;
 }
 
+/**
+ * Resolves the WebGPU library URL for a model, preferring a locally served copy.
+ *
+ * WebLLM's prebuilt config hard-codes model_lib to raw.githubusercontent.com. Hosts
+ * whose egress is filtered can serve the same ~5 MB .wasm from wwwroot/models/_libs/
+ * instead; this returns that URL when it resolves and the upstream one otherwise.
+ */
+async function resolveModelLib(cdnModelLib, modelBaseUrl) {
+    if (!cdnModelLib || !modelBaseUrl) return cdnModelLib;
+    try {
+        const libName = cdnModelLib.split('/').pop();
+        // modelBaseUrl always carries a trailing slash (normalizeModelBaseUrl in
+        // webllm-interop.js), so '../_libs/' resolves to the models root beside it.
+        const base = modelBaseUrl.endsWith('/') ? modelBaseUrl : `${modelBaseUrl}/`;
+        const localLib = new URL(`../_libs/${libName}`, new URL(base, self.location.href)).href;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        try {
+            const response = await fetch(localLib, { method: 'HEAD', signal: controller.signal, cache: 'no-store' });
+            if (response.ok) {
+                console.log(`[WebLLM Worker] Using vendored model_lib: ${localLib}`);
+                return localLib;
+            }
+        } finally {
+            clearTimeout(timeout);
+        }
+    } catch (err) {
+        console.warn(`[WebLLM Worker] Vendored model_lib probe failed, using CDN: ${err?.message ?? err}`);
+    }
+    return cdnModelLib;
+}
+
 // ---------------------------------------------------------------------------
 // Main message handler
 // ---------------------------------------------------------------------------
@@ -154,10 +186,17 @@ self.onmessage = async (event) => {
 
             // Look up model_lib (WASM URL) from prebuilt config so local models get the correct WASM library
             const prebuiltEntry = webllm.prebuiltAppConfig?.model_list?.find(m => m.model_id === effectiveModelId);
+            // Serving weights from wwwroot/models is not enough on a locked-down network:
+            // prebuiltAppConfig points model_lib at raw.githubusercontent.com, a separate
+            // host from huggingface.co that a proxy can block on its own. Prefer a vendored
+            // copy at models/_libs/<name>.wasm (installed by SCRIPTS/receive-artifacts.ps1)
+            // and fall back to the upstream URL when it is absent. The probe also fails
+            // harmlessly when localModelBaseUrl is a CDN URL, which keeps the CDN path intact.
+            const modelLib = await resolveModelLib(prebuiltEntry?.model_lib, localModelBaseUrl);
             // localModelBaseUrl already points at this model's root (resolveBrowserModelAvailability
             // probed <baseUrl>mlc-chat-config.json) — do not append the model id again.
             const appConfig = localModelBaseUrl
-                ? { model_list: [{ model: localModelBaseUrl, model_id: effectiveModelId, model_lib: prebuiltEntry?.model_lib }] }
+                ? { model_list: [{ model: localModelBaseUrl, model_id: effectiveModelId, model_lib: modelLib }] }
                 : undefined;
 
             console.log(`[WebLLM Worker] Creating MLCEngine — effectiveModelId="${effectiveModelId}" appConfig=`, appConfig ?? '(none, using CDN)');

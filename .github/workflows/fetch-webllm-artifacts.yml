@@ -1,0 +1,172 @@
+# Fetches the MLC/WebLLM browser-model artifacts on a GitHub-hosted runner (which has
+# open internet) and publishes them as assets on a prerelease. This exists because the
+# development box's proxy blocks huggingface.co outright, so wwwroot/models/ can never
+# be populated locally — see SCRIPTS/receive-artifacts.ps1 for the other half.
+#
+# Release assets, not Actions artifacts, on purpose:
+#   * artifacts count against the repo storage quota (500 MB on a free private repo);
+#     ~5 GB of weights would blow it on the first run. Release assets do not.
+#   * artifact downloads are a single un-resumable zip. Release assets are split into
+#     fixed-size parts, each with its own URL, so `curl -C -` resumes a dropped transfer.
+#
+# The model list is derived from ModelSeeder.cs and web-llm.js at run time
+# (SCRIPTS/plan-webllm-artifacts.py), so adding a browser model to the seeder is all it
+# takes — there is no second list here to forget to update.
+#
+# Usage:
+#   Actions -> Fetch WebLLM artifacts -> Run workflow  (models: all | small | a,b,c)
+#   gh release download webllm-artifacts -D C:\hf-artifacts
+#   pwsh SCRIPTS\receive-artifacts.ps1 -PartsDir C:\hf-artifacts
+
+name: Fetch WebLLM artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'all | small | comma-separated WebLLM model ids'
+        required: false
+        default: 'all'
+      part_size_mb:
+        description: 'Split each model archive into parts of this many MiB'
+        required: false
+        default: '512'
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: webllm-artifacts
+
+concurrency:
+  group: fetch-webllm-artifacts
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      lib_base: ${{ steps.plan.outputs.lib_base }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve model list from ModelSeeder.cs + web-llm.js
+        id: plan
+        env:
+          MODELS: ${{ inputs.models }}
+        run: python3 SCRIPTS/plan-webllm-artifacts.py
+
+      - name: Create the prerelease if it does not exist yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --prerelease \
+              --title "WebLLM model artifacts" \
+              --notes "MLC model weights + WebGPU libraries for offline/proxied hosts. Download with: gh release download $RELEASE_TAG -D C:\\hf-artifacts, then run pwsh SCRIPTS\\receive-artifacts.ps1 -PartsDir C:\\hf-artifacts"
+          fi
+
+  fetch:
+    name: ${{ matrix.model.dir }}
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        model: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Reclaim runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install --upgrade 'huggingface_hub>=0.25'
+
+      - name: Snapshot weights
+        env:
+          REPO_ID: ${{ matrix.model.repo }}
+          DIR: ${{ matrix.model.dir }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import snapshot_download
+          path = snapshot_download(
+              repo_id=os.environ["REPO_ID"],
+              local_dir=os.path.join("staging", os.environ["DIR"]),
+              repo_type="model",
+              # ndarray-cache-b16.json is a duplicate of ndarray-cache.json that WebLLM
+              # never reads; skipping it saves ~140 KB per model and a lot of confusion.
+              ignore_patterns=[".gitattributes", "README.md", "ndarray-cache-b16.json"],
+              max_workers=8,
+          )
+          print("snapshot ->", path)
+          PY
+
+      - name: Fetch the WebGPU model library
+        env:
+          LIB: ${{ matrix.model.lib }}
+          LIB_BASE: ${{ needs.plan.outputs.lib_base }}
+        run: |
+          mkdir -p staging/_libs
+          curl -fSL --retry 5 --retry-delay 5 -o "staging/_libs/$LIB" "$LIB_BASE/$LIB"
+          file "staging/_libs/$LIB" | grep -q WebAssembly
+
+      - name: Pack and split
+        env:
+          DIR: ${{ matrix.model.dir }}
+          LIB: ${{ matrix.model.lib }}
+          PART_SIZE_MB: ${{ inputs.part_size_mb }}
+        run: |
+          mkdir -p out
+          # Plain tar, no compression: the weights are already quantised binary, so
+          # gzip/zstd buy a few percent for minutes of runner CPU. The archive root is
+          # wwwroot/models itself, so the receiver can extract straight into place.
+          tar -cf "out/$DIR.tar" -C staging "$DIR" "_libs/$LIB"
+          cd out
+          split -b "${PART_SIZE_MB}M" -d -a 3 "$DIR.tar" "$DIR.tar.part"
+          rm "$DIR.tar"
+          sha256sum "$DIR".tar.part* > "$DIR.sha256"
+          ls -lh
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIR: ${{ matrix.model.dir }}
+        run: |
+          # --clobber so a re-run replaces the previous parts instead of failing. Stale
+          # parts from a larger part_size_mb would corrupt reassembly, so clear them first.
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' \
+            | grep -E "^${DIR}\.(tar\.part|sha256)" \
+            | xargs -r -I{} gh release delete-asset "$RELEASE_TAG" {} --yes || true
+          gh release upload "$RELEASE_TAG" out/* --clobber
+
+  summary:
+    name: Summary
+    needs: fetch
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '## WebLLM artifacts'
+            echo
+            echo 'Download and install on the target machine:'
+            echo
+            echo '```powershell'
+            echo "gh release download $RELEASE_TAG -D C:\\hf-artifacts"
+            echo 'pwsh SCRIPTS\receive-artifacts.ps1 -PartsDir C:\hf-artifacts'
+            echo '```'
+            echo
+            gh release view "$RELEASE_TAG" --json assets \
+              --jq '"| asset | size |\n|---|---|\n" + ([.assets[] | "| \(.name) | \(.size/1048576 | floor) MiB |"] | join("\n"))'
+          } >> "$GITHUB_STEP_SUMMARY"
