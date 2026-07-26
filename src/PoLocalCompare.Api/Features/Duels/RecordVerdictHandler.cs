@@ -16,8 +16,8 @@ public sealed class RecordVerdictHandler
     /// <param name="cache">
     /// Optional so pure-logic unit tests can construct the handler without a cache.
     /// When supplied (always, under DI) the leaderboard is invalidated here rather than at
-    /// the HTTP endpoint — the forfeit path in <see cref="DuelExecutionService"/> calls this
-    /// handler directly and would otherwise leave a stale leaderboard behind.
+    /// the HTTP endpoint — <see cref="AutoJudge"/> calls this handler directly, bypassing the
+    /// endpoint, and would otherwise leave a stale leaderboard behind.
     /// </param>
     public RecordVerdictHandler(
         IDuelRepository duelRepository,
@@ -109,6 +109,9 @@ public sealed class RecordVerdictHandler
 
         // Persist duel verdict
         duel.Verdict = command.Verdict;
+        duel.VerdictSource = command.Source;
+        duel.JudgeRationale = command.JudgeRationale;
+        duel.JudgeModel = command.JudgeModel;
         duel.WinnerModelId = winner.ModelId;
         duel.LoserModelId = loser.ModelId;
         duel.EloShiftWinner = eloShiftWinner;
@@ -152,6 +155,8 @@ public sealed class RecordVerdictHandler
             EloShiftLoser = eloShiftLoser,
             WinnerEloAfter = newWinnerElo,
             LoserEloAfter = newLoserElo,
+            Source = command.Source,
+            JudgeRationale = command.JudgeRationale,
         };
     }
 }

@@ -12,6 +12,9 @@ public sealed class SignalRDuelClient : IAsyncDisposable
     public event Action<DuelDto>? OnDuelComplete;
     public event Action<StartLocalInferencePayload>? OnStartLocalInference;
 
+    /// <summary>Raised when the auto-judge decides a duel nobody picked in time.</summary>
+    public event Action<VerdictResponseDto>? OnVerdictRecorded;
+
     public async Task ConnectAsync(string baseUrl, string duelId, CancellationToken cancellationToken = default)
     {
         _connection = new HubConnectionBuilder()
@@ -27,6 +30,9 @@ public sealed class SignalRDuelClient : IAsyncDisposable
 
         _connection.On<StartLocalInferencePayload>("StartLocalInference", payload =>
             OnStartLocalInference?.Invoke(payload));
+
+        _connection.On<VerdictResponseDto>("VerdictRecorded", dto =>
+            OnVerdictRecorded?.Invoke(dto));
 
         await _connection.StartAsync(cancellationToken);
         await _connection.InvokeAsync("JoinDuel", duelId, cancellationToken);

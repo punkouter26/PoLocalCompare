@@ -133,6 +133,9 @@ public sealed class DuelRepository : IDuelRepository
             ["EloShiftLoser"] = duel.EloShiftLoser,
             ["VerdictDeadline"] = duel.VerdictDeadline,
             ["IsPartial"] = duel.IsPartial,
+            ["VerdictSource"] = duel.VerdictSource.ToString(),
+            ["JudgeRationale"] = duel.JudgeRationale,
+            ["JudgeModel"] = duel.JudgeModel,
         };
         return entity;
     }
@@ -155,6 +158,13 @@ public sealed class DuelRepository : IDuelRepository
             EloShiftLoser = entity.GetDouble("EloShiftLoser"),
             VerdictDeadline = entity.GetDateTimeOffset("VerdictDeadline") ?? DateTimeOffset.MinValue,
             IsPartial = entity.GetBoolean("IsPartial") ?? false,
+            // Rows written before the auto-judge existed have no VerdictSource — they were
+            // all human decisions, which is what the Human fallback says.
+            VerdictSource = Enum.TryParse<VerdictSource>(entity.GetString("VerdictSource"), out var vs)
+                ? vs
+                : VerdictSource.Human,
+            JudgeRationale = entity.GetString("JudgeRationale"),
+            JudgeModel = entity.GetString("JudgeModel"),
             ETag = entity.ETag.ToString(),
         };
         return duel;

@@ -16,8 +16,11 @@
 1. User selects two models (Local WebLLM / Remote Azure Foundry / Ollama)
 2. User enters a prompt — models race to generate HTML
 3. Both outputs stream live via SignalR
-4. A human judge picks the winner — always. No verdict is ever awarded automatically, even when one model fails
-5. Elo ratings update, stored in Azure Table Storage
+4. A human picks the winner in the Arena. If nobody picks within `AiJudge:DelaySeconds`, `AutoJudge`
+   asks a Foundry model which output implements the prompt better and records that verdict instead —
+   a human who picks inside the window always wins the race (PRD §9 item 9)
+5. Elo ratings update, stored in Azure Table Storage. Every verdict carries a `VerdictSource`
+   (`Human`/`Ai`) so the two rankings stay separable
 
 ---
 
@@ -192,6 +195,9 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `Elo:KFactor` | `appsettings.json` | — (default 32) |
 | `Duel:TimeLimitSeconds` | `appsettings.json` | — (default 300) |
 | `Ollama:BaseUrl` | `appsettings.json` | — (`http://localhost:11434`) |
+| `AiJudge:Enabled` | `appsettings.json` | — (default `false` in code, `true` in appsettings) |
+| `AiJudge:DelaySeconds` | `appsettings.json` | — (default 5) |
+| `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-nano`) |
 
 ---
 

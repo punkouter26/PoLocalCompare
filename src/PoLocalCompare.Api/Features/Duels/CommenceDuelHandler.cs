@@ -1,4 +1,5 @@
 // SOLID: Open/Closed — new model types extend without modifying handler
+using Microsoft.Extensions.Options;
 using NUlid;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
@@ -8,6 +9,7 @@ namespace PoLocalCompare.Api.Features.Duels;
 public sealed class CommenceDuelHandler(
     IModelRepository modelRepository,
     IDuelRepository duelRepository,
+    IOptions<AutoJudgeOptions> autoJudgeOptions,
     int verdictDeadlineHours = CommenceDuelCommand.DefaultVerdictDeadlineHours)
 {
     private const string CdnSuffix =
@@ -55,6 +57,7 @@ public sealed class CommenceDuelHandler(
             StartedAt = duel.StartedAt,
             Verdict = DuelVerdict.Pending,
             TimeLimitSeconds = 300,
+            AutoJudgeDelaySeconds = autoJudgeOptions.Value.Enabled ? autoJudgeOptions.Value.DelaySeconds : 0,
             IsPartial = false,
         };
     }

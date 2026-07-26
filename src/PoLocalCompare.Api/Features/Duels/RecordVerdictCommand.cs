@@ -2,4 +2,12 @@ using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Api.Features.Duels;
 
-public sealed record RecordVerdictCommand(string DuelId, DuelVerdict Verdict);
+/// <param name="Source">
+/// Defaults to Human so every existing caller keeps its meaning; only the auto-judge passes Ai.
+/// </param>
+public sealed record RecordVerdictCommand(
+    string DuelId,
+    DuelVerdict Verdict,
+    VerdictSource Source = VerdictSource.Human,
+    string? JudgeRationale = null,
+    string? JudgeModel = null);

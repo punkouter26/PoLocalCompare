@@ -70,9 +70,23 @@ only an `HttpOnly`/`SameSite=Strict` cookie. Server authorization is deny-by-def
 that **throws if constructed in Production**; integration and E2E-API tests depend on it, which is why
 their host runs as `Development`.
 
-**Verdicts are human-only.** Nothing auto-awards a duel — not even when one model fails and the other
-succeeded. ELO moves solely through `RecordVerdictHandler` on a human decision; the Arena offers a
-**Retry duel** action instead of resolving a failure automatically.
+**Verdicts are human-first, then auto-judged.** A human who picks a winner in the Arena within
+`AiJudge:DelaySeconds` of the duel finishing always decides it. Otherwise `AutoJudge` asks a Foundry
+model which output follows the prompt better and records that verdict itself. ELO still moves only
+through `RecordVerdictHandler`, but it now has two callers, so **every verdict carries a
+`VerdictSource`** (`Human` or `Ai`) — never add a write path that moves ELO without setting it, or
+the leaderboard silently blends two different signals with no way to separate them afterwards.
+
+Three invariants hold the design together. A human decision always wins the race (`AutoJudge`
+re-reads the duel and stands down on anything but `Pending`, and `RecordVerdictHandler` throws on a
+second verdict). A judge that cannot decide — unreachable, unparseable reply, or both models failed —
+leaves the duel `Pending` rather than guessing; ELO must never move on no evidence. And
+`AiJudge:Enabled=false` genuinely restores the old human-only behaviour.
+
+This reverses the original human-only rule; PRD §9 item 7 records why it was that way and item 9 why
+it changed. Note the default 5-second window is too short to read two outputs, so in practice the
+judge decides nearly every duel — widen `DelaySeconds` if the human path needs to be usable.
+The Arena still offers **Retry duel** for transient failures.
 
 **Vertical slices.** Server code lives in `src/PoLocalCompare.Api/Features/<Feature>/` — endpoint,
 handlers, entities, and repository flat in one folder. `Common/` is only for genuinely cross-slice
@@ -100,7 +114,7 @@ pipelines; adding a per-attempt timeout will abort SSE streams.
 
 ## Known stale documentation
 
-[README.md](README.md) describes a "GPT-4.1 Nano auto-judges after the 24-hour deadline" feature. That
-service was removed, and so was the later forfeit auto-award: **a human judge decides every duel**,
-including one where a model failed. ELO only ever moves on a human verdict. Don't build on the
-auto-judge description.
+The original "GPT-4.1 Nano auto-judges after the 24-hour deadline" service is gone, and so is the
+forfeit auto-award that replaced it. Auto-judging now exists again but works differently from both:
+the trigger is a short grace window after the duel finishes (`AiJudge:DelaySeconds`), not a 24-hour
+deadline, and the judge is whatever `AiJudge:Deployment` names. See the verdict section above.

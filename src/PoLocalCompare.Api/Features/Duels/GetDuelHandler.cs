@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -8,15 +9,18 @@ public sealed class GetDuelHandler
     private readonly IDuelRepository _duelRepository;
     private readonly IDuelResultRepository _duelResultRepository;
     private readonly IModelRepository _modelRepository;
+    private readonly AutoJudgeOptions _autoJudgeOptions;
 
     public GetDuelHandler(
         IDuelRepository duelRepository,
         IDuelResultRepository duelResultRepository,
-        IModelRepository modelRepository)
+        IModelRepository modelRepository,
+        IOptions<AutoJudgeOptions> autoJudgeOptions)
     {
         _duelRepository = duelRepository;
         _duelResultRepository = duelResultRepository;
         _modelRepository = modelRepository;
+        _autoJudgeOptions = autoJudgeOptions.Value;
     }
 
     public async Task<DuelDto?> HandleAsync(GetDuelQuery query)
@@ -68,6 +72,9 @@ public sealed class GetDuelHandler
             EloShiftLoser = duel.EloShiftLoser,
             TimeLimitSeconds = 300,
             Results = resultDtos,
+            VerdictSource = duel.VerdictSource,
+            JudgeRationale = duel.JudgeRationale,
+            AutoJudgeDelaySeconds = _autoJudgeOptions.Enabled ? _autoJudgeOptions.DelaySeconds : 0,
         };
     }
 }

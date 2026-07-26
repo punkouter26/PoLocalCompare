@@ -67,6 +67,15 @@ public static class InfrastructureServiceExtensions
         services.AddHttpClient("Ollama", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .AddResilienceHandler("ollama-ops", AddStreamingRetry);
 
+        // Auto-judge. Its own typed client rather than the streaming one: this call is a single
+        // non-streaming completion, so a per-request timeout is safe here (it would abort SSE
+        // on the inference clients) and the judge's own linked CTS bounds it further.
+        services.Configure<AutoJudgeOptions>(configuration.GetSection(AutoJudgeOptions.SectionName));
+        services.AddHttpClient<IDuelJudge, FoundryDuelJudge>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+        }).AddResilienceHandler("foundry-judge", AddStreamingRetry);
+
         // Remote inference proxies — keyed by ModelType name so DuelExecutionService can resolve the right one
         services.AddKeyedTransient<IRemoteInferenceProxy>("Remote", (sp, _) => sp.GetRequiredService<FoundryInferenceProxy>());
         services.AddKeyedTransient<IRemoteInferenceProxy>("LocalService", (sp, _) => sp.GetRequiredService<OllamaInferenceProxy>());

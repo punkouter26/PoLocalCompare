@@ -108,7 +108,20 @@
         {
             @* SC 4.1.3 Status Messages — announced without moving focus. *@
             <div class="arena__verdict-recorded" role="status">
-                Verdict recorded ✓ — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
+                @if (_verdictSource == VerdictSource.Ai)
+                {
+                    <span>
+                        Decided by the AI judge — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
+                    </span>
+                    @if (!string.IsNullOrWhiteSpace(_judgeRationale))
+                    {
+                        <span class="arena__judge-rationale">“@_judgeRationale”</span>
+                    }
+                }
+                else
+                {
+                    <span>Verdict recorded ✓ — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong></span>
+                }
             </div>
         }
 
@@ -123,6 +136,22 @@
             {
                 <div class="arena__judge-note arena__judge-note--error">
                     Both models failed — start a new duel with a different pairing.
+                </div>
+            }
+            else if (_autoJudgeDeciding)
+            {
+                <div class="arena__judge-note arena__judge-note--auto" role="status">
+                    <span aria-hidden="true">⚖</span> Nobody picked in time — the AI judge is deciding…
+                </div>
+            }
+            else if (_autoJudgeRemaining is int remaining)
+            {
+                @* SC 4.1.3 — the countdown is the live region; it must not steal focus from the
+                   verdict buttons, which are what a user racing the clock needs to reach. *@
+                <div class="arena__judge-note arena__judge-note--auto" role="status">
+                    <span aria-hidden="true">⚖</span>
+                    Pick the winner below — otherwise the AI judge decides in
+                    <strong>@remaining</strong> @(remaining == 1 ? "second" : "seconds").
                 </div>
             }
             else if (_leftResult is not null || _rightResult is not null)
@@ -184,6 +213,16 @@
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
 
+    // ── Auto-judge ────────────────────────────────────────────────────────────
+    // The server owns the real clock (it starts when the duel completes); this countdown
+    // only mirrors it so the user can see how long they have. Whoever writes the verdict
+    // first wins — a human click inside the window makes the server-side judge stand down.
+    private VerdictSource _verdictSource = VerdictSource.Human;
+    private string? _judgeRationale;
+    private int? _autoJudgeRemaining;
+    private bool _autoJudgeDeciding;
+    private CancellationTokenSource? _autoJudgeCts;
+
     // Both models failed → there's nothing to judge; the UI prompts a fresh duel instead.
     private bool BothSidesFailed() =>
         _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
@@ -205,8 +244,10 @@
         // UX#7: Block navigation away when verdict is still pending
         _locationChangingReg = Nav.RegisterLocationChangingHandler(async ctx =>
         {
-            // A retry navigates deliberately to the new duel — don't nag about the old one.
-            if (_duel?.Verdict == DuelVerdict.Pending && !_verdictRecorded && !_retrying)
+            // A retry navigates deliberately to the new duel — don't nag about the old one,
+            // and don't nag at all when the auto-judge will decide it anyway.
+            if (_duel?.Verdict == DuelVerdict.Pending && !_verdictRecorded && !_retrying
+                && _duel.AutoJudgeDelaySeconds <= 0)
             {
                 var confirmed = await JS.InvokeAsync<bool>("confirm", "You haven't picked a winner yet. Leave without voting?");
                 if (!confirmed) ctx.PreventNavigation();
@@ -228,6 +269,7 @@
                     _signalR = new SignalRDuelClient();
                     _signalR.OnModelStatusUpdate += OnStatusUpdate;
                     _signalR.OnDuelComplete += OnDuelComplete;
+                    _signalR.OnVerdictRecorded += OnVerdictRecorded;
                     await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), DuelId);
                 }
                 // If verdict already recorded, restore state
@@ -236,7 +278,15 @@
                     _verdictRecorded = true;
                     _winnerModelId = _duel.WinnerModelId;
                     _loserModelId = _duel.LoserModelId;
+                    _verdictSource = _duel.VerdictSource;
+                    _judgeRationale = _duel.JudgeRationale;
                     ApplyEloShifts(_duel);
+                }
+                else if (!_duelStillRunning)
+                {
+                    // Arrived at an already-finished duel: the server's clock has been running
+                    // since CompletedAt, so resume from where it actually is, not from zero.
+                    StartAutoJudgeCountdown();
                 }
             }
         }
@@ -284,6 +334,10 @@
         if (_verdictRecorded || _submitting || _duel is null) return;
         _submitting = true;
 
+        // Stop the visible countdown the moment they commit. The server-side judge is stopped
+        // by the verdict itself — it re-reads the duel and stands down on anything but Pending.
+        StopAutoJudgeCountdown();
+
         try
         {
             var response = await ApiClient.RecordVerdictAsync(DuelId, new VerdictRequestDto { Verdict = verdict });
@@ -292,6 +346,8 @@
                 _verdictRecorded = true;
                 _winnerModelId = response.WinnerModelId;
                 _loserModelId = response.LoserModelId;
+                _verdictSource = response.Source;
+                _judgeRationale = response.JudgeRationale;
 
                 // Apply ELO shifts to display badges
                 _eloShiftLeft = _duel.LeftModelId == response.WinnerModelId
@@ -303,11 +359,125 @@
 
                 await AudioService.PlaySuccessAsync();
             }
+            else
+            {
+                // Most likely a 409: the auto-judge landed its verdict first. Show what was
+                // actually recorded rather than leaving the buttons live over a decided duel.
+                await RefreshVerdictFromServerAsync();
+            }
         }
         finally
         {
             _submitting = false;
         }
+    }
+
+    // ── Auto-judge countdown ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Mirrors the server's grace window. Started once the duel has finished and is still
+    /// unjudged; a delay of 0 (auto-judge disabled) leaves the Arena exactly as it was.
+    /// </summary>
+    private void StartAutoJudgeCountdown()
+    {
+        if (_duel is null || _verdictRecorded || _autoJudgeCts is not null) return;
+        if (_duel.Verdict != DuelVerdict.Pending) return;
+        if (_duel.AutoJudgeDelaySeconds <= 0) return;
+
+        // The server started counting at CompletedAt, so a page opened late must not restart
+        // the clock — resume from whatever is genuinely left of the window.
+        var elapsed = _duel.CompletedAt is { } completedAt
+            ? (DateTimeOffset.UtcNow - completedAt).TotalSeconds
+            : 0;
+        var remaining = (int)Math.Ceiling(_duel.AutoJudgeDelaySeconds - elapsed);
+
+        _autoJudgeCts = new CancellationTokenSource();
+        _ = RunAutoJudgeCountdownAsync(Math.Max(0, remaining), _autoJudgeCts.Token);
+    }
+
+    private void StopAutoJudgeCountdown()
+    {
+        _autoJudgeCts?.Cancel();
+        _autoJudgeCts?.Dispose();
+        _autoJudgeCts = null;
+        _autoJudgeRemaining = null;
+        _autoJudgeDeciding = false;
+    }
+
+    private async Task RunAutoJudgeCountdownAsync(int seconds, CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (var remaining = seconds; remaining > 0; remaining--)
+            {
+                _autoJudgeRemaining = remaining;
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(1000, cancellationToken);
+            }
+
+            _autoJudgeRemaining = null;
+            _autoJudgeDeciding = true;
+            await InvokeAsync(StateHasChanged);
+
+            // SignalR delivers the verdict when this page is connected, but the Arena only
+            // connects for duels that were still running when it loaded. Poll as well so a
+            // page opened after completion still reflects the decision. The judge call itself
+            // is bounded by AiJudge:TimeoutSeconds, so this window is generous, not open-ended.
+            for (var attempt = 0; attempt < 45 && !_verdictRecorded; attempt++)
+            {
+                await Task.Delay(1000, cancellationToken);
+                if (await RefreshVerdictFromServerAsync()) return;
+            }
+
+            // The judge declined to decide (no output to compare, or an unreachable judge).
+            // Fall back to the plain "pick a winner" prompt — the duel is still judgeable.
+            _autoJudgeDeciding = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+            // Human picked, or the page went away.
+        }
+    }
+
+    /// <summary>Re-reads the duel and adopts its verdict if one has landed. True when it had.</summary>
+    private async Task<bool> RefreshVerdictFromServerAsync()
+    {
+        var fresh = await ApiClient.GetDuelAsync(DuelId);
+        if (fresh is null || fresh.Verdict == DuelVerdict.Pending || fresh.WinnerModelId is null)
+            return false;
+
+        _duel = fresh;
+        _verdictRecorded = true;
+        _winnerModelId = fresh.WinnerModelId;
+        _loserModelId = fresh.LoserModelId;
+        _verdictSource = fresh.VerdictSource;
+        _judgeRationale = fresh.JudgeRationale;
+        _autoJudgeRemaining = null;
+        _autoJudgeDeciding = false;
+        ApplyEloShifts(fresh);
+        await InvokeAsync(StateHasChanged);
+        return true;
+    }
+
+    private void OnVerdictRecorded(VerdictResponseDto response)
+    {
+        if (_verdictRecorded) return;
+
+        _verdictRecorded = true;
+        _winnerModelId = response.WinnerModelId;
+        _loserModelId = response.LoserModelId;
+        _verdictSource = response.Source;
+        _judgeRationale = response.JudgeRationale;
+        _eloShiftLeft = _duel?.LeftModelId == response.WinnerModelId
+            ? response.EloShiftWinner
+            : response.EloShiftLoser;
+        _eloShiftRight = _duel?.RightModelId == response.WinnerModelId
+            ? response.EloShiftWinner
+            : response.EloShiftLoser;
+
+        StopAutoJudgeCountdown();
+        InvokeAsync(StateHasChanged);
     }
 
     private void ApplyEloShifts(DuelDto duel)
@@ -361,6 +531,7 @@
                 _rightResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.RightModelId);
                 _leftStreamingHtml  = null;
                 _rightStreamingHtml = null;
+                StartAutoJudgeCountdown();
             }
             StateHasChanged();
         }));
@@ -370,6 +541,7 @@
     public async ValueTask DisposeAsync()
     {
         _locationChangingReg?.Dispose();
+        StopAutoJudgeCountdown();
         if (_signalR is not null)
             await _signalR.DisposeAsync();
     }

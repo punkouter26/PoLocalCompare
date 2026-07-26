@@ -113,10 +113,6 @@ public sealed class DuelExecutionService
                 }
             }
 
-            // No automatic verdicts. Every duel — including one where a model failed —
-            // stays Pending until a human judges it in the Arena. ELO must only ever move
-            // on a human decision.
-
             await _hubContext.Clients
                 .Group($"duel:{duelId}")
                 .SendAsync("DuelComplete", new DuelDto
@@ -131,6 +127,13 @@ public sealed class DuelExecutionService
                     Verdict = DuelVerdict.Pending,
                     TimeLimitSeconds = 900,
                 });
+
+            // Hand off to the auto-judge, which waits out the grace window before deciding.
+            // Run inline rather than as a second queued item: BackgroundTaskService awaits each
+            // work item before dequeuing the next, so a queued delay would stall the next duel.
+            // The duel is not finished until it has a verdict, so blocking here is the honest
+            // shape — and AutoJudge.RunAsync never throws.
+            await services.GetRequiredService<AutoJudge>().RunAsync(duelId, cancellationToken);
         }
         catch (Exception ex)
         {

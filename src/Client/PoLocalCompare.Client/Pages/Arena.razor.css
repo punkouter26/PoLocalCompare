@@ -176,3 +176,23 @@
     background: #1f0a0a;
     border-radius: 4px;
 }
+
+/* Auto-judge countdown. Amber reads as "time pressure" without competing with the red
+   failure note. #fbbf24 on #1c1408 is ~11:1, well clear of WCAG 2.2 AA (SC 1.4.3). */
+.arena__judge-note--auto {
+    color: #fbbf24;
+    border: 1px solid #78350f;
+    background: #1c1408;
+    border-radius: 4px;
+}
+
+/* The judge's stated reason, under the winner line. Quieter than the verdict itself —
+   it is supporting evidence, not the headline. */
+.arena__judge-rationale {
+    display: block;
+    margin-top: 0.25rem;
+    color: #bbf7d0;
+    font-weight: 400;
+    font-size: 0.85rem;
+    font-style: italic;
+}

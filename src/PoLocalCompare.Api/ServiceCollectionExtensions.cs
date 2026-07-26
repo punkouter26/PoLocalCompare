@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ListDuelsHandler>();
         services.AddScoped<ExportLabReportHandler>();
         services.AddSingleton<DuelExecutionService>();
+        services.AddScoped<AutoJudge>();
 
         services.AddScoped<RecordVerdictHandler>(sp =>
         {

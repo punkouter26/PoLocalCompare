@@ -19,6 +19,18 @@ public sealed class Duel
     public double? EloShiftLoser { get; set; }
     /// <summary>Absolute deadline for verdict submission (VerdictDeadlineHours from config).</summary>
     public DateTimeOffset VerdictDeadline { get; init; }
+
+    /// <summary>
+    /// Who decided this duel. Defaults to <see cref="VerdictSource.Human"/> so duels recorded
+    /// before the auto-judge existed read back as human-judged, which is what they were.
+    /// </summary>
+    public VerdictSource VerdictSource { get; set; } = VerdictSource.Human;
+
+    /// <summary>The auto-judge's one-line reason, when <see cref="VerdictSource"/> is Ai.</summary>
+    public string? JudgeRationale { get; set; }
+
+    /// <summary>Deployment name of the model that judged, when <see cref="VerdictSource"/> is Ai.</summary>
+    public string? JudgeModel { get; set; }
     /// <summary>True when only one model completed (partial duel).</summary>
     public bool IsPartial { get; set; }
 
