@@ -14,93 +14,89 @@ from pathlib import Path
 
 BASE = "https://localhost:5001"
 HEADERS = {"X-Fake-User": "copilot-test", "X-Fake-Roles": "User"}
-OUT_PATH = Path(r"c:\Users\punko\Downloads\PoLocalCompare\model-test-report.html")
 
-# Curated, verified per-model outcomes from the duel telemetry captured during
-# the test run. Each entry's tokens/ms come from real /api/duels/{id} rows.
-TESTED = [
-    {
-        "name": "Phi-4",
-        "type": "Remote",
-        "status": "WORKS",
-        "tokens": 517,
-        "ms": 11693,
-        "note": "Full 3D cube HTML, quality 90/100.",
-        "duelId": "01KYFWKJM9Z1RN5074TDM005PE",
-    },
-    {
-        "name": "GPT-5 Nano",
-        "type": "Remote",
-        "status": "WORKS",
-        "tokens": 784,
-        "ms": 19808,
-        "note": "Used as opponent in browser-side duels.",
-        "duelId": "01KYFX4EPJS079P48T6KXX1VH8",
-    },
-    {
-        "name": "GPT-5.4 Mini",
-        "type": "Remote",
-        "status": "WORKS",
-        "tokens": 625,
-        "ms": 2995,
-        "note": "Fastest response in the test matrix.",
-        "duelId": "01KYFWN6BMRHTMT58ZD2EGM6WX",
-    },
-    {
-        "name": "GPT-5.4 Nano",
-        "type": "Remote",
-        "status": "WORKS",
-        "tokens": 1688,
-        "ms": 8720,
-        "note": "Current ELO leader.",
-        "duelId": "01KYFWNA3TDQ5KJQNYFSRFSJW1",
-    },
-    {
-        "name": "Gemma 4 (Ollama)",
-        "type": "LocalService",
-        "status": "WORKS",
-        "tokens": 723,
-        "ms": 10824,
-        "note": "Ollama daemon present, gemma4:latest resolves in /api/tags.",
-        "duelId": "01KYFWPJBA1Y0703R4GJDDPEJA",
-    },
-    {
-        "name": "Phi-4 Mini",
-        "type": "Remote",
-        "status": "WORKS",
-        "tokens": 577,
-        "ms": 12835,
-        "note": "Initially FAILED with 35s HttpClient.Timeout. Fix applied:",
-        "duelId": "01KYFZH4PA1BN0DWZWKCBHZ8V3",
-    },
-    {
-        "name": "SmolLM2 135M",
-        "type": "Local",
-        "status": "WORKS",
-        "tokens": 120,
-        "ms": 25009,
-        "note": "Browser worker executed end-to-end. Output quality 20/100 (incoherent HTML — small-model limitation, not a pipeline fault).",
-        "duelId": "01KYFX4EPJS079P48T6KXX1VH8",
-    },
-]
+ROOT = Path(__file__).resolve().parents[1]
+OUT_PATH = ROOT / "model-test-report.html"
 
-BLOCKED_LOCAL = [
-    ("SmolLM2 360M",   "SmolLM2-360M-Instruct-q4f32_1-MLC",  "360M"),
-    ("SmolLM2 1.7B",   "SmolLM2-1.7B-Instruct-q4f16_1-MLC",  "1.7B"),
-    ("Qwen2.5 0.5B",   "Qwen2.5-0.5B-Instruct-q4f32_1-MLC", "0.5B"),
-    ("Qwen3 1.7B",     "Qwen3-1.7B-q4f16_1-MLC",             "1.7B"),
-    ("Llama 3.2 1B",   "Llama-3.2-1B-Instruct-q4f16_1-MLC",  "1B"),
-    ("Llama 3.2 3B",   "Llama-3.2-3B-Instruct-q4f16_1-MLC",  "3B"),
-    ("Phi-3.5 Mini",   "Phi-3.5-mini-instruct-q4f32_1-MLC",  "3.8B"),
-    ("Gemma 2 2B",     "gemma-2-2b-it-q4f16_1-MLC",          "2B"),
-]
+# Results are read from the TSVs the test scripts emit, never transcribed by hand. The previous
+# version carried a hardcoded TESTED list of tokens/ms/duel-ids, which went stale the moment
+# either script was re-run and quietly reported outcomes that no longer matched the duels.
+SERVER_TSV = ROOT / "model-test-status.tsv"    # SCRIPTS/test-models-rotating-cube.ps1
+BROWSER_TSV = ROOT / "browser-test-status.tsv"  # SCRIPTS/test-browser-models.ps1
 
-BLOCK_REASON = (
-    "HuggingFace unreachable from this machine (corporate proxy returns a synthetic "
-    "401 on every request, even through hf-mirror.com). Drop the MLC artifacts under "
-    "<code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load "
-    "them directly from the app origin and bypass HuggingFace entirely."
-)
+# Statuses that are a genuine verdict on the model, as opposed to a harness or environment
+# problem. QUEUE_BLOCKED and NOT_TESTED in particular say nothing about the model and must not
+# be rendered as failures.
+VERDICT_STATUSES = {"WORKS", "FAILS"}
+
+STATUS_NOTE = {
+    "TIMEOUT": "No result before the harness timeout.",
+    "CRASHED": "The browser page died before producing a result.",
+    "QUEUE_BLOCKED": "The duel never started — the duel queue was blocked. Not a model result.",
+    "NOT_TESTED": "Not run.",
+    "NO_RESULT": "No result row was written for this model.",
+    "ERROR": "The harness could not run this model.",
+}
+
+
+def read_tsv(path: Path) -> list[dict]:
+    """Reads one of the pipe-delimited status files. Missing file -> no rows, not a crash."""
+    if not path.exists():
+        return []
+    rows, header = [], None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("|")
+        if header is None:
+            header = parts
+            continue
+        # The server script appends a LOCAL_BROWSER_ONLY_MODELS marker and short rows after it;
+        # anything that is not a full record is not a result.
+        if len(parts) < len(header):
+            continue
+        rows.append(dict(zip(header, parts)))
+    return rows
+
+
+def to_int(v) -> int:
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return 0
+
+
+def load_results() -> list[dict]:
+    """Merges both TSVs into one shape: name, type, status, tokens, ms, note, duelId."""
+    out = []
+    for r in read_tsv(SERVER_TSV):
+        out.append({
+            "name": r.get("MODEL", "?"),
+            "type": r.get("TYPE", "?"),
+            "status": r.get("STATUS", "?"),
+            "tokens": to_int(r.get("TOKENS")),
+            "ms": to_int(r.get("DURATION_MS")),
+            "duelId": r.get("DUEL_ID", "-"),
+            "note": r.get("FAILURE_REASON", "-"),
+        })
+    for r in read_tsv(BROWSER_TSV):
+        status = r.get("STATUS", "?")
+        reason = r.get("FAILURE_REASON", "-")
+        note = reason if reason not in ("", "-") else STATUS_NOTE.get(status, "")
+        if status == "WORKS":
+            note = f"Ran in the browser on WebGPU. Output quality {r.get('QUALITY', '?')}/100."
+        out.append({
+            "name": r.get("MODEL", "?"),
+            "type": r.get("TYPE", "Local"),
+            "status": status,
+            "tokens": to_int(r.get("TOKENS")),
+            "ms": to_int(r.get("DURATION_MS")),
+            "duelId": r.get("DUEL_ID", "-"),
+            "note": note,
+            "webLlmId": r.get("WEBLLM_ID", ""),
+        })
+    return out
 
 
 def fetch(url: str):
@@ -112,45 +108,28 @@ def fetch(url: str):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def badge(kind: str) -> str:
-    if kind == "WORKS":
+def badge(status: str) -> str:
+    if status == "WORKS":
         return '<span class="badge ok">WORKS</span>'
-    if kind == "FAILS":
+    if status == "FAILS":
         return '<span class="badge fail">FAILS</span>'
-    return '<span class="badge blocked">BLOCKED</span>'
+    # Everything else is a harness or environment outcome, not a model verdict.
+    return f'<span class="badge blocked">{escape(status)}</span>'
 
 
-def tested_row(t, lb):
-    name = escape(t["name"])
-    badge_html = badge(t["status"])
-    type_badge = f'<span class="badge type-{t["type"].lower()}">{t["type"]}</span>'
+def row(t, lb) -> str:
     l = lb.get(t["name"], {})
     elo = l.get("currentElo", "")
     wins = l.get("winCount", "")
     losses = (l.get("duelCount", 0) or 0) - (l.get("winCount", 0) or 0)
+    css = t["status"].lower() if t["status"] in VERDICT_STATUSES else "blocked"
     return (
-        f"<tr class='{t['status'].lower()}'>"
-        f"<td>{name}</td><td>{type_badge}</td><td>{badge_html}</td>"
+        f"<tr class='{css}'>"
+        f"<td>{escape(t['name'])}</td>"
+        f"<td>{badge(t['status'])}</td>"
         f"<td class='num'>{elo}</td><td class='num'>{wins} / {losses}</td>"
         f"<td class='num'>{t['tokens']}</td><td class='num'>{t['ms']}</td>"
         f"<td>{escape(t['note'])}</td></tr>"
-    )
-
-
-def blocked_row(name, web_llm_id, params, lb):
-    l = lb.get(name, {})
-    elo = l.get("currentElo", "")
-    wins = l.get("winCount", "")
-    losses = (l.get("duelCount", 0) or 0) - (l.get("winCount", 0) or 0)
-    return (
-        "<tr class='blocked'>"
-        f"<td>{escape(name)}</td>"
-        f"<td><span class='badge type-local'>Local</span></td>"
-        f"<td>{badge('BLOCKED')}</td>"
-        f"<td class='num'>{elo}</td><td class='num'>{wins} / {losses}</td>"
-        f"<td>{escape(params)}</td>"
-        f"<td><code>{escape(web_llm_id)}</code></td>"
-        f"<td>{BLOCK_REASON}</td></tr>"
     )
 
 
@@ -162,36 +141,36 @@ def main():
         print(f"ERROR: live API fetch failed ({exc}); check that the API is running.", file=sys.stderr)
         sys.exit(1)
 
-    lb = {row["displayName"]: row for row in leaderboard}
+    results = load_results()
+    if not results:
+        print(f"ERROR: no results in {SERVER_TSV.name} or {BROWSER_TSV.name}. "
+              f"Run the test scripts first.", file=sys.stderr)
+        sys.exit(1)
 
-    remote_rows = "\n".join(tested_row(t, lb) for t in TESTED if t["type"] == "Remote")
-    localservice_rows = "\n".join(tested_row(t, lb) for t in TESTED if t["type"] == "LocalService")
-    local_rows = "\n".join(blocked_row(*m, lb=lb) for m in BLOCKED_LOCAL)
+    lb = {r["displayName"]: r for r in leaderboard}
+    def by_type(kind: str) -> str:
+        return "\n".join(row(t, lb) for t in results if t["type"] == kind)
 
-    works = sum(1 for t in TESTED if t["status"] == "WORKS")
-    fails = sum(1 for t in TESTED if t["status"] == "FAILS")
-    blocked = len(BLOCKED_LOCAL)
-    total = len(models)
-
-    works = sum(1 for t in TESTED if t["status"] == "WORKS")
-    fails = sum(1 for t in TESTED if t["status"] == "FAILS")
-    blocked = len(BLOCKED_LOCAL)
-    total = len(models)
+    works = sum(1 for t in results if t["status"] == "WORKS")
+    fails = sum(1 for t in results if t["status"] == "FAILS")
+    inconclusive = sum(1 for t in results if t["status"] not in VERDICT_STATUSES)
 
     subs = [
-        ("__TOTAL__", str(total)),
+        ("__TOTAL__", str(len(models))),
         ("__WORKS__", str(works)),
         ("__FAILS__", str(fails)),
-        ("__BLOCKED__", str(blocked)),
-        ("__REMOTE_ROWS__", remote_rows),
-        ("__LOCALSERVICE_ROWS__", localservice_rows),
-        ("__LOCAL_ROWS__", local_rows),        ("__WIN_ORIGIN__", "https://localhost:5001"),    ]
+        ("__BLOCKED__", str(inconclusive)),
+        ("__REMOTE_ROWS__", by_type("Remote")),
+        ("__LOCALSERVICE_ROWS__", by_type("LocalService")),
+        ("__LOCAL_ROWS__", by_type("Local")),
+        ("__WIN_ORIGIN__", BASE),
+    ]
     html = HTML_TEMPLATE
     for token, value in subs:
         html = html.replace(token, value)
     OUT_PATH.write_text(html, encoding="utf-8")
     print(f"WROTE: {OUT_PATH} ({OUT_PATH.stat().st_size} bytes)")
-    print(f"Models on registry: {total} | WORKS: {works} | FAILS: {fails} | BLOCKED: {blocked}")
+    print(f"Registered: {len(models)} | WORKS: {works} | FAILS: {fails} | inconclusive: {inconclusive}")
 
 
 HTML_TEMPLATE = """<!doctype html>
@@ -263,7 +242,7 @@ HTML_TEMPLATE = """<!doctype html>
     <div class="stat"><div class="label">Models registered</div><div class="value info">__TOTAL__</div></div>
     <div class="stat"><div class="label">Verified WORKS</div><div class="value ok">__WORKS__</div></div>
     <div class="stat"><div class="label">Verified FAILS</div><div class="value fail">__FAILS__</div></div>
-    <div class="stat"><div class="label">Blocked (network)</div><div class="value blocked">__BLOCKED__</div></div>
+    <div class="stat"><div class="label">Inconclusive</div><div class="value blocked">__BLOCKED__</div></div>
   </div>
 
   <h2>Run configuration</h2>
@@ -314,7 +293,7 @@ HTML_TEMPLATE = """<!doctype html>
 
   <h2>Local (browser-only WebLLM via WebGPU)</h2>
   <table>
-    <thead><tr><th>Model</th><th>Type</th><th>Result</th><th>ELO</th><th>W / L</th><th>Params</th><th>WebLLM id</th><th>Blocker</th></tr></thead>
+    <thead><tr><th>Model</th><th>Result</th><th>ELO</th><th>W / L</th><th>Tokens</th><th>Duration (ms)</th><th>Notes</th></tr></thead>
     <tbody>__LOCAL_ROWS__</tbody>
   </table>
 
@@ -329,13 +308,20 @@ HTML_TEMPLATE = """<!doctype html>
     </ul>
   </div>
 
-  <h2>How to unblock the __BLOCKED__ browser-only models</h2>
+  <h2>How the browser models were tested</h2>
   <div class="meta-card">
     <ul>
-      <li>Drop each model artifact into <code>src/Client/PoLocalCompare.Client/wwwroot/models/&lt;webLlmId&gt;/</code> (folders already created).</li>
-      <li>The WebLLM worker already supports a local static-files base URL: <code>__WIN_ORIGIN__/models/&lt;webLlmId&gt;/</code>. No HuggingFace egress at runtime.</li>
-      <li>Outstanding folders: <code>SmolLM2-360M-Instruct-q4f32_1-MLC</code>, <code>SmolLM2-1.7B-Instruct-q4f16_1-MLC</code>, <code>Qwen2.5-0.5B-Instruct-q4f32_1-MLC</code>, <code>Qwen3-1.7B-q4f16_1-MLC</code>, <code>Llama-3.2-1B-Instruct-q4f16_1-MLC</code>, <code>Llama-3.2-3B-Instruct-q4f16_1-MLC</code>, <code>Phi-3.5-mini-instruct-q4f32_1-MLC</code>, <code>gemma-2-2b-it-q4f16_1-MLC</code>.</li>
-      <li>After dropping them in, rerun <code>SCRIPTS/build_html_report.py</code>; it will refresh the data from <code>/api/models</code> and <code>/api/leaderboard</code>.</li>
+      <li>Weights are served from the app origin (<code>__WIN_ORIGIN__/models/&lt;webLlmId&gt;/</code>) plus the WebGPU
+          libraries in <code>models/_libs/</code>, so nothing is fetched from HuggingFace at run time.</li>
+      <li><code>SCRIPTS/test-browser-models.ps1</code> starts a real Chrome and attaches Playwright to it over CDP.
+          A Playwright-launched browser only exposes the SwiftShader fallback adapter, which lacks
+          <code>shader-f16</code> &mdash; every q4f16 model would fail identically for a reason that has nothing to do
+          with the model, so the harness refuses to run on a fallback adapter.</li>
+      <li>Each browser model duels a server-side opponent, so a page only ever loads one model and a failure is
+          attributable to it.</li>
+      <li><strong>Inconclusive</strong> rows are not model failures. <code>QUEUE_BLOCKED</code> in particular means the
+          duel never started: duel execution is serialised, and an unattended local duel holds the queue for its full
+          900&nbsp;s watchdog.</li>
     </ul>
   </div>
 
