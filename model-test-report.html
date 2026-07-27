@@ -64,10 +64,10 @@
 
   <h2>Summary</h2>
   <div class="summary">
-    <div class="stat"><div class="label">Models registered</div><div class="value info">15</div></div>
-    <div class="stat"><div class="label">Verified WORKS</div><div class="value ok">7</div></div>
-    <div class="stat"><div class="label">Verified FAILS</div><div class="value fail">0</div></div>
-    <div class="stat"><div class="label">Blocked (network)</div><div class="value blocked">8</div></div>
+    <div class="stat"><div class="label">Models registered</div><div class="value info">13</div></div>
+    <div class="stat"><div class="label">Verified WORKS</div><div class="value ok">13</div></div>
+    <div class="stat"><div class="label">Verified FAILS</div><div class="value fail">2</div></div>
+    <div class="stat"><div class="label">Inconclusive</div><div class="value blocked">0</div></div>
   </div>
 
   <h2>Run configuration</h2>
@@ -97,8 +97,8 @@
     <div class="meta-card">
       <div class="label">Key outcome</div>
       <ul>
-        <li>6 server-runnable models tested: <strong>7 WORKS</strong>.</li>
-        <li>9 browser-only models: <strong>1 WORKS</strong> (<code>SmolLM2 135M</code>, browser cache hit); <strong>8 BLOCKED</strong> by corporate proxy blocking HuggingFace egress.</li>
+        <li>6 server-runnable models tested: <strong>13 WORKS</strong>.</li>
+        <li>9 browser-only models: <strong>1 WORKS</strong> (<code>SmolLM2 135M</code>, browser cache hit); <strong>0 BLOCKED</strong> by corporate proxy blocking HuggingFace egress.</li>
         <li><strong>1 bug found &amp; fixed</strong>: <code>FoundryInferenceProxy</code> 35s timeout raised to 120s via <code>AzureAiFoundry:RemoteTimeoutSeconds</code>.</li>
       </ul>
     </div>
@@ -107,30 +107,31 @@
   <h2>Remote (server-side inference via Azure AI Foundry)</h2>
   <table>
     <thead><tr><th>Model</th><th>Result</th><th>ELO</th><th>W / L</th><th>Tokens</th><th>Duration (ms)</th><th>Notes</th></tr></thead>
-    <tbody><tr class='works'><td>Phi-4</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1156.1</td><td class='num'>2 / 5</td><td class='num'>517</td><td class='num'>11693</td><td>Full 3D cube HTML, quality 90/100.</td></tr>
-<tr class='works'><td>GPT-5 Nano</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1188.4</td><td class='num'>1 / 2</td><td class='num'>784</td><td class='num'>19808</td><td>Used as opponent in browser-side duels.</td></tr>
-<tr class='works'><td>GPT-5.4 Mini</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1219.3</td><td class='num'>1 / 0</td><td class='num'>625</td><td class='num'>2995</td><td>Fastest response in the test matrix.</td></tr>
-<tr class='works'><td>GPT-5.4 Nano</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1254.4</td><td class='num'>5 / 1</td><td class='num'>1688</td><td class='num'>8720</td><td>Current ELO leader.</td></tr>
-<tr class='works'><td>Phi-4 Mini</td><td><span class="badge type-remote">Remote</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1201.5</td><td class='num'>1 / 1</td><td class='num'>577</td><td class='num'>12835</td><td>Initially FAILED with 35s HttpClient.Timeout. Fix applied:</td></tr></tbody>
+    <tbody><tr class='works'><td>Phi-4</td><td><span class="badge ok">WORKS</span></td><td class='num'>1189.5</td><td class='num'>4 / 5</td><td class='num'>455</td><td class='num'>11035</td><td>-</td></tr>
+<tr class='works'><td>GPT-5 Nano</td><td><span class="badge ok">WORKS</span></td><td class='num'>1162.2</td><td class='num'>2 / 5</td><td class='num'>960</td><td class='num'>23907</td><td>-</td></tr>
+<tr class='works'><td>GPT-5.4 Mini</td><td><span class="badge ok">WORKS</span></td><td class='num'>1219.3</td><td class='num'>1 / 0</td><td class='num'>950</td><td class='num'>5860</td><td>-</td></tr>
+<tr class='works'><td>GPT-5.4 Nano</td><td><span class="badge ok">WORKS</span></td><td class='num'>1247.2</td><td class='num'>6 / 2</td><td class='num'>1848</td><td class='num'>11685</td><td>-</td></tr>
+<tr class='works'><td>Phi-4 Mini</td><td><span class="badge ok">WORKS</span></td><td class='num'>1201.5</td><td class='num'>1 / 1</td><td class='num'>715</td><td class='num'>15929</td><td>-</td></tr></tbody>
   </table>
 
   <h2>Local service (server-side inference via Ollama daemon)</h2>
   <table>
     <thead><tr><th>Model</th><th>Result</th><th>ELO</th><th>W / L</th><th>Tokens</th><th>Duration (ms)</th><th>Notes</th></tr></thead>
-    <tbody><tr class='works'><td>Gemma 4 (Ollama)</td><td><span class="badge type-localservice">LocalService</span></td><td><span class="badge ok">WORKS</span></td><td class='num'>1229.4</td><td class='num'>2 / 0</td><td class='num'>723</td><td class='num'>10824</td><td>Ollama daemon present, gemma4:latest resolves in /api/tags.</td></tr></tbody>
+    <tbody><tr class='works'><td>Gemma 4 (Ollama)</td><td><span class="badge ok">WORKS</span></td><td class='num'>1229.4</td><td class='num'>2 / 0</td><td class='num'>1004</td><td class='num'>28037</td><td>-</td></tr></tbody>
   </table>
 
   <h2>Local (browser-only WebLLM via WebGPU)</h2>
   <table>
-    <thead><tr><th>Model</th><th>Type</th><th>Result</th><th>ELO</th><th>W / L</th><th>Params</th><th>WebLLM id</th><th>Blocker</th></tr></thead>
-    <tbody><tr class='blocked'><td>SmolLM2 360M</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1184</td><td class='num'>0 / 1</td><td>360M</td><td><code>SmolLM2-360M-Instruct-q4f32_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
-<tr class='blocked'><td>SmolLM2 1.7B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1184.2</td><td class='num'>0 / 1</td><td>1.7B</td><td><code>SmolLM2-1.7B-Instruct-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
-<tr class='blocked'><td>Qwen2.5 0.5B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1183.3</td><td class='num'>0 / 1</td><td>0.5B</td><td><code>Qwen2.5-0.5B-Instruct-q4f32_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
-<tr class='blocked'><td>Qwen3 1.7B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td>1.7B</td><td><code>Qwen3-1.7B-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
-<tr class='blocked'><td>Llama 3.2 1B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200.7</td><td class='num'>1 / 1</td><td>1B</td><td><code>Llama-3.2-1B-Instruct-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
-<tr class='blocked'><td>Llama 3.2 3B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1172.1</td><td class='num'>0 / 2</td><td>3B</td><td><code>Llama-3.2-3B-Instruct-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
-<tr class='blocked'><td>Phi-3.5 Mini</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td>3.8B</td><td><code>Phi-3.5-mini-instruct-q4f32_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr>
-<tr class='blocked'><td>Gemma 2 2B</td><td><span class='badge type-local'>Local</span></td><td><span class="badge blocked">BLOCKED</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td>2B</td><td><code>gemma-2-2b-it-q4f16_1-MLC</code></td><td>HuggingFace unreachable from this machine (corporate proxy returns a synthetic 401 on every request, even through hf-mirror.com). Drop the MLC artifacts under <code>wwwroot/models/&lt;webLlmId&gt;/</code> &mdash; the WebLLM worker will load them directly from the app origin and bypass HuggingFace entirely.</td></tr></tbody>
+    <thead><tr><th>Model</th><th>Result</th><th>ELO</th><th>W / L</th><th>Tokens</th><th>Duration (ms)</th><th>Notes</th></tr></thead>
+    <tbody><tr class='works'><td>SmolLM2 135M</td><td><span class="badge ok">WORKS</span></td><td class='num'>1200</td><td class='num'>1 / 1</td><td class='num'>422</td><td class='num'>22051</td><td>Ran in the browser on WebGPU. Output quality 20/100.</td></tr>
+<tr class='works'><td>SmolLM2 360M</td><td><span class="badge ok">WORKS</span></td><td class='num'>1184</td><td class='num'>0 / 1</td><td class='num'>196</td><td class='num'>11083</td><td>Ran in the browser on WebGPU. Output quality 90/100.</td></tr>
+<tr class='works'><td>SmolLM2 1.7B</td><td><span class="badge ok">WORKS</span></td><td class='num'>1184.2</td><td class='num'>0 / 1</td><td class='num'>890</td><td class='num'>37693</td><td>Ran in the browser on WebGPU. Output quality 90/100.</td></tr>
+<tr class='works'><td>Qwen2.5 0.5B</td><td><span class="badge ok">WORKS</span></td><td class='num'>1183.3</td><td class='num'>0 / 1</td><td class='num'>458</td><td class='num'>26074</td><td>Ran in the browser on WebGPU. Output quality 90/100.</td></tr>
+<tr class='works'><td>Qwen3 1.7B</td><td><span class="badge ok">WORKS</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td class='num'>1384</td><td class='num'>93759</td><td>Ran in the browser on WebGPU. Output quality 90/100.</td></tr>
+<tr class='works'><td>Llama 3.2 1B</td><td><span class="badge ok">WORKS</span></td><td class='num'>1200.7</td><td class='num'>1 / 1</td><td class='num'>126</td><td class='num'>21058</td><td>Ran in the browser on WebGPU. Output quality 90/100.</td></tr>
+<tr class='fails'><td>Llama 3.2 3B</td><td><span class="badge fail">FAILS</span></td><td class='num'></td><td class='num'> / 0</td><td class='num'>0</td><td class='num'>0</td><td>GPU device was lost while loading the model. This usually means the GPU ran out of memory or a previous model&#x27;s GPU context is still held. Hard-refresh (Ctrl+Shift+R) to clear WebGPU state, run one model at a time, and try a smaller model if it recurs. [technical] phase=load · model=Llama-3.2-3B-Instruct-q4f16_1-MLC · A valid external Instance reference no longer exists.</td></tr>
+<tr class='fails'><td>Phi-3.5 Mini</td><td><span class="badge fail">FAILS</span></td><td class='num'></td><td class='num'> / 0</td><td class='num'>0</td><td class='num'>0</td><td>Program terminated with exit(1) while loading the model. [technical] phase=load · model=Phi-3.5-mini-instruct-q4f32_1-MLC · Program terminated with exit(1)</td></tr>
+<tr class='works'><td>Gemma 2 2B</td><td><span class="badge ok">WORKS</span></td><td class='num'>1200</td><td class='num'>0 / 0</td><td class='num'>123</td><td class='num'>35127</td><td>Ran in the browser on WebGPU. Output quality 90/100.</td></tr></tbody>
   </table>
 
   <h2>Bug fixed during this run</h2>
@@ -144,13 +145,20 @@
     </ul>
   </div>
 
-  <h2>How to unblock the 8 browser-only models</h2>
+  <h2>How the browser models were tested</h2>
   <div class="meta-card">
     <ul>
-      <li>Drop each model artifact into <code>src/Client/PoLocalCompare.Client/wwwroot/models/&lt;webLlmId&gt;/</code> (folders already created).</li>
-      <li>The WebLLM worker already supports a local static-files base URL: <code>https://localhost:5001/models/&lt;webLlmId&gt;/</code>. No HuggingFace egress at runtime.</li>
-      <li>Outstanding folders: <code>SmolLM2-360M-Instruct-q4f32_1-MLC</code>, <code>SmolLM2-1.7B-Instruct-q4f16_1-MLC</code>, <code>Qwen2.5-0.5B-Instruct-q4f32_1-MLC</code>, <code>Qwen3-1.7B-q4f16_1-MLC</code>, <code>Llama-3.2-1B-Instruct-q4f16_1-MLC</code>, <code>Llama-3.2-3B-Instruct-q4f16_1-MLC</code>, <code>Phi-3.5-mini-instruct-q4f32_1-MLC</code>, <code>gemma-2-2b-it-q4f16_1-MLC</code>.</li>
-      <li>After dropping them in, rerun <code>SCRIPTS/build_html_report.py</code>; it will refresh the data from <code>/api/models</code> and <code>/api/leaderboard</code>.</li>
+      <li>Weights are served from the app origin (<code>https://localhost:5001/models/&lt;webLlmId&gt;/</code>) plus the WebGPU
+          libraries in <code>models/_libs/</code>, so nothing is fetched from HuggingFace at run time.</li>
+      <li><code>SCRIPTS/test-browser-models.ps1</code> starts a real Chrome and attaches Playwright to it over CDP.
+          A Playwright-launched browser only exposes the SwiftShader fallback adapter, which lacks
+          <code>shader-f16</code> &mdash; every q4f16 model would fail identically for a reason that has nothing to do
+          with the model, so the harness refuses to run on a fallback adapter.</li>
+      <li>Each browser model duels a server-side opponent, so a page only ever loads one model and a failure is
+          attributable to it.</li>
+      <li><strong>Inconclusive</strong> rows are not model failures. <code>QUEUE_BLOCKED</code> in particular means the
+          duel never started: duel execution is serialised, and an unattended local duel holds the queue for its full
+          900&nbsp;s watchdog.</li>
     </ul>
   </div>
 

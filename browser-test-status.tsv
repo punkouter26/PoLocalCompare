@@ -1,10 +1,10 @@
 MODEL|WEBLLM_ID|TYPE|STATUS|TOKENS|WARMUP_MS|DURATION_MS|BYTES|QUALITY|DUEL_ID|FAILURE_REASON
-SmolLM2 135M|SmolLM2-135M-Instruct-q0f32-MLC|Local|WORKS|6199|4264|200861|80|10|01KYGEBBK7FMND806TRCBJRQG5|-
-SmolLM2 360M|SmolLM2-360M-Instruct-q4f32_1-MLC|Local|WORKS|7996|3362|226571|21939|20|01KYGEHRGCGDM1NDPG7P1B2YDH|-
-SmolLM2 1.7B|SmolLM2-1.7B-Instruct-q4f16_1-MLC|Local|WORKS|621|12537|24416|1397|90|01KYGERYM2SXQZTY94B98RFRPZ|-
-Qwen2.5 0.5B|Qwen2.5-0.5B-Instruct-q4f32_1-MLC|Local|CRASHED|0|0|134974|0|0|01KYGESYS0W1W33FBEKAQBXAZP|Failed to load resource: the server responded with a status of 401 ()
-Qwen3 1.7B|Qwen3-1.7B-q4f16_1-MLC|Local|NOT_TESTED|0|0|0|0|0|-|run aborted — browser died earlier
-Llama 3.2 1B|Llama-3.2-1B-Instruct-q4f16_1-MLC|Local|NOT_TESTED|0|0|0|0|0|-|run aborted — browser died earlier
-Llama 3.2 3B|Llama-3.2-3B-Instruct-q4f16_1-MLC|Local|NOT_TESTED|0|0|0|0|0|-|run aborted — browser died earlier
-Phi-3.5 Mini|Phi-3.5-mini-instruct-q4f32_1-MLC|Local|NOT_TESTED|0|0|0|0|0|-|run aborted — browser died earlier
-Gemma 2 2B|gemma-2-2b-it-q4f16_1-MLC|Local|NOT_TESTED|0|0|0|0|0|-|run aborted — browser died earlier
+SmolLM2 135M|SmolLM2-135M-Instruct-q0f32-MLC|Local|WORKS|422|10472|22051|263|20|01KYJ5BVMER0S6EZC6BTQNT4AP|-
+SmolLM2 360M|SmolLM2-360M-Instruct-q4f32_1-MLC|Local|WORKS|196|3389|11083|542|90|01KYJ5CVXTWG326NDETA5CC7B6|-
+SmolLM2 1.7B|SmolLM2-1.7B-Instruct-q4f16_1-MLC|Local|WORKS|890|11946|37693|2353|90|01KYJ5DGX63RY9AD67RG9AS343|-
+Qwen2.5 0.5B|Qwen2.5-0.5B-Instruct-q4f32_1-MLC|Local|WORKS|458|5187|26074|1764|90|01KYJ5EXDMZ4E2ENKTFMQ09ZNH|-
+Qwen3 1.7B|Qwen3-1.7B-q4f16_1-MLC|Local|WORKS|1384|16107|93759|759|90|01KYJ5G20NF0WD5979HJ6871QC|-
+Llama 3.2 1B|Llama-3.2-1B-Instruct-q4f16_1-MLC|Local|WORKS|126|11095|21058|375|90|01KYJ5K893MMVXZ9WA7CC60Y7Z|-
+Llama 3.2 3B|Llama-3.2-3B-Instruct-q4f16_1-MLC|Local|FAILS|0|0|0|0|0|01KYJ5M8NZMB7PFRTHXBZX6VB3|GPU device was lost while loading the model. This usually means the GPU ran out of memory or a previous model's GPU context is still held. Hard-refresh (Ctrl+Shift+R) to clear WebGPU state, run one model at a time, and try a smaller model if it recurs. [technical] phase=load · model=Llama-3.2-3B-Instruct-q4f16_1-MLC · A valid external Instance reference no longer exists.
+Phi-3.5 Mini|Phi-3.5-mini-instruct-q4f32_1-MLC|Local|FAILS|0|0|0|0|0|01KYJ5NGAXBEBYFTKZ3MW80R07|Program terminated with exit(1) while loading the model. [technical] phase=load · model=Phi-3.5-mini-instruct-q4f32_1-MLC · Program terminated with exit(1)
+Gemma 2 2B|gemma-2-2b-it-q4f16_1-MLC|Local|WORKS|123|24186|35127|282|90|01KYJ5PMSTR2KP3KYAKAQFZYS7|-

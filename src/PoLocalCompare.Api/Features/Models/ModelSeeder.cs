@@ -20,9 +20,17 @@ public static class ModelSeeder
         new Model("01SEED0000000000000000004", "Qwen2.5 0.5B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen2.5-0.5B-Instruct-q4f32_1-MLC"),
         new Model("01SEED0000000000000000005", "Qwen3 1.7B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen3-1.7B-q4f16_1-MLC"),
         new Model("01SEED0000000000000000006", "Llama 3.2 1B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Llama-3.2-1B-Instruct-q4f16_1-MLC"),
-        new Model("01SEED0000000000000000007", "Llama 3.2 3B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Llama-3.2-3B-Instruct-q4f16_1-MLC"),
-        new Model("01SEED0000000000000000008", "Phi-3.5 Mini",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Phi-3.5-mini-instruct-q4f32_1-MLC"),
         new Model("01SEED0000000000000000009", "Gemma 2 2B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "gemma-2-2b-it-q4f16_1-MLC"),
+
+        // Ids 007 (Llama 3.2 3B) and 008 (Phi-3.5 Mini) are retired, not reused. Both failed to
+        // load in the browser across three independent runs, each on a dedicated cold browser:
+        // Llama 3.2 3B loses the GPU device ("A valid external Instance reference no longer
+        // exists") and Phi-3.5 Mini aborts with exit(1). Neither is a leak from an earlier model
+        // — Llama 3.2 3B failed running first with 11.3 GB of 12 GB VRAM free. Phi-3.5 Mini's
+        // 2.1 GB of q4f32 weights exceed the adapter's 2048 MB maxBufferSize, which explains it;
+        // Llama 3.2 3B at 1.7 GB sits under every measured limit and remains unexplained.
+        // Their weights are still on disk under wwwroot/models/, so re-adding is a one-line
+        // change if a future WebGPU or MLC release fixes them.
 
         // ── Ollama local service ───────────────────────────────────────────
         new Model("01SEED000000000000000000A", "Gemma 4 (Ollama)",  ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "gemma4:latest"),
