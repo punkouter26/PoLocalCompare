@@ -23,7 +23,7 @@ public sealed class FoundryInferenceProxy(
 
     public async Task<DuelResult> RunInferenceAsync(
         Model model,
-        string duelId,
+        DuelId duelId,
         string promptFull,
         Func<int, long, HtmlStreamStats?, Task> onTokenUpdate,
         CancellationToken cancellationToken)

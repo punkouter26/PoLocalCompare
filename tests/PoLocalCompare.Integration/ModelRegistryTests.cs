@@ -6,7 +6,7 @@ using PoLocalCompare.Shared.Enums;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.Tests.Integration;
+namespace PoLocalCompare.Integration;
 
 /// <summary>
 /// Round-trips a model registration through Azure Table Storage (Azurite) and back out

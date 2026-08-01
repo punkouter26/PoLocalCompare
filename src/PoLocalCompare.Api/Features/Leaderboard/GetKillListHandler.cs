@@ -13,7 +13,7 @@ public sealed class GetKillListHandler
         _modelRepository = modelRepository;
     }
 
-    public async Task<IReadOnlyList<HeadToHeadDto>> HandleAsync(string modelId)
+    public async Task<IReadOnlyList<HeadToHeadDto>> HandleAsync(ModelId modelId)
     {
         var history = (await _eloHistoryRepository.GetAllByModelAsync(modelId)).ToList();
 

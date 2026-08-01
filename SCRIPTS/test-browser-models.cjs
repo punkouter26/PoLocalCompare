@@ -17,7 +17,7 @@
  * Prerequisites:
  *   - App running at BASE_URL (default https://localhost:5001)
  *   - Weights present in wwwroot/models (SCRIPTS/download-models.py)
- *   - Playwright driver built: dotnet build tests/PoLocalCompare.Tests.E2E
+ *   - Playwright driver built: dotnet build tests/PoLocalCompare.E2EUI
  *   - Chrome listening on CDP_URL (the .ps1 wrapper handles this)
  *
  * Usage (from repo root):

@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\PoLocalCompare.Shared\PoLocalCompare.Shared.csproj" />
+    <ProjectReference Include="..\PoLocalCompare.Shared\PoLocalCompare.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -40,7 +40,7 @@ appservice-logs/
 appservice-logs.zip
 
 ## Local LLM model weights (downloaded by download-models.py, ~4.7 GB)
-src/Client/PoLocalCompare.Client/wwwroot/models/
+src/PoLocalCompare.Client/wwwroot/models/
 
 ## NuGet
 *.nupkg
@@ -74,7 +74,7 @@ PublishProfiles/
 
 ## Application logs (local development)
 src/PoLocalCompare.Api/logs/
-src/Client/PoLocalCompare.Client/logs/
+src/PoLocalCompare.Client/logs/
 
 ## Docker & Container
 docker-compose.override.yml
@@ -135,3 +135,8 @@ BenchmarkDotNet.Artifacts/
 
 ## Azure App Service
 scm_restartfile
+
+## Generated model-test reports (SCRIPTS/build_html_report.py, test-browser-models.cjs)
+model-test-report.html
+model-test-status.tsv
+browser-test-status.tsv

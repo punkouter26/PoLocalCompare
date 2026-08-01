@@ -10,7 +10,9 @@ using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.DTOs;
 using Testcontainers.Azurite;
 
-namespace PoLocalCompare.Tests.E2E.Api;
+using PoLocalCompare.Shared.Ids;
+
+namespace PoLocalCompare.E2EAPI;
 
 /// <summary>
 /// Boots the real API (Blazor host) over an ephemeral Azurite container with AI inference mocked,
@@ -49,9 +51,9 @@ public sealed class ApiAppFixture : IAsyncLifetime
                 var mockProxy = new Mock<IRemoteInferenceProxy>();
                 mockProxy
                     .Setup(p => p.RunInferenceAsync(
-                        It.IsAny<Model>(), It.IsAny<string>(), It.IsAny<string>(),
+                        It.IsAny<Model>(), It.IsAny<DuelId>(), It.IsAny<string>(),
                         It.IsAny<Func<int, long, HtmlStreamStats?, Task>>(), It.IsAny<CancellationToken>()))
-                    .ReturnsAsync(new DuelResult("e2e-duel", "e2e-model")
+                    .ReturnsAsync(new DuelResult(DuelId.From("e2e-duel"), ModelId.From("e2e-model"))
                     {
                         HtmlOutputRaw = "<html><body>E2E mock</body></html>",
                         TokenCount = 21,

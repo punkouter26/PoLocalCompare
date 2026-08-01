@@ -1,4 +1,4 @@
-﻿@page "/not-found"
+@page "/not-found"
 @layout MainLayout
 
 <div class="not-found">
@@ -9,65 +9,3 @@
         <a href="/" class="not-found__btn">← Back to Dashboard</a>
     </div>
 </div>
-
-<style>
-    .not-found {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 60vh;
-        padding: 2rem 1rem;
-    }
-
-    .not-found__card {
-        text-align: center;
-        background: var(--oled-surface, #0d1210);
-        border: 1px solid var(--oled-border, #1a2420);
-        border-radius: 12px;
-        padding: 3rem 2.5rem;
-        max-width: 420px;
-        width: 100%;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
-    }
-
-    .not-found__icon {
-        display: block;
-        font-size: 3.5rem;
-        font-weight: 900;
-        color: var(--oled-green, #2ddc84);
-        letter-spacing: -0.04em;
-        margin-bottom: 0.75rem;
-        opacity: 0.7;
-    }
-
-    .not-found__title {
-        font-size: 1.4rem;
-        font-weight: 700;
-        margin: 0 0 0.6rem;
-        color: #f9fafb;
-    }
-
-    .not-found__message {
-        color: #9ca3af;
-        margin: 0 0 1.75rem;
-        line-height: 1.5;
-    }
-
-    .not-found__btn {
-        display: inline-block;
-        padding: 0.6rem 1.4rem;
-        background: rgba(45, 220, 132, 0.15);
-        border: 1px solid rgba(45, 220, 132, 0.4);
-        border-radius: 6px;
-        color: #2ddc84;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 0.9rem;
-        transition: background 0.15s, border-color 0.15s;
-    }
-
-    .not-found__btn:hover {
-        background: rgba(45, 220, 132, 0.25);
-        border-color: rgba(45, 220, 132, 0.65);
-    }
-</style>

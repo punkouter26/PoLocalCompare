@@ -1,3 +1,4 @@
+using PoLocalCompare.Shared.Ids;
 using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Shared.DTOs;
@@ -5,7 +6,7 @@ namespace PoLocalCompare.Shared.DTOs;
 public sealed class LeaderboardEntryDto
 {
     public int Rank { get; init; }
-    public string ModelId { get; init; } = string.Empty;
+    public ModelId ModelId { get; init; }
     public string DisplayName { get; init; } = string.Empty;
     public ModelType ModelType { get; init; }
     public double CurrentElo { get; init; }

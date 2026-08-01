@@ -63,7 +63,7 @@
     @* Time progress bar against 5-minute limit *@
     <div class="processing-panel__progress-track">
         <div class="processing-panel__progress-fill processing-panel__progress-fill--@Status.ToString().ToLower()"
-             style="width: @Math.Min(100, ElapsedMs / 3000.0).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%">
+             style="--fill: @Math.Min(100, ElapsedMs / 3000.0).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%">
         </div>
     </div>
 
@@ -72,7 +72,7 @@
     {
         var pacePercent = Math.Min(100, TokenVelocity.Value / PeakTokenVelocity.Value * 100);
         <div class="processing-panel__pace-track" title="Current velocity vs peak velocity">
-            <div class="processing-panel__pace-fill" style="width: @pacePercent.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+            <div class="processing-panel__pace-fill" style="--fill: @pacePercent.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%"></div>
         </div>
     }
 

@@ -1,11 +1,12 @@
+using PoLocalCompare.Shared.Ids;
 using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Shared.DTOs;
 
 public sealed class ModelDto
 {
-    public string Id => ModelId;
-    public string ModelId { get; init; } = string.Empty;
+    public ModelId Id => ModelId;
+    public ModelId ModelId { get; init; }
     public string DisplayName { get; init; } = string.Empty;
     public ModelType ModelType { get; init; }
     public double CurrentElo { get; init; }

@@ -1,4 +1,4 @@
-﻿@implements IDisposable
+@implements IDisposable
 <nav class="topnav navbar navbar-expand-md navbar-dark">
     @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ── *@
     @if (_usingMockData)
@@ -13,7 +13,7 @@
             <span class="brand-text">PoLocalCompare</span>
         </a>
 
-        <button title="Navigation menu" aria-label="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu" aria-expanded="@(!collapseNavMenu)" aria-controls="navbarLinks">
+        <button title="Navigation menu" aria-label="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu" aria-expanded="@NavExpanded" aria-controls="navbarLinks">
             <span class="navbar-toggler-icon"></span>
         </button>
 
@@ -38,6 +38,17 @@
 
             @* ── User identity / auth (standards §6) ── *@
             <div class="navbar-nav ms-auto align-items-center gap-2 nav-auth">
+                @* Cycles System → Light → Dark. aria-live is on the label so a screen reader
+                   announces the new state; the glyph itself is decorative. *@
+                <button type="button"
+                        class="nav-theme-toggle"
+                        @onclick="CycleThemeAsync"
+                        title="@ThemeTitle"
+                        aria-label="@ThemeTitle">
+                    <span class="nav-theme-toggle__glyph" aria-hidden="true">@ThemeGlyph</span>
+                    <span class="nav-theme-toggle__label">@ThemeLabel</span>
+                </button>
+
                 @if (_identity is not null)
                 {
                     <span class="nav-user-badge @(_isGuest ? "nav-user-badge--guest" : "nav-user-badge--oauth")"
@@ -75,16 +86,50 @@
     [Inject] private HttpClient Http { get; set; } = default!;
     [Inject] private AuthenticationStateProvider AuthState { get; set; } = default!;
     [Inject] private Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment { get; set; } = default!;
+    [Inject] private ThemeService Theme { get; set; } = default!;
 
     private bool collapseNavMenu = true;
     private string? _identity;
     private bool _isGuest;
     private bool _usingMockData;
     private bool _allowGuest;
+    private AppTheme _theme = AppTheme.System;
 
     private string NavMenuCssClass => collapseNavMenu ? "navbar-collapse" : "navbar-collapse nav-open";
 
+    // Rendered as a string, not a bool: Blazor treats a bool-valued attribute as an HTML
+    // boolean attribute and omits it entirely when false, which would leave the collapsed
+    // menu with no aria-expanded at all.
+    private string NavExpanded => collapseNavMenu ? "false" : "true";
+
+    private string ThemeGlyph => _theme switch
+    {
+        AppTheme.Light => "☀",   // sun
+        AppTheme.Dark => "☽",    // moon
+        _ => "◑",                // half-filled circle: following the system
+    };
+
+    private string ThemeLabel => _theme switch
+    {
+        AppTheme.Light => "Light",
+        AppTheme.Dark => "Dark",
+        _ => "Auto",
+    };
+
+    private string ThemeTitle => $"Theme: {ThemeLabel}. Activate to switch.";
+
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+
+    private async Task CycleThemeAsync()
+    {
+        _theme = _theme switch
+        {
+            AppTheme.System => AppTheme.Light,
+            AppTheme.Light => AppTheme.Dark,
+            _ => AppTheme.System,
+        };
+        await Theme.SetAsync(_theme);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -95,6 +140,10 @@
         _allowGuest = allowGuestByConfig && !isProduction;
 
         await RefreshIdentityAsync();
+
+        // theme.js already painted before Blazor booted; this only syncs the button's label
+        // to what it chose, so the two cannot disagree.
+        _theme = await Theme.GetAsync();
 
         var useRealAi = Config["Features:UseRealAi"];
         _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using PoLocalCompare.Shared.Enums;
 
@@ -13,82 +15,12 @@ public static class HealthEndpoints
 {
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/health", async (
-            TableServiceClient tableServiceClient,
-            IConfiguration configuration,
-            IHttpClientFactory httpClientFactory,
-            HttpContext context) =>
+        // Backed by the standard health-check pipeline (services.AddHealthChecks). The JSON
+        // shape is preserved from the hand-rolled version this replaced, so existing probes
+        // and the /diag page keep working.
+        app.MapHealthChecks("/health", new HealthCheckOptions
         {
-            var checks = new Dictionary<string, object>();
-            var overallHealthy = true;
-
-            // Azure Table Storage check — use a data-plane operation so that only
-            // Storage Table Data Contributor RBAC is required (GetPropertiesAsync is
-            // a management-plane call that requires Storage Account Contributor).
-            try
-            {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
-                await foreach (var _ in tableServiceClient.QueryAsync(maxPerPage: 1, cancellationToken: cts.Token))
-                    break;
-                sw.Stop();
-                checks["azureTableStorage"] = new { status = "Healthy", latencyMs = sw.ElapsedMilliseconds };
-            }
-            catch (Exception ex)
-            {
-                checks["azureTableStorage"] = new { status = "Unhealthy", error = ex.Message };
-                overallHealthy = false;
-            }
-
-            // Azure AI Foundry check (ping configuration only — avoid API costs)
-            var foundryEndpoint = configuration["AzureAiFoundry:Endpoint"];
-            if (!string.IsNullOrEmpty(foundryEndpoint))
-            {
-                try
-                {
-                    var sw = System.Diagnostics.Stopwatch.StartNew();
-                    var httpClient = httpClientFactory.CreateClient("OllamaStatus");
-                    var response = await httpClient.GetAsync(foundryEndpoint);
-                    sw.Stop();
-                    checks["azureAiFoundry"] = new { status = "Healthy", latencyMs = sw.ElapsedMilliseconds };
-                }
-                catch (Exception ex)
-                {
-                    checks["azureAiFoundry"] = new { status = "Unhealthy", error = ex.Message };
-                    overallHealthy = false;
-                }
-            }
-            else
-            {
-                checks["azureAiFoundry"] = new { status = "NotConfigured" };
-            }
-
-            // Key Vault check
-            var keyVaultUri = configuration["KeyVault:Uri"];
-            if (!string.IsNullOrEmpty(keyVaultUri))
-            {
-                try
-                {
-                    var sw = System.Diagnostics.Stopwatch.StartNew();
-                    var httpClient = httpClientFactory.CreateClient("OllamaStatus");
-                    var response = await httpClient.GetAsync(keyVaultUri);
-                    sw.Stop();
-                    checks["keyVault"] = new { status = "Healthy", latencyMs = sw.ElapsedMilliseconds };
-                }
-                catch (Exception ex)
-                {
-                    checks["keyVault"] = new { status = "Unhealthy", error = ex.Message };
-                    overallHealthy = false;
-                }
-            }
-            else
-            {
-                checks["keyVault"] = new { status = "NotConfigured" };
-            }
-
-            var result = new { status = overallHealthy ? "Healthy" : "Unhealthy", checks };
-            context.Response.StatusCode = overallHealthy ? 200 : 503;
-            return Results.Json(result);
+            ResponseWriter = WriteHealthResponseAsync,
         })
         .WithName("Health")
         .WithTags("Health")
@@ -140,5 +72,46 @@ public static class HealthEndpoints
         .AllowAnonymous();
 
         return app;
+    }
+
+    /// <summary>
+    /// Renders <see cref="HealthReport"/> in the shape the hand-rolled /health used to emit:
+    /// <c>{ status, checks: { name: { status, latencyMs?, error? } } }</c>. Kept byte-compatible
+    /// on purpose — App Service probes and any saved dashboards parse it.
+    /// </summary>
+    private static Task WriteHealthResponseAsync(HttpContext context, HealthReport report)
+    {
+        var checks = new Dictionary<string, object>();
+
+        foreach (var (name, entry) in report.Entries)
+        {
+            var detail = new Dictionary<string, object>
+            {
+                // A check that reported "NotConfigured" in its data is Healthy to the pipeline
+                // but should still read as NotConfigured to a human looking at the payload.
+                ["status"] = entry.Data.TryGetValue("state", out var state)
+                    ? state.ToString() ?? entry.Status.ToString()
+                    : entry.Status.ToString(),
+            };
+
+            if (entry.Data.TryGetValue("latencyMs", out var latency))
+                detail["latencyMs"] = latency;
+
+            if (entry.Status == HealthStatus.Unhealthy && entry.Exception is not null)
+                detail["error"] = entry.Exception.Message;
+
+            checks[name] = detail;
+        }
+
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = report.Status == HealthStatus.Healthy
+            ? StatusCodes.Status200OK
+            : StatusCodes.Status503ServiceUnavailable;
+
+        return context.Response.WriteAsJsonAsync(new
+        {
+            status = report.Status.ToString(),
+            checks,
+        });
     }
 }

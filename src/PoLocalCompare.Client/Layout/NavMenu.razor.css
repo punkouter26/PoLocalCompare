@@ -1,7 +1,7 @@
 /* ── Top horizontal navbar — portrait/phone-first ─────────────────────────── */
 .topnav {
-    background-color: #000000 !important;
-    border-bottom: 1px solid #1a1a1a;
+    background-color: var(--surface-base) !important;
+    border-bottom: 1px solid var(--border);
     padding: 0 1rem;
     min-height: 3.5rem;
     position: sticky;
@@ -31,14 +31,14 @@
     gap: 0.5rem;
     min-height: 44px;           /* ≥44px touch target */
     text-decoration: none;
-    color: #f0f0f0 !important;
+    color: var(--text) !important;
     font-weight: 700;
     font-size: 1.1rem;
     letter-spacing: -0.02em;
 }
 
 .navbar-brand:hover {
-    color: #22c55e !important;
+    color: var(--accent-green) !important;
 }
 
 .brand-mark {
@@ -50,7 +50,7 @@
     border-radius: 0.45rem;
     background: linear-gradient(135deg, rgba(18, 184, 207, 0.28), rgba(45, 220, 132, 0.28));
     border: 1px solid rgba(18, 184, 207, 0.4);
-    color: #d8e6ff;
+    color: var(--text);
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -101,7 +101,7 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    color: #a0a0a0;
+    color: var(--text-muted);
     padding: 0.5rem 0.85rem;
     border-radius: 6px;
     text-decoration: none;
@@ -110,12 +110,12 @@
 }
 
 ::deep .nav-link:hover {
-    color: #f0f0f0;
-    background: #0f0f0f;
+    color: var(--text);
+    background: var(--surface-1);
 }
 
 ::deep .nav-link.active {
-    color: #22c55e;
+    color: var(--accent-green);
     background: rgba(34, 197, 94, 0.1);
     font-weight: 600;
 }
@@ -153,7 +153,7 @@
     }
 
     .navbar-collapse {
-        border-top: 1px solid #1a1a1a;
+        border-top: 1px solid var(--border);
         padding: 0.5rem 0;
     }
 
@@ -171,7 +171,7 @@
 
 /* ── USING MOCK DATA banner (standards §7) ─────────────────────────────────── */
 .mock-data-banner {
-    background: #ef4444;
+    background: var(--accent-red);
     color: #ffffff;
     font-weight: 700;
     text-align: center;
@@ -225,7 +225,9 @@
     font-size: 0.78rem;
     padding: 0.25rem 0.75rem;
     white-space: nowrap;
-    background: #fff;
+    /* Microsoft brand button: fixed white field with near-black text in BOTH themes.
+       Deliberately not tokenised — the mark is trademarked artwork, not app chrome. */
+    background: #ffffff;
     color: #1a1a1a;
     border: none;
     border-radius: 6px;
@@ -235,7 +237,7 @@
 }
 
 .btn-ms-nav:hover {
-    background: #e8e8e8;
+    background: #f0f0f0;
 }
 
 /* Decorative Microsoft mark inside the sign-in button (aria-hidden). */
@@ -249,6 +251,43 @@
     padding: 0.2rem 0.55rem;
 }
 
+/* ── Theme toggle (System → Light → Dark) ──────────────────────────────────── */
+.nav-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    /* SC 2.5.8 requires a 24×24 minimum target. */
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.nav-theme-toggle:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+}
+
+.nav-theme-toggle__glyph {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+@media (max-width: 575px) {
+    /* Keep the glyph as the affordance on narrow screens; the label is redundant with aria-label. */
+    .nav-theme-toggle__label {
+        display: none;
+    }
+}
+
 /* ── Tools kebab menu (Finding #8) ─────────────────────────────────── */
 .nav-item--kebab {
     position: relative;
@@ -257,7 +296,7 @@
 .nav-kebab {
     background: transparent;
     border: 1px solid transparent;
-    color: #9ea8bb;
+    color: var(--text-muted);
     padding: 0.25rem 0.55rem;
     cursor: pointer;
     font-size: 1.25rem;
@@ -268,8 +307,8 @@
 
 .nav-kebab:hover {
     background: rgba(255, 255, 255, 0.04);
-    border-color: var(--oled-border);
-    color: var(--oled-text);
+    border-color: var(--border);
+    color: var(--text);
 }
 
 .nav-kebab-menu {
@@ -282,7 +321,7 @@
     padding: 0.35rem;
     list-style: none;
     background: rgba(8, 11, 18, 0.97);
-    border: 1px solid var(--oled-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
@@ -290,7 +329,7 @@
 .nav-kebab-link {
     display: block;
     padding: 0.5rem 0.75rem;
-    color: var(--oled-text);
+    color: var(--text);
     text-decoration: none;
     border-radius: var(--radius-sm);
     font-size: 0.85rem;
@@ -299,5 +338,5 @@
 
 .nav-kebab-link:hover {
     background: rgba(255, 255, 255, 0.05);
-    color: var(--oled-text);
+    color: var(--text);
 }

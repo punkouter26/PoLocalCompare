@@ -29,7 +29,7 @@ public sealed class DuelRepository : IDuelRepository
     private Task EnsureTableAsync() =>
         TableEnsured.GetOrAdd(_tableClient.Uri.ToString(), _ => _tableClient.CreateIfNotExistsAsync());
 
-    public async Task<Duel?> GetByIdAsync(string duelId)
+    public async Task<Duel?> GetByIdAsync(DuelId duelId)
     {
         await EnsureTableAsync();
 
@@ -102,7 +102,7 @@ public sealed class DuelRepository : IDuelRepository
         return duels.OrderByDescending(d => d.DuelId).Take(limit);
     }
 
-    private static string GetPartitionKey(string duelId)
+    private static string GetPartitionKey(DuelId duelId)
     {
         try
         {
@@ -122,13 +122,13 @@ public sealed class DuelRepository : IDuelRepository
         {
             ["PromptText"] = duel.PromptText,
             ["PromptFull"] = duel.PromptFull,
-            ["LeftModelId"] = duel.LeftModelId,
-            ["RightModelId"] = duel.RightModelId,
+            ["LeftModelId"] = duel.LeftModelId.Value,
+            ["RightModelId"] = duel.RightModelId.Value,
             ["StartedAt"] = duel.StartedAt,
             ["CompletedAt"] = duel.CompletedAt,
             ["Verdict"] = duel.Verdict.ToString(),
-            ["WinnerModelId"] = duel.WinnerModelId,
-            ["LoserModelId"] = duel.LoserModelId,
+            ["WinnerModelId"] = duel.WinnerModelId?.Value,
+            ["LoserModelId"] = duel.LoserModelId?.Value,
             ["EloShiftWinner"] = duel.EloShiftWinner,
             ["EloShiftLoser"] = duel.EloShiftLoser,
             ["VerdictDeadline"] = duel.VerdictDeadline,
@@ -144,16 +144,16 @@ public sealed class DuelRepository : IDuelRepository
     {
         var duel = new Duel
         {
-            DuelId = entity.RowKey,
+            DuelId = DuelId.FromOrDefault(entity.RowKey),
             PromptText = entity.GetString("PromptText") ?? string.Empty,
             PromptFull = entity.GetString("PromptFull") ?? string.Empty,
-            LeftModelId = entity.GetString("LeftModelId") ?? string.Empty,
-            RightModelId = entity.GetString("RightModelId") ?? string.Empty,
+            LeftModelId = ModelId.FromOrDefault(entity.GetString("LeftModelId")),
+            RightModelId = ModelId.FromOrDefault(entity.GetString("RightModelId")),
             StartedAt = entity.GetDateTimeOffset("StartedAt") ?? DateTimeOffset.MinValue,
             CompletedAt = entity.GetDateTimeOffset("CompletedAt"),
             Verdict = Enum.TryParse<DuelVerdict>(entity.GetString("Verdict"), out var v) ? v : DuelVerdict.Pending,
-            WinnerModelId = entity.GetString("WinnerModelId"),
-            LoserModelId = entity.GetString("LoserModelId"),
+            WinnerModelId = ModelId.FromOrNull(entity.GetString("WinnerModelId")),
+            LoserModelId = ModelId.FromOrNull(entity.GetString("LoserModelId")),
             EloShiftWinner = entity.GetDouble("EloShiftWinner"),
             EloShiftLoser = entity.GetDouble("EloShiftLoser"),
             VerdictDeadline = entity.GetDateTimeOffset("VerdictDeadline") ?? DateTimeOffset.MinValue,

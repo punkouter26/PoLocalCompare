@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
@@ -103,7 +103,7 @@
             <div class="wizard__grid">
                 @for (var i = 0; i < 6; i++)
                 {
-                    <div class="skeleton" style="height:6.5rem;border-radius:var(--radius-md);animation-delay:@(i * 70)ms"></div>
+                    <div class="skeleton wizard__skeleton" style="--stagger: @(i * 70)ms"></div>
                 }
             </div>
         }

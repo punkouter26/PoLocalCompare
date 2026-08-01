@@ -7,7 +7,9 @@ using PoLocalCompare.Api.Features.Leaderboard;
 using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Tests.Unit;
+using PoLocalCompare.Shared.Ids;
+
+namespace PoLocalCompare.Unit;
 
 /// <summary>
 /// The auto-judge moves ELO without a human, so these tests pin the two invariants that keep
@@ -16,13 +18,13 @@ namespace PoLocalCompare.Tests.Unit;
 /// </summary>
 public class AutoJudgeTests
 {
-    private static Model MakeModel(string id) =>
+    private static Model MakeModel(ModelId id) =>
         new(id, $"Model {id}", ModelType.Local, tdpWatts: 115.0, webLlmModelId: "llm-1");
 
-    private static DuelResult MakeResult(string duelId, string modelId, string html) =>
+    private static DuelResult MakeResult(DuelId duelId, ModelId modelId, string html) =>
         new(duelId, modelId) { HtmlOutputRaw = html, IsFailure = false };
 
-    private static DuelResult MakeFailure(string duelId, string modelId, string reason) =>
+    private static DuelResult MakeFailure(DuelId duelId, ModelId modelId, string reason) =>
         new(duelId, modelId) { HtmlOutputRaw = string.Empty, IsFailure = true, FailureReason = reason };
 
     private sealed record Harness(
@@ -86,7 +88,7 @@ public class AutoJudgeTests
     }
 
     private static Duel MakePendingDuel() =>
-        new("duel-aj", "Build a page", "Build a page (full)", "left-aj", "right-aj");
+        new(DuelId.From("duel-aj"), "Build a page", "Build a page (full)", ModelId.From("left-aj"), ModelId.From("right-aj"));
 
     // ── The judge decides an unjudged duel ────────────────────────────────────
 
@@ -96,14 +98,14 @@ public class AutoJudgeTests
         var duel = MakePendingDuel();
         var harness = BuildHarness(
             duel,
-            [MakeResult(duel.DuelId, "left-aj", "<p>left</p>"), MakeResult(duel.DuelId, "right-aj", "<p>right</p>")],
+            [MakeResult(duel.DuelId, ModelId.From("left-aj"), "<p>left</p>"), MakeResult(duel.DuelId, ModelId.From("right-aj"), "<p>right</p>")],
             new JudgeDecision(DuelVerdict.Right, "Right implemented every requested element."));
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
 
         Assert.Equal(DuelVerdict.Right, duel.Verdict);
         Assert.Equal(VerdictSource.Ai, duel.VerdictSource);
-        Assert.Equal("right-aj", duel.WinnerModelId);
+        Assert.Equal(ModelId.From("right-aj"), duel.WinnerModelId);
         Assert.Equal("Right implemented every requested element.", duel.JudgeRationale);
         Assert.Equal("judge-model", duel.JudgeModel);
     }
@@ -116,11 +118,11 @@ public class AutoJudgeTests
         var duel = MakePendingDuel();
         duel.Verdict = DuelVerdict.Left;
         duel.VerdictSource = VerdictSource.Human;
-        duel.WinnerModelId = "left-aj";
+        duel.WinnerModelId = ModelId.From("left-aj");
 
         var harness = BuildHarness(
             duel,
-            [MakeResult(duel.DuelId, "left-aj", "<p>left</p>"), MakeResult(duel.DuelId, "right-aj", "<p>right</p>")],
+            [MakeResult(duel.DuelId, ModelId.From("left-aj"), "<p>left</p>"), MakeResult(duel.DuelId, ModelId.From("right-aj"), "<p>right</p>")],
             new JudgeDecision(DuelVerdict.Right, "should never be used"));
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
@@ -139,7 +141,7 @@ public class AutoJudgeTests
         var duel = MakePendingDuel();
         var harness = BuildHarness(
             duel,
-            [MakeResult(duel.DuelId, "left-aj", "<p>left</p>"), MakeResult(duel.DuelId, "right-aj", "<p>right</p>")],
+            [MakeResult(duel.DuelId, ModelId.From("left-aj"), "<p>left</p>"), MakeResult(duel.DuelId, ModelId.From("right-aj"), "<p>right</p>")],
             llmDecision: null);
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
@@ -154,7 +156,7 @@ public class AutoJudgeTests
         var duel = MakePendingDuel();
         var harness = BuildHarness(
             duel,
-            [MakeFailure(duel.DuelId, "left-aj", "OOM"), MakeFailure(duel.DuelId, "right-aj", "Watchdog timeout")],
+            [MakeFailure(duel.DuelId, ModelId.From("left-aj"), "OOM"), MakeFailure(duel.DuelId, ModelId.From("right-aj"), "Watchdog timeout")],
             new JudgeDecision(DuelVerdict.Left, "should never be used"));
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
@@ -172,7 +174,7 @@ public class AutoJudgeTests
         var duel = MakePendingDuel();
         var harness = BuildHarness(
             duel,
-            [MakeResult(duel.DuelId, "left-aj", "<p>left</p>"), MakeFailure(duel.DuelId, "right-aj", "Watchdog timeout (900s)")],
+            [MakeResult(duel.DuelId, ModelId.From("left-aj"), "<p>left</p>"), MakeFailure(duel.DuelId, ModelId.From("right-aj"), "Watchdog timeout (900s)")],
             new JudgeDecision(DuelVerdict.Right, "should never be used"));
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
@@ -192,13 +194,13 @@ public class AutoJudgeTests
         var duel = MakePendingDuel();
         var harness = BuildHarness(
             duel,
-            [MakeResult(duel.DuelId, "left-aj", "<p>left</p>"), MakeResult(duel.DuelId, "right-aj", "<p>right</p>")],
+            [MakeResult(duel.DuelId, ModelId.From("left-aj"), "<p>left</p>"), MakeResult(duel.DuelId, ModelId.From("right-aj"), "<p>right</p>")],
             new JudgeDecision(DuelVerdict.Right, "should never be used"),
             enabled: false);
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
 
         Assert.Equal(DuelVerdict.Pending, duel.Verdict);
-        harness.DuelRepo.Verify(r => r.GetByIdAsync(It.IsAny<string>()), Times.Never);
+        harness.DuelRepo.Verify(r => r.GetByIdAsync(It.IsAny<DuelId>()), Times.Never);
     }
 }

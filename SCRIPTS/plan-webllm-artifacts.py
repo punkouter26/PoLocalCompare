@@ -1,7 +1,7 @@
 import json, os, re, sys
 
 SEEDER = "src/PoLocalCompare.Api/Features/Models/ModelSeeder.cs"
-WEBLLM = "src/Client/PoLocalCompare.Client/wwwroot/js/web-llm.js"
+WEBLLM = "src/PoLocalCompare.Client/wwwroot/js/web-llm.js"
 
 seeder = open(SEEDER, encoding="utf-8").read()
 ids = re.findall(r'webLlmModelId:\s*"([^"]+)"', seeder)

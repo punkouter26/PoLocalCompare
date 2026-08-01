@@ -60,7 +60,7 @@ public static class DuelsEndpoints
         .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/{duelId}", async (
-            string duelId,
+            DuelId duelId,
             [FromServices] GetDuelHandler handler) =>
         {
             var dto = await handler.HandleAsync(new GetDuelQuery(duelId));
@@ -73,13 +73,13 @@ public static class DuelsEndpoints
 
         // Called by the Blazor client after local (WebLLM) inference completes
         group.MapPost("/{duelId}/local-result", async (
-            string duelId,
+            DuelId duelId,
             [FromBody] LocalResultRequest request,
             [FromServices] IDuelResultRepository duelResultRepo,
             [FromServices] IModelRepository modelRepo,
             [FromServices] IConfiguration configuration) =>
         {
-            if (string.IsNullOrWhiteSpace(request.ModelId))
+            if (request.ModelId.IsEmpty)
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
                     ["ModelId"] = ["ModelId is required."]
@@ -121,7 +121,7 @@ public static class DuelsEndpoints
 
         // POST /api/duels/{duelId}/verdict
         group.MapPost("/{duelId}/verdict", async (
-            string duelId,
+            DuelId duelId,
             [FromBody] VerdictRequestDto request,
             [FromServices] RecordVerdictHandler handler) =>
         {
@@ -182,7 +182,7 @@ public static class DuelsEndpoints
 
         // T081 — GET /api/duels/{duelId}/report (Lab Report export)
         group.MapGet("/{duelId}/report", async (
-            string duelId,
+            DuelId duelId,
             HttpContext httpContext,
             [FromServices] ExportLabReportHandler handler) =>
         {
@@ -207,12 +207,12 @@ public static class DuelsEndpoints
 }
 
 public sealed record CommenceDuelRequest(
-    string LeftModelId,
-    string RightModelId,
+    ModelId LeftModelId,
+    ModelId RightModelId,
     string PromptText);
 
 public sealed record LocalResultRequest(
-    string ModelId,
+    ModelId ModelId,
     string? HtmlOutputRaw,
     int TokenCount,
     long TotalDurationMs,

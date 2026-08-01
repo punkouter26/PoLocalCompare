@@ -1,4 +1,5 @@
 using Azure.Data.Tables;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Azure;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
@@ -158,6 +159,24 @@ try
 
     // ─── Razor pages (for /diag) ─────────────────────────────────────────────
     builder.Services.AddRazorPages();
+
+    // ─── Health checks (standards §3) ────────────────────────────────────────
+    // /health composes these; /diag renders the same report as the human-readable view,
+    // so the two can never disagree about what is up.
+    builder.Services.AddHealthChecks()
+        .AddCheck<TableStorageHealthCheck>(
+            "azureTableStorage",
+            tags: [HealthCheckTags.Dependency])
+        .AddTypeActivatedCheck<ConfiguredEndpointHealthCheck>(
+            "azureAiFoundry",
+            HealthStatus.Unhealthy,
+            [HealthCheckTags.Dependency],
+            "AzureAiFoundry:Endpoint", "Azure AI Foundry")
+        .AddTypeActivatedCheck<ConfiguredEndpointHealthCheck>(
+            "keyVault",
+            HealthStatus.Unhealthy,
+            [HealthCheckTags.Dependency],
+            "KeyVault:Uri", "Key Vault");
 
     // ─── JSON serialization — string enum values for API consumers ───────────
     builder.Services.ConfigureHttpJsonOptions(opts =>

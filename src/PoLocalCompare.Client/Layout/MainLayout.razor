@@ -1,10 +1,14 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.WebAssembly.Hosting
 @inject IWebAssemblyHostEnvironment HostEnv
+@inject IJSRuntime JS
 
 <div class="page">
-    @* SC 2.4.1 Bypass Blocks — first tab stop skips the nav. *@
-    <a class="skip-link" href="#main-content">Skip to main content</a>
+    @* SC 2.4.1 Bypass Blocks — first tab stop skips the nav.
+       The href is kept for semantics, but focus is moved explicitly: Blazor intercepts
+       same-document anchor clicks as router navigation, so the browser never runs its native
+       "focus the fragment target" step and the link would scroll without moving focus. *@
+    <a class="skip-link" href="#main-content" @onclick="FocusMainAsync">Skip to main content</a>
 
     <NavMenu />
 
@@ -40,6 +44,8 @@
 </div>
 
 @code {
+    private async Task FocusMainAsync() => await JS.InvokeVoidAsync("focusElement", "main-content");
+
     private ErrorBoundary? _errorBoundary;
 
     protected override void OnParametersSet()

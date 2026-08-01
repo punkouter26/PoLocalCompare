@@ -119,7 +119,7 @@
                         }
                         else
                         {
-                            <span style="color: var(--rz-text-secondary-color);" title="No scored outputs yet — run a duel to generate one">—</span>
+                            <span class="leaderboard__no-data" title="No scored outputs yet — run a duel to generate one">—</span>
                         }
                     </Template>
                 </RadzenDataGridColumn>
@@ -132,7 +132,7 @@
                         }
                         else
                         {
-                            <span style="color: var(--rz-text-secondary-color);" title="Run a local model duel to generate this score">—</span>
+                            <span class="leaderboard__no-data" title="Run a local model duel to generate this score">—</span>
                         }
                     </Template>
                 </RadzenDataGridColumn>
@@ -145,11 +145,11 @@
                         }
                         else if (entry.EloSparkline is not null && entry.EloSparkline.Length == 1)
                         {
-                            <span title="Only 1 duel recorded so far" style="color: var(--rz-text-secondary-color); font-style: italic;">1 duel</span>
+                            <span class="leaderboard__no-data leaderboard__no-data--note" title="Only 1 duel recorded so far">1 duel</span>
                         }
                         else
                         {
-                            <span title="No duel history yet" style="color: var(--rz-text-secondary-color); font-style: italic;">No duels yet</span>
+                            <span class="leaderboard__no-data leaderboard__no-data--note" title="No duel history yet">No duels yet</span>
                         }
                     </Template>
                 </RadzenDataGridColumn>
@@ -220,7 +220,7 @@
 @code {
     private List<LeaderboardEntryDto> _entries = [];
     private List<LeaderboardEntryDto> _displayedEntries = [];
-    private Dictionary<string, ModelType> _modelTypes = [];
+    private Dictionary<ModelId, ModelType> _modelTypes = [];
     private bool _activeOnly = true; // default: hide unplayed models
     private bool _loading = true;
     private string? _error;

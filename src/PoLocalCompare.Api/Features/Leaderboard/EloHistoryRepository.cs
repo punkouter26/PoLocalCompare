@@ -28,7 +28,7 @@ public sealed class EloHistoryRepository : IEloHistoryRepository
     }
 
     /// <summary>Returns the most recent 20 ELO records for sparkline display (inverted-tick RowKey gives descending order).</summary>
-    public async Task<IEnumerable<EloRecord>> GetLast20Async(string modelId)
+    public async Task<IEnumerable<EloRecord>> GetLast20Async(ModelId modelId)
     {
         var records = new List<EloRecord>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
@@ -44,7 +44,7 @@ public sealed class EloHistoryRepository : IEloHistoryRepository
     }
 
     /// <summary>Returns all ELO records for a model (full partition scan, used by Kill List aggregation).</summary>
-    public async Task<IEnumerable<EloRecord>> GetAllByModelAsync(string modelId)
+    public async Task<IEnumerable<EloRecord>> GetAllByModelAsync(ModelId modelId)
     {
         var records = new List<EloRecord>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
@@ -59,12 +59,12 @@ public sealed class EloHistoryRepository : IEloHistoryRepository
     {
         return new TableEntity(record.ModelId, record.TimestampKey)
         {
-            ["DuelId"] = record.DuelId,
+            ["DuelId"] = record.DuelId.Value,
             ["EloAfter"] = record.EloAfter,
             ["EloBefore"] = record.EloBefore,
             ["EloShift"] = record.EloShift,
             ["Outcome"] = record.Outcome,
-            ["OpponentModelId"] = record.OpponentModelId,
+            ["OpponentModelId"] = record.OpponentModelId.Value,
             ["OpponentEloBefore"] = record.OpponentEloBefore,
             ["RecordedAt"] = record.RecordedAt
         };
@@ -74,14 +74,14 @@ public sealed class EloHistoryRepository : IEloHistoryRepository
     {
         return new EloRecord
         {
-            ModelId = entity.PartitionKey,
+            ModelId = ModelId.FromOrDefault(entity.PartitionKey),
             TimestampKey = entity.RowKey,
-            DuelId = entity.GetString("DuelId") ?? string.Empty,
+            DuelId = DuelId.FromOrDefault(entity.GetString("DuelId")),
             EloAfter = entity.GetDouble("EloAfter") ?? 0,
             EloBefore = entity.GetDouble("EloBefore") ?? 0,
             EloShift = entity.GetDouble("EloShift") ?? 0,
             Outcome = entity.GetString("Outcome") ?? string.Empty,
-            OpponentModelId = entity.GetString("OpponentModelId") ?? string.Empty,
+            OpponentModelId = ModelId.FromOrDefault(entity.GetString("OpponentModelId")),
             OpponentEloBefore = entity.GetDouble("OpponentEloBefore") ?? 0,
             RecordedAt = entity.GetDateTimeOffset("RecordedAt") ?? DateTimeOffset.MinValue
         };

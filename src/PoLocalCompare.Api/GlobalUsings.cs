@@ -1,3 +1,4 @@
+global using PoLocalCompare.Shared.Ids;
 global using PoLocalCompare.Api.Common.Background;
 global using PoLocalCompare.Api.Common.Caching;
 global using PoLocalCompare.Api.Common.Domain;

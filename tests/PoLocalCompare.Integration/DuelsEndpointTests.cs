@@ -13,7 +13,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.Tests.Integration;
+using PoLocalCompare.Shared.Ids;
+
+namespace PoLocalCompare.Integration;
 
 /// <summary>
 /// Integration tests for the Duels API endpoints.
@@ -59,11 +61,11 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
                     mockProxy
                         .Setup(p => p.RunInferenceAsync(
                             It.IsAny<Model>(),
-                            It.IsAny<string>(),
+                            It.IsAny<DuelId>(),
                             It.IsAny<string>(),
                             It.IsAny<Func<int, long, HtmlStreamStats?, Task>>(),
                             It.IsAny<CancellationToken>()))
-                        .ReturnsAsync(new DuelResult("test-duel", "test-model")
+                        .ReturnsAsync(new DuelResult(DuelId.From("test-duel"), ModelId.From("test-model"))
                         {
                             HtmlOutputRaw = "<html><body>Mock output</body></html>",
                             TokenCount = 42,
@@ -114,8 +116,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
     [Fact]
     public async Task PostDuel_ValidRequest_Returns202WithDuelId()
     {
-        var leftId = await SeedRemoteModelAsync("left-int-1", "Left Model");
-        var rightId = await SeedRemoteModelAsync("right-int-1", "Right Model");
+        var leftId = await SeedRemoteModelAsync(ModelId.From("left-int-1"), "Left Model");
+        var rightId = await SeedRemoteModelAsync(ModelId.From("right-int-1"), "Right Model");
 
         var payload = new
         {
@@ -139,8 +141,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
     [Fact]
     public async Task PostDuel_EmptyPrompt_Returns400()
     {
-        var leftId = await SeedRemoteModelAsync("left-int-2", "Left Model 2");
-        var rightId = await SeedRemoteModelAsync("right-int-2", "Right Model 2");
+        var leftId = await SeedRemoteModelAsync(ModelId.From("left-int-2"), "Left Model 2");
+        var rightId = await SeedRemoteModelAsync(ModelId.From("right-int-2"), "Right Model 2");
 
         var payload = new
         {
@@ -159,8 +161,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
     [Fact]
     public async Task FullFlow_CommenceDuel_RecordVerdict_LeaderboardReflectsEloChange()
     {
-        var leftId = await SeedRemoteModelAsync("left-flow-1", "Flow Left");
-        var rightId = await SeedRemoteModelAsync("right-flow-1", "Flow Right");
+        var leftId = await SeedRemoteModelAsync(ModelId.From("left-flow-1"), "Flow Left");
+        var rightId = await SeedRemoteModelAsync(ModelId.From("right-flow-1"), "Flow Right");
 
         // Step 1: Commence duel
         var commenceResponse = await _client.PostAsJsonAsync("/api/duels", new
@@ -207,8 +209,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
     [Fact]
     public async Task PostVerdict_DuplicateVerdict_Returns409()
     {
-        var leftId = await SeedRemoteModelAsync("left-dup-1", "Dup Left");
-        var rightId = await SeedRemoteModelAsync("right-dup-1", "Dup Right");
+        var leftId = await SeedRemoteModelAsync(ModelId.From("left-dup-1"), "Dup Left");
+        var rightId = await SeedRemoteModelAsync(ModelId.From("right-dup-1"), "Dup Right");
 
         var commenceResponse = await _client.PostAsJsonAsync("/api/duels", new
         {

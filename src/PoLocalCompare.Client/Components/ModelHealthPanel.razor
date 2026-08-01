@@ -14,7 +14,7 @@
    Consolidated to a readiness snapshot + one-click verify run — no benchmark tables
    or charts. Expensive availability probes are deferred until the panel is expanded. *@
 <section class="lab lab--panel">
-    <button class="lab__panel-toggle" @onclick="ToggleAsync" aria-expanded="@_expanded">
+    <button class="lab__panel-toggle" @onclick="ToggleAsync" aria-expanded="@PanelExpanded">
         <span class="lab__panel-toggle-main">
             <span class="lab__panel-toggle-title">🩺 Model health</span>
             <span class="lab__panel-toggle-summary">@SummaryText()</span>
@@ -186,6 +186,10 @@
 </section>
 
 @code {
+    // Rendered as a string, not a bool: a bool-valued attribute is treated as an HTML
+    // boolean attribute and omitted when false, leaving no aria-expanded when collapsed.
+    private string PanelExpanded => _expanded ? "true" : "false";
+
     /// <summary>Models loaded by the host page; the panel filters to local + Ollama entries.</summary>
     [Parameter] public IReadOnlyList<ModelDto> Models { get; set; } = [];
 

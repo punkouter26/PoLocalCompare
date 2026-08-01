@@ -1,4 +1,4 @@
-@page "/processing/{DuelId}"
+@page "/processing/{DuelIdText}"
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
@@ -15,12 +15,12 @@
     <h1 class="processing-page__title">Processing Duel…</h1>
     <details class="processing-page__debug">
         <summary>Debug</summary>
-        <p class="processing-page__duel-id">Duel ID: @DuelId</p>
+        <p class="processing-page__duel-id">Duel ID: @DuelIdText</p>
     </details>
 
     <div class="processing-page__panels">
         <ProcessingPanel
-            ModelName="@_leftModelId"
+            ModelName="@LeftLabel"
             DisplayName="@_leftDisplayName"
             SourceType="@_leftModelType"
             TdpWatts="@_leftTdpWatts"
@@ -42,7 +42,7 @@
             GpuAccelerated="@_leftGpuAccelerated"
         />
         <ProcessingPanel
-            ModelName="@_rightModelId"
+            ModelName="@RightLabel"
             DisplayName="@_rightDisplayName"
             SourceType="@_rightModelType"
             TdpWatts="@_rightTdpWatts"
@@ -74,21 +74,21 @@
             <div class="processing-page__preview-panel">
                 @if (_leftHtmlPreview is not null)
                 {
-                    <SandboxedViewport HtmlContent="@_leftHtmlPreview" ModelName="@_leftModelId" IsLoser="false" />
+                    <SandboxedViewport HtmlContent="@_leftHtmlPreview" ModelName="@LeftLabel" IsLoser="false" />
                 }
                 else
                 {
-                    <div class="processing-page__preview-waiting">@_leftModelId — waiting for first output…</div>
+                    <div class="processing-page__preview-waiting">@LeftLabel — waiting for first output…</div>
                 }
             </div>
             <div class="processing-page__preview-panel">
                 @if (_rightHtmlPreview is not null)
                 {
-                    <SandboxedViewport HtmlContent="@_rightHtmlPreview" ModelName="@_rightModelId" IsLoser="false" />
+                    <SandboxedViewport HtmlContent="@_rightHtmlPreview" ModelName="@RightLabel" IsLoser="false" />
                 }
                 else
                 {
-                    <div class="processing-page__preview-waiting">@_rightModelId — waiting for first output…</div>
+                    <div class="processing-page__preview-waiting">@RightLabel — waiting for first output…</div>
                 }
             </div>
         </div>
@@ -96,19 +96,31 @@
 </div>
 
 @code {
-    [Parameter] public string DuelId { get; set; } = string.Empty;
+    // Blazor route parameters must be one of its supported primitive types, so the route binds
+    // text and it is narrowed to DuelId once, here, instead of at every call site.
+    [Parameter] public string DuelIdText { get; set; } = string.Empty;
 
-    private string _leftModelId = "Left Model";
-    private string _rightModelId = "Right Model";
+    private DuelId _duelId;
+
+    protected override void OnParametersSet() => _duelId = DuelId.From(DuelIdText);
+
+    private ModelId _leftModelId;
+    private ModelId _rightModelId;
     private string? _leftDisplayName;
     private string? _rightDisplayName;
+
+    // Until the first status update names the model, there is no id to show — fall back to the
+    // side. Previously the placeholder text was seeded into _leftModelId itself, which meant the
+    // _models lookup in RunGpuPollAsync silently missed until a result arrived.
+    private string LeftLabel => _leftModelId.IsEmpty ? "Left Model" : _leftModelId.Value;
+    private string RightLabel => _rightModelId.IsEmpty ? "Right Model" : _rightModelId.Value;
     private bool _leftIsLocal;
     private bool _rightIsLocal;
     private ModelType _leftModelType = ModelType.Remote;
     private ModelType _rightModelType = ModelType.Remote;
     private double? _leftTdpWatts;
     private double? _rightTdpWatts;
-    private Dictionary<string, ModelDto> _models = new();
+    private Dictionary<ModelId, ModelDto> _models = new();
 
     private DuelStatus _leftStatus = DuelStatus.Initializing;
     private DuelStatus _rightStatus = DuelStatus.Initializing;
@@ -155,7 +167,7 @@
     private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
 
     // Track in-flight local inference tasks to avoid double-starting
-    private readonly HashSet<string> _runningLocalModels = [];
+    private readonly HashSet<ModelId> _runningLocalModels = [];
     private CancellationTokenSource? _pollCts;
     private PeriodicTimer? _stallTimer;
     private PeriodicTimer? _gpuPollTimer;
@@ -168,7 +180,7 @@
         WebLlm.OnStatusUpdate += HandleLocalStatusUpdate;
 
         var baseUri = Nav.BaseUri.TrimEnd('/');
-        await HubClient.ConnectAsync(baseUri, DuelId);
+        await HubClient.ConnectAsync(baseUri, _duelId);
 
         // Pre-load model metadata for display names
         var models = await ApiClient.GetModelsAsync();
@@ -177,10 +189,10 @@
 
         // Immediate check: navigate if duel was already judged (handles page refresh / reconnect).
         // Also re-hydrate any already-Done results so panels aren't blank on reconnect.
-        var existingDuel = await ApiClient.GetDuelAsync(DuelId);
+        var existingDuel = await ApiClient.GetDuelAsync(_duelId);
         if (existingDuel?.Verdict is DuelVerdict.Left or DuelVerdict.Right)
         {
-            Nav.NavigateTo($"/arena/{DuelId}");
+            Nav.NavigateTo($"/arena/{_duelId}");
             return;
         }
 
@@ -296,9 +308,9 @@
             try { await Task.Delay(5_000, ct); } catch (OperationCanceledException) { break; }
             try
             {
-                var duel = await ApiClient.GetDuelAsync(DuelId);
+                var duel = await ApiClient.GetDuelAsync(_duelId);
                 if (duel?.Verdict is DuelVerdict.Left or DuelVerdict.Right)
-                    await InvokeAsync(() => Nav.NavigateTo($"/arena/{DuelId}"));
+                    await InvokeAsync(() => Nav.NavigateTo($"/arena/{_duelId}"));
             }
             catch { /* ignore transient errors */ }
         }
@@ -306,7 +318,7 @@
 
     private void HandleStatusUpdate(ModelStatusUpdateDto update)
     {
-        if (update.DuelId != DuelId) return;
+        if (update.DuelId != _duelId) return;
 
         if (update.Side == "Left")
         {
@@ -367,7 +379,7 @@
     }
 
     // Local model status updates come directly from the JS worker (bypassing server SignalR)
-    private void HandleLocalStatusUpdate(string modelId, WebLlmStatusUpdate update)
+    private void HandleLocalStatusUpdate(ModelId modelId, WebLlmStatusUpdate update)
     {
         var isLeft = _leftModelId == modelId || (_leftStatus == DuelStatus.Initializing && _rightModelId != modelId);
 
@@ -442,14 +454,14 @@
 
     private void HandleDuelComplete(DuelDto dto)
     {
-        if (dto.DuelId != DuelId) return;
+        if (dto.DuelId != _duelId) return;
         _pollCts?.Cancel();
-        Nav.NavigateTo($"/arena/{DuelId}");
+        Nav.NavigateTo($"/arena/{_duelId}");
     }
 
     private void HandleStartLocalInference(StartLocalInferencePayload payload)
     {
-        if (payload.DuelId != DuelId) return;
+        if (payload.DuelId != _duelId) return;
         if (_runningLocalModels.Contains(payload.ModelId)) return;
 
         _runningLocalModels.Add(payload.ModelId);

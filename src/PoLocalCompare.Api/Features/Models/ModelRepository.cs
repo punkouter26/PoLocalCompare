@@ -17,7 +17,7 @@ public sealed class ModelRepository : IModelRepository
         _tableClient = tableServiceClient.GetTableClient(TableName);
     }
 
-    public async Task<Model?> GetByIdAsync(string modelId)
+    public async Task<Model?> GetByIdAsync(ModelId modelId)
     {
         try
         {
@@ -60,7 +60,7 @@ public sealed class ModelRepository : IModelRepository
         await _tableClient.UpdateEntityAsync(entity, ParseETag(model.ETag), TableUpdateMode.Replace);
     }
 
-    public async Task DeleteAsync(string modelId)
+    public async Task DeleteAsync(ModelId modelId)
     {
         try
         {
@@ -102,7 +102,7 @@ public sealed class ModelRepository : IModelRepository
     {
         var model = new Model
         {
-            ModelId = entity.RowKey,
+            ModelId = ModelId.FromOrDefault(entity.RowKey),
             DisplayName = entity.GetString("DisplayName") ?? string.Empty,
             ModelType = Enum.Parse<ModelType>(entity.GetString("ModelType") ?? "Local"),
             CurrentElo = entity.GetDouble("CurrentElo") ?? 1200,

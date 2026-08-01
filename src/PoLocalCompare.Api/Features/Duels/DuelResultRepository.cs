@@ -39,7 +39,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
         await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace);
     }
 
-    public async Task<DuelResult?> GetAsync(string duelId, string modelId)
+    public async Task<DuelResult?> GetAsync(DuelId duelId, ModelId modelId)
     {
         try
         {
@@ -52,7 +52,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
         }
     }
 
-    public async Task<IEnumerable<DuelResult>> GetByDuelIdAsync(string duelId)
+    public async Task<IEnumerable<DuelResult>> GetByDuelIdAsync(DuelId duelId)
     {
         var results = new List<DuelResult>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
@@ -63,7 +63,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
         return results;
     }
 
-    public async Task<IEnumerable<DuelResult>> GetByModelIdAsync(string modelId)
+    public async Task<IEnumerable<DuelResult>> GetByModelIdAsync(ModelId modelId)
     {
         var results = new List<DuelResult>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
@@ -111,8 +111,8 @@ public sealed class DuelResultRepository : IDuelResultRepository
 
         return new DuelResult
         {
-            DuelId = entity.PartitionKey,
-            ModelId = entity.RowKey,
+            DuelId = DuelId.FromOrDefault(entity.PartitionKey),
+            ModelId = ModelId.FromOrDefault(entity.RowKey),
             WarmUpDurationMs = entity.GetInt64("WarmUpDurationMs") ?? 0,
             GenerationDurationMs = entity.GetInt64("GenerationDurationMs") ?? 0,
             TotalDurationMs = entity.GetInt64("TotalDurationMs") ?? 0,

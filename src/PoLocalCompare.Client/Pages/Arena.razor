@@ -1,4 +1,4 @@
-@page "/arena/{DuelId}"
+@page "/arena/{DuelIdText}"
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
@@ -197,7 +197,13 @@
 </div>
 
 @code {
-    [Parameter] public string DuelId { get; set; } = string.Empty;
+    // Blazor route parameters must be one of its supported primitive types, so the route binds
+    // text and it is narrowed to DuelId once, here, instead of at every call site.
+    [Parameter] public string DuelIdText { get; set; } = string.Empty;
+
+    private DuelId _duelId;
+
+    protected override void OnParametersSet() => _duelId = DuelId.From(DuelIdText);
 
     private DuelDto? _duel;
     private DuelResultDto? _leftResult;
@@ -256,7 +262,7 @@
 
         try
         {
-            _duel = await ApiClient.GetDuelAsync(DuelId);
+            _duel = await ApiClient.GetDuelAsync(_duelId);
             if (_duel is not null)
             {
                 _leftResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.LeftModelId);
@@ -270,7 +276,7 @@
                     _signalR.OnModelStatusUpdate += OnStatusUpdate;
                     _signalR.OnDuelComplete += OnDuelComplete;
                     _signalR.OnVerdictRecorded += OnVerdictRecorded;
-                    await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), DuelId);
+                    await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), _duelId);
                 }
                 // If verdict already recorded, restore state
                 if (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null)
@@ -340,7 +346,7 @@
 
         try
         {
-            var response = await ApiClient.RecordVerdictAsync(DuelId, new VerdictRequestDto { Verdict = verdict });
+            var response = await ApiClient.RecordVerdictAsync(_duelId, new VerdictRequestDto { Verdict = verdict });
             if (response is not null)
             {
                 _verdictRecorded = true;
@@ -443,7 +449,7 @@
     /// <summary>Re-reads the duel and adopts its verdict if one has landed. True when it had.</summary>
     private async Task<bool> RefreshVerdictFromServerAsync()
     {
-        var fresh = await ApiClient.GetDuelAsync(DuelId);
+        var fresh = await ApiClient.GetDuelAsync(_duelId);
         if (fresh is null || fresh.Verdict == DuelVerdict.Pending || fresh.WinnerModelId is null)
             return false;
 
@@ -521,7 +527,7 @@
     private void OnDuelComplete(DuelDto completedDuel)
     {
         _duelStillRunning = false;
-        var duelId = DuelId;
+        var duelId = _duelId;
         InvokeAsync((Func<Task>)(async () =>
         {
             _duel = await ApiClient.GetDuelAsync(duelId);

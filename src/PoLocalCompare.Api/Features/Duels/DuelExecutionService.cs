@@ -13,13 +13,13 @@ namespace PoLocalCompare.Api.Features.Duels;
 internal static partial class DuelExecutionLog
 {
     [LoggerMessage(EventId = 1100, Level = LogLevel.Warning, Message = "Duel {DuelId} not found for execution.")]
-    public static partial void DuelNotFound(ILogger logger, string duelId);
+    public static partial void DuelNotFound(ILogger logger, DuelId duelId);
 
     [LoggerMessage(EventId = 1101, Level = LogLevel.Error, Message = "One or both models not found for duel {DuelId}.")]
-    public static partial void ModelsNotFound(ILogger logger, string duelId);
+    public static partial void ModelsNotFound(ILogger logger, DuelId duelId);
 
     [LoggerMessage(EventId = 1102, Level = LogLevel.Error, Message = "Duel execution failed for {DuelId}.")]
-    public static partial void ExecutionFailed(ILogger logger, Exception ex, string duelId);
+    public static partial void ExecutionFailed(ILogger logger, Exception ex, DuelId duelId);
 }
 
 public sealed class DuelExecutionService
@@ -44,7 +44,7 @@ public sealed class DuelExecutionService
         _taskQueue = taskQueue;
     }
 
-    public Task EnqueueAsync(string duelId)
+    public Task EnqueueAsync(DuelId duelId)
     {
         // Queue the execution task for reliable background processing
         _taskQueue.QueueBackgroundWork(async ct =>
@@ -55,7 +55,7 @@ public sealed class DuelExecutionService
         return Task.CompletedTask;
     }
 
-    private async Task ExecuteAsync(IServiceProvider services, string duelId, CancellationToken cancellationToken)
+    private async Task ExecuteAsync(IServiceProvider services, DuelId duelId, CancellationToken cancellationToken)
     {
         var duelRepo = services.GetRequiredService<IDuelRepository>();
         var modelRepo = services.GetRequiredService<IModelRepository>();
@@ -142,7 +142,7 @@ public sealed class DuelExecutionService
     }
 
     private async Task RunModelAsync(
-        string duelId,
+        DuelId duelId,
         Model model,
         string side,
         string promptFull,
@@ -216,7 +216,7 @@ public sealed class DuelExecutionService
     }
 
     private async Task<DuelResult> WaitForLocalModelResultAsync(
-        string duelId,
+        DuelId duelId,
         Model model,
         string side,
         CancellationToken cancellationToken)
@@ -275,8 +275,8 @@ public sealed class DuelExecutionService
     }
 
     private Task SendStatusAsync(
-        string duelId,
-        string modelId,
+        DuelId duelId,
+        ModelId modelId,
         string side,
         DuelStatus status,
         long elapsedMs,

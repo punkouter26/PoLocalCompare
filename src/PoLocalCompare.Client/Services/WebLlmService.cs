@@ -32,10 +32,10 @@ public sealed class WebLlmService : IAsyncDisposable
     /// <summary>Starts inference via the WebLLM Web Worker and reports status updates.
     /// Multiple modelIds can run concurrently.</summary>
     public async IAsyncEnumerable<WebLlmStatusUpdate> StartInferenceAsync(
-        string modelId,
+        ModelId modelId,
         string webLlmModelId,
         string prompt,
-        string duelId,
+        DuelId duelId,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         _selfRef ??= DotNetObjectReference.Create(this);
@@ -57,7 +57,7 @@ public sealed class WebLlmService : IAsyncDisposable
     }
 
     /// <summary>Returns the full result payload (including HTML) after inference completes.</summary>
-    public Task<DuelResultPayload?> GetResultAsync(string modelId, CancellationToken cancellationToken = default)
+    public Task<DuelResultPayload?> GetResultAsync(ModelId modelId, CancellationToken cancellationToken = default)
     {
         if (_sessions.TryGet(modelId, out var session))
             return session.CompletionSource.Task.WaitAsync(cancellationToken)
@@ -66,8 +66,10 @@ public sealed class WebLlmService : IAsyncDisposable
     }
 
     /// <summary>Fired on every JS status tick so Processing.razor can update UI directly for local models.</summary>
-    public event Action<string, WebLlmStatusUpdate>? OnStatusUpdate;
+    public event Action<ModelId, WebLlmStatusUpdate>? OnStatusUpdate;
 
+    // The three Receive* callbacks are invoked from webllm-worker.js, so their modelId arrives
+    // as a raw JS string; it is narrowed to ModelId here, at the interop boundary.
     [JSInvokable]
     public void ReceiveStatusUpdate(string modelId, string status, int tokenCount, long elapsedMs,
         string? detail = null,
@@ -78,15 +80,16 @@ public sealed class WebLlmService : IAsyncDisposable
         var update = new WebLlmStatusUpdate(status, tokenCount, elapsedMs, null, detail,
             htmlTagCount, openTagDepth, styleRuleCount, repetitionScore,
             prefillSpeedTps > 0 ? prefillSpeedTps : null, cacheHit, htmlPreview);
-        if (_sessions.TryGet(modelId, out var session))
+        var id = ModelId.From(modelId);
+        if (_sessions.TryGet(id, out var session))
             session.Channel.Writer.TryWrite(update);
-        OnStatusUpdate?.Invoke(modelId, update);
+        OnStatusUpdate?.Invoke(id, update);
     }
 
     [JSInvokable]
     public void ReceiveComplete(string modelId, string htmlOutput, int tokenCount, long totalMs, long warmUpMs)
     {
-        if (_sessions.TryGet(modelId, out var session))
+        if (_sessions.TryGet(ModelId.From(modelId), out var session))
         {
             session.Channel.Writer.TryWrite(new WebLlmStatusUpdate("Done", tokenCount, totalMs, null));
             session.CompletionSource.TrySetResult(new DuelResultPayload(htmlOutput, tokenCount, totalMs, warmUpMs));
@@ -96,7 +99,7 @@ public sealed class WebLlmService : IAsyncDisposable
     [JSInvokable]
     public void ReceiveError(string modelId, string reason)
     {
-        if (_sessions.TryGet(modelId, out var session))
+        if (_sessions.TryGet(ModelId.From(modelId), out var session))
         {
             session.Channel.Writer.TryWrite(new WebLlmStatusUpdate("Failed", 0, 0, reason));
             session.CompletionSource.TrySetException(new InvalidOperationException(reason));

@@ -323,7 +323,7 @@ public static class ModelsEndpoints
         .Produces<ModelDownloadStatusDto>();
 
         group.MapPatch("/{modelId}", async (
-            [FromRoute] string modelId,
+            [FromRoute] ModelId modelId,
             [FromBody] PatchModelRequest request,
             [FromServices] IModelRepository repository) =>
         {
@@ -358,7 +358,7 @@ public static class ModelsEndpoints
         .Produces(StatusCodes.Status404NotFound);
 
         group.MapDelete("/{modelId}", async (
-            [FromRoute] string modelId,
+            [FromRoute] ModelId modelId,
             [FromServices] IModelRepository repository) =>
         {
             var model = await repository.GetByIdAsync(modelId);

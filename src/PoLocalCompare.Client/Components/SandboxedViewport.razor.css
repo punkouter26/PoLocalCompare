@@ -1,0 +1,110 @@
+/* Extracted from a <style> block inside SandboxedViewport.razor — scoped, so these rules
+   no longer leak to every component on the page. */
+
+.sandboxed-viewport {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #0a0a0a;
+    transition: filter 0.4s ease, opacity 0.4s ease;
+    height: 100%;
+}
+
+.sandboxed-viewport--loser {
+    filter: grayscale(80%) brightness(0.5);
+    opacity: 0.6;
+}
+
+.sandboxed-viewport__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    background: #111;
+    border-bottom: 1px solid #333;
+}
+
+.sandboxed-viewport__model-name {
+    color: #e5e7eb;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sandboxed-viewport__score {
+    margin-left: auto;
+    color: #93c5fd;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border: 1px solid #1d4ed8;
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    background: rgba(30, 64, 175, 0.18);
+}
+
+.sandboxed-viewport__badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.sandboxed-viewport__badge--loser {
+    background: #ef4444;
+    color: #fff;
+}
+
+.sandboxed-viewport__badge--winner {
+    background: #22c55e;
+    color: #000;
+}
+
+.sandboxed-viewport__empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: #6b7280;
+    font-size: 0.875rem;
+    font-style: italic;
+    min-height: 200px;
+}
+
+.sandboxed-viewport__diagnostics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.4rem 0.65rem;
+    border-bottom: 1px solid #2a2a2a;
+    background: #0f172a;
+}
+
+.sandboxed-viewport__diagnostic-item {
+    font-size: 0.72rem;
+    color: #fde68a;
+    border: 1px solid #854d0e;
+    background: rgba(133, 77, 14, 0.2);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+}
+
+.sandboxed-viewport__empty-icon {
+    font-size: 2rem;
+    opacity: 0.4;
+}
+
+.sandboxed-viewport__frame {
+    width: 100%;
+    flex: 1;
+    border: none;
+    min-height: 500px;
+    background: #fff;
+}

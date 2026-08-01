@@ -15,7 +15,7 @@ public sealed class SignalRDuelClient : IAsyncDisposable
     /// <summary>Raised when the auto-judge decides a duel nobody picked in time.</summary>
     public event Action<VerdictResponseDto>? OnVerdictRecorded;
 
-    public async Task ConnectAsync(string baseUrl, string duelId, CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(string baseUrl, DuelId duelId, CancellationToken cancellationToken = default)
     {
         _connection = new HubConnectionBuilder()
             .WithUrl($"{baseUrl.TrimEnd('/')}/hubs/duel")
@@ -48,4 +48,4 @@ public sealed class SignalRDuelClient : IAsyncDisposable
     }
 }
 
-public sealed record StartLocalInferencePayload(string DuelId, string ModelId, string Side, string? WebLlmModelId = null);
+public sealed record StartLocalInferencePayload(DuelId DuelId, ModelId ModelId, string Side, string? WebLlmModelId = null);

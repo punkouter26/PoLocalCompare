@@ -29,7 +29,7 @@ public static class LeaderboardEndpoints
         .Produces<IReadOnlyList<LeaderboardEntryDto>>();
 
         group.MapGet("/{modelId}/killlist", async (
-            string modelId,
+            ModelId modelId,
             [FromServices] GetKillListHandler handler) =>
         {
             var rows = await handler.HandleAsync(modelId);

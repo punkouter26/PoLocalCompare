@@ -28,24 +28,25 @@ Blazor WASM client, so there is one process, not two.
 
 ### Tests
 
-Two projects, each with slices in folders. Unit tests need nothing; everything else needs Docker
-(Testcontainers spins Azurite) and the UI slice needs a running app.
+Four projects, one per tier. Unit needs nothing; Integration and E2EAPI need Docker
+(Testcontainers spins Azurite) and E2EUI needs a running app.
 
 ```powershell
-dotnet test tests/PoLocalCompare.Tests                                    # unit + integration
-dotnet test tests/PoLocalCompare.Tests --filter FullyQualifiedName~Unit   # unit only, no Docker
-dotnet test tests/PoLocalCompare.Tests.E2E --filter Category!=UI          # API journeys
-dotnet test tests/PoLocalCompare.Tests.E2E --filter Category=UI           # Playwright (app must be running)
-dotnet test tests/PoLocalCompare.Tests --filter FullyQualifiedName~EloCalculatorTests.Calculate_WinForA_AIncreasesAndBDecreases
+dotnet test tests/PoLocalCompare.Unit          # pure logic, no Docker
+dotnet test tests/PoLocalCompare.Integration   # Testcontainers Azurite
+dotnet test tests/PoLocalCompare.E2EAPI        # API journeys
+dotnet test tests/PoLocalCompare.E2EUI         # Playwright (app must be running)
+dotnet test tests/PoLocalCompare.Unit --filter FullyQualifiedName~EloCalculatorTests.Calculate_WinForA_AIncreasesAndBDecreases
 ```
 
 UI tests run **headed Chrome by default** across a mobile and a desktop viewport; set `HEADLESS=1`
 to suppress windows and `BASE_URL` to point elsewhere. Browsers install via
-`pwsh tests/PoLocalCompare.Tests.E2E/bin/Debug/net10.0/playwright.ps1 install chromium`.
+`pwsh tests/PoLocalCompare.E2EUI/bin/Debug/net10.0/playwright.ps1 install chromium`.
 
-Tests are **never run in CI** — [.github/workflows/deploy.yml](.github/workflows/deploy.yml) only
-publishes and deploys. That makes the E2E suites easy to leave stale; run them locally after touching
-UI markup or the HTTP surface.
+Unit, Integration and E2EAPI **gate the deploy** — [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
+runs them in a `test` job that `build` depends on. **E2EUI is not in CI** (real headed Chrome, WebGPU
+paths a runner has no GPU for), so it is the one suite that goes stale silently; run it locally after
+touching UI markup.
 
 ## Architecture
 
@@ -109,8 +110,12 @@ pipelines; adding a per-attempt timeout will abort SSE streams.
 - UI targets **WCAG 2.2 Level AA**: keyboard-operable custom controls, `:focus-visible` ring, 24×24
   minimum target size, `role="status"` for live updates, `aria-hidden` on decorative glyphs. Colour
   contrast is not automatically checked — verify new palette tokens by hand.
-- Styling should be scoped `.razor.css` with design tokens. Known debt: inline `style=` attributes and
-  `<style>` blocks remain in `ModelCard.razor`, `SandboxedViewport.razor`, and `Leaderboard.razor`.
+- Styling is scoped `.razor.css` + design tokens; there are **no** inline `style=` attributes or
+  `<style>` blocks left. A genuinely dynamic value (a progress width, an animation stagger) is passed
+  as a CSS custom property — `style="--fill: 42%"` — and consumed by a rule in the stylesheet, so the
+  styling itself stays in CSS. Colour tokens are declared for light, for `prefers-color-scheme: dark`,
+  and again under `:root[data-theme=...]`; the `[data-theme]` blocks must stay last or the header's
+  theme toggle cannot override the OS preference.
 
 ## Known stale documentation
 

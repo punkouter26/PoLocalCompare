@@ -2,7 +2,7 @@
     max-width: 880px;
     margin: 0 auto;
     padding: 2rem 1.25rem 6rem;
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
@@ -25,12 +25,12 @@
     font-weight: 700;
     margin: 0;
     letter-spacing: -0.02em;
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 .wizard__subtitle {
     margin: 0;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     font-size: 1rem;
 }
 
@@ -43,19 +43,19 @@
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
-    border: 1px solid var(--oled-border);
-    background: var(--oled-surface);
+    border: 1px solid var(--border);
+    background: var(--surface-1);
     white-space: nowrap;
 }
 
 .wizard__health--ok {
-    color: var(--oled-green);
+    color: var(--accent-green);
     border-color: rgba(45, 220, 132, 0.4);
     background: rgba(45, 220, 132, 0.08);
 }
 
 .wizard__health--warn {
-    color: var(--oled-yellow);
+    color: var(--accent-yellow);
     border-color: rgba(234, 179, 8, 0.4);
     background: rgba(234, 179, 8, 0.08);
 }
@@ -63,7 +63,7 @@
 .wizard__health-warning {
     margin: 0.75rem 0 0;
     padding: 0.6rem 0.85rem;
-    color: var(--oled-yellow);
+    color: var(--accent-yellow);
     background: rgba(234, 179, 8, 0.08);
     border: 1px solid rgba(234, 179, 8, 0.3);
     border-radius: var(--radius-md);
@@ -90,16 +90,16 @@
     font: inherit;
     text-align: left;
     padding: 0.65rem 0.85rem;
-    border: 1px solid var(--oled-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     background: rgba(9, 12, 20, 0.55);
     cursor: pointer;
     transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
 .wizard__step:hover {
-    border-color: var(--oled-text-muted);
+    border-color: var(--text-muted);
 }
 
 .wizard__step-num {
@@ -112,7 +112,7 @@
     font-size: 0.78rem;
     font-weight: 700;
     background: #17213a;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     transition: background var(--transition-fast), color var(--transition-fast);
 }
 
@@ -123,23 +123,23 @@
 
 .wizard__step--active {
     border-color: rgba(18, 184, 207, 0.5);
-    color: var(--oled-text);
+    color: var(--text);
     background: rgba(18, 184, 207, 0.06);
 }
 
 .wizard__step--active .wizard__step-num {
     background: rgba(18, 184, 207, 0.25);
-    color: var(--oled-cyan);
+    color: var(--accent-cyan);
 }
 
 .wizard__step--done {
     border-color: rgba(45, 220, 132, 0.4);
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 .wizard__step--done .wizard__step-num {
     background: rgba(45, 220, 132, 0.22);
-    color: var(--oled-green);
+    color: var(--accent-green);
 }
 
 @media (max-width: 520px) {
@@ -150,7 +150,7 @@
 .wizard__panel {
     margin-bottom: 1.5rem;
     padding: 1.25rem 1.25rem 1.5rem;
-    border: 1px solid var(--oled-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: rgba(8, 11, 18, 0.6);
 }
@@ -165,7 +165,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--oled-cyan);
+    color: var(--accent-cyan);
     margin-bottom: 0.35rem;
 }
 
@@ -173,19 +173,19 @@
     font-size: 1.15rem;
     font-weight: 600;
     margin: 0 0 0.25rem;
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 .wizard__panel-hint {
     margin: 0;
     font-size: 0.85rem;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
 }
 
 .wizard__hint {
     margin: 0;
     font-size: 0.85rem;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
 }
 
 /* ── Slots ──────────────────────────────────────────────────────────── */
@@ -204,7 +204,7 @@
     gap: 0.25rem;
     padding: 0.85rem 1rem;
     background: #070b12;
-    border: 1px solid var(--oled-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
     min-height: 4rem;
     transition: border-color var(--transition-fast), background var(--transition-fast);
@@ -228,7 +228,7 @@
 
 .wizard__slot-tag--left {
     background: rgba(18, 184, 207, 0.18);
-    color: var(--oled-cyan);
+    color: var(--accent-cyan);
 }
 
 .wizard__slot-tag--right {
@@ -239,14 +239,14 @@
 .wizard__slot-name {
     font-size: 0.95rem;
     font-weight: 600;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .wizard__slot--set .wizard__slot-name {
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 .wizard__slot-vs {
@@ -277,19 +277,19 @@
     gap: 0.6rem;
     padding: 0.35rem 0.1rem;
     margin: 0.85rem 0 0.5rem;
-    border-bottom: 1px solid var(--oled-border, #2a2a3a);
+    border-bottom: 1px solid var(--border, var(--border));
 }
 
 .wizard__group-name {
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.05em;
-    color: var(--oled-text, #e8e8e8);
+    color: var(--text, var(--text));
 }
 
 .wizard__group-count {
     font-size: 0.72rem;
-    color: var(--oled-text-muted, #8a8a9a);
+    color: var(--text-muted, var(--text-muted));
 }
 
 .wizard__grid {
@@ -309,7 +309,7 @@
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
-    background: var(--oled-red);
+    background: var(--accent-red);
     color: #fff;
     font-size: 0.65rem;
     font-weight: 700;
@@ -333,7 +333,7 @@
 .wizard__popover-text {
     margin: 0 0 0.65rem;
     font-size: 0.9rem;
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 .wizard__popover-actions {
@@ -351,7 +351,7 @@
     font-family: inherit;
     font-size: 0.95rem;
     line-height: 1.5;
-    color: var(--oled-text);
+    color: var(--text);
     background: #070b12;
     border: 1px solid #324056;
     border-radius: var(--radius-md);
@@ -361,7 +361,7 @@
 
 .wizard__textarea:focus {
     outline: none;
-    border-color: var(--oled-cyan);
+    border-color: var(--accent-cyan);
     box-shadow: 0 0 0 3px rgba(18, 184, 207, 0.18);
 }
 
@@ -379,7 +379,7 @@
     align-items: baseline;
     margin-top: 0.4rem;
     font-size: 0.75rem;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
 }
 
 .wizard__textarea-counter {
@@ -387,12 +387,12 @@
 }
 
 .wizard__textarea-counter--warn {
-    color: var(--oled-yellow);
+    color: var(--accent-yellow);
     font-weight: 600;
 }
 
 .wizard__textarea-hint {
-    color: var(--oled-yellow);
+    color: var(--accent-yellow);
 }
 
 /* ── Compare CTA ────────────────────────────────────────────────────── */
@@ -429,9 +429,9 @@
 }
 
 .wizard__btn--primary {
-    background: linear-gradient(135deg, var(--oled-green), #25b072);
+    background: linear-gradient(135deg, var(--accent-green), #25b072);
     color: #000;
-    border-color: var(--oled-green);
+    border-color: var(--accent-green);
 }
 
 .wizard__btn--primary:hover:not(:disabled) {
@@ -440,25 +440,25 @@
 }
 
 .wizard__btn--primary:disabled {
-    background: #1f2937;
-    color: var(--oled-text-muted);
-    border-color: var(--oled-border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border-color: var(--border);
     cursor: not-allowed;
     opacity: 0.7;
 }
 
 .wizard__btn--ghost {
     background: transparent;
-    color: var(--oled-text);
-    border-color: var(--oled-border);
+    color: var(--text);
+    border-color: var(--border);
 }
 
 .wizard__btn--ghost:hover {
-    border-color: var(--oled-text-muted);
+    border-color: var(--text-muted);
 }
 
 .wizard__error {
-    color: var(--oled-red);
+    color: var(--accent-red);
     font-size: 0.85rem;
 }
 
@@ -478,19 +478,19 @@
     margin: 0;
     font-size: 0.78rem;
     font-weight: 700;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.1em;
 }
 
 .wizard__recent-link {
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     font-size: 0.8rem;
     text-decoration: none;
 }
 
 .wizard__recent-link:hover {
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 .wizard__recent-list {
@@ -509,16 +509,16 @@
     justify-content: space-between;
     gap: 0.5rem;
     padding: 0.6rem 0.9rem;
-    border: 1px solid var(--oled-border);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    background: var(--oled-surface);
+    background: var(--surface-1);
     text-decoration: none;
     color: inherit;
     transition: border-color var(--transition-fast);
 }
 
 .wizard__recent-item:hover {
-    border-color: var(--oled-text-muted);
+    border-color: var(--text-muted);
 }
 
 .wizard__recent-item--pending {
@@ -527,7 +527,7 @@
 
 .wizard__recent-prompt {
     font-size: 0.85rem;
-    color: var(--oled-text);
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -537,7 +537,7 @@
 
 .wizard__recent-meta {
     font-size: 0.78rem;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     white-space: nowrap;
 }
 
@@ -548,7 +548,7 @@
 }
 
 .wizard__recent-winner {
-    color: var(--oled-green);
+    color: var(--accent-green);
     font-weight: 600;
 }
 
@@ -561,7 +561,7 @@
 .wizard__onboard {
     margin-top: 2rem;
     padding: 1.25rem;
-    border: 1px dashed var(--oled-border);
+    border: 1px dashed var(--border);
     border-radius: var(--radius-lg);
     background: rgba(8, 11, 18, 0.4);
     text-align: center;
@@ -571,13 +571,13 @@
     margin: 0 0 0.4rem;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--oled-text);
+    color: var(--text);
 }
 
 .wizard__onboard-hint {
     margin: 0 0 0.85rem;
     font-size: 0.85rem;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
 }
 
 /* ── Sticky CTA bar (Finding #7) ────────────────────────────────────── */
@@ -601,7 +601,7 @@
 .wizard__sticky-text {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--oled-text);
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -611,4 +611,11 @@
     .wizard__sticky-text {
         font-size: 0.78rem;
     }
+}
+/* Loading placeholders in the model grid. Only the stagger is dynamic — the markup passes
+   it as --stagger; everything else lives here rather than in an inline style. */
+.wizard__skeleton {
+    height: 6.5rem;
+    border-radius: var(--radius-md);
+    animation-delay: var(--stagger, 0ms);
 }

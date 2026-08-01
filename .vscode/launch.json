@@ -52,7 +52,7 @@
       "type": "pwa-msedge",
       "request": "launch",
       "url": "https://localhost:5001",
-      "webRoot": "${workspaceFolder}/src/Client/PoLocalCompare.Client/wwwroot",
+      "webRoot": "${workspaceFolder}/src/PoLocalCompare.Client/wwwroot",
       "presentation": {
         "hidden": true
       }

@@ -6,10 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PoLocalCompare</title>
     <base href="/" />
-    <link href="_content/Radzen.Blazor/css/dark.css" rel="stylesheet" />
+    <link id="radzen-theme" href="_content/Radzen.Blazor/css/dark.css" rel="stylesheet" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="PoLocalCompare.Client.styles.css" rel="stylesheet" />
+    <!-- Loaded in <head>, before first paint: applying the theme after the body renders
+         flashes the wrong palette on every navigation. -->
+    <script src="js/theme.js"></script>
     <script type="importmap"></script>
 </head>
 
@@ -22,15 +25,15 @@
         <div class="loading-progress-text"></div>
     </div>
 
-    <div id="boot-timeout-ui" hidden style="max-width: 720px; margin: 1rem auto; padding: 1rem; border: 1px solid #5f1f1f; background: #1b0f0f; color: #ffdada; border-radius: 8px; font-family: ui-sans-serif, system-ui, sans-serif;">
-        <h2 style="margin: 0 0 0.5rem; font-size: 1rem;">Client startup is taking longer than expected</h2>
-        <p id="boot-timeout-message" style="margin: 0 0 0.75rem; line-height: 1.4;">
+    <div id="boot-timeout-ui" hidden>
+        <h2>Client startup is taking longer than expected</h2>
+        <p id="boot-timeout-message">
             The app is still loading. If this persists, check the diagnostics page and refresh.
         </p>
-        <p style="margin: 0;">
-            <a href="/diag" style="color: #93c5fd;">Open diagnostics</a>
-            <span style="opacity: 0.6;"> · </span>
-            <a href="/" style="color: #93c5fd;">Retry</a>
+        <p>
+            <a href="/diag">Open diagnostics</a>
+            <span class="boot-timeout__sep"> · </span>
+            <a href="/">Retry</a>
         </p>
     </div>
 

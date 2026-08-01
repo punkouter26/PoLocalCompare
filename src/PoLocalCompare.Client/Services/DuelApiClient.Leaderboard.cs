@@ -10,7 +10,7 @@ public sealed partial class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<LeaderboardEntryDto>>($"/api/leaderboard?sortBy={Uri.EscapeDataString(sortBy)}", JsonOptions);
     }
 
-    public async Task<IReadOnlyList<HeadToHeadDto>?> GetKillListAsync(string modelId)
+    public async Task<IReadOnlyList<HeadToHeadDto>?> GetKillListAsync(ModelId modelId)
     {
         return await _http.GetFromJsonAsync<IReadOnlyList<HeadToHeadDto>>($"/api/leaderboard/{modelId}/killlist", JsonOptions);
     }

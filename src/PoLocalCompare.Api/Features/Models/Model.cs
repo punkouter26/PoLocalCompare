@@ -5,7 +5,7 @@ namespace PoLocalCompare.Api.Features.Models;
 
 public sealed class Model
 {
-    public string ModelId { get; init; }
+    public ModelId ModelId { get; init; }
     public string DisplayName { get; set; }
     public ModelType ModelType { get; init; }
     public double CurrentElo { get; set; }
@@ -28,7 +28,7 @@ public sealed class Model
     public string? ETag { get; set; }
 
     public Model(
-        string modelId,
+        ModelId modelId,
         string displayName,
         ModelType modelType,
         double? tdpWatts = null,
@@ -78,7 +78,6 @@ public sealed class Model
     // Parameterless constructor for Azure Table Storage deserialization
     public Model()
     {
-        ModelId = string.Empty;
         DisplayName = string.Empty;
     }
 }

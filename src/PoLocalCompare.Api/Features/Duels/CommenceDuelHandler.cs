@@ -34,7 +34,7 @@ public sealed class CommenceDuelHandler(
         var rightModel = await modelRepository.GetByIdAsync(command.RightModelId)
             ?? throw new KeyNotFoundException($"Model '{command.RightModelId}' not found.");
 
-        var duelId = Ulid.NewUlid().ToString();
+        var duelId = DuelId.New();
         var promptFull = command.PromptText + CdnSuffix;
 
         var duel = new Duel(

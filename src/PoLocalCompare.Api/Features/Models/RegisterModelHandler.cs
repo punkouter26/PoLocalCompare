@@ -21,7 +21,7 @@ public sealed class RegisterModelHandler
         if (existing.Any(m => string.Equals(m.DisplayName, command.DisplayName, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException($"A model named '{command.DisplayName}' is already registered.");
 
-        var modelId = Ulid.NewUlid().ToString();
+        var modelId = ModelId.New();
 
         var model = new Model(
             modelId,

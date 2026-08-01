@@ -8,12 +8,12 @@
 main {
     flex: 1;
     background-color: #000000;
-    color: #f0f0f0;
+    color: var(--text);
 }
 
 article.content {
     background-color: #000000;
-    color: #f0f0f0;
+    color: var(--text);
     padding-top: 1rem;
 }
 

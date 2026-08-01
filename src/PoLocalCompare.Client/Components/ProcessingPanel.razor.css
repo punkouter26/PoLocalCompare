@@ -1,6 +1,6 @@
 .processing-panel {
-    background: #0a0a0a;
-    border: 1px solid #333;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 1rem;
     min-height: 160px;
@@ -9,9 +9,9 @@
     gap: 0.6rem;
 }
 
-.processing-panel--generating { border-color: #eab308; }
-.processing-panel--done       { border-color: #22c55e; }
-.processing-panel--failed     { border-color: #ef4444; }
+.processing-panel--generating { border-color: var(--accent-yellow); }
+.processing-panel--done       { border-color: var(--accent-green); }
+.processing-panel--failed     { border-color: var(--accent-red); }
 
 .processing-panel__header {
     display: flex;
@@ -38,7 +38,7 @@
 }
 
 .processing-panel__model-id {
-    color: #4b5563;
+    color: var(--text-muted);
     font-size: 0.7rem;
     font-family: monospace;
     white-space: nowrap;
@@ -52,7 +52,7 @@
     gap: 0.4rem;
 }
 
-.processing-panel__side { color: #9ca3af; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.processing-panel__side { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
 
 .badge {
     font-size: 0.68rem;
@@ -68,7 +68,7 @@
 .badge--local  { background: #0f2a1a; color: #34d399; border: 1px solid #065f46; }
 .badge--service { background: #10271f; color: #2dd4bf; border: 1px solid #0f766e; }
 .badge--remote { background: #0d1f3a; color: #60a5fa; border: 1px solid #1d4ed8; }
-.badge--gpu    { background: #0a2a0a; color: #22c55e; border: 1px solid #15803d; }
+.badge--gpu    { background: #0a2a0a; color: var(--accent-green); border: 1px solid #15803d; }
 .badge--cpu    { background: #1a1a2e; color: #93c5fd; border: 1px solid #1d4ed8; }
 
 @keyframes pulse-stall {
@@ -85,22 +85,22 @@
 .processing-panel__status-label {
     font-weight: 600;
     font-size: 1.05rem;
-    color: #e5e7eb;
+    color: var(--text);
     display: flex;
     align-items: center;
     gap: 0.4rem;
 }
 
-.processing-panel--generating .processing-panel__status-label { color: #eab308; }
-.processing-panel--done       .processing-panel__status-label { color: #22c55e; }
-.processing-panel--failed     .processing-panel__status-label { color: #ef4444; }
+.processing-panel--generating .processing-panel__status-label { color: var(--accent-yellow); }
+.processing-panel--done       .processing-panel__status-label { color: var(--accent-green); }
+.processing-panel--failed     .processing-panel__status-label { color: var(--accent-red); }
 
 .processing-panel__pulse {
     display: inline-block;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #eab308;
+    background: var(--accent-yellow);
     animation: pulse-dot 1s ease-in-out infinite;
 }
 
@@ -109,10 +109,10 @@
     50%       { opacity: 0.3; transform: scale(0.6); }
 }
 
-.processing-panel__tokens { color: #9ca3af; font-size: 0.88rem; }
+.processing-panel__tokens { color: var(--text-muted); font-size: 0.88rem; }
 
 .processing-panel__detail {
-    color: #6b7280;
+    color: var(--text-muted);
     font-size: 0.78rem;
     font-style: italic;
     white-space: nowrap;
@@ -132,25 +132,26 @@
 
 .processing-panel__progress-track {
     height: 4px;
-    background: #1f2937;
+    background: var(--surface-2);
     border-radius: 2px;
     overflow: hidden;
 }
 
 .processing-panel__progress-fill {
+    width: var(--fill, 0%);
     height: 100%;
     border-radius: 2px;
     transition: width 0.5s linear;
-    background: #374151;
+    background: var(--border);
 }
 
 .processing-panel__progress-fill--generating {
-    background: linear-gradient(90deg, #eab308, #f97316, #eab308);
+    background: linear-gradient(90deg, var(--accent-yellow), #f97316, var(--accent-yellow));
     background-size: 200% 100%;
     animation: progressShimmer 2s linear infinite;
 }
-.processing-panel__progress-fill--done       { background: #22c55e; }
-.processing-panel__progress-fill--failed     { background: #ef4444; }
+.processing-panel__progress-fill--done       { background: var(--accent-green); }
+.processing-panel__progress-fill--failed     { background: var(--accent-red); }
 
 @@keyframes progressShimmer {
     0%   { background-position: 100% 0; }
@@ -160,15 +161,16 @@
 /* Velocity pace bar (P2) */
 .processing-panel__pace-track {
     height: 2px;
-    background: #111827;
+    background: var(--surface-2);
     border-radius: 1px;
     overflow: hidden;
     margin-top: 2px;
 }
 
 .processing-panel__pace-fill {
+    width: var(--fill, 0%);
     height: 100%;
-    background: linear-gradient(90deg, #06b6d4, #22c55e);
+    background: linear-gradient(90deg, #06b6d4, var(--accent-green));
     border-radius: 1px;
     transition: width 0.5s ease-out;
 }
@@ -185,11 +187,11 @@
     gap: 0.1rem;
 }
 
-.processing-panel__metric--highlight .processing-panel__metric-value { color: #eab308; }
+.processing-panel__metric--highlight .processing-panel__metric-value { color: var(--accent-yellow); }
 .processing-panel__metric--danger    .processing-panel__metric-value { color: #f87171; }
 
 .processing-panel__metric-label {
-    color: #4b5563;
+    color: var(--text-muted);
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;

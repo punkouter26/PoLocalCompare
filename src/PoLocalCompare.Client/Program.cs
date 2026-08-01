@@ -27,6 +27,7 @@ try
 
     // ─── Phase 3 client services ─────────────────────────────────────────────────
     builder.Services.AddScoped<AudioService>();
+    builder.Services.AddScoped<ThemeService>();
     builder.Services.AddScoped<WebLlmService>();
     builder.Services.AddTransient<SignalRDuelClient>();
     await builder.Build().RunAsync();

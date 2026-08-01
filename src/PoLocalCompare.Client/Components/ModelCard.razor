@@ -7,15 +7,14 @@
 <div class="@_cardClass"
      role="button"
      tabindex="@(IsDisabled ? -1 : 0)"
-     aria-pressed="@IsSelected"
-     aria-disabled="@IsDisabled"
+     aria-pressed="@AriaPressed"
+     aria-disabled="@AriaDisabled"
      aria-label="@AriaLabel"
      @onclick="OnCardClick"
-     @onkeydown="OnCardKeyDown"
-     style="@_cardStyle">
+     @onkeydown="OnCardKeyDown">
     <div class="model-card__header">
         <span class="model-card__name">@Model.DisplayName</span>
-        <div style="display:flex;align-items:center;gap:0.4rem;">
+        <div class="model-card__badges">
             @if (Slot == "Left")
             {
                 <span class="model-card__slot-badge model-card__slot-badge--left" title="Left player">L</span>
@@ -53,18 +52,24 @@
     [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
 
-    private string _cardClass => IsSelected ? "model-card model-card--selected" : "model-card";
+    // Rendered as strings, not bools. Blazor treats a bool-valued attribute as an HTML boolean
+    // attribute and OMITS it when false — so an unselected card exposed no pressed state at
+    // all, failing SC 4.1.2.
+    private string AriaPressed => IsSelected ? "true" : "false";
 
-    private string _cardStyle
+    private string AriaDisabled => IsDisabled ? "true" : "false";
+
+    // Selected and disabled are expressed as classes so the whole appearance lives in
+    // ModelCard.razor.css; they used to be an inline style string, which is why the
+    // selected state needed !important to beat the stylesheet.
+    private string _cardClass
     {
         get
         {
-            // Dimming is owned by the caller's .wizard__card-disabled wrapper; only the
-            // cursor is set here so the two don't compound into an unreadable opacity.
-            var cursor = IsDisabled ? "cursor:not-allowed;" : "cursor:pointer;";
-            if (IsSelected)
-                return cursor + "border:2px solid #22c55e !important;box-shadow:0 0 0 2px rgba(34,197,94,0.4),0 0 24px rgba(34,197,94,0.2) !important;background:linear-gradient(135deg,rgba(34,197,94,0.08) 0%,#0a0a0a 100%) !important;";
-            return cursor;
+            var css = "model-card";
+            if (IsSelected) css += " model-card--selected";
+            if (IsDisabled) css += " model-card--disabled";
+            return css;
         }
     }
 
@@ -116,180 +121,3 @@
         return "Undisclosed";
     }
 }
-
-<style>
-    .model-card {
-        background: var(--oled-surface);
-        border: 1px solid var(--oled-border);
-        transition: all var(--transition-medium);
-        margin-bottom: 0.5rem;
-        border-radius: var(--radius-md);
-        position: relative;
-        overflow: hidden;
-        padding: 1rem;
-    }
-
-    .model-card::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        background: linear-gradient(180deg, var(--oled-green), var(--oled-cyan));
-        transform: scaleY(0);
-        transition: transform var(--transition-medium);
-    }
-
-    .model-card:hover:not(.model-card--selected) {
-        border-color: var(--oled-border-light);
-        transform: translateY(-2px) scale(1.01);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        background: var(--oled-surface-elevated);
-    }
-
-    .model-card:hover:not(.model-card--selected)::before {
-        transform: scaleY(0.3);
-    }
-
-    .model-card--selected {
-        border-color: var(--oled-green);
-        border-left: none;
-        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4), 0 0 24px rgba(34, 197, 94, 0.2);
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--oled-surface) 100%);
-        animation: borderGlow 3s ease-in-out infinite;
-    }
-
-    .model-card--selected::before {
-        transform: scaleY(1);
-    }
-
-    .model-card__slot-badge {
-        font-size: 0.7rem;
-        font-weight: 700;
-        width: 1.25rem;
-        height: 1.25rem;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        animation: scaleIn 0.3s var(--spring-bounce);
-    }
-
-    .model-card__slot-badge--left {
-        background: var(--oled-cyan);
-        color: #000;
-    }
-
-    .model-card__slot-badge--right {
-        background: #f59e0b;
-        color: #000;
-    }
-
-    .model-card__header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.35rem;
-    }
-
-    .model-card__name {
-        color: var(--oled-text);
-        font-weight: 600;
-        font-size: 1rem;
-    }
-
-    .model-card__badge {
-        font-size: 0.65rem;
-        padding: 0.2rem 0.45rem;
-        border-radius: var(--radius-sm);
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3em;
-    }
-
-    .model-card__badge::before {
-        content: 'o';
-        font-size: 0.6em;
-    }
-
-    .model-card__badge--local {
-        background: linear-gradient(135deg, #4c1d95, #7c3aed);
-        color: #fff;
-        box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
-    }
-    .model-card__badge--local::before { color: #c4b5fd; }
-
-    .model-card__badge--remote {
-        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
-        color: #fff;
-        box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
-    }
-    .model-card__badge--remote::before { color: #93c5fd; }
-
-    .model-card__badge--localservice {
-        background: linear-gradient(135deg, #0d9469, #06b6d4);
-        color: #fff;
-        box-shadow: 0 2px 8px rgba(13, 148, 105, 0.3);
-    }
-    .model-card__badge--localservice::before { color: #6ee7b7; }
-
-    .model-card__elo {
-        color: var(--oled-text);
-        font-size: 0.9rem;
-        margin-bottom: 0.25rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .model-card__stats {
-        color: var(--oled-text-muted);
-        font-size: 0.8rem;
-    }
-
-    .model-card__params {
-        color: var(--oled-text-muted);
-        font-size: 0.78rem;
-        margin-top: 0.15rem;
-    }
-
-    .model-card__params-value {
-        color: var(--oled-text);
-        font-weight: 600;
-    }
-
-    .model-card__pricing {
-        color: var(--oled-text-muted);
-        font-size: 0.75rem;
-        margin-top: 0.25rem;
-        opacity: 0.8;
-    }
-
-    .model-card__pricing-unit {
-        opacity: 0.6;
-        font-size: 0.7rem;
-    }
-    
-    /* Ripple effect on click */
-    .model-card::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 0;
-        height: 0;
-        background: radial-gradient(circle, rgba(34, 197, 94, 0.3) 0%, transparent 70%);
-        border-radius: 50%;
-        transform: translate(-50%, -50%);
-        transition: width 0.5s, height 0.5s;
-    }
-    
-    .model-card:active::after {
-        width: 300px;
-        height: 300px;
-    }
-</style>

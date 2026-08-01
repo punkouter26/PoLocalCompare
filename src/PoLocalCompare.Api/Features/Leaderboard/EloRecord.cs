@@ -3,24 +3,24 @@ namespace PoLocalCompare.Api.Features.Leaderboard;
 
 public sealed class EloRecord
 {
-    public string ModelId { get; init; }
+    public ModelId ModelId { get; init; }
     public string TimestampKey { get; init; }
-    public string DuelId { get; init; }
+    public DuelId DuelId { get; init; }
     public double EloAfter { get; init; }
     public double EloBefore { get; init; }
     public double EloShift { get; init; }
     public string Outcome { get; init; }
-    public string OpponentModelId { get; init; }
+    public ModelId OpponentModelId { get; init; }
     public double OpponentEloBefore { get; init; }
     public DateTimeOffset RecordedAt { get; init; }
 
     public EloRecord(
-        string modelId,
-        string duelId,
+        ModelId modelId,
+        DuelId duelId,
         double eloAfter,
         double eloBefore,
         string outcome,
-        string opponentModelId,
+        ModelId opponentModelId,
         double opponentEloBefore)
     {
         ModelId = modelId;
@@ -39,10 +39,7 @@ public sealed class EloRecord
     // Parameterless constructor for Azure Table Storage deserialization
     public EloRecord()
     {
-        ModelId = string.Empty;
         TimestampKey = string.Empty;
-        DuelId = string.Empty;
         Outcome = string.Empty;
-        OpponentModelId = string.Empty;
     }
 }

@@ -1,0 +1,195 @@
+/* Extracted from a <style> block inside ModelCard.razor. Scoped now, so these
+   .model-card rules can no longer leak into other components. */
+
+.model-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    transition: all var(--transition-medium);
+    margin-bottom: 0.5rem;
+    border-radius: var(--radius-md);
+    position: relative;
+    overflow: hidden;
+    padding: 1rem;
+}
+
+.model-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--accent-green), var(--accent-cyan));
+    transform: scaleY(0);
+    transition: transform var(--transition-medium);
+}
+
+.model-card:hover:not(.model-card--selected) {
+    border-color: var(--border-strong);
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    background: var(--surface-2);
+}
+
+.model-card:hover:not(.model-card--selected)::before {
+    transform: scaleY(0.3);
+}
+
+.model-card--selected {
+    border-color: var(--accent-green);
+    border-left: none;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4), 0 0 24px rgba(34, 197, 94, 0.2);
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--surface-1) 100%);
+    animation: borderGlow 3s ease-in-out infinite;
+}
+
+.model-card--selected::before {
+    transform: scaleY(1);
+}
+
+.model-card__slot-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    animation: scaleIn 0.3s var(--spring-bounce);
+}
+
+.model-card__slot-badge--left {
+    background: var(--accent-cyan);
+    color: #000;
+}
+
+.model-card__slot-badge--right {
+    background: #f59e0b;
+    color: #000;
+}
+
+.model-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+}
+
+.model-card__name {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.model-card__badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+}
+
+.model-card__badge::before {
+    content: 'o';
+    font-size: 0.6em;
+}
+
+.model-card__badge--local {
+    background: linear-gradient(135deg, #4c1d95, #7c3aed);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+.model-card__badge--local::before { color: #c4b5fd; }
+
+.model-card__badge--remote {
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
+}
+.model-card__badge--remote::before { color: #93c5fd; }
+
+.model-card__badge--localservice {
+    background: linear-gradient(135deg, #0d9469, #06b6d4);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(13, 148, 105, 0.3);
+}
+.model-card__badge--localservice::before { color: #6ee7b7; }
+
+.model-card__elo {
+    color: var(--text);
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.model-card__stats {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.model-card__params {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-top: 0.15rem;
+}
+
+.model-card__params-value {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.model-card__pricing {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    opacity: 0.8;
+}
+
+.model-card__pricing-unit {
+    opacity: 0.6;
+    font-size: 0.7rem;
+}
+
+/* Ripple effect on click */
+.model-card::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.3) 0%, transparent 70%);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.5s, height 0.5s;
+}
+
+.model-card:active::after {
+    width: 300px;
+    height: 300px;
+}
+
+/* Badge row in the card header — was an inline flex style. */
+.model-card__badges {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Cursor affordance. Dimming is owned by the caller's .wizard__card-disabled wrapper,
+   so it is deliberately not repeated here — the two would compound into an
+   unreadable opacity. */
+.model-card {
+    cursor: pointer;
+}
+
+.model-card--disabled {
+    cursor: not-allowed;
+}

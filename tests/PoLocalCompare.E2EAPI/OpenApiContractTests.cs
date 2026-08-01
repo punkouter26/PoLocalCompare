@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.Tests.E2E.Api;
+namespace PoLocalCompare.E2EAPI;
 
 /// <summary>
 /// Guards the documented API surface: the generated document must be OpenAPI 3.1

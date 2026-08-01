@@ -12,7 +12,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PoLocalCompare.Tests.Integration;
+using PoLocalCompare.Shared.Ids;
+
+namespace PoLocalCompare.Integration;
 
 /// <summary>
 /// Integration tests for leaderboard ranking, Green Score sort, and Kill List.
@@ -58,11 +60,11 @@ public sealed class LeaderboardTests : IAsyncLifetime
                     mockProxy
                         .Setup(p => p.RunInferenceAsync(
                             It.IsAny<Model>(),
-                            It.IsAny<string>(),
+                            It.IsAny<DuelId>(),
                             It.IsAny<string>(),
                             It.IsAny<Func<int, long, HtmlStreamStats?, Task>>(),
                             It.IsAny<CancellationToken>()))
-                        .ReturnsAsync(new DuelResult("id", "model")
+                        .ReturnsAsync(new DuelResult(DuelId.From("id"), ModelId.From("model"))
                         {
                             HtmlOutputRaw = "<html><body>Mock</body></html>",
                             TokenCount = 50,

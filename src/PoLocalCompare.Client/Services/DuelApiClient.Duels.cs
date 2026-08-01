@@ -13,21 +13,21 @@ public sealed partial class DuelApiClient
         return await response.Content.ReadFromJsonAsync<DuelDto>(JsonOptions);
     }
 
-    public async Task<VerdictResponseDto?> RecordVerdictAsync(string duelId, VerdictRequestDto request)
+    public async Task<VerdictResponseDto?> RecordVerdictAsync(DuelId duelId, VerdictRequestDto request)
     {
         var response = await _http.PostAsJsonAsync($"/api/duels/{duelId}/verdict", request, JsonOptions);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<VerdictResponseDto>(JsonOptions);
     }
 
-    public async Task<DuelDto?> GetDuelAsync(string duelId)
+    public async Task<DuelDto?> GetDuelAsync(DuelId duelId)
     {
         return await _http.GetFromJsonAsync<DuelDto>($"/api/duels/{duelId}", JsonOptions);
     }
 
     public async Task PostLocalResultAsync(
-        string duelId,
-        string modelId,
+        DuelId duelId,
+        ModelId modelId,
         string htmlOutputRaw,
         int tokenCount,
         long totalDurationMs,
@@ -57,7 +57,7 @@ public sealed partial class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<DuelSummaryDto>>(url, JsonOptions);
     }
 
-    public async Task<byte[]?> DownloadReportAsync(string duelId)
+    public async Task<byte[]?> DownloadReportAsync(DuelId duelId)
     {
         var response = await _http.GetAsync($"/api/duels/{duelId}/report");
         response.EnsureSuccessStatusCode();

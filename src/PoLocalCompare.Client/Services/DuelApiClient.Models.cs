@@ -15,7 +15,7 @@ public sealed partial class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<ModelAvailabilityDto>>("/api/models/availability", JsonOptions);
     }
 
-    public async Task<ModelDto?> PatchModelAsync(string modelId, string? displayName, string? apiEndpointRef)
+    public async Task<ModelDto?> PatchModelAsync(ModelId modelId, string? displayName, string? apiEndpointRef)
     {
         var body = new { displayName, apiEndpointRef };
         var response = await _http.PatchAsJsonAsync($"/api/models/{Uri.EscapeDataString(modelId)}", body, JsonOptions);

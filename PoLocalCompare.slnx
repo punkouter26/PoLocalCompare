@@ -2,12 +2,12 @@
   <Folder Name="/src/">
     <Project Path="src/PoLocalCompare.Api/PoLocalCompare.Api.csproj" />
     <Project Path="src/PoLocalCompare.Shared/PoLocalCompare.Shared.csproj" />
-  </Folder>
-  <Folder Name="/src/Client/">
-    <Project Path="src/Client/PoLocalCompare.Client/PoLocalCompare.Client.csproj" />
+    <Project Path="src/PoLocalCompare.Client/PoLocalCompare.Client.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/PoLocalCompare.Tests/PoLocalCompare.Tests.csproj" />
-    <Project Path="tests/PoLocalCompare.Tests.E2E/PoLocalCompare.Tests.E2E.csproj" />
+    <Project Path="tests/PoLocalCompare.Unit/PoLocalCompare.Unit.csproj" />
+    <Project Path="tests/PoLocalCompare.Integration/PoLocalCompare.Integration.csproj" />
+    <Project Path="tests/PoLocalCompare.E2EAPI/PoLocalCompare.E2EAPI.csproj" />
+    <Project Path="tests/PoLocalCompare.E2EUI/PoLocalCompare.E2EUI.csproj" />
   </Folder>
 </Solution>

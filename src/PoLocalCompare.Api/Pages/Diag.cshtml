@@ -118,57 +118,56 @@
         <a class="diag-header__back" href="/health">Health JSON</a>
     </div>
     <div class="diag-body">
-        @{
-            var tableHealthy = string.Equals(Model.TableStatus, "Healthy", StringComparison.OrdinalIgnoreCase);
-            var overallStatus = tableHealthy ? "Healthy" : "Degraded";
-            var statusChipClass = tableHealthy ? "diag-status-chip diag-status-chip--ok" : "diag-status-chip diag-status-chip--bad";
-        }
         <h1>Diagnostics</h1>
         <p class="diag-lead">
             Runtime observability snapshot for local troubleshooting. Use this page first when startup or middleware behavior looks inconsistent.
+            Connection states below come from the same health checks <a class="diag-header__back" href="/health">/health</a> reports, so the two always agree.
         </p>
 
         <div class="diag-summary">
             <div class="diag-summary__card">
                 <div class="diag-summary__label">Overall Status</div>
-                <div class="diag-summary__value @(tableHealthy ? "diag-summary__value--ok" : "diag-summary__value--bad")">@overallStatus</div>
+                <div class="diag-summary__value @(Model.IsHealthy ? "diag-summary__value--ok" : "diag-summary__value--bad")">@Model.OverallStatus</div>
             </div>
-            <div class="diag-summary__card">
-                <div class="diag-summary__label">Table Latency</div>
-                <div class="diag-summary__value @(Model.TableLatencyMs > 250 ? "diag-summary__value--warn" : "diag-summary__value--ok")">@Model.TableLatencyMs ms</div>
-            </div>
-            <div class="diag-summary__card">
-                <div class="diag-summary__label">Foundry Config</div>
-                <div class="diag-summary__value @(string.IsNullOrWhiteSpace(Model.FoundryEndpoint) ? "diag-summary__value--bad" : "diag-summary__value--ok")">
-                    @(string.IsNullOrWhiteSpace(Model.FoundryEndpoint) ? "Missing" : "Configured")
+            @foreach (var dep in Model.Dependencies)
+            {
+                var ok = string.Equals(dep.Status, "Healthy", StringComparison.OrdinalIgnoreCase);
+                var notConfigured = string.Equals(dep.Status, "NotConfigured", StringComparison.OrdinalIgnoreCase);
+                var valueClass = notConfigured
+                    ? "diag-summary__value--warn"
+                    : ok ? "diag-summary__value--ok" : "diag-summary__value--bad";
+                <div class="diag-summary__card">
+                    <div class="diag-summary__label">@dep.Name</div>
+                    <div class="diag-summary__value @valueClass">@dep.Status</div>
                 </div>
-            </div>
-            <div class="diag-summary__card">
-                <div class="diag-summary__label">Key Vault Config</div>
-                <div class="diag-summary__value @(string.IsNullOrWhiteSpace(Model.KeyVaultUri) ? "diag-summary__value--bad" : "diag-summary__value--ok")">
-                    @(string.IsNullOrWhiteSpace(Model.KeyVaultUri) ? "Missing" : "Configured")
-                </div>
-            </div>
+            }
         </div>
 
         <section>
-            <h2>Azure Table Storage</h2>
-            <p>
-                Status:
-                <strong>@Model.TableStatus</strong>
-                <span class="@statusChipClass">@overallStatus</span>
-                | Latency: @Model.TableLatencyMs ms
-            </p>
+            <h2>Connections</h2>
+            <table>
+                <thead><tr><th>Dependency</th><th>Status</th><th>Latency</th><th>Detail</th></tr></thead>
+                <tbody>
+                    @foreach (var dep in Model.Dependencies)
+                    {
+                        var ok = string.Equals(dep.Status, "Healthy", StringComparison.OrdinalIgnoreCase);
+                        <tr>
+                            <td>@dep.Name</td>
+                            <td>
+                                <span class="diag-status-chip @(ok ? "diag-status-chip--ok" : "diag-status-chip--bad")">@dep.Status</span>
+                            </td>
+                            <td>@(dep.LatencyMs is null ? "—" : $"{dep.LatencyMs} ms")</td>
+                            <td>@(dep.Error ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </section>
 
         <section>
-            <h2>Azure AI Foundry</h2>
-            <p>Endpoint: <code>@Model.MaskValue(Model.FoundryEndpoint)</code></p>
-        </section>
-
-        <section>
-            <h2>Key Vault</h2>
-            <p>URI: <code>@Model.MaskValue(Model.KeyVaultUri)</code></p>
+            <h2>Endpoints (masked)</h2>
+            <p>Azure AI Foundry: <code>@Model.MaskValue(Model.FoundryEndpoint)</code></p>
+            <p>Key Vault: <code>@Model.MaskValue(Model.KeyVaultUri)</code></p>
         </section>
 
         <section>

@@ -106,7 +106,7 @@ public sealed class HtmlLabReportRenderer : ILabReportRenderer
         sb.AppendLine("  <div class=\"section\">");
         sb.AppendLine("    <h2>Source Code Output</h2>");
 
-        var orderedResults = new List<(string modelId, DuelResult? result, bool isWinner)>
+        var orderedResults = new List<(ModelId modelId, DuelResult? result, bool isWinner)>
         {
             (duel.WinnerModelId == duel.LeftModelId ? duel.LeftModelId : duel.RightModelId,
              duel.WinnerModelId == duel.LeftModelId ? leftResult : rightResult, true),

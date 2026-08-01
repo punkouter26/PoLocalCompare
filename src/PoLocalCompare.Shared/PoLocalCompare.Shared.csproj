@@ -6,4 +6,9 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- ULID minting for the strongly-typed ids in Ids/. -->
+    <PackageReference Include="NUlid" />
+  </ItemGroup>
+
 </Project>

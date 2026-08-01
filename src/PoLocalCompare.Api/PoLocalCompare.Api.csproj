@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PoLocalCompare.Shared\PoLocalCompare.Shared.csproj" />
-    <ProjectReference Include="..\Client\PoLocalCompare.Client\PoLocalCompare.Client.csproj" />
+    <ProjectReference Include="..\PoLocalCompare.Client\PoLocalCompare.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

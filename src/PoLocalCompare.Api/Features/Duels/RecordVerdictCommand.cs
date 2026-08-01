@@ -6,7 +6,7 @@ namespace PoLocalCompare.Api.Features.Duels;
 /// Defaults to Human so every existing caller keeps its meaning; only the auto-judge passes Ai.
 /// </param>
 public sealed record RecordVerdictCommand(
-    string DuelId,
+    DuelId DuelId,
     DuelVerdict Verdict,
     VerdictSource Source = VerdictSource.Human,
     string? JudgeRationale = null,

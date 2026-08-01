@@ -12,7 +12,7 @@ namespace PoLocalCompare.Api.Features.Duels;
 public sealed class DuelHub : Hub
 {
     /// <summary>Client calls this to join a duel's broadcast group.</summary>
-    public async Task JoinDuel(string duelId)
+    public async Task JoinDuel(DuelId duelId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, $"duel:{duelId}");
     }

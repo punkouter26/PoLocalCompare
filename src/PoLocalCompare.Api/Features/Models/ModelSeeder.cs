@@ -14,13 +14,13 @@ public static class ModelSeeder
     private static readonly List<Model> DefaultModels =
     [
         // ── Local WebLLM (in-browser) ──────────────────────────────────────
-        new Model("01SEED0000000000000000001", "SmolLM2 135M",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-135M-Instruct-q0f32-MLC"),
-        new Model("01SEED0000000000000000002", "SmolLM2 360M",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-360M-Instruct-q4f32_1-MLC"),
-        new Model("01SEED0000000000000000003", "SmolLM2 1.7B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-1.7B-Instruct-q4f16_1-MLC"),
-        new Model("01SEED0000000000000000004", "Qwen2.5 0.5B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen2.5-0.5B-Instruct-q4f32_1-MLC"),
-        new Model("01SEED0000000000000000005", "Qwen3 1.7B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen3-1.7B-q4f16_1-MLC"),
-        new Model("01SEED0000000000000000006", "Llama 3.2 1B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Llama-3.2-1B-Instruct-q4f16_1-MLC"),
-        new Model("01SEED0000000000000000009", "Gemma 2 2B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "gemma-2-2b-it-q4f16_1-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000001"), "SmolLM2 135M",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-135M-Instruct-q0f32-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000002"), "SmolLM2 360M",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-360M-Instruct-q4f32_1-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000003"), "SmolLM2 1.7B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-1.7B-Instruct-q4f16_1-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000004"), "Qwen2.5 0.5B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen2.5-0.5B-Instruct-q4f32_1-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000005"), "Qwen3 1.7B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen3-1.7B-q4f16_1-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000006"), "Llama 3.2 1B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Llama-3.2-1B-Instruct-q4f16_1-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000009"), "Gemma 2 2B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "gemma-2-2b-it-q4f16_1-MLC"),
 
         // Ids 007 (Llama 3.2 3B) and 008 (Phi-3.5 Mini) are retired, not reused. Both failed to
         // load in the browser across three independent runs, each on a dedicated cold browser:
@@ -33,13 +33,13 @@ public static class ModelSeeder
         // change if a future WebGPU or MLC release fixes them.
 
         // ── Ollama local service ───────────────────────────────────────────
-        new Model("01SEED000000000000000000A", "Gemma 4 (Ollama)",  ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "gemma4:latest"),
-        new Model("01SEED000000000000000000B", "Qwen 3.5 (Ollama)", ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "qwen3.5:latest"),
+        new Model(ModelId.From("01SEED000000000000000000A"), "Gemma 4 (Ollama)",  ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "gemma4:latest"),
+        new Model(ModelId.From("01SEED000000000000000000B"), "Qwen 3.5 (Ollama)", ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "qwen3.5:latest"),
 
         // ── Azure remote models (po-aiservices-shared) ────────────────────
         // Only deployments that actually exist in the Foundry resource are seeded.
-        new Model("01SEED000000000000000000M", "GPT-5 Nano",     ModelType.Remote, apiEndpointRef: "gpt-5-nano",                    inputTokenPricePerMillion: 0.05m,  outputTokenPricePerMillion: 0.40m),
-        new Model("01SEED000000000000000000N", "GPT-5.4 Nano",   ModelType.Remote, apiEndpointRef: "gpt-5.4-nano",                  inputTokenPricePerMillion: 0.20m,  outputTokenPricePerMillion: 1.25m),
+        new Model(ModelId.From("01SEED000000000000000000M"), "GPT-5 Nano",     ModelType.Remote, apiEndpointRef: "gpt-5-nano",                    inputTokenPricePerMillion: 0.05m,  outputTokenPricePerMillion: 0.40m),
+        new Model(ModelId.From("01SEED000000000000000000N"), "GPT-5.4 Nano",   ModelType.Remote, apiEndpointRef: "gpt-5.4-nano",                  inputTokenPricePerMillion: 0.20m,  outputTokenPricePerMillion: 1.25m),
     ];
 
     public static async Task SeedAsync(IServiceProvider services)

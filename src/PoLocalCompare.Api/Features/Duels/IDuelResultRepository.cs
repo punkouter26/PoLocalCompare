@@ -5,7 +5,7 @@ namespace PoLocalCompare.Api.Features.Duels;
 public interface IDuelResultRepository
 {
     Task SaveAsync(DuelResult result);
-    Task<DuelResult?> GetAsync(string duelId, string modelId);
-    Task<IEnumerable<DuelResult>> GetByDuelIdAsync(string duelId);
-    Task<IEnumerable<DuelResult>> GetByModelIdAsync(string modelId);
+    Task<DuelResult?> GetAsync(DuelId duelId, ModelId modelId);
+    Task<IEnumerable<DuelResult>> GetByDuelIdAsync(DuelId duelId);
+    Task<IEnumerable<DuelResult>> GetByModelIdAsync(ModelId modelId);
 }

@@ -5,16 +5,16 @@ namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class Duel
 {
-    public string DuelId { get; init; }
+    public DuelId DuelId { get; init; }
     public string PromptText { get; init; }
     public string PromptFull { get; init; }
-    public string LeftModelId { get; init; }
-    public string RightModelId { get; init; }
+    public ModelId LeftModelId { get; init; }
+    public ModelId RightModelId { get; init; }
     public DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DuelVerdict Verdict { get; set; }
-    public string? WinnerModelId { get; set; }
-    public string? LoserModelId { get; set; }
+    public ModelId? WinnerModelId { get; set; }
+    public ModelId? LoserModelId { get; set; }
     public double? EloShiftWinner { get; set; }
     public double? EloShiftLoser { get; set; }
     /// <summary>Absolute deadline for verdict submission (VerdictDeadlineHours from config).</summary>
@@ -38,11 +38,11 @@ public sealed class Duel
     public string? ETag { get; set; }
 
     public Duel(
-        string duelId,
+        DuelId duelId,
         string promptText,
         string promptFull,
-        string leftModelId,
-        string rightModelId,
+        ModelId leftModelId,
+        ModelId rightModelId,
         int verdictDeadlineHours = 24)
     {
         if (string.IsNullOrWhiteSpace(promptText))
@@ -64,11 +64,8 @@ public sealed class Duel
     // Parameterless constructor for Azure Table Storage deserialization
     public Duel()
     {
-        DuelId = string.Empty;
         PromptText = string.Empty;
         PromptFull = string.Empty;
-        LeftModelId = string.Empty;
-        RightModelId = string.Empty;
     }
 
     /// <summary>Returns true if the verdict deadline has passed.</summary>

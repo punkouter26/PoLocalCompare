@@ -44,7 +44,7 @@
 | **Logging** | Serilog → File + Console + App Insights |
 | **Telemetry** | OpenTelemetry → Azure Monitor |
 | **Versioning** | MinVer (Git tag driven, prefix `v`) |
-| **Styling** | Cyberpunk/OLED dark theme, 4px grid, CSS clamp() |
+| **Styling** | Scoped `.razor.css` + design tokens; system-aware light/dark with an explicit override |
 
 ---
 
@@ -84,21 +84,23 @@ PoLocalCompare.slnx
 │   │   ├── Program.cs                  ← Composition root
 │   │   ├── ServiceCollectionExtensions.cs
 │   │   └── InfrastructureServiceExtensions.cs
-│   ├── PoLocalCompare.Shared/          ← DTOs and Enums shared between WASM and API
+│   ├── PoLocalCompare.Shared/          ← DTOs, Enums and strongly-typed ids shared by WASM + API
 │   │   ├── DTOs/                       ← DuelDto, ModelDto, LeaderboardEntryDto, VerdictRequestDto, etc.
-│   │   └── Enums/
-│   └── Client/
-│       └── PoLocalCompare.Client/      ← Blazor WASM (hosted by Api)
-│           ├── Pages/                  ← Home, WarRoom, Processing, Arena, Leaderboard,
-│           │                             Archive, Login (model-health is a Home section)
-│           ├── Components/
-│           ├── Services/               ← DuelApiClient, BffAuthenticationStateProvider,
-│           │                             WebLlmService, SignalRDuelClient, AudioService,
-│           │                             InferenceSessionStore, CorrelationHandler
-│           └── Layout/
+│   │   ├── Enums/
+│   │   └── Ids/                        ← DuelId / ModelId (readonly record struct + JSON converters)
+│   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
+│       ├── Pages/                      ← Home, WarRoom, Processing, Arena, Leaderboard,
+│       │                                 Archive, Login (model-health is a Home section)
+│       ├── Components/
+│       ├── Services/                   ← DuelApiClient, BffAuthenticationStateProvider,
+│       │                                 WebLlmService, SignalRDuelClient, AudioService,
+│       │                                 InferenceSessionStore, CorrelationHandler, ThemeService
+│       └── Layout/
 ├── tests/
-│   ├── PoLocalCompare.Tests/           ← Unit/ (xUnit + Moq, no I/O) + Integration/ (Testcontainers Azurite)
-│   └── PoLocalCompare.Tests.E2E/       ← Api/ (black-box HTTP journeys) + Ui/ (Playwright, Category=UI)
+│   ├── PoLocalCompare.Unit/            ← Pure logic, no I/O (xUnit + Moq; no Docker)
+│   ├── PoLocalCompare.Integration/     ← Testcontainers Azurite behind WebApplicationFactory
+│   ├── PoLocalCompare.E2EAPI/          ← Black-box HTTP journeys over Testcontainers + fake auth
+│   └── PoLocalCompare.E2EUI/           ← Playwright, headed Chrome, mobile + desktop viewports
 ├── docs/                               ← PRD_Master.md + Mermaid diagrams (.mmd, *_simplified.mmd, .svg)
 ├── SCRIPTS/                            ← setup.ps1, download-models.py, cleanup-models.py
 ├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep / main.json)
@@ -247,30 +249,35 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 
 ## 8. Testing Strategy
 
-Two test projects (standards §6). Each holds its slices in folders, not separate assemblies.
+Four test projects (standards §5), one per tier. Splitting them is what keeps `PoLocalCompare.Unit`
+free of Testcontainers and `Microsoft.AspNetCore.Mvc.Testing`, so it runs without Docker by project
+rather than by name filter. `PoLocalCompare.E2EUI` has no `ProjectReference` at all — it drives the
+app purely over HTTP.
 
 | Test Type | Location | Notes |
 |---|---|---|
-| Unit | `tests/PoLocalCompare.Tests/Unit` | Pure logic, no I/O, mock data (no real AI) |
-| Integration | `tests/PoLocalCompare.Tests/Integration` | Testcontainers (Azurite), fake-auth header, dev env |
-| E2E API | `tests/PoLocalCompare.Tests.E2E/Api` | Black-box HTTP journeys over Testcontainers + fake auth |
-| E2E UI | `tests/PoLocalCompare.Tests.E2E/Ui` | Playwright, headed Chrome, mobile + desktop viewports |
+| Unit | `tests/PoLocalCompare.Unit` | Pure logic, no I/O, mock data (no real AI) |
+| Integration | `tests/PoLocalCompare.Integration` | Testcontainers (Azurite), fake-auth header, dev env |
+| E2E API | `tests/PoLocalCompare.E2EAPI` | Black-box HTTP journeys over Testcontainers + fake auth |
+| E2E UI | `tests/PoLocalCompare.E2EUI` | Playwright, headed Chrome, mobile + desktop viewports |
 
 **Ratio contract (100 / 50 / 25 / 25).** Unit is the baseline; integration ≈ 50% of unit, each
-E2E tier ≈ 25%. Current: 15 unit / 8 integration / 8 E2E-API test methods, plus 2 E2E-UI methods
-run across both viewports (4 cases). Keep new work inside those proportions.
+E2E tier ≈ 25%. Current (2026-08-01): **121 unit / 66 integration / 33 E2E-API / 46 E2E-UI cases**
+(23 UI methods × 2 viewports). Counts are test *cases*, so a `[Theory]` contributes one per
+`InlineData`/viewport. Keep new work inside those proportions.
 
 ```bash
-dotnet test tests/PoLocalCompare.Tests                              # unit + integration (needs Docker)
-dotnet test tests/PoLocalCompare.Tests --filter FullyQualifiedName~Unit   # unit only, no Docker
-dotnet test tests/PoLocalCompare.Tests.E2E --filter Category!=UI    # API journeys only
-dotnet test tests/PoLocalCompare.Tests.E2E --filter Category=UI     # Playwright (app must be running)
+dotnet test tests/PoLocalCompare.Unit          # pure logic, no Docker
+dotnet test tests/PoLocalCompare.Integration   # Testcontainers Azurite (needs Docker)
+dotnet test tests/PoLocalCompare.E2EAPI        # API journeys (needs Docker)
+dotnet test tests/PoLocalCompare.E2EUI         # Playwright (app must be running)
 ```
 
 - Integration / E2E-API tests run in a **non-Production** host so the `X-Fake-User` guest bypass works.
 - E2E-UI needs a running app and `playwright install`; it runs **headed** by default (`HEADLESS=1` to
   suppress) across a 390×844 mobile and 1440×900 desktop viewport, and is **not** run in CI.
-- Tests are intentionally **not** executed in CI/CD — the pipeline only builds, publishes, and deploys.
+- Unit / Integration / E2EAPI run in CI as a `test` job that `build` depends on, so a red suite blocks
+  the deploy. E2E-UI is excluded (no GPU on the runner) and remains a local-only gate.
 
 ---
 
@@ -332,8 +339,8 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | [DuelExecutionService.cs](src/PoLocalCompare.Api/Features/Duels/DuelExecutionService.cs) | Core duel orchestration |
 | [AzuriteSetup.cs](src/PoLocalCompare.Api/Common/Persistence/AzuriteSetup.cs) | Local storage bootstrap |
 | [BffAuthentication.cs](src/PoLocalCompare.Api/Auth/BffAuthentication.cs) | BFF OIDC flow, session cookie, dev fake-auth guard |
-| [BffAuthenticationStateProvider.cs](src/Client/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
-| [WebLlmService.cs](src/Client/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |
+| [BffAuthenticationStateProvider.cs](src/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
+| [WebLlmService.cs](src/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |
 | [docs/PRD_Master.md](docs/PRD_Master.md) | Project source of truth — slices, endpoints, schema, ADR log |
 | [SCRIPTS/setup.ps1](SCRIPTS/setup.ps1) | First-run machine setup |
 | [SCRIPTS/receive-artifacts.ps1](SCRIPTS/receive-artifacts.ps1) | Installs browser-model weights + `.wasm` libs into `wwwroot/models/` |

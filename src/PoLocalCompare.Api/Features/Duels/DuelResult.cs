@@ -3,8 +3,8 @@ namespace PoLocalCompare.Api.Features.Duels;
 
 public sealed class DuelResult
 {
-    public string DuelId { get; init; }
-    public string ModelId { get; init; }
+    public DuelId DuelId { get; init; }
+    public ModelId ModelId { get; init; }
     public long WarmUpDurationMs { get; set; }
     public long GenerationDurationMs { get; set; }
     public long TotalDurationMs { get; set; }
@@ -27,7 +27,7 @@ public sealed class DuelResult
     // Local models only
     public double? GreenScore { get; set; }
 
-    public DuelResult(string duelId, string modelId)
+    public DuelResult(DuelId duelId, ModelId modelId)
     {
         DuelId = duelId;
         ModelId = modelId;
@@ -37,8 +37,6 @@ public sealed class DuelResult
     // Parameterless constructor for Azure Table Storage deserialization
     public DuelResult()
     {
-        DuelId = string.Empty;
-        ModelId = string.Empty;
         HtmlOutputRaw = string.Empty;
     }
 }

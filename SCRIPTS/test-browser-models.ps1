@@ -36,11 +36,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-$driver = Join-Path $repoRoot 'tests\PoLocalCompare.Tests.E2E\bin\Debug\net10.0\.playwright'
+$driver = Join-Path $repoRoot 'tests\PoLocalCompare.E2EUI\bin\Debug\net10.0\.playwright'
 $node = Join-Path $driver 'node\win32_x64\node.exe'
 $package = Join-Path $driver 'package'
 if (-not (Test-Path $node) -or -not (Test-Path $package)) {
-    throw "Playwright driver not found at $driver. Run: dotnet build tests/PoLocalCompare.Tests.E2E"
+    throw "Playwright driver not found at $driver. Run: dotnet build tests/PoLocalCompare.E2EUI"
 }
 
 $chrome = @(

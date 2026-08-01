@@ -45,7 +45,7 @@ MODELS=Qwen3-1.7B-q4f16_1-MLC python SCRIPTS/download-models.py
 **What it does:**
 - Asks `plan-webllm-artifacts.py` which models are in scope, so the list comes from
   `ModelSeeder.cs` — seeding a new browser model needs no edit here
-- Stores weights at `src/Client/PoLocalCompare.Client/wwwroot/models/{webLlmModelId}/` and
+- Stores weights at `src/PoLocalCompare.Client/wwwroot/models/{webLlmModelId}/` and
   libraries at `.../models/_libs/`, served from `https://localhost:5001/models/`
 - Skips unnecessary files (`.gitattributes`, `README.md`, `ndarray-cache-b16.json`)
 - Verifies every LFS file against the sha256 the Hub advertises, and re-fetches on mismatch

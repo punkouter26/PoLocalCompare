@@ -38,3 +38,21 @@ window.openHtmlSource = function (html, modelName) {
     if (tab) setTimeout(() => URL.revokeObjectURL(url), 60000);
 };
 
+
+/**
+ * Moves keyboard focus to an element by id.
+ *
+ * Needed for the skip link: Blazor intercepts same-document anchor clicks and handles them as
+ * router navigation, so the browser's native "scroll to the fragment target and focus it"
+ * behaviour never runs. Without this the link scrolls but leaves focus in the nav, which
+ * defeats the entire point of SC 2.4.1 Bypass Blocks for a keyboard user.
+ *
+ * @param {string} id - Target element id. The element needs tabindex="-1" to accept focus.
+ */
+window.focusElement = function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.focus();
+        el.scrollIntoView({ block: 'start' });
+    }
+};

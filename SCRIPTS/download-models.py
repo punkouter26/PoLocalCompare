@@ -12,7 +12,7 @@ The model list is derived from ModelSeeder.cs + web-llm.js by
 plan-webllm-artifacts.py, so there is no second list to keep in sync. MODELS is
 passed straight through to the planner and accepts the same values.
 
-Weights land in src/Client/PoLocalCompare.Client/wwwroot/models/{webLlmId}/ and
+Weights land in src/PoLocalCompare.Client/wwwroot/models/{webLlmId}/ and
 libraries in .../models/_libs/, served as static files from
 https://localhost:5001/models/.
 

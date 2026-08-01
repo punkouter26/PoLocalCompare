@@ -133,7 +133,7 @@
     @if (State.Status is DiagStatus.Loading or DiagStatus.Generating)
     {
         <div class="lab__progress-track">
-            <div class="lab__progress-fill" style="width: @(State.LoadProgress)%"></div>
+            <div class="lab__progress-fill" style="--fill: @(State.LoadProgress)%"></div>
         </div>
         <div class="lab__step-detail">@State.StepDetail</div>
     }

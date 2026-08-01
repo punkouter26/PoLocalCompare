@@ -1,9 +1,10 @@
+using PoLocalCompare.Shared.Ids;
 namespace PoLocalCompare.Shared.DTOs;
 
 public sealed class DuelResultDto
 {
-    public string DuelId { get; init; } = string.Empty;
-    public string ModelId { get; init; } = string.Empty;
+    public DuelId DuelId { get; init; }
+    public ModelId ModelId { get; init; }
     public string ModelName { get; init; } = string.Empty;
     public long WarmUpDurationMs { get; init; }
     public long GenerationDurationMs { get; init; }

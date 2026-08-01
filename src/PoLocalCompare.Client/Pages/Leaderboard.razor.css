@@ -2,7 +2,7 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.25rem 1rem;
-    color: #e5e7eb;
+    color: var(--text);
 }
 
 .leaderboard__title {
@@ -23,7 +23,7 @@
 
 .leaderboard__sort-label {
     font-size: 0.875rem;
-    color: var(--rz-text-secondary-color, #666);
+    color: var(--text-muted);
     font-weight: 500;
 }
 
@@ -33,7 +33,7 @@
 }
 
 .leaderboard__divider {
-    color: #374151;
+    color: var(--border-strong);
     padding: 0 4px;
 }
 
@@ -44,14 +44,14 @@
 
 .leaderboard__green-info {
     font-size: 0.8rem;
-    color: var(--oled-text-muted);
+    color: var(--text-muted);
     margin: 0.25rem 0 0.75rem;
     padding: 0.4rem 0.75rem;
     border-left: 2px solid rgba(45, 220, 132, 0.4);
 }
 
 .leaderboard__green-info a {
-    color: var(--oled-green);
+    color: var(--accent-green);
 }
 
 .lb__type-badge {
@@ -85,7 +85,7 @@
 
 .leaderboard__green-warn {
     font-size: 0.85rem;
-    color: #22c55e;
+    color: var(--accent-green);
     margin: -0.5rem 0 1rem;
     padding: 6px 10px;
     background: #22c55e10;
@@ -113,23 +113,23 @@
 }
 
 ::deep .leaderboard__grid .rz-data-row:hover td {
-    background-color: var(--rz-datalist-item-hover-background-color, rgba(var(--rz-primary-rgb, 59,130,246), 0.06));
+    background-color: var(--surface-2);
 }
 
 .leaderboard__empty-state {
-    background: #111;
-    border: 1px solid #2a2a2a;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 20px 24px;
     margin-bottom: 1.5rem;
     text-align: left;
-    color: #9ca3af;
+    color: var(--text-muted);
     animation: lb-fade 280ms ease-out;
 }
 
 .leaderboard__empty-state h2 {
     margin: 0 0 0.35rem;
-    color: #f8fafc;
+    color: var(--text);
     font-size: 1.15rem;
 }
 
@@ -147,7 +147,7 @@
 .leaderboard__cta {
     display: inline-block;
     margin-top: 0;
-    color: #22c55e;
+    color: var(--accent-green);
     font-weight: 600;
     text-decoration: none;
     border: 1px solid #1f5132;
@@ -164,7 +164,7 @@
 .leaderboard__cta--ghost {
     color: #bfdbfe;
     border-color: #1e3a5f;
-    background: #111827;
+    background: var(--surface-2);
 }
 
 .leaderboard__summary {
@@ -172,21 +172,21 @@
     gap: 2rem;
     flex-wrap: wrap;
     padding: 0.65rem 1rem;
-    background: #111;
-    border: 1px solid #1f2937;
+    background: var(--surface-1);
+    border: 1px solid var(--surface-2);
     border-radius: 8px;
-    color: #9ca3af;
+    color: var(--text-muted);
     font-size: 0.8rem;
     margin-bottom: 1rem;
 }
 
 .leaderboard__summary strong {
-    color: #e5e7eb;
+    color: var(--text);
 }
 
 .leaderboard__killlist-panel {
     margin-top: 1.5rem;
-    border: 1px solid #2a2a2a;
+    border: 1px solid var(--border);
     border-radius: 0.5rem;
     background: #0b0b0b;
     padding: 0;
@@ -198,8 +198,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    background: var(--rz-secondary-lighter, #f3f4f6);
-    border-bottom: 1px solid var(--rz-border-color, #e5e7eb);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
 }
 
 .leaderboard__killlist-title {
@@ -216,13 +216,13 @@
 }
 
 .leaderboard__status {
-    color: #9ca3af;
+    color: var(--text-muted);
     font-style: italic;
     padding: 0.75rem 1rem;
 }
 
 .leaderboard__error {
-    color: #ef4444;
+    color: var(--accent-red);
     font-weight: 600;
     padding: 0.75rem 1rem;
 }
@@ -230,4 +230,14 @@
 @keyframes lb-fade {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+/* Placeholder shown in a grid cell that has no value yet. Replaces four inline
+   style= attributes that reached for Radzen's --rz-* tokens directly. */
+.leaderboard__no-data {
+    color: var(--text-muted);
+}
+
+.leaderboard__no-data--note {
+    font-style: italic;
 }

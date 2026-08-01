@@ -1,6 +1,6 @@
 using Testcontainers.Azurite;
 
-namespace PoLocalCompare.Tests.Integration;
+namespace PoLocalCompare.Integration;
 
 /// <summary>
 /// Shared Azurite container for all integration tests in the "Integration" collection.

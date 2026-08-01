@@ -10,14 +10,14 @@ internal static partial class AutoJudgeLog
 {
     [LoggerMessage(EventId = 1210, Level = LogLevel.Information,
         Message = "Auto-judge stood down for duel {DuelId}: {Reason}")]
-    public static partial void StoodDown(ILogger logger, string duelId, string reason);
+    public static partial void StoodDown(ILogger logger, DuelId duelId, string reason);
 
     [LoggerMessage(EventId = 1211, Level = LogLevel.Information,
         Message = "Auto-judge recorded {Verdict} for duel {DuelId}.")]
-    public static partial void Recorded(ILogger logger, string duelId, DuelVerdict verdict);
+    public static partial void Recorded(ILogger logger, DuelId duelId, DuelVerdict verdict);
 
     [LoggerMessage(EventId = 1212, Level = LogLevel.Error, Message = "Auto-judge failed for duel {DuelId}.")]
-    public static partial void Failed(ILogger logger, Exception ex, string duelId);
+    public static partial void Failed(ILogger logger, Exception ex, DuelId duelId);
 }
 
 /// <summary>
@@ -61,7 +61,7 @@ public sealed class AutoJudge
     /// Waits out the grace window, then decides the duel if it is still unjudged. Never throws —
     /// a failed auto-judge must leave the duel judgeable by hand, not break duel execution.
     /// </summary>
-    public async Task RunAsync(string duelId, CancellationToken cancellationToken)
+    public async Task RunAsync(DuelId duelId, CancellationToken cancellationToken)
     {
         if (!_options.Enabled) return;
 
@@ -144,7 +144,7 @@ public sealed class AutoJudge
             cancellationToken);
     }
 
-    private async Task RecordAsync(string duelId, JudgeDecision decision, CancellationToken cancellationToken)
+    private async Task RecordAsync(DuelId duelId, JudgeDecision decision, CancellationToken cancellationToken)
     {
         var command = new RecordVerdictCommand(
             duelId,

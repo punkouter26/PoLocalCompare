@@ -1,0 +1,16 @@
+/* Extracted from a <style> block inside EloSparkline.razor — scoped, so these rules
+   no longer leak to every component on the page. */
+
+.elo-sparkline {
+    width: 140px;
+    height: 28px;
+    display: block;
+}
+
+.elo-sparkline__line {
+    fill: none;
+    stroke: #22c55e;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}

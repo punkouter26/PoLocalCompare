@@ -1,6 +1,6 @@
 using PoLocalCompare.Api.Features.Leaderboard;
 
-namespace PoLocalCompare.Tests.Unit;
+namespace PoLocalCompare.Unit;
 
 public class EloCalculatorTests
 {

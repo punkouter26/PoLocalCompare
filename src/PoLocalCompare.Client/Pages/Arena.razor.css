@@ -12,14 +12,14 @@
 }
 
 .arena__prompt-label {
-    color: #9ca3af;
+    color: var(--text-muted);
     font-size: 0.875rem;
     margin-bottom: 1rem;
 }
 
 .arena__loading,
 .arena__error {
-    color: #6b7280;
+    color: var(--text-muted);
     font-style: italic;
 }
 
@@ -123,13 +123,13 @@
 
 .arena__elo-badge--positive {
     background: #052e16;
-    color: #22c55e;
+    color: var(--accent-green);
     border: 1px solid #22c55e44;
 }
 
 .arena__elo-badge--negative {
     background: #450a0a;
-    color: #ef4444;
+    color: var(--accent-red);
     border: 1px solid #ef444444;
 }
 
@@ -147,7 +147,7 @@
 
 .arena__verdict-recorded {
     text-align: center;
-    color: #22c55e;
+    color: var(--accent-green);
     font-weight: 600;
     font-size: 1rem;
     padding: 0.5rem 1.5rem;
@@ -164,7 +164,7 @@
 
 .arena__judge-note {
     text-align: center;
-    color: #cbd5e1;
+    color: var(--text);
     font-size: 0.9rem;
     padding: 0.4rem 0.75rem;
     margin-bottom: 0.5rem;
