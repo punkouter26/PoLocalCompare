@@ -33,9 +33,9 @@
     padding: var(--space-sm) var(--space-md);
     font-size: 0.8rem;
     font-weight: 600;
-    color: #fbbf24;
-    background: #1c1408;
-    border: 1px solid #78350f;
+    color: var(--accent-yellow);
+    background: var(--warn-surface);
+    border: 1px solid var(--warn-border);
     border-radius: var(--radius-md);
     max-width: 62ch;
 }

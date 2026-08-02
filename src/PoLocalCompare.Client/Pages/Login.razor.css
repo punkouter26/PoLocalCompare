@@ -9,7 +9,7 @@
 
 .login-card {
     background: var(--surface-1);
-    border: 1px solid #1e1e1e;
+    border: 1px solid var(--border);
     border-radius: 16px;
     padding: 2.5rem 2rem;
     width: 100%;
@@ -36,7 +36,7 @@
     border-radius: 0.55rem;
     background: linear-gradient(135deg, rgba(18, 184, 207, 0.28), rgba(45, 220, 132, 0.28));
     border: 1px solid rgba(18, 184, 207, 0.4);
-    color: #d8e6ff;
+    color: var(--text-muted);
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -98,14 +98,14 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: #222;
+    background: var(--surface-2);
 }
 
 .btn-guest-login {
     width: 100%;
     padding: 0.6rem 1.25rem;
     background: transparent;
-    color: #777;
+    color: var(--text-muted);
     border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 0.88rem;
@@ -114,14 +114,14 @@
 }
 
 .btn-guest-login:hover {
-    border-color: #444;
-    color: #aaa;
+    border-color: var(--border-strong);
+    color: var(--text-muted);
 }
 
 .login-guest-note {
     margin: -0.5rem 0 0;
     font-size: 0.72rem;
-    color: #444;
+    color: var(--text-dim);
     text-align: center;
     line-height: 1.4;
 }

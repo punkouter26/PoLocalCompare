@@ -307,12 +307,14 @@
 
 @code {
     // Blazor route parameters must be one of its supported primitive types, so the route binds
-    // text and it is narrowed to DuelId once, here, instead of at every call site.
+    // text and it is narrowed to DuelId here instead of at every call site.
     [Parameter] public string DuelIdText { get; set; } = string.Empty;
 
-    private DuelId _duelId;
-
-    protected override void OnParametersSet() => _duelId = DuelId.From(DuelIdText);
+    // Derived, not assigned in OnParametersSet: Blazor runs OnInitializedAsync *before*
+    // OnParametersSet, so a field set there is still default() during the initial load. That
+    // sent GET /api/duels/ with an empty id, which matched the list route, returned a JSON
+    // array, and blew up deserializing it into a single DuelDto.
+    private DuelId _duelId => DuelId.From(DuelIdText);
 
     private DuelDto? _duel;
     private DuelResultDto? _leftResult;

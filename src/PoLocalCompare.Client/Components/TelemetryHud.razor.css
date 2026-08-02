@@ -1,18 +1,21 @@
 /* Extracted from a <style> block inside TelemetryHud.razor — scoped, so these rules
    no longer leak to every component on the page. */
 
+/* --glass-bg rather than a literal rgba(0,0,0,.85): the HUD floats over a model's
+   rendered output, so it needs a translucent scrim that darkens on a dark page and
+   lightens on a light one. */
 .telemetry-hud {
-    background: rgba(0, 0, 0, 0.85);
-    border: 1px solid #333;
+    background: var(--glass-bg);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 0.75rem;
     font-size: 0.78rem;
-    color: #d1d5db;
+    color: var(--text);
     backdrop-filter: blur(4px);
 }
 
 .telemetry-hud__failure-badge {
-    background: #ef4444;
+    background: var(--accent-red);
     color: #fff;
     font-weight: 700;
     padding: 0.3rem 0.5rem;
@@ -38,27 +41,27 @@
 }
 
 .telemetry-hud__label {
-    color: #6b7280;
+    color: var(--text-muted);
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
 .telemetry-hud__value {
-    color: #f9fafb;
+    color: var(--text);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 
 .telemetry-hud__value--green {
-    color: #22c55e;
+    color: var(--accent-green);
 }
 
 .telemetry-hud__value--yellow {
-    color: #eab308;
+    color: var(--accent-yellow);
 }
 
 .telemetry-hud__pending {
-    color: #6b7280;
+    color: var(--text-muted);
     font-style: italic;
 }

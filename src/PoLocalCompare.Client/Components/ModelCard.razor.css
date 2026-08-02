@@ -59,14 +59,16 @@
     animation: scaleIn 0.3s var(--spring-bounce);
 }
 
+/* --on-accent flips with the theme (white on the darkened light accents, black on
+   the bright dark ones), so a filled chip stays legible either way. */
 .model-card__slot-badge--left {
     background: var(--accent-cyan);
-    color: #000;
+    color: var(--on-accent);
 }
 
 .model-card__slot-badge--right {
-    background: #f59e0b;
-    color: #000;
+    background: var(--accent-yellow);
+    color: var(--on-accent);
 }
 
 .model-card__header {
@@ -99,6 +101,10 @@
     font-size: 0.6em;
 }
 
+/* The three type chips keep their literal gradients on purpose: they are saturated
+   brand-ish fills that read the same against a white or a black page, and swapping
+   them for the muted light-mode accents would make them harder to tell apart, which
+   is the one job they have. White text sits on all three at well past 4.5:1. */
 .model-card__badge--local {
     background: linear-gradient(135deg, #4c1d95, #7c3aed);
     color: #fff;

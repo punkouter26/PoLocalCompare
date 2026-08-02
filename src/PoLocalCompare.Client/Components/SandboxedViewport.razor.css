@@ -4,10 +4,10 @@
 .sandboxed-viewport {
     display: flex;
     flex-direction: column;
-    border: 1px solid #333;
+    border: 1px solid var(--border);
     border-radius: 4px;
     overflow: hidden;
-    background: #0a0a0a;
+    background: var(--surface-1);
     transition: filter 0.4s ease, opacity 0.4s ease;
     height: 100%;
 }
@@ -22,12 +22,12 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.4rem 0.75rem;
-    background: #111;
-    border-bottom: 1px solid #333;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
 }
 
 .sandboxed-viewport__model-name {
-    color: #e5e7eb;
+    color: var(--text);
     font-size: 0.85rem;
     font-weight: 600;
     white-space: nowrap;
@@ -37,13 +37,13 @@
 
 .sandboxed-viewport__score {
     margin-left: auto;
-    color: #93c5fd;
+    color: var(--accent-blue);
     font-size: 0.72rem;
     font-weight: 700;
-    border: 1px solid #1d4ed8;
+    border: 1px solid var(--info-border);
     border-radius: 999px;
     padding: 0.1rem 0.45rem;
-    background: rgba(30, 64, 175, 0.18);
+    background: var(--info-surface);
 }
 
 .sandboxed-viewport__badge {
@@ -56,13 +56,13 @@
 }
 
 .sandboxed-viewport__badge--loser {
-    background: #ef4444;
+    background: var(--accent-red);
     color: #fff;
 }
 
 .sandboxed-viewport__badge--winner {
-    background: #22c55e;
-    color: #000;
+    background: var(--accent-green);
+    color: var(--on-accent-green);
 }
 
 .sandboxed-viewport__empty {
@@ -72,7 +72,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    color: #6b7280;
+    color: var(--text-muted);
     font-size: 0.875rem;
     font-style: italic;
     min-height: 200px;
@@ -83,15 +83,15 @@
     flex-wrap: wrap;
     gap: 0.4rem;
     padding: 0.4rem 0.65rem;
-    border-bottom: 1px solid #2a2a2a;
-    background: #0f172a;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
 }
 
 .sandboxed-viewport__diagnostic-item {
     font-size: 0.72rem;
-    color: #fde68a;
-    border: 1px solid #854d0e;
-    background: rgba(133, 77, 14, 0.2);
+    color: var(--accent-yellow);
+    border: 1px solid var(--warn-border);
+    background: var(--warn-surface);
     border-radius: 999px;
     padding: 0.1rem 0.45rem;
 }
@@ -106,5 +106,7 @@
     flex: 1;
     border: none;
     min-height: 500px;
+    /* Stays white in both themes on purpose: this frame renders a model's own HTML
+       document, which brings its own background and assumes a white canvas. */
     background: #fff;
 }

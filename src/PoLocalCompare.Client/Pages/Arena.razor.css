@@ -95,11 +95,11 @@
 }
 
 .arena__failure-card {
-    border: 1px solid #7f1d1d;
-    background: #1f0a0a;
+    border: 1px solid var(--danger-border);
+    background: var(--danger-surface);
     border-radius: 6px;
     padding: 0.6rem 0.75rem;
-    color: #fecaca;
+    color: var(--accent-red);
 }
 
 .arena__failure-title {
@@ -116,7 +116,7 @@
 .arena__failure-hint {
     margin-top: 0.35rem;
     font-size: 0.75rem;
-    color: #fda4af;
+    color: var(--accent-red);
 }
 
 /* Finding #10: collapse raw error JSON behind a disclosure */
@@ -127,23 +127,23 @@
 
 .arena__failure-details summary {
     cursor: pointer;
-    color: #fda4af;
+    color: var(--accent-red);
     font-weight: 600;
     user-select: none;
     padding: 0.15rem 0;
 }
 
 .arena__failure-details summary:hover {
-    color: #fff;
+    color: var(--text);
 }
 
 .arena__failure-raw {
     margin: 0.4rem 0 0;
     padding: 0.55rem;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid #7f1d1d;
+    background: var(--surface-1);
+    border: 1px solid var(--danger-border);
     border-radius: 4px;
-    color: #fecaca;
+    color: var(--text);
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.72rem;
     line-height: 1.4;
@@ -170,15 +170,15 @@
 }
 
 .arena__elo-badge--positive {
-    background: #052e16;
+    background: var(--success-surface);
     color: var(--accent-green);
-    border: 1px solid #22c55e44;
+    border: 1px solid var(--success-border);
 }
 
 .arena__elo-badge--negative {
-    background: #450a0a;
+    background: var(--danger-surface);
     color: var(--accent-red);
-    border: 1px solid #ef444444;
+    border: 1px solid var(--danger-border);
 }
 
 .arena__actions {
@@ -199,15 +199,15 @@
     font-weight: 600;
     font-size: 1rem;
     padding: 0.5rem 1.5rem;
-    background: #052e16;
-    border: 1px solid #22c55e44;
+    background: var(--success-surface);
+    border: 1px solid var(--success-border);
     border-radius: 4px;
     margin-bottom: 0.5rem;
     /* UI#4: sticky verdict bar */
     position: sticky;
     top: 0;
     z-index: 10;
-    box-shadow: 0 2px 8px #00000088;
+    box-shadow: var(--glass-shadow);
 }
 
 /* The optimistic window: the pick is on screen but the server has not confirmed it. Muted
@@ -222,13 +222,13 @@
    correction, not as flavour text — the user's click genuinely did not count. */
 .arena__override-notice {
     text-align: center;
-    color: #fbbf24;
+    color: var(--accent-yellow);
     font-size: 0.875rem;
     font-weight: 600;
     padding: 0.5rem 1rem;
     margin-bottom: 0.5rem;
-    background: #1c1408;
-    border: 1px solid #78350f;
+    background: var(--warn-surface);
+    border: 1px solid var(--warn-border);
     border-radius: 4px;
 }
 
@@ -241,18 +241,18 @@
 }
 
 .arena__judge-note--error {
-    color: #f87171;
-    border: 1px solid #7f1d1d;
-    background: #1f0a0a;
+    color: var(--accent-red);
+    border: 1px solid var(--danger-border);
+    background: var(--danger-surface);
     border-radius: 4px;
 }
 
 /* Auto-judge countdown. Amber reads as "time pressure" without competing with the red
-   failure note. #fbbf24 on #1c1408 is ~11:1, well clear of WCAG 2.2 AA (SC 1.4.3). */
+   failure note. --accent-yellow on --warn-surface is contrast-checked in both themes. */
 .arena__judge-note--auto {
-    color: #fbbf24;
-    border: 1px solid #78350f;
-    background: #1c1408;
+    color: var(--accent-yellow);
+    border: 1px solid var(--warn-border);
+    background: var(--warn-surface);
     border-radius: 4px;
 }
 
@@ -274,7 +274,7 @@
 .arena__judge-rationale {
     display: block;
     margin-top: 0.25rem;
-    color: #bbf7d0;
+    color: var(--accent-green);
     font-weight: 400;
     font-size: 0.85rem;
     font-style: italic;

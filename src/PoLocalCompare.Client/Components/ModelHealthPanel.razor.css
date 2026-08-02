@@ -1,9 +1,11 @@
 /* ── Collapsible panel shell ──────────────────────────────────── */
+/* Written dark-only originally; every surface and text colour is a token now so the
+   panel survives the light theme. See app.css for the derived status tints. */
 
 .lab--panel {
-    border: 1px solid #1e2a44;
+    border: 1px solid var(--border);
     border-radius: 12px;
-    background: #070b14;
+    background: var(--surface-1);
     overflow: hidden;
 }
 
@@ -23,7 +25,7 @@
     text-align: left;
 }
 
-.lab__panel-toggle:hover { background: #0c1322; }
+.lab__panel-toggle:hover { background: var(--surface-2); }
 
 .lab__panel-toggle-main { display: flex; flex-direction: column; gap: 0.15rem; }
 
@@ -39,17 +41,17 @@
     margin: -0.5rem 0 0.9rem;
     font-size: 0.8rem;
     color: var(--text);
-    border-left: 3px solid #22c55e66;
-    background: #0f172a;
+    border-left: 3px solid var(--success-border);
+    background: var(--surface-2);
     border-radius: 6px;
     padding: 0.5rem 0.75rem;
 }
 
 .lab__setup-hint {
     margin: 0.15rem 0 0.9rem;
-    border: 1px solid #3d3a27;
-    border-left: 3px solid #f59e0b;
-    background: #19140a;
+    border: 1px solid var(--warn-border);
+    border-left: 3px solid var(--accent-yellow);
+    background: var(--warn-surface);
     border-radius: 6px;
     padding: 0.6rem 0.75rem;
 }
@@ -58,18 +60,18 @@
     margin: 0;
     font-size: 0.78rem;
     font-weight: 700;
-    color: #fbbf24;
+    color: var(--accent-yellow);
 }
 
 .lab__setup-hint-copy {
     margin: 0.35rem 0 0;
     font-size: 0.78rem;
-    color: #e2e8f0;
+    color: var(--text);
 }
 
 .lab__setup-hint-copy code {
-    color: #d1fae5;
-    background: #113027;
+    color: var(--accent-green);
+    background: var(--success-surface);
     border-radius: 3px;
     padding: 0 0.3rem;
 }
@@ -92,21 +94,21 @@
     border-radius: 8px;
     margin-bottom: 1.5rem;
     font-size: 0.8rem;
-    background: #1a1a2e;
-    border: 1px solid #2a2a4a;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
 }
 
-.lab__env--ok  { border-color: #2a4a3a; background: #0d1f18; }
+.lab__env--ok  { border-color: var(--success-border); background: var(--success-surface); }
 
-.lab__env--warn { border-color: #4a3a1a; background: #1f1808; }
+.lab__env--warn { border-color: var(--warn-border); background: var(--warn-surface); }
 
 .lab__env-sep  { color: var(--text-muted); }
 
-.lab__env-item { color: #b0b0c0; }
+.lab__env-item { color: var(--text-muted); }
 
-.lab__env-item--ok  { color: #4caf7d; font-weight: 600; }
+.lab__env-item--ok  { color: var(--accent-green); font-weight: 600; }
 
-.lab__env-item--err { color: #e05c5c; font-weight: 600; }
+.lab__env-item--err { color: var(--accent-red); font-weight: 600; }
 
 .lab__env-item--muted { color: var(--text-muted); }
 
@@ -118,7 +120,7 @@
     padding: 0.35rem 0.55rem;
     border: 1px solid var(--border);
     border-radius: 6px;
-    background: #131322;
+    background: var(--surface-1);
 }
 
 .lab__env-cluster--runtime {
@@ -139,7 +141,7 @@
 }
 
 .lab__env-number {
-    color: #d7defa;
+    color: var(--text);
     font-weight: 700;
     margin-right: 0.18rem;
 }
@@ -147,7 +149,7 @@
 /* ── Prompt section ──────────────────────────────────────────── */
 
 .lab__prompt-section {
-    background: #12121e;
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 1rem 1.25rem;
@@ -160,16 +162,16 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #7a7a9a;
+    color: var(--text-muted);
     margin-bottom: 0.5rem;
 }
 
 .lab__prompt-input {
     width: 100%;
-    background: #0d0d18;
+    background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 6px;
-    color: #e0e0f0;
+    color: var(--text);
     font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
     font-size: 0.82rem;
     padding: 0.6rem 0.75rem;
@@ -179,7 +181,7 @@
 }
 
 .lab__prompt-input:focus {
-    border-color: #5566dd;
+    border-color: var(--accent-blue);
 }
 
 .lab__btn-row {
@@ -191,7 +193,7 @@
 
 .lab__status-note {
     margin: 0.45rem 0 0.85rem;
-    color: #94a3b8;
+    color: var(--text-muted);
     font-size: 0.8rem;
 }
 
@@ -210,17 +212,17 @@
 
 .lab__btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.lab__btn--primary   { background: #3d5af1; color: #fff; border-color: #3d5af1; }
+.lab__btn--primary   { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
 
-.lab__btn--primary:not(:disabled):hover { background: #2d48d8; }
+.lab__btn--primary:not(:disabled):hover { background: var(--link-hover); border-color: var(--link-hover); }
 
-.lab__btn--danger    { background: #6a1a1a; color: #ffb0b0; border-color: #7a2a2a; }
+.lab__btn--danger    { background: var(--danger-surface); color: var(--accent-red); border-color: var(--danger-border); }
 
-.lab__btn--danger:not(:disabled):hover { background: #531414; }
+.lab__btn--danger:not(:disabled):hover { background: var(--accent-red); color: #fff; }
 
-.lab__btn--secondary { background: var(--border); color: var(--text-muted); border-color: #3a3a5a; }
+.lab__btn--secondary { background: var(--surface-2); color: var(--text-muted); border-color: var(--border-strong); }
 
-.lab__btn--secondary:not(:disabled):hover { background: #323248; }
+.lab__btn--secondary:not(:disabled):hover { background: var(--surface-accent); color: var(--text); }
 
 /* ── Model grid ──────────────────────────────────────────────── */
 
@@ -233,7 +235,7 @@
 
 .lab__cancel-feedback {
     font-size: 0.72rem;
-    color: #70c070;
+    color: var(--accent-green);
     margin: 0.3rem 0 0;
     animation: lab-fadeout 2.5s ease forwards;
 }
@@ -264,26 +266,26 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #7a7aaa;
+    color: var(--text-muted);
 }
 
 .lab__family-count {
     font-size: 0.68rem;
-    color: #4a4a6a;
+    color: var(--text-dim);
 }
 
 .lab__no-models-hint {
     margin: 0.6rem 0 0;
     font-size: 0.78rem;
-    color: var(--text-dim, var(--text-muted));
-    border: 1px dashed #2b2b38;
+    color: var(--text-dim);
+    border: 1px dashed var(--border-strong);
     border-radius: 6px;
     padding: 0.5rem 0.75rem;
 }
 
 .lab__no-models-hint code {
-    color: var(--accent-green, #2ddc84);
-    background: #0d180d;
+    color: var(--accent-green);
+    background: var(--success-surface);
     border-radius: 3px;
     padding: 0 0.3rem;
 }

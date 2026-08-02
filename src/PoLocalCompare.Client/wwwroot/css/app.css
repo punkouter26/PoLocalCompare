@@ -39,6 +39,7 @@
         linear-gradient(180deg, #ffffff 0%, #f7f8fb 40%, #eef1f7 100%);
 
     --on-accent-green: #ffffff;
+    --on-accent: #ffffff;
     --link-hover: #0d4ea3;
 
     color-scheme: light;
@@ -74,6 +75,7 @@
             linear-gradient(180deg, #020306 0%, #000000 40%, #03050a 100%);
 
         --on-accent-green: #000000;
+        --on-accent: #000000;
         --link-hover: #60a5fa;
 
         color-scheme: dark;
@@ -109,6 +111,7 @@
         linear-gradient(180deg, #ffffff 0%, #f7f8fb 40%, #eef1f7 100%);
 
     --on-accent-green: #ffffff;
+    --on-accent: #ffffff;
     --link-hover: #0d4ea3;
 
     color-scheme: light;
@@ -142,6 +145,7 @@
         linear-gradient(180deg, #020306 0%, #000000 40%, #03050a 100%);
 
     --on-accent-green: #000000;
+    --on-accent: #000000;
     --link-hover: #60a5fa;
 
     color-scheme: dark;
@@ -168,6 +172,39 @@
     --radius-lg: 1rem;
     --radius-xl: 1.5rem;
     --radius-full: 9999px;
+}
+
+/* ── Status tints ─────────────────────────────────────────────────────────────
+   Derived rather than declared: each is a mix of an accent with the current
+   surface, and both inputs are already themed, so one definition covers light and
+   dark and there is no fourth copy to keep in sync. Components used to hardcode
+   these (a literal #052e16 for a success panel, #1f0a0a for a failure card), which
+   is exactly what made light mode unreadable.
+
+   Pairing rule: -surface as the background, -border as the border, and the plain
+   --accent-* as the text on top. Those accents are already contrast-checked
+   against --surface-1 (see the light block above), and mixing 12% of a hue into a
+   surface moves it far too little to disturb that. */
+:root {
+    --success-surface: color-mix(in srgb, var(--accent-green) 12%, var(--surface-1));
+    --success-border:  color-mix(in srgb, var(--accent-green) 38%, var(--surface-1));
+
+    --warn-surface:    color-mix(in srgb, var(--accent-yellow) 12%, var(--surface-1));
+    --warn-border:     color-mix(in srgb, var(--accent-yellow) 38%, var(--surface-1));
+
+    --danger-surface:  color-mix(in srgb, var(--accent-red) 12%, var(--surface-1));
+    --danger-border:   color-mix(in srgb, var(--accent-red) 38%, var(--surface-1));
+
+    --info-surface:    color-mix(in srgb, var(--accent-blue) 12%, var(--surface-1));
+    --info-border:     color-mix(in srgb, var(--accent-blue) 38%, var(--surface-1));
+
+    --violet-surface:  color-mix(in srgb, var(--accent-purple) 12%, var(--surface-1));
+    --violet-border:   color-mix(in srgb, var(--accent-purple) 38%, var(--surface-1));
+
+    /* Slightly stronger fills for progress bars and selected rows, where a 12% tint
+       does not read as filled. */
+    --success-fill:    color-mix(in srgb, var(--accent-green) 22%, var(--surface-1));
+    --info-fill:       color-mix(in srgb, var(--accent-blue) 22%, var(--surface-1));
 }
 
 /* ── Modern Animations ────────────────────────────────────────────────────────── */

@@ -17,9 +17,9 @@
 }
 
 .archive__empty-card {
-    border: 1px solid #2b2b38;
+    border: 1px solid var(--border);
     border-radius: 12px;
-    background: linear-gradient(180deg, #11131d 0%, #0f1017 100%);
+    background: var(--surface-1);
     padding: 1.1rem 1.2rem;
     max-width: 760px;
     animation: archive-rise 260ms ease-out;
@@ -27,13 +27,13 @@
 
 .archive__empty-card h2 {
     margin: 0 0 0.35rem;
-    color: #f4f7ff;
+    color: var(--text);
     font-size: 1.15rem;
 }
 
 .archive__empty-card p {
     margin: 0;
-    color: #aab2c6;
+    color: var(--text-muted);
 }
 
 .archive__empty-actions {
@@ -45,7 +45,7 @@
 
 .archive__empty-cta {
     text-decoration: none;
-    color: #03130c;
+    color: var(--on-accent-green);
     background: var(--accent-green);
     border: 1px solid var(--accent-green);
     border-radius: 8px;
@@ -89,15 +89,15 @@
 }
 
 .archive__verdict--win {
-    background: #22c55e20;
+    background: var(--success-surface);
     color: var(--accent-green);
-    border: 1px solid #22c55e40;
+    border: 1px solid var(--success-border);
 }
 
 .archive__verdict--pending {
-    background: #6b728020;
+    background: var(--surface-2);
     color: var(--text-muted);
-    border: 1px solid #6b728040;
+    border: 1px solid var(--border-strong);
 }
 
 .archive__expand-icon {
@@ -189,7 +189,7 @@
 .archive__filter-chip--active {
     border-color: var(--accent-green);
     color: var(--accent-green);
-    background: #22c55e18;
+    background: var(--success-surface);
     font-weight: 700;
 }
 
