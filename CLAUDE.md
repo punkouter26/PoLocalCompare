@@ -121,7 +121,7 @@ which a filtered network can block. `download-models.py` vendors both (weights p
 `new Worker('/js/webllm-worker.js?v=N')` from `webllm-interop.js`; without incrementing `N` the browser
 serves the old worker and your change appears to do nothing. The same trap applies to every
 `<script src="/js/*.js?v=N">` in [index.html](src/PoLocalCompare.Client/wwwroot/index.html) —
-`util.js`, `diag-interop.js` and `compare.js` all carry their own `v=`.
+`theme.js`, `util.js`, `diag-interop.js` and `compare.js` all carry their own `v=`.
 
 **Browser-side logic belongs in `PoLocalCompare.Shared`, not in the Client project.**
 `PoLocalCompare.Unit` references only the Api project, so anything pure that lives under
@@ -129,6 +129,26 @@ serves the old worker and your change appears to do nothing. The same trap appli
 runs. That is why the diff engine, the HTML analyzer, the prompt library and the demo planner sit in
 `Shared/Analysis`, `Shared/Prompts` and `Shared/Demo` rather than beside the components that use
 them. Razor components stay thin wrappers over those statics.
+
+**The Arena is the whole duel — streaming and judging.** `/processing` no longer exists; `POST
+/api/duels` navigates straight to `/arena/{id}`, which connects to `DuelHub`, shows the live
+`TokenRace` and streaming previews while `_duelStillRunning`, then swaps to the verdict UI on
+`DuelComplete`. Critically, **Arena drives browser-model inference**: it handles
+`OnStartLocalInference`, runs `WebLlmService`, and POSTs to `/api/duels/{id}/local-result`. A
+change that breaks that handler stalls every WebGPU pairing at `Initializing` with no error.
+
+**There is no UI component library.** Radzen was removed; buttons and tables are `.po-btn` and
+`.po-table` in [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens.
+Add variants there rather than reaching for a package — and note the app now has no reflective
+component instantiation except the Router's `NotFoundPage`, which is the only remaining reason
+`PublishTrimmed` is off.
+
+**Scoped CSS is per-`.razor`-file, and nothing warns when it isn't.** `ModelHealthPanel.razor.css`
+had spent a long time styling `LabModelCard`'s markup, which silently matched nothing because
+Blazor stamps each stylesheet with its own component's scope id. If you move markup into a child
+component, move its rules into that component's own `.razor.css` (or use `::deep`). A class that is
+built by interpolation — `lab__vram-badge--@State.VramTier` — will also read as dead to any text
+scan, so check for those before deleting a rule.
 
 **The Arena's scorecard must never feed ELO.** `OutputAnalysis.CompletenessScore` is presentational
 and deliberately separate from the persisted `OutputQualityScore` — tightening a heuristic there must

@@ -8,6 +8,7 @@
 @inject NavigationManager Nav
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject WebLlmService WebLlm
 
 <div class="arena">
     <h1 class="arena__title">Arena - Judge the Duel</h1>
@@ -23,6 +24,36 @@
     else
     {
         <p class="arena__prompt-label">Prompt: <em>@_duel.PromptText</em></p>
+
+        @* ── Live race ────────────────────────────────────────────────────
+           Only while generating. Previously this, the streaming previews and the whole
+           telemetry read-out lived on a separate /processing page that navigated here the
+           instant the duel finished; folding it in removes the page swap mid-duel. *@
+        @if (_duelStillRunning)
+        {
+            <TokenRace
+                LeftName="@LeftDisplayName"
+                RightName="@RightDisplayName"
+                LeftStatus="@_leftStatus"
+                RightStatus="@_rightStatus"
+                LeftTokenCount="@_leftTokenCount"
+                RightTokenCount="@_rightTokenCount"
+                LeftVelocity="@_leftTokenVelocity"
+                RightVelocity="@_rightTokenVelocity"
+                LeftPeakVelocity="@_leftPeakVelocity"
+                RightPeakVelocity="@_rightPeakVelocity"
+                LeftHistory="_leftVelocityHistory"
+                RightHistory="_rightVelocityHistory" />
+
+            @* The one diagnostic worth keeping from the old panels: without it, a browser model
+               compiling shaders for 30 s is indistinguishable from a hung page. *@
+            @if (_leftStallDetail is not null || _rightStallDetail is not null)
+            {
+                <div class="arena__stall-note" role="status">
+                    @(_leftStallDetail ?? _rightStallDetail)
+                </div>
+            }
+        }
 
         @* ── View switcher ────────────────────────────────────────────────
            Rendered is what the models built; Code and Diff are for deciding *why* one is
@@ -357,11 +388,56 @@
         StateHasChanged();
     }
 
-    // Live streaming preview while duel is in progress
+    // ── Live duel state ───────────────────────────────────────────────────────
+    // Everything from here to RunLocalInferenceAsync used to be the /processing page. It lives
+    // here because a duel is one thing: it streams, then it is judged, and swapping pages
+    // between those two moments cost a full remount of both preview iframes.
     private string? _leftStreamingHtml;
     private string? _rightStreamingHtml;
     private bool _duelStillRunning;
     private SignalRDuelClient? _signalR;
+
+    private DuelStatus _leftStatus = DuelStatus.Initializing;
+    private DuelStatus _rightStatus = DuelStatus.Initializing;
+    private int _leftTokenCount;
+    private int _rightTokenCount;
+    private double? _leftTokenVelocity;
+    private double? _rightTokenVelocity;
+    private double? _leftPeakVelocity;
+    private double? _rightPeakVelocity;
+    private long? _leftWarmUpMs;
+    private long? _rightWarmUpMs;
+    private string? _leftStallDetail;
+    private string? _rightStallDetail;
+
+    private ModelId _leftLocalModelId;
+    private ModelId _rightLocalModelId;
+    private bool _leftIsBrowserModel;
+    private bool _rightIsBrowserModel;
+    private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
+    private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
+    private DateTimeOffset _leftLastTokenAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _rightLastTokenAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _leftLastUpdateAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _rightLastUpdateAt = DateTimeOffset.UtcNow;
+
+    // Rolling tok/s samples behind the race sparklines. Bounded because status updates arrive
+    // per token batch for the whole run — an unbounded list would grow for 15 minutes and the
+    // sparkline only has ~100 horizontal units to draw into anyway.
+    private const int VelocityHistoryLength = 60;
+    private readonly List<double> _leftVelocityHistory = [];
+    private readonly List<double> _rightVelocityHistory = [];
+
+    private static void PushVelocity(List<double> history, double? velocity)
+    {
+        if (velocity is not > 0) return;
+        history.Add(velocity.Value);
+        if (history.Count > VelocityHistoryLength) history.RemoveAt(0);
+    }
+
+    // Guards against double-starting the same browser model when a reconnect replays the signal.
+    private readonly HashSet<ModelId> _runningLocalModels = [];
+    private PeriodicTimer? _stallTimer;
 
     private IDisposable? _locationChangingReg;
 
@@ -388,15 +464,25 @@
                 _leftResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.LeftModelId);
                 _rightResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.RightModelId);
 
-                // If duel is still running, connect SignalR for live streaming preview
+                // If duel is still running, connect SignalR for the live race and preview
                 if (_leftResult is null && _rightResult is null && _duel.CompletedAt is null)
                 {
                     _duelStillRunning = true;
+                    NoteBrowserModels(_duel);
+
                     _signalR = new SignalRDuelClient();
                     _signalR.OnModelStatusUpdate += OnStatusUpdate;
                     _signalR.OnDuelComplete += OnDuelComplete;
                     _signalR.OnVerdictRecorded += OnVerdictRecorded;
+                    // Browser models run in this tab, not on the server — without this the duel
+                    // would sit at Initializing forever for any WebGPU pairing.
+                    _signalR.OnStartLocalInference += OnStartLocalInference;
+                    WebLlm.OnStatusUpdate += OnLocalStatusUpdate;
                     await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), _duelId);
+
+                    // Independent ticker: worker silence is exactly when the UI must keep talking.
+                    _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+                    _ = RunStallTimerAsync(_stallTimer);
                 }
                 // If verdict already recorded, restore state
                 if (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null)
@@ -442,7 +528,7 @@
 
             if (rerun is not null)
             {
-                Nav.NavigateTo($"/processing/{rerun.DuelId}");
+                Nav.NavigateTo($"/arena/{rerun.DuelId}");
                 return;
             }
 
@@ -823,10 +909,196 @@
     // ── SignalR handlers ──────────────────────────────────────────────────────
     private void OnStatusUpdate(ModelStatusUpdateDto update)
     {
-        if (string.IsNullOrEmpty(update.HtmlPreview)) return;
-        if (update.Side == "Left") _leftStreamingHtml = update.HtmlPreview;
-        else if (update.Side == "Right") _rightStreamingHtml = update.HtmlPreview;
+        if (update.DuelId != _duelId) return;
+
+        if (update.Side == "Left")
+        {
+            _leftStatus = update.Status;
+            _leftTokenCount = update.TokenCount;
+            if (update.TokenVelocity.HasValue) _leftTokenVelocity = update.TokenVelocity;
+            PushVelocity(_leftVelocityHistory, update.TokenVelocity);
+            if (update.PeakTokenVelocity.HasValue) _leftPeakVelocity = update.PeakTokenVelocity;
+            if (update.WarmUpMs.HasValue) _leftWarmUpMs = update.WarmUpMs;
+            if (!string.IsNullOrEmpty(update.HtmlPreview)) _leftStreamingHtml = update.HtmlPreview;
+            _leftLastTokenAt = DateTimeOffset.UtcNow;
+        }
+        else
+        {
+            _rightStatus = update.Status;
+            _rightTokenCount = update.TokenCount;
+            if (update.TokenVelocity.HasValue) _rightTokenVelocity = update.TokenVelocity;
+            PushVelocity(_rightVelocityHistory, update.TokenVelocity);
+            if (update.PeakTokenVelocity.HasValue) _rightPeakVelocity = update.PeakTokenVelocity;
+            if (update.WarmUpMs.HasValue) _rightWarmUpMs = update.WarmUpMs;
+            if (!string.IsNullOrEmpty(update.HtmlPreview)) _rightStreamingHtml = update.HtmlPreview;
+            _rightLastTokenAt = DateTimeOffset.UtcNow;
+        }
+
         InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Records which sides run in the browser so the stall hint can explain the silence.</summary>
+    private void NoteBrowserModels(DuelDto duel)
+    {
+        _leftLocalModelId = ModelId.From(duel.LeftModelId);
+        _rightLocalModelId = ModelId.From(duel.RightModelId);
+    }
+
+    /// <summary>
+    /// Browser-model status arrives straight from the JS worker, bypassing the server hub, so
+    /// velocity has to be derived here rather than read off the update.
+    /// </summary>
+    private void OnLocalStatusUpdate(ModelId modelId, WebLlmStatusUpdate update)
+    {
+        // The first browser update names the side: before it lands, neither id is known.
+        var isLeft = modelId == _leftLocalModelId;
+        if (isLeft) _leftIsBrowserModel = true; else _rightIsBrowserModel = true;
+
+        var status = update.Status switch
+        {
+            "Generating" => DuelStatus.Generating,
+            "Done" => DuelStatus.Done,
+            "Failed" => DuelStatus.Failed,
+            _ => DuelStatus.Initializing,
+        };
+
+        if (isLeft)
+        {
+            _leftLastUpdateAt = DateTimeOffset.UtcNow;
+            // Warm-up is the elapsed time at the Initializing → Generating edge.
+            if (_leftPrevStatus == DuelStatus.Initializing && status == DuelStatus.Generating)
+                _leftWarmUpMs = update.ElapsedMs;
+            _leftPrevStatus = status;
+            _leftStatus = status;
+            _leftTokenCount = update.TokenCount;
+
+            var velocity = GenerationVelocity(update, _leftWarmUpMs);
+            _leftTokenVelocity = velocity;
+            PushVelocity(_leftVelocityHistory, velocity);
+            if (velocity > (_leftPeakVelocity ?? 0)) _leftPeakVelocity = velocity;
+            if (update.TokenCount > 0) _leftLastTokenAt = DateTimeOffset.UtcNow;
+            if (update.HtmlPreview is not null) _leftStreamingHtml = update.HtmlPreview;
+        }
+        else
+        {
+            _rightLastUpdateAt = DateTimeOffset.UtcNow;
+            if (_rightPrevStatus == DuelStatus.Initializing && status == DuelStatus.Generating)
+                _rightWarmUpMs = update.ElapsedMs;
+            _rightPrevStatus = status;
+            _rightStatus = status;
+            _rightTokenCount = update.TokenCount;
+
+            var velocity = GenerationVelocity(update, _rightWarmUpMs);
+            _rightTokenVelocity = velocity;
+            PushVelocity(_rightVelocityHistory, velocity);
+            if (velocity > (_rightPeakVelocity ?? 0)) _rightPeakVelocity = velocity;
+            if (update.TokenCount > 0) _rightLastTokenAt = DateTimeOffset.UtcNow;
+            if (update.HtmlPreview is not null) _rightStreamingHtml = update.HtmlPreview;
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Tokens per second excluding warm-up, so a slow model load does not read as slow generation.</summary>
+    private static double? GenerationVelocity(WebLlmStatusUpdate update, long? warmUpMs)
+    {
+        var generatingMs = warmUpMs.HasValue ? update.ElapsedMs - warmUpMs.Value : update.ElapsedMs;
+        return generatingMs > 0 && update.TokenCount > 0
+            ? Math.Round(update.TokenCount / (generatingMs / 1000.0), 1)
+            : null;
+    }
+
+    private async Task RunStallTimerAsync(PeriodicTimer timer)
+    {
+        while (await timer.WaitForNextTickAsync())
+        {
+            var now = DateTimeOffset.UtcNow;
+            _leftStallDetail = StallDetail(_leftIsBrowserModel, _leftStatus, _leftTokenCount, _leftLastUpdateAt, now, LeftDisplayName);
+            _rightStallDetail = StallDetail(_rightIsBrowserModel, _rightStatus, _rightTokenCount, _rightLastUpdateAt, now, RightDisplayName);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>
+    /// Explains pre-first-token silence for browser models. Server-side models stream steadily,
+    /// so an empty return here is the normal case and the note simply does not render.
+    /// </summary>
+    private static string? StallDetail(
+        bool isBrowserModel, DuelStatus status, int tokenCount, DateTimeOffset lastUpdate, DateTimeOffset now, string name)
+    {
+        if (!isBrowserModel || status != DuelStatus.Generating || tokenCount > 0) return null;
+
+        var secondsSince = (int)(now - lastUpdate).TotalSeconds;
+        if (secondsSince < 3) return null;   // suppress for the first few seconds
+
+        return $"⏳ {name}: GPU compiling shaders / pre-filling — last worker signal {secondsSince}s ago. Waiting for first token…";
+    }
+
+    // ── Browser-model inference ───────────────────────────────────────────────
+
+    private void OnStartLocalInference(StartLocalInferencePayload payload)
+    {
+        if (payload.DuelId != _duelId) return;
+        if (!_runningLocalModels.Add(payload.ModelId)) return;
+
+        if (payload.ModelId == _leftLocalModelId) _leftIsBrowserModel = true;
+        else _rightIsBrowserModel = true;
+
+        // Fire-and-forget; every failure path is handled inside and reported to the server.
+        _ = Task.Run(() => RunLocalInferenceAsync(payload));
+    }
+
+    private async Task RunLocalInferenceAsync(StartLocalInferencePayload payload)
+    {
+        var htmlOutput = string.Empty;
+        var tokenCount = 0;
+        long totalMs = 0;
+        long warmUpMs = 0;
+        var isFailure = false;
+        string? failureReason = null;
+
+        try
+        {
+            // WebLlmService needs the prompt, which only the duel record has.
+            var duel = await ApiClient.GetDuelAsync(payload.DuelId);
+            var prompt = duel?.PromptFull ?? string.Empty;
+
+            await foreach (var update in WebLlm.StartInferenceAsync(
+                payload.ModelId, payload.WebLlmModelId ?? payload.ModelId, prompt, payload.DuelId))
+            {
+                if (update.Status is "Done" or "Failed")
+                {
+                    isFailure = update.Status == "Failed";
+                    failureReason = update.ErrorReason;
+                    break;
+                }
+            }
+
+            if (!isFailure)
+            {
+                var result = await WebLlm.GetResultAsync(payload.ModelId);
+                if (result is not null)
+                {
+                    htmlOutput = result.HtmlOutput;
+                    tokenCount = result.TokenCount;
+                    totalMs = result.TotalMs;
+                    warmUpMs = result.WarmUpMs;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            isFailure = true;
+            failureReason = ex.Message;
+        }
+        finally
+        {
+            _runningLocalModels.Remove(payload.ModelId);
+        }
+
+        // Posted even on failure: the server needs the result to settle the duel either way.
+        await ApiClient.PostLocalResultAsync(
+            payload.DuelId, payload.ModelId, htmlOutput, tokenCount, totalMs, warmUpMs, isFailure, failureReason);
     }
 
     private void OnDuelComplete(DuelDto completedDuel)
@@ -855,7 +1127,15 @@
         StopAutoJudgeCountdown();
         _eloAnimationCts?.Cancel();
         _eloAnimationCts?.Dispose();
+        _stallTimer?.Dispose();
+        WebLlm.OnStatusUpdate -= OnLocalStatusUpdate;
         if (_signalR is not null)
+        {
+            _signalR.OnModelStatusUpdate -= OnStatusUpdate;
+            _signalR.OnDuelComplete -= OnDuelComplete;
+            _signalR.OnVerdictRecorded -= OnVerdictRecorded;
+            _signalR.OnStartLocalInference -= OnStartLocalInference;
             await _signalR.DisposeAsync();
+        }
     }
 }

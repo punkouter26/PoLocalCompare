@@ -31,7 +31,7 @@
 | **Runtime** | .NET 10 (pinned via `global.json`) |
 | **Language** | C# `latest` (`Directory.Build.props`) — standards mandate C# 15; SDK 10 tops out at 14, so `latest` rolls forward automatically |
 | **Client** | Blazor WASM hosted in `PoLocalCompare.Api` |
-| **UI library** | Radzen Blazor |
+| **UI library** | none — plain Blazor components over design tokens (`.po-btn` / `.po-table` in `app.css`) |
 | **In-browser AI** | WebLLM (WebGPU) via JS interop |
 | **Remote AI** | Azure AI Foundry (Azure OpenAI) |
 | **Local AI** | Ollama HTTP (`http://localhost:11434`) |
@@ -95,9 +95,10 @@ PoLocalCompare.slnx
 │   │   ├── Prompts/                    ← PromptLibrary (curated starter + demo prompts)
 │   │   └── Demo/                       ← DemoPlanner (pure, seeded demo scheduling)
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
-│       ├── Pages/                      ← Home, WarRoom, Processing, Arena, Leaderboard,
-│       │                                 Archive, HeadToHead, Demo, Login
-│       │                                 (model-health is a Home section)
+│       ├── Pages/                      ← Home, Arena, Leaderboard, Archive, HeadToHead,
+│       │                                 Demo, Login, NotFound
+│       │                                 (model-health is a Home section; Arena both
+│       │                                  streams a running duel and judges it)
 │       ├── Components/                 ← incl. OutputScorecard, SourceCompare, TokenRace,
 │       │                                 PromptPicker, SandboxedViewport
 │       ├── Services/                   ← DuelApiClient, BffAuthenticationStateProvider,

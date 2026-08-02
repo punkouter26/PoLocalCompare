@@ -496,7 +496,7 @@
 
         try
         {
-            // Remembered before the request, not after: navigation to /processing follows
+            // Remembered before the request, not after: navigation to the Arena follows
             // immediately on success, and a prompt worth re-running is worth keeping even if
             // the duel itself fails to start.
             _recentPrompts = await PromptHistory.RememberAsync(_prompt);
@@ -504,7 +504,7 @@
             await AudioService.PlaySnareRollAsync();
             var dto = await ApiClient.CommenceDuelAsync(_leftModel!.ModelId, _rightModel!.ModelId, _prompt);
             if (dto is not null)
-                Nav.NavigateTo($"/processing/{dto.DuelId}");
+                Nav.NavigateTo($"/arena/{dto.DuelId}");
             else
                 _error = "Could not start the duel. Please try again.";
         }

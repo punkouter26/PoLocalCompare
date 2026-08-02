@@ -3,7 +3,7 @@
 %% Shared is restricted to DTOs/enums; the mobile-first Client talks only HTTP+SignalR.
 graph TD
     subgraph ClientProj["PoLocalCompare.Client — Blazor WASM (mobile-portrait-first, hosted by Api)"]
-        PAGES["Pages: Home (+ ModelHealthPanel) · WarRoom · Processing<br/>Arena · Leaderboard · Archive · Login"]
+        PAGES["Pages: Home (+ ModelHealthPanel) · Arena (streams + judges)<br/>Leaderboard · Archive · HeadToHead · Login"]
         SVCS["Services: DuelApiClient (typed) · BffAuthenticationStateProvider<br/>WebLlmService (WebGPU) · SignalRDuelClient<br/>CorrelationHandler · InferenceSessionStore · AudioService"]
     end
 

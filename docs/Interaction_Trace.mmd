@@ -1,10 +1,10 @@
 %% End-to-end trace of one duel transaction through the BFF boundary:
-%% WarRoom.razor → resilient typed HttpClient → cookie verification → Minimal API
+%% Home.razor → resilient typed HttpClient → cookie verification → Minimal API
 %% feature handler → Table Storage, then SignalR streaming and the verdict write-back.
 sequenceDiagram
     autonumber
     actor Judge
-    participant WR as WarRoom.razor
+    participant WR as Home.razor
     participant HC as DuelApiClient<br/>(typed HttpClient + CorrelationHandler)
     participant BFF as BFF boundary<br/>(cookie auth middleware)
     participant EP as DuelsEndpoints<br/>(Minimal API)

@@ -256,6 +256,19 @@
     border-radius: 4px;
 }
 
+/* Explains pre-first-token silence for a browser model. Deliberately low-key: it reports
+   that work is happening, so it must not read as an error. */
+.arena__stall-note {
+    margin: 0.5rem 0 0;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
 /* The judge's stated reason, under the winner line. Quieter than the verdict itself —
    it is supporting evidence, not the headline. */
 .arena__judge-rationale {

@@ -5,9 +5,7 @@ stateDiagram-v2
     AuthGate --> Home : authenticated
     Login --> Home : Microsoft OIDC (or Guest in Dev)
 
-    Home --> WarRoom : stage duel
-    WarRoom --> Processing : duel accepted
-    Processing --> Arena : duel complete
+    Home --> Arena : duel accepted
     Arena --> Leaderboard : verdict + Elo
     Home --> Archive : past duels
 

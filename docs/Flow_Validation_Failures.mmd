@@ -2,7 +2,7 @@
 %% UI component rules through endpoint guards, domain invariants, and storage races,
 %% each mapped to its HTTP contract. RFC 7807 problem+json is the terminal net.
 graph TD
-    subgraph UI["WarRoom.razor / Arena.razor (client-side rules)"]
+    subgraph UI["Home.razor / Arena.razor (client-side rules)"]
         U1["Prompt textarea — non-empty before submit"]
         U2["Model pickers — two distinct, availability-badged models"]
         U3["Verdict buttons — enabled only while duel Pending"]

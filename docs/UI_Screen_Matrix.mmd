@@ -34,17 +34,14 @@ stateDiagram-v2
     EntraChallenge --> Home : /signin-oidc → cookie issued → redirect /
 
     state "Home  route /" as Home
-    state "WarRoom  route /war-room" as WarRoom
-    state "Processing  route /processing/{DuelId}" as Processing
     state "Arena  route /arena/{DuelId}" as Arena
     state "Leaderboard  route /leaderboard" as Leaderboard
     state "Archive  route /archive" as Archive
     state "Model health (collapsible section on Home)" as Lab
     state "NotFound  route /not-found" as NotFound
 
-    Home --> WarRoom : Start a duel
-    WarRoom --> Processing : POST /api/duels → 202
-    Processing --> Arena : DuelComplete via /hubs/duel
+    Home --> Arena : POST /api/duels → 202
+    Arena --> Arena : streams via /hubs/duel, then judged in place
     Arena --> Leaderboard : verdict recorded
     Arena --> Archive : browse history
     Archive --> Arena : re-open duel
