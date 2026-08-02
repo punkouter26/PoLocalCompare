@@ -3,8 +3,7 @@
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
-@using Radzen
-@using Radzen.Blazor
+@using Microsoft.AspNetCore.Components.Web
 @inject DuelApiClient ApiClient
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -50,54 +49,63 @@
                 <button class="archive__filter-reset" @onclick="ResetFilters">Show all duels</button>
             </div>
         }
-        <RadzenDataGrid Data="@_filteredDuels" TItem="DuelSummaryDto" RowSelect="OnRowSelect"
-            RowClass="@_rowClassFn"
-            Class="archive__grid">
-            <Columns>
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="StartedAt" Title="Date" Width="170px">
-                    <Template Context="d">@d.StartedAt.ToString("yyyy-MM-dd HH:mm") <span class="archive__tz">UTC</span></Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Property="PromptSummary" Title="Prompt" Width="200px" />
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Left Model" Width="180px">
-                    <Template Context="d">
-                        <span class="archive__model @(IsUnresolvedModelName(d.LeftModelName, d.LeftModelId) ? "archive__model--unresolved" : "")"
-                              title="@d.LeftModelId">
-                            @FormatModelName(d.LeftModelName, d.LeftModelId)
-                        </span>
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Right Model" Width="180px">
-                    <Template Context="d">
-                        <span class="archive__model @(IsUnresolvedModelName(d.RightModelName, d.RightModelId) ? "archive__model--unresolved" : "")"
-                              title="@d.RightModelId">
-                            @FormatModelName(d.RightModelName, d.RightModelId)
-                        </span>
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="" Width="30px">
-                    <Template Context="d">
-                        @{ var chevron = d.DuelId == _selectedDuel?.DuelId ? "▾" : "›"; }
-                        <span class="archive__expand-icon">@chevron</span>
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Verdict" Width="120px">
-                    <Template Context="d">
-                        @switch (d.Verdict)
-                        {
-                            case DuelVerdict.Left:
-                                <span class="archive__verdict archive__verdict--win">⬅ Left</span>
-                                break;
-                            case DuelVerdict.Right:
-                                <span class="archive__verdict archive__verdict--win">Right ➡</span>
-                                break;
-                            default:
-                                <span class="archive__verdict archive__verdict--pending">No Verdict</span>
-                                break;
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-            </Columns>
-        </RadzenDataGrid>
+        @* Rows are keyboard-operable (WCAG 2.2 SC 2.1.1): tabbable, and Enter/Space
+           selects, because clicking a row is the only way to open the detail panel. *@
+        <div class="po-table-wrap">
+            <table class="po-table po-table--selectable archive__grid">
+                <caption class="archive__grid-caption">Recorded duels — select a row for details</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Prompt</th>
+                        <th scope="col">Left Model</th>
+                        <th scope="col">Right Model</th>
+                        <th scope="col"><span class="visually-hidden">Expanded</span></th>
+                        <th scope="col">Verdict</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in _filteredDuels)
+                    {
+                        <tr class="@GetRowClass(d)"
+                            tabindex="0"
+                            aria-selected="@((d.DuelId == _selectedDuel?.DuelId).ToString().ToLowerInvariant())"
+                            @onclick="() => OnRowSelect(d)"
+                            @onkeydown="e => OnRowKeyDown(e, d)">
+                            <td>@d.StartedAt.ToString("yyyy-MM-dd HH:mm") <span class="archive__tz">UTC</span></td>
+                            <td>@d.PromptSummary</td>
+                            <td>
+                                <span class="archive__model @(IsUnresolvedModelName(d.LeftModelName, d.LeftModelId) ? "archive__model--unresolved" : "")"
+                                      title="@d.LeftModelId">
+                                    @FormatModelName(d.LeftModelName, d.LeftModelId)
+                                </span>
+                            </td>
+                            <td>
+                                <span class="archive__model @(IsUnresolvedModelName(d.RightModelName, d.RightModelId) ? "archive__model--unresolved" : "")"
+                                      title="@d.RightModelId">
+                                    @FormatModelName(d.RightModelName, d.RightModelId)
+                                </span>
+                            </td>
+                            <td><span class="archive__expand-icon" aria-hidden="true">@(d.DuelId == _selectedDuel?.DuelId ? "▾" : "›")</span></td>
+                            <td>
+                                @switch (d.Verdict)
+                                {
+                                    case DuelVerdict.Left:
+                                        <span class="archive__verdict archive__verdict--win">⬅ Left</span>
+                                        break;
+                                    case DuelVerdict.Right:
+                                        <span class="archive__verdict archive__verdict--win">Right ➡</span>
+                                        break;
+                                    default:
+                                        <span class="archive__verdict archive__verdict--pending">No Verdict</span>
+                                        break;
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
 
         @if (_selectedDuel is not null)
         {
@@ -116,23 +124,25 @@
                 </div>
 
                 <div class="archive__detail-actions">
-                    <RadzenButton
-                        Text="👁 View Output"
-                        ButtonStyle="ButtonStyle.Light"
-                        Click="@(() => Nav.NavigateTo($"/arena/{_selectedDuel.DuelId}"))"
-                        class="archive__btn" />
-                    <RadzenButton
-                        Text="⚧ Re-Challenge"
-                        ButtonStyle="ButtonStyle.Light"
-                        Click="@GoToReChallenge"
-                        class="archive__btn" />
+                    <button type="button" class="po-btn archive__btn"
+                            @onclick="@(() => Nav.NavigateTo($"/arena/{_selectedDuel.DuelId}"))">
+                        👁 View Output
+                    </button>
+                    <button type="button" class="po-btn archive__btn" @onclick="GoToReChallenge">
+                        ⚧ Re-Challenge
+                    </button>
+                    @* Same endpoint the Arena links to; the BFF cookie rides along on a
+                       same-origin GET, so no interop is needed to download it. *@
+                    <a class="po-btn archive__btn"
+                       href="@($"/api/duels/{_selectedDuel.DuelId}/report")"
+                       download="@($"lab-report-{_selectedDuel.DuelId}.html")">
+                        ⬇ Lab report
+                    </a>
                     @if (_selectedDuel.Verdict == DuelVerdict.Pending)
                     {
-                        <RadzenButton
-                            Text="⚔ Judge This Duel"
-                            ButtonStyle="ButtonStyle.Primary"
-                            Click="@GoToArena"
-                            class="archive__btn" />
+                        <button type="button" class="po-btn po-btn--primary archive__btn" @onclick="GoToArena">
+                            ⚔ Judge This Duel
+                        </button>
                     }
                 </div>
             </div>
@@ -142,7 +152,7 @@
             <span class="archive__count">Showing @_filteredDuels.Count of @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span>
             @if (_hasMore)
             {
-                <RadzenButton Text="Load More" ButtonStyle="ButtonStyle.Light" Click="LoadMoreAsync" />
+                <button type="button" class="po-btn" @onclick="LoadMoreAsync">Load More</button>
             }
         </div>
     }
@@ -181,8 +191,6 @@
         _verdictFilter = label;
         ApplyFilter();
     }
-
-    private Func<DuelSummaryDto, string> _rowClassFn => GetRowClass;
 
     private void ResetFilters() => SetVerdictFilter("All");
 
@@ -241,6 +249,13 @@
         _selectedDuel = duel;
         await InvokeAsync(StateHasChanged);
         await JS.InvokeVoidAsync("scrollElementIntoView", "archive-detail");
+    }
+
+    /// <summary>Keyboard equivalent of clicking a row (SC 2.1.1).</summary>
+    private async Task OnRowKeyDown(KeyboardEventArgs e, DuelSummaryDto duel)
+    {
+        if (e.Key is "Enter" or " ")
+            await OnRowSelect(duel);
     }
 
     private static string GetWinnerName(DuelSummaryDto d)

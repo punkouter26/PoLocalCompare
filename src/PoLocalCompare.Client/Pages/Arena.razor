@@ -3,8 +3,6 @@
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
-@using Radzen
-@using Radzen.Blazor
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
 @inject NavigationManager Nav
@@ -219,56 +217,53 @@
         }
 
         <div class="arena__actions">
-            <RadzenButton
-                Text="👈 Winner: Left"
-                ButtonStyle="ButtonStyle.Success"
-                Size="ButtonSize.Large"
-                Disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
-                Click="@(() => RecordVerdictAsync(DuelVerdict.Left))"
-                class="arena__action-btn"
-            />
-            <RadzenButton
-                Text="Winner: Right 👉"
-                ButtonStyle="ButtonStyle.Success"
-                Size="ButtonSize.Large"
-                Disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
-                Click="@(() => RecordVerdictAsync(DuelVerdict.Right))"
-                class="arena__action-btn"
-            />
+            <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+                    disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
+                    @onclick="@(() => RecordVerdictAsync(DuelVerdict.Left))">
+                👈 Winner: Left
+            </button>
+            <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+                    disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
+                    @onclick="@(() => RecordVerdictAsync(DuelVerdict.Right))">
+                Winner: Right 👉
+            </button>
             @* Re-runs the same pairing and prompt as a brand-new duel — useful when a
                model failed for a transient reason (model load, cache, rate limit). *@
-            <RadzenButton
-                Text="@(_retrying ? "Starting…" : "🔄 Retry duel")"
-                ButtonStyle="ButtonStyle.Secondary"
-                Size="ButtonSize.Large"
-                Disabled="@(_retrying || _submitting || _duelStillRunning)"
-                Click="RetryDuelAsync"
-                class="arena__action-btn"
-            />
+            <button type="button" class="po-btn po-btn--lg po-btn--secondary arena__action-btn"
+                    disabled="@(_retrying || _submitting || _duelStillRunning)"
+                    @onclick="RetryDuelAsync">
+                @(_retrying ? "Starting…" : "🔄 Retry duel")
+            </button>
             @if (_verdictRecorded && !_optimistic)
             {
-                <RadzenButton
-                    Text="🖼 Share result"
-                    ButtonStyle="ButtonStyle.Light"
-                    Size="ButtonSize.Large"
-                    Click="ShareResultAsync"
-                    class="arena__action-btn"
-                />
+                <button type="button" class="po-btn po-btn--lg arena__action-btn"
+                        @onclick="ShareResultAsync">
+                    🖼 Share result
+                </button>
             }
             @* Available once both models are known — even if one is mid-stream or failed, a
                head-to-head link is still meaningful because the screen shows W/L counts per
                opponent regardless of who failed this round. *@
             @if (_duel is not null)
             {
-                <RadzenButton
-                    Text="⚔ Head-to-head"
-                    ButtonStyle="ButtonStyle.Light"
-                    Size="ButtonSize.Large"
-                    Disabled="@(_duelStillRunning)"
-                    Title="@(_duelStillRunning ? "Available once the duel finishes" : "Open the head-to-head record for these two models")"
-                    Click="@(() => Nav.NavigateTo($"/h2h/{_duel!.LeftModelId}/{_duel.RightModelId}"))"
-                    class="arena__action-btn"
-                />
+                <button type="button" class="po-btn po-btn--lg arena__action-btn"
+                        disabled="@(_duelStillRunning)"
+                        title="@(_duelStillRunning ? "Available once the duel finishes" : "Open the head-to-head record for these two models")"
+                        @onclick="@(() => Nav.NavigateTo($"/h2h/{_duel!.LeftModelId}/{_duel.RightModelId}"))">
+                    ⚔ Head-to-head
+                </button>
+            }
+            @* Plain anchor rather than a fetch + blob: the endpoint already sets
+               Content-Disposition, and a same-origin GET carries the BFF session cookie,
+               so the browser does the whole download without any interop. *@
+            @if (_duel is not null && !_duelStillRunning)
+            {
+                <a class="po-btn po-btn--lg arena__action-btn"
+                   href="@($"/api/duels/{_duelId}/report")"
+                   download="@($"lab-report-{_duelId}.html")"
+                   title="Download a self-contained HTML lab report for this duel">
+                    ⬇ Lab report
+                </a>
             }
         </div>
 

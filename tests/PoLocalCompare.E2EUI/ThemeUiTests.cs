@@ -150,17 +150,24 @@ public sealed class ThemeUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task RadzenStylesheet_TracksTheChosenTheme(int width, int height)
+    public async Task DataTable_FollowsTheChosenTheme(int width, int height)
     {
-        // Radzen ships one stylesheet per theme rather than custom properties, so the <link>
-        // has to be swapped alongside the attribute or its grid stays dark on a light page.
-        var page = await SignedInPageAsync(width, height, colorScheme: ColorScheme.Dark);
+        // Replaces the old Radzen-stylesheet check. The grid is now a plain .po-table
+        // styled from the design tokens, so the assertion is that its computed colour
+        // actually changes with the toggle rather than that a <link> href was swapped.
+        var page = await SignedInPageAsync(width, height, "/leaderboard", ColorScheme.Dark);
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
+
+        var header = page.Locator(".po-table th").First;
+        await Assertions.Expect(header).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        var darkColor = await header.EvaluateAsync<string>("el => getComputedStyle(el).color");
 
         await OpenNavIfCollapsedAsync(page);
         await page.Locator(".nav-theme-toggle").ClickAsync();   // System → Light
 
-        var href = await page.EvaluateAsync<string>(
-            "() => document.getElementById('radzen-theme').getAttribute('href')");
-        Assert.Contains("default.css", href);
+        await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "light");
+        var lightColor = await header.EvaluateAsync<string>("el => getComputedStyle(el).color");
+
+        Assert.NotEqual(darkColor, lightColor);
     }
 }

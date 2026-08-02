@@ -3,15 +3,10 @@
 //   "light" / "dark" — an explicit user choice, stamped onto <html data-theme> so the
 //   [data-theme] rules in app.css override the prefers-color-scheme block.
 //
-// Radzen ships a separate stylesheet per theme rather than CSS custom properties, so its
-// <link> href has to be swapped alongside the attribute; leaving it pinned to dark.css was
-// what made a light theme impossible before.
+// Everything the theme touches is a CSS custom property in app.css, so stamping the
+// attribute is the whole job -- there is no per-theme stylesheet left to swap.
 (() => {
     const KEY = 'po-theme';
-    const RADZEN = {
-        light: '_content/Radzen.Blazor/css/default.css',
-        dark: '_content/Radzen.Blazor/css/dark.css',
-    };
 
     const systemPrefersDark = () =>
         window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -40,14 +35,6 @@
             root.setAttribute('data-theme', theme);
         } else {
             root.removeAttribute('data-theme');
-        }
-
-        const link = document.getElementById('radzen-theme');
-        if (link) {
-            const href = RADZEN[theme];
-            if (!link.getAttribute('href').endsWith(href.split('/').pop())) {
-                link.setAttribute('href', href);
-            }
         }
     };
 

@@ -249,7 +249,7 @@ h1:focus {
     outline: none;
 }
 
-a, .btn-link {
+a {
     color: var(--accent-blue);
 }
 
@@ -257,8 +257,129 @@ a:hover {
     color: var(--link-hover);
 }
 
-.btn:focus, .btn:active:focus {
-  box-shadow: 0 0 0 0.1rem var(--surface-base), 0 0 0 0.25rem var(--accent-blue);
+/* ── Buttons and tables ──────────────────────────────────────────────────────
+   These two primitives replace Radzen's RadzenButton and RadzenDataGrid, which
+   were the library's only use across the whole app. They live here rather than in
+   a .razor.css because five pages need them and scoped CSS is per-component.
+   Styled from the design tokens, so they follow the theme toggle for free. */
+
+.po-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: var(--target-min);
+    padding: 0.45rem 1rem;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.po-btn:hover:not(:disabled) {
+    background: var(--surface-accent);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+.po-btn:disabled,
+.po-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.po-btn--lg {
+    padding: 0.6rem 1.35rem;
+    font-size: 0.95rem;
+}
+
+.po-btn--primary {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #fff;
+}
+
+.po-btn--primary:hover:not(:disabled) {
+    background: var(--link-hover);
+    border-color: var(--link-hover);
+    color: #fff;
+}
+
+.po-btn--success {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    color: var(--on-accent-green);
+}
+
+.po-btn--success:hover:not(:disabled) {
+    filter: brightness(1.12);
+    color: var(--on-accent-green);
+}
+
+.po-btn--secondary {
+    background: transparent;
+    border-color: var(--border-strong);
+    color: var(--text-muted);
+}
+
+.po-btn--secondary:hover:not(:disabled) {
+    color: var(--text);
+}
+
+/* Data table — semantic <table>, horizontally scrollable inside .po-table-wrap. */
+.po-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.po-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.po-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+}
+
+.po-table td {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+}
+
+.po-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Only grids whose rows are actually clickable opt into the affordance. */
+.po-table--selectable tbody tr {
+    cursor: pointer;
+}
+
+.po-table--selectable tbody tr:hover td {
+    background: var(--surface-2);
+}
+
+.po-table--selectable tbody tr:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: -2px;
 }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
@@ -440,6 +561,19 @@ input[type="reset"], input[type="checkbox"], input[type="radio"], summary {
 p a, li a, td a, .prose a {
     min-block-size: auto;
     min-inline-size: auto;
+}
+
+/* Reachable by assistive tech, absent from the visual layout. Global because three
+   components need it and each had grown its own byte-identical copy. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* SC 2.4.1 Bypass Blocks — keyboard escape hatch past the nav. */

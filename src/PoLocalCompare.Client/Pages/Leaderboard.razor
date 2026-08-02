@@ -3,8 +3,7 @@
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
-@using Radzen
-@using Radzen.Blazor
+@using Microsoft.AspNetCore.Components.Web
 
 <PageTitle>Leaderboard — PoLocalCompare</PageTitle>
 
@@ -15,25 +14,24 @@
 
     <div class="leaderboard__controls">
         <span class="leaderboard__sort-label">Sort by:</span>
-        <RadzenButton Text="ELO" Click="@(() => SetSortAsync("Elo"))"
-            ButtonStyle="@(IsGreenSort ? ButtonStyle.Light : ButtonStyle.Primary)"
-            Size="ButtonSize.Small" class="leaderboard__sort-btn" />
-        <RadzenButton Text="🌱 Green Score" Click="@(() => SetSortAsync("GreenScore"))"
-            ButtonStyle="@(IsGreenSort ? ButtonStyle.Primary : ButtonStyle.Light)"
-            Size="ButtonSize.Small" class="leaderboard__sort-btn"
-            Disabled="@(!_entries.Any(e => e.GreenScoreAvg is > 0))"
-            title="@(!_entries.Any(e => e.GreenScoreAvg is > 0) ? "Run local (WebGPU) model duels to unlock Green Score" : "Sort by energy efficiency")" />
-        <RadzenButton Text="🧪 Output Quality" Click="@(() => SetSortAsync("Quality"))"
-            ButtonStyle="@(IsQualitySort ? ButtonStyle.Primary : ButtonStyle.Light)"
-            Size="ButtonSize.Small" class="leaderboard__sort-btn"
-            Disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
-            title="Sort by persisted HTML output quality score" />
-        <span class="leaderboard__divider">|</span>
-        <RadzenButton Text="@(_activeOnly ? "Active ✓" : "Show All")"
-            Click="ToggleActiveOnly"
-            ButtonStyle="@(_activeOnly ? ButtonStyle.Primary : ButtonStyle.Light)"
-            Size="ButtonSize.Small" class="leaderboard__sort-btn"
-            title="@(_activeOnly ? "Showing models with duels — click to show all" : "Showing all models — click to hide unplayed")" />
+        @* aria-pressed carries the active sort to assistive tech; the colour alone would not. *@
+        <button type="button" class="po-btn leaderboard__sort-btn @(IsEloSort ? "po-btn--primary" : "")"
+                aria-pressed="@Pressed(IsEloSort)" @onclick="@(() => SetSortAsync("Elo"))">ELO</button>
+        <button type="button" class="po-btn leaderboard__sort-btn @(IsGreenSort ? "po-btn--primary" : "")"
+                aria-pressed="@Pressed(IsGreenSort)"
+                disabled="@(!_entries.Any(e => e.GreenScoreAvg is > 0))"
+                title="@(!_entries.Any(e => e.GreenScoreAvg is > 0) ? "Run local (WebGPU) model duels to unlock Green Score" : "Sort by energy efficiency")"
+                @onclick="@(() => SetSortAsync("GreenScore"))">🌱 Green Score</button>
+        <button type="button" class="po-btn leaderboard__sort-btn @(IsQualitySort ? "po-btn--primary" : "")"
+                aria-pressed="@Pressed(IsQualitySort)"
+                disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
+                title="Sort by persisted HTML output quality score"
+                @onclick="@(() => SetSortAsync("Quality"))">🧪 Output Quality</button>
+        <span class="leaderboard__divider" aria-hidden="true">|</span>
+        <button type="button" class="po-btn leaderboard__sort-btn @(_activeOnly ? "po-btn--primary" : "")"
+                aria-pressed="@Pressed(_activeOnly)"
+                title="@(_activeOnly ? "Showing models with duels — click to show all" : "Showing all models — click to hide unplayed")"
+                @onclick="ToggleActiveOnly">@(_activeOnly ? "Active ✓" : "Show All")</button>
     </div>
     @if (!_entries.Any(e => e.GreenScoreAvg is > 0) && !_loading)
     {
@@ -60,101 +58,106 @@
                 </div>
             </div>
         }
-        <RadzenDataGrid Data="@_displayedEntries"
-            TItem="LeaderboardEntryDto" RowSelect="OnRowSelect"
-            Class="leaderboard__grid leaderboard__grid--scrollable">
-            <Columns>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="Rank" Title="Rank" Width="80px">
-                    <Template Context="entry">
-                        @{ var dr = _displayedEntries.IndexOf(entry) + 1; }
-                        @if (dr == 1)
-                        {
-                            <span class="lb__rank lb__rank--gold" title="#1 Ranked">🥇</span>
-                        }
-                        else if (dr == 2)
-                        {
-                            <span class="lb__rank lb__rank--silver" title="#2 Ranked">🥈</span>
-                        }
-                        else if (dr == 3)
-                        {
-                            <span class="lb__rank lb__rank--bronze" title="#3 Ranked">🥉</span>
-                        }
-                        else
-                        {
-                            <span class="lb__rank">@dr</span>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DisplayName" Title="Model Name" Width="200px">
-                    <Template Context="entry">
-                        @entry.DisplayName
-                        @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
-                        {
-                            <span class="lb__type-badge lb__type-badge--@ModelTypeGroup.CssModifier(mtype)">
-                                @ModelTypeGroup.ShortLabel(mtype)
-                            </span>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="CurrentElo" Title="ELO" Width="120px">
-                    <Template Context="entry">@((int)Math.Round(entry.CurrentElo))</Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="DuelCount" Title="Duels" Width="90px" />
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="W/L (Win %)" Width="140px">
-                    <Template Context="entry">
-                        @{
-                            var losses = Math.Max(entry.DuelCount - entry.WinCount, 0);
-                            var winPct = entry.DuelCount > 0 ? (entry.WinCount * 100.0 / entry.DuelCount) : 0;
-                            var pctStr = entry.DuelCount > 0 ? $" ({winPct:F0}%)" : "";
-                        }
-                        @($"{entry.WinCount}/{losses}{pctStr}")
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="OutputQualityAvg" Title="🧪 Output Quality" Width="160px"
-                    HeaderTooltip="0–100 score from automated renderability + structure checks on each model's HTML output. Higher = more polished, self-contained HTML.">
-                    <Template Context="entry">
-                        @if (entry.OutputQualityAvg.HasValue)
-                        {
-                            <span title="@($"Last quality score: {entry.OutputQualityAvg.Value:F1} / 100")">@entry.OutputQualityAvg.Value.ToString("F1")</span>
-                        }
-                        else
-                        {
-                            <span class="leaderboard__no-data" title="No scored outputs yet — run a duel to generate one">—</span>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Property="GreenScoreAvg" Title="🌱 Green Score" Width="150px"
-                    HeaderTooltip="Tokens generated per watt-hour. Higher = more energy efficient.">
-                    <Template Context="entry">
-                        @if (entry.GreenScoreAvg.HasValue)
-                        {
-                            <span title="@entry.GreenScoreAvg.Value.ToString("F1") tok/Wh">@entry.GreenScoreAvg.Value.ToString("F1")</span>
-                        }
-                        else
-                        {
-                            <span class="leaderboard__no-data" title="Run a local model duel to generate this score">—</span>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="LeaderboardEntryDto" Title="ELO Trend" Width="170px"
-                    HeaderTooltip="ELO rating trend over the last 20 duels">
-                    <Template Context="entry">
-                        @if (entry.EloSparkline is not null && entry.EloSparkline.Length > 1)
-                        {
-                            <EloSparkline Values="entry.EloSparkline" />
-                        }
-                        else if (entry.EloSparkline is not null && entry.EloSparkline.Length == 1)
-                        {
-                            <span class="leaderboard__no-data leaderboard__no-data--note" title="Only 1 duel recorded so far">1 duel</span>
-                        }
-                        else
-                        {
-                            <span class="leaderboard__no-data leaderboard__no-data--note" title="No duel history yet">No duels yet</span>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-            </Columns>
-        </RadzenDataGrid>
+        @* Rows open the kill-list panel, so they are keyboard-operable (SC 2.1.1). *@
+        <div class="po-table-wrap leaderboard__grid--scrollable">
+            <table class="po-table po-table--selectable leaderboard__grid">
+                <caption class="visually-hidden">Model rankings - select a row for head-to-head history</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Rank</th>
+                        <th scope="col">Model Name</th>
+                        <th scope="col">ELO</th>
+                        <th scope="col">Duels</th>
+                        <th scope="col">W/L (Win %)</th>
+                        <th scope="col" title="0-100 score from automated renderability + structure checks on each model's HTML output. Higher = more polished, self-contained HTML.">&#x1F9EA; Output Quality</th>
+                        <th scope="col" title="Tokens generated per watt-hour. Higher = more energy efficient.">&#x1F331; Green Score</th>
+                        <th scope="col" title="ELO rating trend over the last 20 duels">ELO Trend</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _displayedEntries.Count; i++)
+                    {
+                        var entry = _displayedEntries[i];
+                        var dr = i + 1;
+                        <tr tabindex="0"
+                            @onclick="() => OnRowSelect(entry)"
+                            @onkeydown="e => OnRowKeyDown(e, entry)">
+                            <td>
+                                @if (dr == 1)
+                                {
+                                    <span class="lb__rank lb__rank--gold" title="#1 Ranked">&#x1F947;</span>
+                                }
+                                else if (dr == 2)
+                                {
+                                    <span class="lb__rank lb__rank--silver" title="#2 Ranked">&#x1F948;</span>
+                                }
+                                else if (dr == 3)
+                                {
+                                    <span class="lb__rank lb__rank--bronze" title="#3 Ranked">&#x1F949;</span>
+                                }
+                                else
+                                {
+                                    <span class="lb__rank">@dr</span>
+                                }
+                            </td>
+                            <td>
+                                @entry.DisplayName
+                                @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
+                                {
+                                    <span class="lb__type-badge lb__type-badge--@ModelTypeGroup.CssModifier(mtype)">
+                                        @ModelTypeGroup.ShortLabel(mtype)
+                                    </span>
+                                }
+                            </td>
+                            <td>@((int)Math.Round(entry.CurrentElo))</td>
+                            <td>@entry.DuelCount</td>
+                            <td>
+                                @{
+                                    var losses = Math.Max(entry.DuelCount - entry.WinCount, 0);
+                                    var winPct = entry.DuelCount > 0 ? (entry.WinCount * 100.0 / entry.DuelCount) : 0;
+                                    var pctStr = entry.DuelCount > 0 ? $" ({winPct:F0}%)" : "";
+                                }
+                                @($"{entry.WinCount}/{losses}{pctStr}")
+                            </td>
+                            <td>
+                                @if (entry.OutputQualityAvg.HasValue)
+                                {
+                                    <span title="@($"Last quality score: {entry.OutputQualityAvg.Value:F1} / 100")">@entry.OutputQualityAvg.Value.ToString("F1")</span>
+                                }
+                                else
+                                {
+                                    <span class="leaderboard__no-data" title="No scored outputs yet - run a duel to generate one">&#8212;</span>
+                                }
+                            </td>
+                            <td>
+                                @if (entry.GreenScoreAvg.HasValue)
+                                {
+                                    <span title="@entry.GreenScoreAvg.Value.ToString("F1") tok/Wh">@entry.GreenScoreAvg.Value.ToString("F1")</span>
+                                }
+                                else
+                                {
+                                    <span class="leaderboard__no-data" title="Run a local model duel to generate this score">&#8212;</span>
+                                }
+                            </td>
+                            <td>
+                                @if (entry.EloSparkline is not null && entry.EloSparkline.Length > 1)
+                                {
+                                    <EloSparkline Values="entry.EloSparkline" />
+                                }
+                                else if (entry.EloSparkline is not null && entry.EloSparkline.Length == 1)
+                                {
+                                    <span class="leaderboard__no-data leaderboard__no-data--note" title="Only 1 duel recorded so far">1 duel</span>
+                                }
+                                else
+                                {
+                                    <span class="leaderboard__no-data leaderboard__no-data--note" title="No duel history yet">No duels yet</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
 
         @if (_entries.Count > 0)
         {
@@ -172,8 +175,8 @@
             <div class="leaderboard__killlist-panel">
                 <div class="leaderboard__killlist-header">
                     <span class="leaderboard__killlist-title">@KillListPanelText</span>
-                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
-                        Click="CloseKillList" class="leaderboard__killlist-close" />
+                    <button type="button" class="po-btn leaderboard__killlist-close"
+                            aria-label="Close kill list" @onclick="CloseKillList">✕</button>
                 </div>
                 @if (_killListLoading)
                 {
@@ -189,28 +192,32 @@
                 }
                 else
                 {
-                    <RadzenDataGrid Data="@_killList" TItem="HeadToHeadDto">
-                        <Columns>
-                            <RadzenDataGridColumn TItem="HeadToHeadDto" Property="OpponentName" Title="Opponent" />
-                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="W/L" Width="100px">
-                                <Template Context="row">@row.Wins/@row.Losses</Template>
-                            </RadzenDataGridColumn>
-                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="Win %" Width="90px">
-                                <Template Context="row">
-                                    @{
-                                        var total = row.Wins + row.Losses;
-                                        var pct = total > 0 ? (row.Wins * 100.0 / total) : 0;
-                                    }
-                                    @(total > 0 ? $"{pct:F0}%" : "-")
-                                </Template>
-                            </RadzenDataGridColumn>
-                            <RadzenDataGridColumn TItem="HeadToHeadDto" Title="Last Duel" Width="170px">
-                                <Template Context="row">
-                                    @(row.LastDuelAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")
-                                </Template>
-                            </RadzenDataGridColumn>
-                        </Columns>
-                    </RadzenDataGrid>
+                    <div class="po-table-wrap">
+                        <table class="po-table">
+                            <caption class="visually-hidden">Head-to-head record against each opponent</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Opponent</th>
+                                    <th scope="col">W/L</th>
+                                    <th scope="col">Win %</th>
+                                    <th scope="col">Last Duel</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _killList)
+                                {
+                                    var total = row.Wins + row.Losses;
+                                    var pct = total > 0 ? (row.Wins * 100.0 / total) : 0;
+                                    <tr>
+                                        <td>@row.OpponentName</td>
+                                        <td>@row.Wins/@row.Losses</td>
+                                        <td>@(total > 0 ? $"{pct:F0}%" : "-")</td>
+                                        <td>@(row.LastDuelAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             </div>
         }
@@ -233,6 +240,10 @@
     private string _sortBy = "Elo";
     private bool IsGreenSort => string.Equals(_sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase);
     private bool IsQualitySort => string.Equals(_sortBy, "Quality", StringComparison.OrdinalIgnoreCase);
+    private bool IsEloSort => !IsGreenSort && !IsQualitySort;
+
+    /// <summary>aria-pressed needs the lowercase JS-style literal, not .NET's "True"/"False".</summary>
+    private static string Pressed(bool on) => on ? "true" : "false";
     private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
 
     protected override async Task OnInitializedAsync()
@@ -321,6 +332,13 @@
         {
             _killListLoading = false;
         }
+    }
+
+    /// <summary>Keyboard equivalent of clicking a row (SC 2.1.1).</summary>
+    private async Task OnRowKeyDown(KeyboardEventArgs e, LeaderboardEntryDto row)
+    {
+        if (e.Key is "Enter" or " ")
+            await OnRowSelect(row);
     }
 }
 
