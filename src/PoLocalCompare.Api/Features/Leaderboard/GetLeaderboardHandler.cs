@@ -11,11 +11,13 @@ public sealed class GetLeaderboardHandler(
     {
         var models = (await modelRepository.GetAllAsync()).ToList();
 
-        // Each model's history and results are independent partition reads. Serially that was 2N
-        // round-trips of latency on every cache miss — and there are three cached sort variants,
-        // so a cold cache paid it three times over.
-        var rows = (await Task.WhenAll(models.Select(async model =>
+        // Each model's history and results are independent reads, so they overlap rather than
+        // costing 2N serial round-trips per cache miss (paid three times over on a cold cache —
+        // there are three cached sort variants). Bounded, because a model's result set can pull
+        // a blob per oversized output and the roster grows without a ceiling.
+        var rows = (await StorageConcurrency.ReadAllAsync(models.Count, async index =>
         {
+            var model = models[index];
             var historyTask = eloHistoryRepository.GetLast20Async(model.ModelId);
             var modelResults = (await duelResultRepository.GetByModelIdAsync(model.ModelId)).ToList();
             var sparkline = (await historyTask).Select(x => Math.Round(x.EloAfter, 1)).ToArray();
@@ -33,7 +35,7 @@ public sealed class GetLeaderboardHandler(
                 GreenScoreAvg = model.GreenScoreAvg > 0 ? model.GreenScoreAvg : null,
                 EloSparkline = sparkline,
             };
-        }))).ToList();
+        })).ToList();
 
         var sorted = string.Equals(sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase)
             ? rows

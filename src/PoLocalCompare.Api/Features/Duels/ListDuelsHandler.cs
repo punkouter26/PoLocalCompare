@@ -14,10 +14,12 @@ public sealed class ListDuelsHandler(
 
         // The roster is small and every page re-references the same handful of models, so one
         // GetAllAsync beats two GetByIdAsync per duel. Results live in per-duel partitions and
-        // are independent, so they fetch concurrently rather than one duel at a time.
+        // are independent, so they fetch concurrently — but bounded: a page may hold 100 duels
+        // and each result can pull a blob, so an unbounded fan-out would be hundreds of calls.
         var modelsByIdTask = modelRepository.GetAllAsync();
-        var resultsPerDuel = await Task.WhenAll(
-            duels.Select(duel => duelResultRepository.GetByDuelIdAsync(duel.DuelId)));
+        var resultsPerDuel = await StorageConcurrency.ReadAllAsync(
+            duels.Count,
+            index => duelResultRepository.GetByDuelIdAsync(duels[index].DuelId));
         var modelsById = (await modelsByIdTask).ToDictionary(model => model.ModelId);
 
         var result = new List<DuelSummaryDto>(duels.Count);
