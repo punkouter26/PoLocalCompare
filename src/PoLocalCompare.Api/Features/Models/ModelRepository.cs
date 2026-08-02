@@ -57,7 +57,7 @@ public sealed class ModelRepository : IModelRepository
     {
         var entity = MapToEntity(model);
         // ETag-conditional replace (standards §5.5): a concurrent writer surfaces as 412 instead of a lost update.
-        await _tableClient.UpdateEntityAsync(entity, ParseETag(model.ETag), TableUpdateMode.Replace);
+        await _tableClient.UpdateEntityAsync(entity, TableETag.Parse(model.ETag), TableUpdateMode.Replace);
     }
 
     public async Task DeleteAsync(ModelId modelId)
@@ -71,8 +71,6 @@ public sealed class ModelRepository : IModelRepository
             // Idempotent delete: already gone.
         }
     }
-
-    private static ETag ParseETag(string? etag) => string.IsNullOrEmpty(etag) ? ETag.All : new ETag(etag);
 
     private static TableEntity MapToEntity(Model model)
     {

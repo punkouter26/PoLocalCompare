@@ -38,19 +38,19 @@
             @foreach (var label in new[] { "All", "Won", "No Verdict" })
             {
                 <button class="archive__filter-chip @(_verdictFilter == label ? "archive__filter-chip--active" : "")"
-                        @onclick="() => _verdictFilter = label">
+                        @onclick="() => SetVerdictFilter(label)">
                     @label
                 </button>
             }
         </div>
-        @if (FilteredDuels().Count == 0)
+        @if (_filteredDuels.Count == 0)
         {
             <div class="archive__filtered-empty">
                 <p>No duels match the <strong>@_verdictFilter</strong> filter.</p>
                 <button class="archive__filter-reset" @onclick="ResetFilters">Show all duels</button>
             </div>
         }
-        <RadzenDataGrid Data="@FilteredDuels()" TItem="DuelSummaryDto" RowSelect="OnRowSelect"
+        <RadzenDataGrid Data="@_filteredDuels" TItem="DuelSummaryDto" RowSelect="OnRowSelect"
             RowClass="@_rowClassFn"
             Class="archive__grid">
             <Columns>
@@ -139,7 +139,7 @@
         }
 
         <div class="archive__pagination">
-            <span class="archive__count">Showing @FilteredDuels().Count of @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span>
+            <span class="archive__count">Showing @_filteredDuels.Count of @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span>
             @if (_hasMore)
             {
                 <RadzenButton Text="Load More" ButtonStyle="ButtonStyle.Light" Click="LoadMoreAsync" />
@@ -158,7 +158,12 @@
 
     private string _verdictFilter = "All";
 
-    private List<DuelSummaryDto> FilteredDuels()
+    // Materialised once per change instead of per read: the markup wants this list three times
+    // (empty check, grid data, footer count), and re-sorting on every incidental re-render —
+    // a row selection, say — was pure waste.
+    private List<DuelSummaryDto> _filteredDuels = [];
+
+    private void ApplyFilter()
     {
         IEnumerable<DuelSummaryDto> query = _verdictFilter switch
         {
@@ -166,17 +171,20 @@
             "No Verdict" => _duels.Where(d => d.Verdict == DuelVerdict.Pending),
             _ => _duels
         };
-        return query
+        _filteredDuels = query
             .OrderByDescending(d => d.StartedAt)
             .ToList();
     }
 
+    private void SetVerdictFilter(string label)
+    {
+        _verdictFilter = label;
+        ApplyFilter();
+    }
+
     private Func<DuelSummaryDto, string> _rowClassFn => GetRowClass;
 
-    private void ResetFilters()
-    {
-        _verdictFilter = "All";
-    }
+    private void ResetFilters() => SetVerdictFilter("All");
 
     protected override async Task OnInitializedAsync()
     {
@@ -194,6 +202,7 @@
             {
                 _hasMore = results.Count > PageSize;
                 _duels = results.Take(PageSize).ToList();
+                ApplyFilter();
             }
         }
         catch (Exception ex)
@@ -218,6 +227,7 @@
             {
                 _hasMore = more.Count > PageSize;
                 _duels.AddRange(more.Take(PageSize));
+                ApplyFilter();
             }
         }
         catch (Exception ex)

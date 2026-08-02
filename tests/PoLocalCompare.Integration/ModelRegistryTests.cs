@@ -1,7 +1,3 @@
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using PoLocalCompare.Shared.Enums;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -17,7 +13,7 @@ namespace PoLocalCompare.Integration;
 public sealed class ModelRegistryTests : IAsyncLifetime
 {
     private readonly string _connectionString;
-    private WebApplicationFactory<Program> _factory = null!;
+    private IntegrationHost _host = null!;
     private HttpClient _client = null!;
 
     public ModelRegistryTests(AzuriteFixture azurite)
@@ -27,37 +23,12 @@ public sealed class ModelRegistryTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        var connectionString = _connectionString;
-
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                // Non-Production so the BFF fake-auth bypass (X-Fake-User) is available to tests.
-                builder.UseEnvironment("Development");
-                builder.UseSetting("ConnectionStrings:AzureTableStorage", connectionString);
-                builder.UseSetting("ConnectionStrings:AzureBlobStorage", connectionString);
-                builder.UseSetting("Features:UseRealAi", "false");
-                builder.UseSetting("KeyVault:Uri", "");
-                builder.UseSetting("Testing:SkipSeeding", "true");
-
-                builder.ConfigureServices(services => services.AddLogging(logging =>
-                {
-                    logging.AddFilter("PoLocalCompare.Api.Common.Persistence", LogLevel.Warning);
-                    logging.AddFilter("Testcontainers", LogLevel.Warning);
-                }));
-            });
-
-        _client = _factory.CreateClient();
-        _client.DefaultRequestHeaders.Add("X-Fake-User", "integration-test");
+        _host = new IntegrationHost(_connectionString);
+        _client = _host.Client;
         return Task.CompletedTask;
     }
 
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _factory.DisposeAsync();
-        // Azurite lifetime is managed by AzuriteFixture — do not dispose here.
-    }
+    public async Task DisposeAsync() => await _host.DisposeAsync();
 
     [Fact]
     public async Task RegisterModel_ThenList_PersistsDtoFieldsThroughTableStorage()

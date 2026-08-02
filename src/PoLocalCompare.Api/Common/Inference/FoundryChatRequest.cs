@@ -13,6 +13,21 @@ public static class FoundryChatRequest
     /// <summary>API version that supports <c>max_completion_tokens</c> for reasoning models.</summary>
     public const string ApiVersion = "2024-12-01-preview";
 
+    /// <summary>
+    /// Per-deployment chat route. A name that is not a deployment in this resource 404s here
+    /// but may still resolve on <see cref="ModelInferenceUrl"/> — every Foundry caller runs
+    /// that two-endpoint fallback, so both URLs are built here rather than at each call site.
+    /// </summary>
+    public static string DeploymentUrl(string endpoint, string deploymentName) =>
+        $"{endpoint}/openai/deployments/{deploymentName}/chat/completions?api-version={ApiVersion}";
+
+    /// <summary>
+    /// Model-inference chat route — the 404 fallback for <see cref="DeploymentUrl"/>. Requires
+    /// the model named in the body, so pair it with <c>Build(..., includeModelField: true)</c>.
+    /// </summary>
+    public static string ModelInferenceUrl(string endpoint) =>
+        $"{endpoint}/models/chat/completions?api-version={ApiVersion}";
+
     public static bool IsReasoningModel(string? deploymentName)
     {
         if (string.IsNullOrWhiteSpace(deploymentName)) return false;

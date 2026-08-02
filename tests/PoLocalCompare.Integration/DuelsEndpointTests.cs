@@ -1,19 +1,11 @@
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Moq;
-using PoLocalCompare.Api.Common.Inference;
 using PoLocalCompare.Api.Features.Duels;
 using PoLocalCompare.Api.Features.Leaderboard;
-using PoLocalCompare.Api.Features.Models;
 
 using PoLocalCompare.Shared.DTOs;
+using PoLocalCompare.Shared.Ids;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-
-using PoLocalCompare.Shared.Ids;
 
 namespace PoLocalCompare.Integration;
 
@@ -25,7 +17,7 @@ namespace PoLocalCompare.Integration;
 public sealed class DuelsEndpointTests : IAsyncLifetime
 {
     private readonly string _connectionString;
-    private WebApplicationFactory<Program> _factory = null!;
+    private IntegrationHost _host = null!;
     private HttpClient _client = null!;
 
     public DuelsEndpointTests(AzuriteFixture azurite)
@@ -33,65 +25,14 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
         _connectionString = azurite.ConnectionString;
     }
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
-        var connectionString = _connectionString;
-
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                // Non-Production so the BFF fake-auth bypass (X-Fake-User) is available to tests.
-                builder.UseEnvironment("Development");
-                builder.UseSetting("ConnectionStrings:AzureTableStorage", connectionString);
-                builder.UseSetting("ConnectionStrings:AzureBlobStorage", connectionString);
-                builder.UseSetting("Features:UseRealAi", "false");
-                builder.UseSetting("KeyVault:Uri", ""); // Skip Key Vault in tests
-                builder.UseSetting("Testing:SkipSeeding", "true"); // Suppress ModelSeeder noise
-
-                builder.ConfigureServices(services =>
-                {
-                    // Suppress noisy seeder and Testcontainers log output
-                    services.AddLogging(logging =>
-                    {
-                        logging.AddFilter("PoLocalCompare.Api.Common.Persistence", LogLevel.Warning);
-                        logging.AddFilter("Testcontainers", LogLevel.Warning);
-                    });
-                    // Replace Foundry proxy with a mock that returns immediately
-                    var mockProxy = new Mock<IRemoteInferenceProxy>();
-                    mockProxy
-                        .Setup(p => p.RunInferenceAsync(
-                            It.IsAny<Model>(),
-                            It.IsAny<DuelId>(),
-                            It.IsAny<string>(),
-                            It.IsAny<Func<int, long, HtmlStreamStats?, Task>>(),
-                            It.IsAny<CancellationToken>()))
-                        .ReturnsAsync(new DuelResult(DuelId.From("test-duel"), ModelId.From("test-model"))
-                        {
-                            HtmlOutputRaw = "<html><body>Mock output</body></html>",
-                            TokenCount = 42,
-                            TotalDurationMs = 500,
-                            IsFailure = false,
-                        });
-
-                    services.AddScoped(_ => mockProxy.Object);
-                });
-
-            });
-
-        _client = _factory.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-        });
-        // Authenticate every request via the dev/test fake-auth scheme.
-        _client.DefaultRequestHeaders.Add("X-Fake-User", "integration-test");
+        _host = new IntegrationHost(_connectionString);
+        _client = _host.Client;
+        return Task.CompletedTask;
     }
 
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _factory.DisposeAsync();
-        // Azurite lifetime is managed by AzuriteFixture — do not dispose here.
-    }
+    public async Task DisposeAsync() => await _host.DisposeAsync();
 
     // ── Helpers ────────────────────────────────────────────────────────────
 

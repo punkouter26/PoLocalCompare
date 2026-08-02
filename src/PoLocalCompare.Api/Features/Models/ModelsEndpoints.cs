@@ -18,13 +18,7 @@ public static class ModelsEndpoints
             [FromServices] ListModelsHandler handler,
             [FromServices] IWebHostEnvironment env) =>
         {
-            var models = await handler.HandleAsync();
-            if (!env.IsDevelopment())
-            {
-                models = models
-                    .Where(model => model.ModelType != ModelType.LocalService)
-                    .ToList();
-            }
+            var models = VisibleModels(await handler.HandleAsync(), env);
 
             return Results.Ok(models);
         })
@@ -39,15 +33,7 @@ public static class ModelsEndpoints
             [FromServices] IHttpClientFactory httpClientFactory,
             CancellationToken cancellationToken) =>
         {
-            var models = await handler.HandleAsync();
-            if (!env.IsDevelopment())
-            {
-                models = models
-                    .Where(model => model.ModelType != ModelType.LocalService)
-                    .ToList();
-            }
-
-            var modelList = models.ToList();
+            var modelList = VisibleModels(await handler.HandleAsync(), env);
 
             // Probe Ollama tags once for all LocalService models.
             string[] ollamaAvailableModels = [];
@@ -161,8 +147,8 @@ public static class ModelsEndpoints
 
                 var deploymentName = model.ApiEndpointRef;
 
-                var deploymentUrl = $"{foundryEndpoint}/openai/deployments/{deploymentName}/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
-                var modelInferenceUrl = $"{foundryEndpoint}/models/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
+                var deploymentUrl = FoundryChatRequest.DeploymentUrl(foundryEndpoint, deploymentName);
+                var modelInferenceUrl = FoundryChatRequest.ModelInferenceUrl(foundryEndpoint);
 
                 var probeMessages = new[] { new { role = "user", content = "Say OK." } };
 
@@ -443,6 +429,16 @@ public static class ModelsEndpoints
 
         return app;
     }
+
+    /// <summary>
+    /// Drops Ollama-backed models outside Development. They need a local Ollama daemon that does
+    /// not exist in the cloud, so the hosted catalog would otherwise advertise dead entries —
+    /// the same reason <see cref="ModelSeeder"/> only seeds them in Development.
+    /// </summary>
+    private static List<ModelDto> VisibleModels(IEnumerable<ModelDto> models, IWebHostEnvironment env) =>
+        env.IsDevelopment()
+            ? models.ToList()
+            : models.Where(model => model.ModelType != ModelType.LocalService).ToList();
 }
 
 public sealed record RegisterModelRequest(

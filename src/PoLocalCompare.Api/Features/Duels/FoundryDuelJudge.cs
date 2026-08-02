@@ -108,18 +108,14 @@ public sealed class FoundryDuelJudge : IDuelJudge
         string replyText;
         try
         {
-            // Same two-endpoint dance as FoundryInferenceProxy: a name that is not a deployment
-            // in this resource 404s on the per-deployment route but may still resolve on the
-            // model-inference route, which wants the model named in the body instead.
-            var deploymentUrl = $"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
-            var (status, payload) = await PostAsync(deploymentUrl, apiKey,
+            // Same two-endpoint dance as FoundryInferenceProxy — see FoundryChatRequest.DeploymentUrl.
+            var (status, payload) = await PostAsync(FoundryChatRequest.DeploymentUrl(endpoint, deployment), apiKey,
                 FoundryChatRequest.Build(deployment, messages, ReplyTokenBudget, 0.0, stream: false, includeModelField: false),
                 timeout.Token);
 
             if (status == System.Net.HttpStatusCode.NotFound)
             {
-                var modelUrl = $"{endpoint}/models/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
-                (status, payload) = await PostAsync(modelUrl, apiKey,
+                (status, payload) = await PostAsync(FoundryChatRequest.ModelInferenceUrl(endpoint), apiKey,
                     FoundryChatRequest.Build(deployment, messages, ReplyTokenBudget, 0.0, stream: false, includeModelField: true),
                     timeout.Token);
             }

@@ -156,16 +156,7 @@ public sealed class AutoJudge
         VerdictResponseDto? response;
         try
         {
-            try
-            {
-                response = await _recordVerdict.HandleAsync(command);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 412)
-            {
-                // Lost an optimistic-concurrency race (standards §5.5); the handler re-reads
-                // everything, so one retry resolves against fresh state.
-                response = await _recordVerdict.HandleAsync(command);
-            }
+            response = await _recordVerdict.HandleWithRetryAsync(command);
         }
         catch (InvalidOperationException ex)
         {

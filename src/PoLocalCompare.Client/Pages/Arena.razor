@@ -233,9 +233,7 @@
     private bool BothSidesFailed() =>
         _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
 
-    // Failure reasons carry a "[technical] …" second block; show only the clear first
-    // line in the card body (the full block stays in the technical-details expander).
-    private static string? FirstLine(string? reason) => reason?.Split('\n', 2)[0].Trim();
+    private static string? FirstLine(string? reason) => FailureReasonText.FirstLine(reason);
 
     // Live streaming preview while duel is in progress
     private string? _leftStreamingHtml;
@@ -355,13 +353,7 @@
                 _verdictSource = response.Source;
                 _judgeRationale = response.JudgeRationale;
 
-                // Apply ELO shifts to display badges
-                _eloShiftLeft = _duel.LeftModelId == response.WinnerModelId
-                    ? response.EloShiftWinner
-                    : response.EloShiftLoser;
-                _eloShiftRight = _duel.RightModelId == response.WinnerModelId
-                    ? response.EloShiftWinner
-                    : response.EloShiftLoser;
+                ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
 
                 await AudioService.PlaySuccessAsync();
             }
@@ -475,12 +467,7 @@
         _loserModelId = response.LoserModelId;
         _verdictSource = response.Source;
         _judgeRationale = response.JudgeRationale;
-        _eloShiftLeft = _duel?.LeftModelId == response.WinnerModelId
-            ? response.EloShiftWinner
-            : response.EloShiftLoser;
-        _eloShiftRight = _duel?.RightModelId == response.WinnerModelId
-            ? response.EloShiftWinner
-            : response.EloShiftLoser;
+        ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
 
         StopAutoJudgeCountdown();
         InvokeAsync(StateHasChanged);
@@ -491,12 +478,18 @@
         if (duel.WinnerModelId is null || duel.EloShiftWinner is null || duel.EloShiftLoser is null)
             return;
 
-        _eloShiftLeft = duel.LeftModelId == duel.WinnerModelId
-            ? duel.EloShiftWinner
-            : duel.EloShiftLoser;
-        _eloShiftRight = duel.RightModelId == duel.WinnerModelId
-            ? duel.EloShiftWinner
-            : duel.EloShiftLoser;
+        ApplyEloShifts(duel.WinnerModelId, duel.EloShiftWinner, duel.EloShiftLoser);
+    }
+
+    /// <summary>
+    /// The server reports shifts by outcome (winner/loser); the two panels need them by side.
+    /// Every path that learns a verdict — human click, SignalR push, or a re-read of the duel —
+    /// funnels through here so the badges can't disagree about which side gained.
+    /// </summary>
+    private void ApplyEloShifts(string? winnerModelId, double? shiftWinner, double? shiftLoser)
+    {
+        _eloShiftLeft = _duel?.LeftModelId == winnerModelId ? shiftWinner : shiftLoser;
+        _eloShiftRight = _duel?.RightModelId == winnerModelId ? shiftWinner : shiftLoser;
     }
 
     private string ResolveDisplayName(string? modelId)

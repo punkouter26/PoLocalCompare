@@ -23,8 +23,8 @@
             {
                 <span class="model-card__slot-badge model-card__slot-badge--right" title="Right player">R</span>
             }
-            <span class="model-card__badge model-card__badge--@(Model.ModelType.ToString().ToLower())">
-                @(Model.ModelType == ModelType.LocalService ? "SVC" : Model.ModelType.ToString().ToUpper())
+            <span class="model-card__badge model-card__badge--@ModelTypeGroup.CssModifier(Model.ModelType)">
+                @ModelTypeGroup.ShortLabel(Model.ModelType)
             </span>
         </div>
     </div>

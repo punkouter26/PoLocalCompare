@@ -42,8 +42,8 @@ public sealed class FoundryInferenceProxy(
             return result;
         }
 
-        var deploymentUrl = $"{endpoint}/openai/deployments/{deploymentName}/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
-        var modelInferenceUrl = $"{endpoint}/models/chat/completions?api-version={FoundryChatRequest.ApiVersion}";
+        var deploymentUrl = FoundryChatRequest.DeploymentUrl(endpoint, deploymentName);
+        var modelInferenceUrl = FoundryChatRequest.ModelInferenceUrl(endpoint);
 
         var messages = new[]
         {
@@ -173,111 +173,26 @@ public sealed class FoundryInferenceProxy(
 
         var warmUpMs = sw.ElapsedMilliseconds; // time-to-first-byte (response headers received)
 
-        var sb = new StringBuilder();
-        int tokenCount = 0;
-        long? firstTokenMs = null; // time-to-first-token (actual warm-up per PRD)
-        var counters = new HtmlStreamCounters();
-        long lastCallbackAt = -500; // trigger first callback immediately
+        var streamError = await SseChatStreamReader.ReadIntoAsync(
+            response, result, sw, warmUpMs, onTokenUpdate, cancellationToken);
 
-        try
+        if (streamError is not null)
         {
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
-
-            string? line;
-            while ((line = await reader.ReadLineAsync(cancellationToken)) is not null &&
-                   !cancellationToken.IsCancellationRequested)
-            {
-                if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
-
-                var data = line[6..];
-                if (data == "[DONE]") break;
-
-                string? token = null;
-                try
-                {
-                    using var doc = JsonDocument.Parse(data);
-                    if (doc.RootElement.TryGetProperty("choices", out var choices) &&
-                        choices.GetArrayLength() > 0)
-                    {
-                        var choice = choices[0];
-                        if (choice.TryGetProperty("delta", out var delta) &&
-                            delta.TryGetProperty("content", out var contentEl) &&
-                            contentEl.ValueKind == JsonValueKind.String)
-                        {
-                            token = contentEl.GetString();
-                        }
-                    }
-                }
-                catch (JsonException)
-                {
-                    continue;
-                }
-
-                if (token is null) continue;
-
-                sb.Append(token);
-                tokenCount++;
-
-                var elapsed = sw.ElapsedMilliseconds;
-                if (firstTokenMs is null) firstTokenMs = elapsed;
-
-                // Update HTML stats incrementally
-                counters.Accumulate(token);
-
-                // Throttle callback to ~500ms
-                if (elapsed - lastCallbackAt >= 500)
-                {
-                    lastCallbackAt = elapsed;
-                    // Send partial HTML preview every 25 tokens (max 5000 chars) for live streaming
-                    // ToString(0, n) copies only the prefix; ToString()[..n] materialised the
-                    // whole accumulated document first, twice a second, just to slice it.
-                    string? preview = tokenCount % 25 == 0
-                        ? sb.ToString(0, Math.Min(5000, sb.Length))
-                        : null;
-                    var stats = counters.ToStats(preview);
-                    await onTokenUpdate(tokenCount, elapsed, stats);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            result.IsFailure = true;
-            result.FailureReason = "Inference cancelled (timeout or user abort).";
+            if (streamError is not OperationCanceledException)
+                _logger.LogError(streamError, "Stream read failed for model {Model}", deploymentName);
             return result;
         }
-        catch (Exception ex)
-        {
-            result.IsFailure = true;
-            result.FailureReason = $"Stream read error: {ex.Message}";
-            _logger.LogError(ex, "Stream read failed for model {Model}", deploymentName);
-            return result;
-        }
-
-        sw.Stop();
-
-        // Normalization + density/size are applied centrally by DuelResultEnricher.
-        var html = sb.ToString();
-        result.HtmlOutputRaw = html;
-        result.HtmlOutputSizeBytes = Encoding.UTF8.GetByteCount(html);
-        result.TokenCount = tokenCount;
-        result.WarmUpDurationMs = firstTokenMs ?? warmUpMs; // first-token latency
-        result.TotalDurationMs = sw.ElapsedMilliseconds;
-        result.GenerationDurationMs = Math.Max(0L, result.TotalDurationMs - result.WarmUpDurationMs);
-        result.TokenVelocity = result.GenerationDurationMs > 0
-            ? Math.Round(tokenCount / (result.GenerationDurationMs / 1000.0), 1)
-            : 0;
 
         // Estimate API cost (if pricing is set on the model)
         if (model.InputTokenPricePerMillion.HasValue || model.OutputTokenPricePerMillion.HasValue)
         {
-            var outputCost = (tokenCount / 1_000_000.0) * (double)(model.OutputTokenPricePerMillion ?? 0);
+            var outputCost = (result.TokenCount / 1_000_000.0) * (double)(model.OutputTokenPricePerMillion ?? 0);
             result.ApiCostUsd = outputCost;
         }
 
         _logger.LogInformation(
             "Inference complete for {Model}: {Tokens} tokens, {Bytes} bytes, {Ms}ms",
-            deploymentName, tokenCount, result.HtmlOutputSizeBytes, result.TotalDurationMs);
+            deploymentName, result.TokenCount, result.HtmlOutputSizeBytes, result.TotalDurationMs);
 
         return result;
     }

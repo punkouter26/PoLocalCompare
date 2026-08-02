@@ -1,4 +1,5 @@
 // SOLID: Single Responsibility — verdict recording coordinates ELO + persistence only
+using Azure;
 using Microsoft.Extensions.Caching.Hybrid;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
@@ -31,6 +32,28 @@ public sealed class RecordVerdictHandler
         _eloHistoryRepository = eloHistoryRepository;
         _kFactor = kFactor;
         _cache = cache;
+    }
+
+    /// <summary>
+    /// <see cref="HandleAsync"/>, retried once when it loses an optimistic-concurrency race.
+    /// </summary>
+    /// <remarks>
+    /// ELO moves only through this handler but it now has two callers — the verdict endpoint and
+    /// <see cref="AutoJudge"/> — which both have to survive a 412 the same way. Keeping the retry
+    /// here means a third verdict writer inherits it instead of pasting the policy a third time.
+    /// </remarks>
+    public async Task<VerdictResponseDto?> HandleWithRetryAsync(RecordVerdictCommand command)
+    {
+        try
+        {
+            return await HandleAsync(command);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 412)
+        {
+            // Lost an optimistic-concurrency race (standards §5.5) — HandleAsync re-reads
+            // everything, so one retry resolves against the fresh state.
+            return await HandleAsync(command);
+        }
     }
 
     /// <summary>

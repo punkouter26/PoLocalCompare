@@ -127,17 +127,8 @@ public static class DuelsEndpoints
         {
             try
             {
-                VerdictResponseDto? response;
-                try
-                {
-                    response = await handler.HandleAsync(new RecordVerdictCommand(duelId, request.Verdict));
-                }
-                catch (RequestFailedException ex) when (ex.Status == 412)
-                {
-                    // Lost an optimistic-concurrency race (standards §5.5) — the handler re-reads
-                    // everything, so one retry resolves against the fresh state.
-                    response = await handler.HandleAsync(new RecordVerdictCommand(duelId, request.Verdict));
-                }
+                var response = await handler.HandleWithRetryAsync(
+                    new RecordVerdictCommand(duelId, request.Verdict));
 
                 if (response is null)
                     return Results.NotFound(new { error = $"Duel '{duelId}' not found." });

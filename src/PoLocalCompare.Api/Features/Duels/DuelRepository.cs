@@ -72,8 +72,7 @@ public sealed class DuelRepository : IDuelRepository
 
         var entity = MapToEntity(duel);
         // ETag-conditional replace (standards §5.5): a concurrent writer surfaces as 412 instead of a lost update.
-        var etag = string.IsNullOrEmpty(duel.ETag) ? ETag.All : new ETag(duel.ETag);
-        await _tableClient.UpdateEntityAsync(entity, etag, TableUpdateMode.Replace);
+        await _tableClient.UpdateEntityAsync(entity, TableETag.Parse(duel.ETag), TableUpdateMode.Replace);
     }
 
     public async Task<IEnumerable<Duel>> ListAsync(int limit, string? beforeMonth)

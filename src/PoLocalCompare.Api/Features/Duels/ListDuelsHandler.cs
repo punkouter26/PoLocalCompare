@@ -10,14 +10,23 @@ public sealed class ListDuelsHandler(
 {
     public async Task<IReadOnlyList<DuelSummaryDto>> HandleAsync(ListDuelsQuery query)
     {
-        var duels = await duelRepository.ListAsync(query.Limit, query.BeforeMonth);
+        var duels = (await duelRepository.ListAsync(query.Limit, query.BeforeMonth)).ToList();
 
-        var result = new List<DuelSummaryDto>();
-        foreach (var duel in duels)
+        // The roster is small and every page re-references the same handful of models, so one
+        // GetAllAsync beats two GetByIdAsync per duel. Results live in per-duel partitions and
+        // are independent, so they fetch concurrently rather than one duel at a time.
+        var modelsByIdTask = modelRepository.GetAllAsync();
+        var resultsPerDuel = await Task.WhenAll(
+            duels.Select(duel => duelResultRepository.GetByDuelIdAsync(duel.DuelId)));
+        var modelsById = (await modelsByIdTask).ToDictionary(model => model.ModelId);
+
+        var result = new List<DuelSummaryDto>(duels.Count);
+        for (var index = 0; index < duels.Count; index++)
         {
-            var leftModel = await modelRepository.GetByIdAsync(duel.LeftModelId);
-            var rightModel = await modelRepository.GetByIdAsync(duel.RightModelId);
-            var duelResults = (await duelResultRepository.GetByDuelIdAsync(duel.DuelId)).ToList();
+            var duel = duels[index];
+            modelsById.TryGetValue(duel.LeftModelId, out var leftModel);
+            modelsById.TryGetValue(duel.RightModelId, out var rightModel);
+            var duelResults = resultsPerDuel[index].ToList();
             var leftResult = duelResults.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
             var rightResult = duelResults.FirstOrDefault(r => r.ModelId == duel.RightModelId);
             var qualitySamples = duelResults.Select(r => r.OutputQualityScore).ToList();

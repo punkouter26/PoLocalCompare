@@ -26,4 +26,14 @@ public static class ModelTypeGroup
         ModelType.LocalService => "🦙 Ollama",
         _ => "Other",
     };
+
+    /// <summary>
+    /// Uppercase badge form for tight spaces, e.g. "SVC". Pairs with a
+    /// <c>--@ModelTypeGroup.CssModifier(type)</c> class on the same element.
+    /// </summary>
+    public static string ShortLabel(ModelType type) =>
+        type == ModelType.LocalService ? "SVC" : type.ToString().ToUpper();
+
+    /// <summary>Lowercase type name for BEM modifier classes, e.g. <c>badge--remote</c>.</summary>
+    public static string CssModifier(ModelType type) => type.ToString().ToLower();
 }

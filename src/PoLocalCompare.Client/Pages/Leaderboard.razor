@@ -90,8 +90,8 @@
                         @entry.DisplayName
                         @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
                         {
-                            <span class="lb__type-badge lb__type-badge--@mtype.ToString().ToLower()">
-                                @(mtype == ModelType.LocalService ? "SVC" : mtype.ToString().ToUpper())
+                            <span class="lb__type-badge lb__type-badge--@ModelTypeGroup.CssModifier(mtype)">
+                                @ModelTypeGroup.ShortLabel(mtype)
                             </span>
                         }
                     </Template>
