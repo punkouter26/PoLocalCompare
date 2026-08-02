@@ -69,11 +69,4 @@ public sealed partial class DuelApiClient
             url += $"&before={before}";
         return await _http.GetFromJsonAsync<IReadOnlyList<DuelSummaryDto>>(url, JsonOptions);
     }
-
-    public async Task<byte[]?> DownloadReportAsync(DuelId duelId)
-    {
-        var response = await _http.GetAsync($"/api/duels/{duelId}/report");
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsByteArrayAsync();
-    }
 }

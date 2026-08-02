@@ -15,31 +15,6 @@ public sealed partial class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<ModelAvailabilityDto>>("/api/models/availability", JsonOptions);
     }
 
-    public async Task<ModelDto?> PatchModelAsync(ModelId modelId, string? displayName, string? apiEndpointRef)
-    {
-        var body = new { displayName, apiEndpointRef };
-        var response = await _http.PatchAsJsonAsync($"/api/models/{Uri.EscapeDataString(modelId)}", body, JsonOptions);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<ModelDto>(JsonOptions);
-    }
-
-    public async Task<bool> IsLocalModelDownloadedAsync(string webLlmModelId)
-    {
-        if (string.IsNullOrWhiteSpace(webLlmModelId))
-            return false;
-
-        try
-        {
-            var response = await _http.GetFromJsonAsync<ModelDownloadStatusResponse>(
-                $"/api/models/download-status/{Uri.EscapeDataString(webLlmModelId)}", JsonOptions);
-            return response?.Downloaded == true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     public async Task<bool> RequestModelDownloadAsync(string webLlmModelId)
     {
         try
@@ -52,10 +27,5 @@ public sealed partial class DuelApiClient
         {
             return false;
         }
-    }
-
-    private sealed class ModelDownloadStatusResponse
-    {
-        public bool Downloaded { get; set; }
     }
 }

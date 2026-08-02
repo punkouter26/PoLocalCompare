@@ -190,30 +190,6 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
         Assert.True(response.IsSuccessStatusCode);
     }
 
-    // ── Update ─────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task Patch_RenamesTheModel()
-    {
-        var id = await RegisterAsync(RemotePayload($"Before {Guid.NewGuid():N}"));
-        var newName = $"After {Guid.NewGuid():N}";
-
-        var patch = await Client.PatchAsJsonAsync($"/api/models/{id}", new { DisplayName = newName });
-        patch.EnsureSuccessStatusCode();
-
-        var models = await Client.GetFromJsonAsync<JsonElement[]>("/api/models");
-        var model = Assert.Single(models!, m => m.GetProperty("modelId").GetString() == id);
-        Assert.Equal(newName, model.GetProperty("displayName").GetString());
-    }
-
-    [Fact]
-    public async Task Patch_UnknownModel_Returns404()
-    {
-        var response = await Client.PatchAsJsonAsync("/api/models/01NOTAREALMODELID00000000", new { DisplayName = "x" });
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
     // ── Delete ─────────────────────────────────────────────────────────────
 
     [Fact]

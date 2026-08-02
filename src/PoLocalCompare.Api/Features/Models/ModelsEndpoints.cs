@@ -283,66 +283,6 @@ public static class ModelsEndpoints
         .Produces<ModelDto>(StatusCodes.Status201Created)
         .ProducesValidationProblem();
 
-        group.MapGet("/download-status/{webLlmModelId}", (
-            [FromRoute] string webLlmModelId,
-            [FromServices] IWebHostEnvironment env) =>
-        {
-            if (string.IsNullOrWhiteSpace(webLlmModelId))
-            {
-                return Results.BadRequest(new { error = "webLlmModelId is required." });
-            }
-
-            if (webLlmModelId.Contains("..", StringComparison.Ordinal) ||
-                webLlmModelId.Contains('/', StringComparison.Ordinal) ||
-                webLlmModelId.Contains('\\', StringComparison.Ordinal))
-            {
-                return Results.BadRequest(new { error = "Invalid model id." });
-            }
-
-            var relativePath = $"models/{webLlmModelId}/mlc-chat-config.json";
-            var fileInfo = env.WebRootFileProvider.GetFileInfo(relativePath);
-            var downloaded = fileInfo.Exists && fileInfo.Length > 0;
-            return Results.Ok(new ModelDownloadStatusDto(webLlmModelId, downloaded));
-        })
-        .WithName("GetModelDownloadStatus")
-        .WithSummary("Checks whether a local WebLLM model asset has been downloaded.")
-        .Produces<ModelDownloadStatusDto>();
-
-        group.MapPatch("/{modelId}", async (
-            [FromRoute] ModelId modelId,
-            [FromBody] PatchModelRequest request,
-            [FromServices] IModelRepository repository) =>
-        {
-            var model = await repository.GetByIdAsync(modelId);
-            if (model is null) return Results.NotFound();
-
-            var updated = new Model
-            {
-                ModelId = model.ModelId,
-                DisplayName = request.DisplayName ?? model.DisplayName,
-                ModelType = model.ModelType,
-                CurrentElo = model.CurrentElo,
-                DuelCount = model.DuelCount,
-                WinCount = model.WinCount,
-                GreenScoreAvg = model.GreenScoreAvg,
-                TdpWatts = model.TdpWatts,
-                WebLlmModelId = model.WebLlmModelId,
-                ApiEndpointRef = request.ApiEndpointRef ?? model.ApiEndpointRef,
-                ETag = model.ETag,
-                InputTokenPricePerMillion = model.InputTokenPricePerMillion,
-                OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
-                CreatedAt = model.CreatedAt
-            };
-
-            await repository.UpdateAsync(updated);
-
-            return Results.Ok(RegisterModelHandler.MapToDto(updated));
-        })
-        .WithName("PatchModel")
-        .WithSummary("Updates DisplayName and/or ApiEndpointRef for an existing model.")
-        .Produces<PoLocalCompare.Shared.DTOs.ModelDto>()
-        .Produces(StatusCodes.Status404NotFound);
-
         group.MapDelete("/{modelId}", async (
             [FromRoute] ModelId modelId,
             [FromServices] IModelRepository repository) =>
@@ -449,14 +389,6 @@ public sealed record RegisterModelRequest(
     string? ApiEndpointRef,
     decimal? InputTokenPricePerMillion,
     decimal? OutputTokenPricePerMillion);
-
-public sealed record PatchModelRequest(
-    string? DisplayName,
-    string? ApiEndpointRef);
-
-public sealed record ModelDownloadStatusDto(
-    string WebLlmModelId,
-    bool Downloaded);
 
 file sealed record OllamaTagsResponse(
     IReadOnlyList<OllamaTagModel>? Models);
