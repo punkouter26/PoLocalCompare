@@ -128,7 +128,7 @@ public sealed class NavigationUiTests : UiTestBase
             if (msg.Type == "error") errors.Add(msg.Text);
         };
 
-        await page.GotoAsync("/e2e/seed-auth?redirect=/");
+        await page.GotoAsync(SeedAuthUrl("/"));
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
         Assert.True(errors.Count == 0, "Console errors: " + string.Join(" | ", errors));

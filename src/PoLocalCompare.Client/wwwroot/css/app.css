@@ -257,38 +257,9 @@ a:hover {
     color: var(--link-hover);
 }
 
-.btn-primary {
-    color: #fff;
-    background-color: var(--accent-blue);
-    border-color: var(--accent-blue);
-}
-
-.btn-primary:hover {
-    background-color: #2563eb;
-    border-color: #2563eb;
-}
-
-.btn-success {
-    background-color: var(--accent-green);
-    border-color: var(--accent-green);
-    color: var(--on-accent-green);
-}
-
-.btn-danger {
-    background-color: var(--accent-red);
-    border-color: var(--accent-red);
-    color: #fff;
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+.btn:focus, .btn:active:focus {
   box-shadow: 0 0 0 0.1rem var(--surface-base), 0 0 0 0.25rem var(--accent-blue);
 }
-
-/* Status colours */
-.text-success   { color: var(--accent-green) !important; }
-.text-warning   { color: var(--accent-yellow) !important; }
-.text-danger    { color: var(--accent-red) !important; }
-.text-muted     { color: var(--text-muted) !important; }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 
@@ -301,80 +272,6 @@ a:hover {
 
 .app-content > * {
     animation: fadeIn 240ms ease-out;
-}
-
-.section-eyebrow {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.73rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-}
-
-/* ── Duel grid: 2-column desktop, scroll-snap mobile ─────────────────────── */
-
-.duel-grid {
-    display: grid;
-    gap: 1rem;
-}
-
-@media (min-width: 1024px) {
-    .duel-grid {
-        grid-template-columns: 1fr 1fr;
-        align-items: start;
-    }
-}
-
-@media (max-width: 1023px) {
-    .duel-grid {
-        grid-template-columns: 1fr;
-        scroll-snap-type: y mandatory;
-        overflow-y: auto;
-        max-height: 100dvh;
-    }
-
-    .duel-grid > * {
-        scroll-snap-align: start;
-        min-height: 50dvh;
-    }
-}
-
-/* ── Surface / card ───────────────────────────────────────────────────────── */
-
-.oled-card {
-    background-color: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    padding: 1rem;
-}
-
-/* ── Form controls ────────────────────────────────────────────────────────── */
-
-.form-control, .form-select {
-    background-color: var(--surface-1);
-    color: var(--text);
-    border-color: var(--border);
-}
-
-.form-control:focus, .form-select:focus {
-    background-color: var(--surface-1);
-    color: var(--text);
-    border-color: var(--accent-blue);
-}
-
-/* ── Validation ───────────────────────────────────────────────────────────── */
-
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid var(--accent-green);
-}
-
-.invalid {
-    outline: 1px solid var(--accent-red);
-}
-
-.validation-message {
-    color: var(--accent-red);
 }
 
 /* ── Blazor error UI ──────────────────────────────────────────────────────── */
@@ -498,15 +395,6 @@ code {
     text-align: center;
     text-transform: uppercase;
     width: 100%;
-}
-
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-    color: var(--bs-secondary-color);
-    text-align: end;
-}
-
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-    text-align: start;
 }
 
 /* ── Accessibility — WCAG 2.2 Level AA ────────────────────────────────────── */

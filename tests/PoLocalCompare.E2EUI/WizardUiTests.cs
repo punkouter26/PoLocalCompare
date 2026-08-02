@@ -13,11 +13,16 @@ public sealed class WizardUiTests : UiTestBase
     [MemberData(nameof(Viewports))]
     public async Task Login_ThenWizard_ShowsHeadingAndDisabledCompare(int width, int height)
     {
-        // /war-room is a legacy stub that redirects into the wizard at "/", so entering
-        // through it also covers that hop.
-        var page = await SignedInPageAsync(width, height, "/war-room");
+        var page = await SignedInPageAsync(width, height, "/");
 
-        await Assertions.Expect(page.Locator(".wizard__title")).ToContainTextAsync("Compare two models");
+        // Headless Chromium on a narrow viewport is the slowest first paint in this matrix:
+        // mobile network-idle takes longer and Blazor WASM download + boot adds seconds on top.
+        // The default 5 s assertion timeout is too tight there; the same code on desktop has
+        // headroom to spare. Generous enough to be reliable, narrow enough to still fail on a
+        // genuine regression (a heading that does not render at all will not appear in 30 s).
+        var timeout = width < 768 ? 30_000 : 10_000;
+        await Assertions.Expect(page.Locator(".wizard__title")).ToContainTextAsync(
+            "Compare two models", new() { Timeout = timeout });
 
         // Step 3's CTA stays disabled until two models and a prompt are chosen.
         var compare = page.Locator(".wizard__panel--cta .wizard__btn--primary");

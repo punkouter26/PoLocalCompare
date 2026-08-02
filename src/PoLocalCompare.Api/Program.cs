@@ -351,10 +351,6 @@ try
     app.MapLeaderboardEndpoints();
     app.MapOllamaEndpoints();
 
-    // ─── E2E test helpers (non-Production only) ───────────────────────────────
-    if (!app.Environment.IsProduction())
-        app.MapE2EEndpoints();
-
     // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
     if (app.Environment.IsDevelopment())
     {

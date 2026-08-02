@@ -54,6 +54,6 @@ public static partial class DuelResultEnricher
         var noComments = HtmlCommentRegex().Replace(html, string.Empty);
         var collapsed = WhitespaceRegex().Replace(noComments, " ").Trim();
         var functionalChars = collapsed.Replace(" ", string.Empty).Length;
-        return Math.Round(new CharacterDensity(functionalChars, totalBytes).Value, 4);
+        return Math.Round((double)functionalChars / totalBytes, 4);
     }
 }

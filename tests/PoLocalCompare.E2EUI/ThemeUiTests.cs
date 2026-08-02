@@ -134,7 +134,7 @@ public sealed class ThemeUiTests : UiTestBase
         // theme.js is loaded in <head> precisely so the attribute is already set by the time
         // the document finishes parsing — otherwise every navigation flashes the wrong palette.
         var page = await NewPageAsync(width, height, ColorScheme.Dark);
-        await page.GotoAsync("/e2e/seed-auth?redirect=/");
+        await page.GotoAsync(SeedAuthUrl("/"));
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
         await OpenNavIfCollapsedAsync(page);

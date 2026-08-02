@@ -9,7 +9,7 @@ namespace PoLocalCompare.E2EUI;
 /// Prerequisites — this suite is NOT run in CI (no GPU on the runner), so invoke it manually:
 ///   1. App running at BASE_URL (default https://localhost:5001).
 ///   2. Browsers installed: <c>pwsh bin/Debug/net10.0/playwright.ps1 install chromium</c>.
-/// Authentication uses the dev guest bypass via <c>/e2e/seed-auth</c>, which sets the BFF cookie.
+/// Authentication uses the dev-only <c>/auth/login/fake</c> route, which sets the BFF cookie.
 /// Set <c>HEADLESS=1</c> to run without a visible window.
 /// </summary>
 public abstract class UiTestBase : IAsyncLifetime
@@ -73,11 +73,18 @@ public abstract class UiTestBase : IAsyncLifetime
         }
     }
 
+    /// <summary>Identity the dev-only fake-auth route signs the browser in as.</summary>
+    protected const string GuestIdentity = "GUEST_E2E_TEST";
+
+    /// <summary>Builds the dev-only fake-auth URL that establishes a BFF cookie and lands on <paramref name="path"/>.</summary>
+    protected static string SeedAuthUrl(string path) =>
+        $"/auth/login/fake?user={GuestIdentity}&returnUrl={Uri.EscapeDataString(path)}";
+
     /// <summary>Signs in as a guest and lands on <paramref name="path"/>.</summary>
     protected async Task<IPage> SignedInPageAsync(int width, int height, string path = "/", ColorScheme? colorScheme = null)
     {
         var page = await NewPageAsync(width, height, colorScheme);
-        await page.GotoAsync($"/e2e/seed-auth?redirect={Uri.EscapeDataString(path)}");
+        await page.GotoAsync(SeedAuthUrl(path));
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
         return page;
     }
