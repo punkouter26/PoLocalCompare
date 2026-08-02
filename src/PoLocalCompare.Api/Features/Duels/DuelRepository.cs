@@ -135,6 +135,7 @@ public sealed class DuelRepository : IDuelRepository
             ["VerdictSource"] = duel.VerdictSource.ToString(),
             ["JudgeRationale"] = duel.JudgeRationale,
             ["JudgeModel"] = duel.JudgeModel,
+            ["JudgeStoodDownReason"] = duel.JudgeStoodDownReason,
         };
         return entity;
     }
@@ -164,6 +165,7 @@ public sealed class DuelRepository : IDuelRepository
                 : VerdictSource.Human,
             JudgeRationale = entity.GetString("JudgeRationale"),
             JudgeModel = entity.GetString("JudgeModel"),
+            JudgeStoodDownReason = entity.GetString("JudgeStoodDownReason"),
             ETag = entity.ETag.ToString(),
         };
         return duel;

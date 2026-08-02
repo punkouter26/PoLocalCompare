@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using Azure;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
+using PoLocalCompare.Api.Common.Background;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -18,6 +20,10 @@ internal static partial class AutoJudgeLog
 
     [LoggerMessage(EventId = 1212, Level = LogLevel.Error, Message = "Auto-judge failed for duel {DuelId}.")]
     public static partial void Failed(ILogger logger, Exception ex, DuelId duelId);
+
+    [LoggerMessage(EventId = 1213, Level = LogLevel.Warning,
+        Message = "Auto-judge rate-limited for duel {DuelId}, re-queuing in {DelaySeconds:F0}s (attempt {Attempt}/{Max}).")]
+    public static partial void RateLimited(ILogger logger, DuelId duelId, double delaySeconds, int attempt, int max);
 }
 
 /// <summary>
@@ -28,6 +34,11 @@ internal static partial class AutoJudgeLog
 /// now carries a <see cref="VerdictSource"/>. Two invariants keep it honest:
 /// a human who picks inside the window always wins the race, and a judge that cannot reach a
 /// decision leaves the duel Pending rather than guessing — ELO never moves on no evidence.
+///
+/// A third behaviour complements those: a judge that *temporarily* cannot reach the model —
+/// a 429 with a <c>Retry-After</c> header, mostly — is re-queued for the requested delay
+/// rather than stood down, so a Foundry rate-limit burst does not silently turn ten-demo runs
+/// into one-judge-recorded.
 /// </remarks>
 public sealed class AutoJudge
 {
@@ -37,7 +48,17 @@ public sealed class AutoJudge
     private readonly IDuelJudge _judge;
     private readonly IHubContext<DuelHub> _hubContext;
     private readonly AutoJudgeOptions _options;
+    private readonly IBackgroundTaskQueue _backgroundQueue;
     private readonly ILogger<AutoJudge> _logger;
+
+    /// <summary>
+    /// Per-duel re-queue attempt counter. Process-wide because <see cref="AutoJudge"/> is
+    /// scoped per call, but the lifetime we care about (a finished duel) is bounded by the
+    /// verdict deadline (24 h default). The eviction is opportunistic — the entries are
+    /// tiny integers — and the worst case is a future duel arriving with a duplicate id, which
+    /// is impossible since <see cref="DuelId"/> is a ULID.
+    /// </summary>
+    private static readonly ConcurrentDictionary<DuelId, int> RateLimitAttempts = new();
 
     public AutoJudge(
         IDuelRepository duelRepository,
@@ -46,6 +67,7 @@ public sealed class AutoJudge
         IDuelJudge judge,
         IHubContext<DuelHub> hubContext,
         IOptions<AutoJudgeOptions> options,
+        IBackgroundTaskQueue backgroundQueue,
         ILogger<AutoJudge> logger)
     {
         _duelRepository = duelRepository;
@@ -54,6 +76,7 @@ public sealed class AutoJudge
         _judge = judge;
         _hubContext = hubContext;
         _options = options.Value;
+        _backgroundQueue = backgroundQueue;
         _logger = logger;
     }
 
@@ -75,8 +98,12 @@ public sealed class AutoJudge
 
         try
         {
-            var delaySeconds = delaySecondsOverride ?? _options.DelaySeconds;
-            await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(delaySeconds, 0, 3600)), cancellationToken);
+            var configuredDelay = delaySecondsOverride ?? _options.DelaySeconds;
+            // Floor at 0 because demo mode legitimately wants 0 ("decide immediately, no human
+            // is watching"). Negative values come from misconfigured appsettings and would
+            // skip the delay entirely, which is benign but ugly in the logs.
+            var delaySeconds = Math.Clamp(configuredDelay, 0, 3600);
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
 
             var duel = await _duelRepository.GetByIdAsync(duelId);
             if (duel is null)
@@ -102,9 +129,48 @@ public sealed class AutoJudge
             var left = results.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
             var right = results.FirstOrDefault(r => r.ModelId == duel.RightModelId);
 
-            var decision = await DecideAsync(duel, left, right, cancellationToken);
-            if (decision is null) return;
+            JudgeDecision? decision;
+            string? standDownReason = null;
+            try
+            {
+                decision = await DecideAsync(duel, left, right, cancellationToken);
+            }
+            catch (JudgeRateLimitedException rateLimit)
+            {
+                standDownReason = $"Rate-limited by judge endpoint; retrying in {rateLimit.RetryAfter.TotalSeconds:F0}s.";
+                await RequeueAfterRateLimitAsync(duelId, rateLimit.RetryAfter, cancellationToken);
+                await PersistStandDownReasonAsync(duel, standDownReason);
+                return;
+            }
 
+            // Make the "could not decide" reason persistent on the duel so a human arriving at
+            // the Arena from the demo queue gets the same hint the judge had. The two cases:
+            //   - both sides failed ⇒ nothing to compare (the Arena already shows a failure
+            //     card, but the explicit reason stops a judge coming back later from logging
+            //     the same placeholder again);
+            //   - one side failed ⇒ the partial-duel walkover the code below returns, in which
+            //     case no "stood down" note should remain on the saved duel.
+            if (decision is null)
+            {
+                standDownReason = SynthesizeStandDownReason(left, right);
+                if (standDownReason is not null)
+                    await PersistStandDownReasonAsync(duel, standDownReason);
+
+                // Reset the rate-limit counter on a clean "no decision" so a subsequent 429
+                // gets a fresh budget — the alternative is locking out the duel forever after
+                // one transient and one permanent failure.
+                RateLimitAttempts.TryRemove(duelId, out _);
+                return;
+            }
+
+            // A successful decision means we never have to retry this duel; drop the counter
+            // and clear the standing-down note so future reads do not show stale text.
+            RateLimitAttempts.TryRemove(duelId, out _);
+            if (!string.IsNullOrEmpty(duel.JudgeStoodDownReason))
+            {
+                duel.JudgeStoodDownReason = null;
+                await SafeUpdateAsync(duel, duelId);
+            }
             await RecordAsync(duelId, decision, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -115,6 +181,44 @@ public sealed class AutoJudge
         {
             AutoJudgeLog.Failed(_logger, ex, duelId);
         }
+    }
+
+    /// <summary>
+    /// Schedules a fresh attempt after <paramref name="retryAfter"/> via the same task queue the
+    /// duels themselves use, then returns so the next duel in the demo does not stall behind a
+    /// long <c>Retry-After</c>.
+    /// </summary>
+    private Task RequeueAfterRateLimitAsync(DuelId duelId, TimeSpan retryAfter, CancellationToken cancellationToken)
+    {
+        var max = Math.Max(0, _options.RateLimitRetryMax);
+        var attempt = RateLimitAttempts.AddOrUpdate(duelId, 1, (_, prev) => prev + 1);
+        var cappedDelay = TimeSpan.FromSeconds(
+            Math.Min(retryAfter.TotalSeconds, Math.Max(1, _options.RateLimitRetryMaxDelaySeconds)));
+
+        if (attempt > max)
+        {
+            // Out of retries. Leave the duel Pending so a human can finish it; the queue item
+            // is the only thing standing in the way of the next duel, so dropping it is
+            // essential and "judge stood down (rate-limit)" still appears in the Arena for
+            // anyone who walks back to this duel.
+            AutoJudgeLog.StoodDown(_logger, duelId,
+                $"rate-limit retries exhausted ({attempt - 1} attempts)");
+            return Task.CompletedTask;
+        }
+
+        AutoJudgeLog.RateLimited(_logger, duelId, cappedDelay.TotalSeconds, attempt, max);
+
+        _backgroundQueue.QueueBackgroundWork(async ct =>
+        {
+            try
+            {
+                await Task.Delay(cappedDelay, ct);
+                await RunAsync(duelId, ct, delaySecondsOverride: 0);
+            }
+            catch (OperationCanceledException) { /* host shutting down */ }
+        });
+
+        return Task.CompletedTask;
     }
 
     private async Task<JudgeDecision?> DecideAsync(
@@ -151,6 +255,44 @@ public sealed class AutoJudge
             left!.HtmlOutputRaw,
             right!.HtmlOutputRaw,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Best-effort persistence of a standing-down reason on the duel. A 412 here means a human
+    /// or another auto-judge race has moved the row; in that case the next reader still gets
+    /// a useful value (whatever won the race) and we drop the write without surfacing a false
+    /// error.
+    /// </summary>
+    private async Task PersistStandDownReasonAsync(Duel duel, string reason)
+    {
+        try
+        {
+            duel.JudgeStoodDownReason = reason;
+            await _duelRepository.UpdateAsync(duel);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 412)
+        {
+            // Lost the optimistic-concurrency race; nothing we can do without re-read + retry
+            // and the reason is informational, not load-bearing.
+        }
+    }
+
+    private static string? SynthesizeStandDownReason(DuelResult? left, DuelResult? right)
+    {
+        var leftOk = left is not null && !left.IsFailure && !string.IsNullOrWhiteSpace(left.HtmlOutputRaw);
+        var rightOk = right is not null && !right.IsFailure && !string.IsNullOrWhiteSpace(right.HtmlOutputRaw);
+        if (!leftOk && !rightOk) return "Neither model produced output.";
+        return null; // single-side failure walkovers return a decision via DecideAsync, not null.
+    }
+
+    /// <summary>
+    /// Quietly clears stale state on the duel, swallowing the optimistic-concurrency races
+    /// that happen when the human path finishes a verdict between our reads and our writes.
+    /// </summary>
+    private async Task SafeUpdateAsync(Duel duel, DuelId duelId)
+    {
+        try { await _duelRepository.UpdateAsync(duel); }
+        catch (RequestFailedException ex) when (ex.Status == 412) { /* race lost */ }
     }
 
     private async Task RecordAsync(DuelId duelId, JudgeDecision decision, CancellationToken cancellationToken)

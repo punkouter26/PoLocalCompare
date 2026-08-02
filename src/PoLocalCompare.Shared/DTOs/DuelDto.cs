@@ -34,4 +34,12 @@ public sealed class DuelDto
     /// the client read this — a page opened late must resume the clock, not restart it.
     /// </summary>
     public int AutoJudgeDelaySeconds { get; init; }
+
+    /// <summary>
+    /// Reason the auto-judge stood down on a still-<see cref="DuelVerdict.Pending"/> duel, if
+    /// it has. Carries rate-limit notes ("HTTP 429") and per-side failure notes that are
+    /// genuinely interesting to the human asked to finish the duel by hand; absent on duels
+    /// that were judged, or never tried.
+    /// </summary>
+    public string? JudgeStoodDownReason { get; init; }
 }

@@ -1,3 +1,7 @@
+@* /war-room was consolidated into the wizard at /. This route exists to redirect anyone
+   with a bookmarked old link so the share URL does not 404; the Home page owns the
+   single-pane setup. Kept with the same name on purpose so existing anchor links still resolve. *@
+
 @page "/war-room"
 @inject NavigationManager Nav
 
@@ -8,7 +12,8 @@
 
     protected override void OnInitialized()
     {
-        // /war-room was consolidated into the wizard at /. Forward any query params.
+        // Forward any query params to the wizard, replacing history so the back button does not
+        // bounce through this stub on the way out.
         var qs = new List<string>();
         if (!string.IsNullOrWhiteSpace(Prompt))
             qs.Add($"prompt={Uri.EscapeDataString(Prompt)}");

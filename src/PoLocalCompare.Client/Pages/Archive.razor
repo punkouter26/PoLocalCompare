@@ -240,7 +240,7 @@
     {
         _selectedDuel = duel;
         await InvokeAsync(StateHasChanged);
-        await JS.InvokeVoidAsync("eval", "document.getElementById('archive-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'})");
+        await JS.InvokeVoidAsync("scrollElementIntoView", "archive-detail");
     }
 
     private static string GetWinnerName(DuelSummaryDto d)

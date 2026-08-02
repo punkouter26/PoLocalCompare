@@ -232,7 +232,7 @@ public sealed record OutputAnalysis
         if (scriptBlocks.Count > 0 && scriptChars == 0)
             structural.Add("Empty <script> block");
 
-        if (html.Contains("```", StringComparison.Ordinal))
+        if (HtmlPreview.ContainsFence(html))
             structural.Add("Markdown fences present in raw output");
 
         var lineCount = html.Count(c => c == '\n') + 1;

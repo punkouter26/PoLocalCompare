@@ -1,5 +1,6 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Shared.Analysis
 
 <div class="processing-panel processing-panel--@Status.ToString().ToLower()">
     <div class="processing-panel__header">
@@ -60,10 +61,12 @@
         </div>
     }
 
-    @* Time progress bar against 5-minute limit *@
+    @* Time progress bar against the duel watchdog (DuelExecutionService enforces a 900 s
+       ceiling; we surface that same scale so what the user sees matches the server-side
+       behaviour the duel gets timed out against). *@
     <div class="processing-panel__progress-track">
         <div class="processing-panel__progress-fill processing-panel__progress-fill--@Status.ToString().ToLower()"
-             style="--fill: @Math.Min(100, ElapsedMs / 3000.0).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%">
+             style="--fill: @TimeProgressPercent.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%">
         </div>
     </div>
 
@@ -102,12 +105,16 @@
 
         @if (Status == DuelStatus.Generating && TokenVelocity.HasValue && TokenVelocity.Value > 0)
         {
-            var remainingTokens = 8000 - TokenCount;
+            var completionTarget = TelemetryConstants.ExpectedCompletionTokens;
+            var remainingTokens = Math.Max(0, completionTarget - TokenCount);
             var etaMs = (long)(remainingTokens / TokenVelocity.Value * 1000);
-            var finishAt = DateTime.Now.AddMilliseconds(etaMs);
+            // UTC in, UTC displayed: the rest of the app runs in UTC (Archive timestamps,
+            // `StartedAt`, lobby events). An ETA in local time would leap on cross-time-zone
+            // reloads and was the source of brief "the clock jumped back" confusion.
+            var finishAt = DateTimeOffset.UtcNow.AddMilliseconds(etaMs);
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">~Done at</span>
-                <span class="processing-panel__metric-value">@finishAt.ToString("h:mm tt")</span>
+                <span class="processing-panel__metric-value">@finishAt.ToLocalTime().ToString("h:mm tt")</span>
             </div>
         }
 
@@ -139,7 +146,7 @@
         @* --- Output size + rate --- *@
         @if (TokenCount > 0)
         {
-            var outputBytes = (long)(TokenCount * 4.5);
+            var outputBytes = (long)(TokenCount * TelemetryConstants.ApproxBytesPerToken);
             var genElapsedMs = WarmUpMs.HasValue ? Math.Max(1, ElapsedMs - WarmUpMs.Value) : Math.Max(1, ElapsedMs);
 
             <div class="processing-panel__metric">
@@ -158,7 +165,7 @@
 
             <div class="processing-panel__metric">
                 <span class="processing-panel__metric-label">~Progress</span>
-                <span class="processing-panel__metric-value">@((TokenCount * 100 / 8000).ToString())%</span>
+                <span class="processing-panel__metric-value">@((TokenCount * 100 / TelemetryConstants.ExpectedCompletionTokens).ToString())%</span>
             </div>
         }
 
@@ -208,6 +215,15 @@
     [Parameter] public double? TdpWatts { get; set; }
     [Parameter] public DuelStatus Status { get; set; } = DuelStatus.Initializing;
     [Parameter] public long ElapsedMs { get; set; }
+
+    /// <summary>
+    /// Five-minute match for the duel watchdog — the same ceiling the server uses to abandon
+    /// a stalled duel. Pinning the progress bar here means it never overflows to >100 % in a
+    /// duel that races the timeout.
+    /// </summary>
+    private const double WatchdogSeconds = 300.0;
+
+    private double TimeProgressPercent => Math.Clamp(ElapsedMs / 1000.0 / WatchdogSeconds * 100.0, 0, 100);
     [Parameter] public int TokenCount { get; set; }
     [Parameter] public double? TokenVelocity { get; set; }
     [Parameter] public double? PeakTokenVelocity { get; set; }

@@ -105,28 +105,23 @@ public sealed class FoundryDuelJudge : IDuelJudge
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_options.TimeoutSeconds, 5, 300)));
 
-        string replyText;
+        // Foundry's 429 carries its own retry hint. We don't read it here — the typed client has
+        // already exhausted its fast-retry policy — but we surface the header value all the way
+        // back via JudgeRateLimitedException so AutoJudge can schedule itself for the right window.
+        (System.Net.HttpStatusCode Status, string Body, string? RetryAfter) response;
         try
         {
             // Same two-endpoint dance as FoundryInferenceProxy — see FoundryChatRequest.DeploymentUrl.
-            var (status, payload) = await PostAsync(FoundryChatRequest.DeploymentUrl(endpoint, deployment), apiKey,
+            response = await PostAsync(FoundryChatRequest.DeploymentUrl(endpoint, deployment), apiKey,
                 FoundryChatRequest.Build(deployment, messages, ReplyTokenBudget, 0.0, stream: false, includeModelField: false),
                 timeout.Token);
 
-            if (status == System.Net.HttpStatusCode.NotFound)
+            if (response.Status == System.Net.HttpStatusCode.NotFound)
             {
-                (status, payload) = await PostAsync(FoundryChatRequest.ModelInferenceUrl(endpoint), apiKey,
+                response = await PostAsync(FoundryChatRequest.ModelInferenceUrl(endpoint), apiKey,
                     FoundryChatRequest.Build(deployment, messages, ReplyTokenBudget, 0.0, stream: false, includeModelField: true),
                     timeout.Token);
             }
-
-            if (status != System.Net.HttpStatusCode.OK)
-            {
-                JudgeLog.CallFailed(_logger, $"HTTP {(int)status}: {Clip(payload, 300)}");
-                return null;
-            }
-
-            replyText = ExtractContent(payload) ?? string.Empty;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -138,6 +133,21 @@ public sealed class FoundryDuelJudge : IDuelJudge
             JudgeLog.CallFailed(_logger, ex.Message);
             return null;
         }
+
+        var (status, payload, retryAfter) = response;
+        if (status == (System.Net.HttpStatusCode)429)
+        {
+            var hint = ParseRetryAfter(retryAfter);
+            JudgeLog.CallFailed(_logger, $"HTTP 429 (retry after {hint.TotalSeconds:F0}s)");
+            throw new JudgeRateLimitedException(hint, "HTTP 429 from judge endpoint");
+        }
+        if (status != System.Net.HttpStatusCode.OK)
+        {
+            JudgeLog.CallFailed(_logger, $"HTTP {(int)status}: {Clip(payload, 300)}");
+            return null;
+        }
+
+        var replyText = ExtractContent(payload) ?? string.Empty;
 
         var parsed = ParseReply(replyText);
         if (parsed is null)
@@ -153,7 +163,7 @@ public sealed class FoundryDuelJudge : IDuelJudge
         return new JudgeDecision(verdict, reason);
     }
 
-    private async Task<(System.Net.HttpStatusCode Status, string Body)> PostAsync(
+    private async Task<(System.Net.HttpStatusCode Status, string Body, string? RetryAfter)> PostAsync(
         string url,
         string apiKey,
         Dictionary<string, object?> body,
@@ -164,7 +174,39 @@ public sealed class FoundryDuelJudge : IDuelJudge
         request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
         using var response = await _http.SendAsync(request, cancellationToken);
-        return (response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
+        var status = response.StatusCode;
+        string? retryAfterHeader = null;
+        if (response.Headers.TryGetValues("Retry-After", out var values))
+        {
+            retryAfterHeader = values.FirstOrDefault();
+        }
+
+        var bodyText = await response.Content.ReadAsStringAsync(cancellationToken);
+        return (status, bodyText, retryAfterHeader);
+    }
+
+    /// <summary>
+    /// RFC 7231 §7.1.3 says Retry-After is either a delta-seconds integer or an HTTP-date.
+    /// Real Foundry replies send the integer form; we still parse both defensively, fall back to
+    /// a one-minute window so a missing/malformed header yields a sensible "try again shortly".
+    /// </summary>
+    private static TimeSpan ParseRetryAfter(string? header)
+    {
+        if (string.IsNullOrWhiteSpace(header)) return TimeSpan.FromSeconds(60);
+        var trimmed = header.Trim();
+        if (int.TryParse(trimmed, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+        {
+            // Clamp to a minute ceiling so an adversarial 86400 cannot park the demo for a day.
+            return TimeSpan.FromSeconds(Math.Clamp(seconds, 1, 60));
+        }
+        if (DateTimeOffset.TryParse(trimmed, out var when))
+        {
+            var delta = when - DateTimeOffset.UtcNow;
+            return delta <= TimeSpan.Zero ? TimeSpan.FromSeconds(60)
+                : TimeSpan.FromSeconds(Math.Min(delta.TotalSeconds, 60));
+        }
+        return TimeSpan.FromSeconds(60);
     }
 
     private string Truncate(string html)

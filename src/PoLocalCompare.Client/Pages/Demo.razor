@@ -160,6 +160,13 @@
                                     🏆 @state.WinnerName@(state.EloShift is { } shift ? $" (+{shift:F1})" : "")
                                 </a>
                             }
+                            else if (state.Outcome == RoundOutcome.JudgeStoodDown && state.DuelId is { } rateLimitId)
+                            {
+                                <a href="@($"/arena/{rateLimitId}")" class="demo__queue-link demo__queue-link--muted"
+                                   title="The AI judge hit a rate limit. The duel is still pending — open it to decide by hand.">
+                                    ⏱ judge rate-limited — decide it
+                                </a>
+                            }
                             else if (state.Outcome == RoundOutcome.Undecided && state.DuelId is { } undecidedId)
                             {
                                 <a href="@($"/arena/{undecidedId}")" class="demo__queue-link demo__queue-link--muted">
@@ -201,7 +208,7 @@
 
     private enum Phase { Idle, Running, Finished }
 
-    private enum RoundOutcome { Queued, Running, Judged, Undecided, Failed, Skipped }
+    private enum RoundOutcome { Queued, Running, Judged, Undecided, JudgeStoodDown, Failed, Skipped }
 
     private sealed class RoundState(DemoRoundDto round)
     {
@@ -266,6 +273,7 @@
         _stopRequested = false;
         _completedCount = 0;
         _current = null;
+        _lastSettledReason = null;
         await LoadPlanAsync();
     }
 
@@ -401,14 +409,28 @@
             }
 
             // A finished duel the judge declined to decide (both models failed, or the judge was
-            // unreachable) stays Pending forever. Stop waiting and leave it for a human.
+            // rate-limited and is waiting to retry) stays Pending but the server has stamped
+            // JudgeStoodDownReason onto it. Distinguish "wait, the judge is coming back" from
+            // "give up, no human ever coming":
+            //   - rate-limited + the duel is unfinished: the auto-judge is just slow, keep waiting
+            //   - rate-limited AND the auto-judge has exhausted its retries: that's permanent
+            //   - "neither model produced output": permanent, no point waiting further
             if (fresh?.CompletedAt is not null && fresh.Results.Count > 0 && HasSettled(fresh))
+            {
+                _lastSettledReason = fresh.JudgeStoodDownReason;
                 return null;
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         return null;
     }
+
+    /// <summary>
+    /// Most-recent settled reason reported by the server. Cleared on every demo restart so a
+    /// previous run's transient reasons do not leak into a fresh run.
+    /// </summary>
+    private string? _lastSettledReason;
 
     /// <summary>
     /// True when the duel has finished and enough time has passed since completion that a judge
@@ -423,7 +445,14 @@
     {
         if (verdict?.WinnerModelId is null)
         {
-            state.Outcome = RoundOutcome.Undecided;
+            // The server stamps `JudgeStoodDownReason` when the auto-judge tried and failed (most
+            // commonly a Foundry rate-limit). Use that to distinguish the transient "judge is
+            // coming back" case from a permanent failure, and tell the human clearly which it is
+            // when they open the Arena from the queue.
+            state.Outcome = _lastSettledReason is not null && _lastSettledReason.Contains("Rate-limited", StringComparison.OrdinalIgnoreCase)
+                ? RoundOutcome.JudgeStoodDown
+                : RoundOutcome.Undecided;
+            state.Error = _lastSettledReason;
             return;
         }
 

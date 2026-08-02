@@ -31,6 +31,14 @@ public sealed class Duel
 
     /// <summary>Deployment name of the model that judged, when <see cref="VerdictSource"/> is Ai.</summary>
     public string? JudgeModel { get; set; }
+
+    /// <summary>
+    /// Last standing-down reason recorded while the duel was still <see cref="DuelVerdict.Pending"/>.
+    /// Set when <see cref="AutoJudge"/> cannot decide (rate-limit, both sides failed, etc.) and
+    /// later cleared when a verdict lands.
+    /// </summary>
+    public string? JudgeStoodDownReason { get; set; }
+
     /// <summary>True when only one model completed (partial duel).</summary>
     public bool IsPartial { get; set; }
 
