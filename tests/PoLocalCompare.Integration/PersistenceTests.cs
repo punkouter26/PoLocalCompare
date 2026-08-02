@@ -241,6 +241,23 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Contains(all, r => r.ModelId == right && r.TokenCount == 2);
     }
 
+    [Theory]
+    [InlineData("' or PartitionKey ne '")]
+    [InlineData("x' or RowKey ne 'x")]
+    public async Task DuelResult_QuoteInId_CannotWidenTheFilterToOtherPartitions(string payload)
+    {
+        // Ids are not shape-validated (DuelId.From takes any non-blank string so legacy rows keep
+        // round-tripping), so a route-supplied id reaches the OData filter verbatim. Pasted in
+        // raw, these payloads close the quoted literal and turn the scoped read into a full-table
+        // read of every duel's results. Bound as an escaped literal, they simply match nothing.
+        var otherDuel = DuelId.New();
+        await Results.SaveAsync(new DuelResult(otherDuel, ModelId.New()) { TokenCount = 7 });
+
+        var leaked = await Results.GetByDuelIdAsync(DuelId.From(payload));
+
+        Assert.Empty(leaked);
+    }
+
     [Fact]
     public async Task DuelResult_FailureDetailsPersist()
     {

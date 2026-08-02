@@ -55,8 +55,12 @@ public sealed class DuelResultRepository : IDuelResultRepository
     public async Task<IEnumerable<DuelResult>> GetByDuelIdAsync(DuelId duelId)
     {
         var results = new List<DuelResult>();
+        // CreateQueryFilter escapes the value instead of pasting it into the OData expression.
+        // Ids are not shape-validated (DuelId.From accepts any non-blank string so legacy rows
+        // keep round-tripping), so a route-supplied id reaches here verbatim and a raw
+        // interpolation would let `x' or PartitionKey ne 'x` widen the query to every partition.
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
-            filter: $"PartitionKey eq '{duelId}'"))
+            filter: TableClient.CreateQueryFilter($"PartitionKey eq {duelId.Value}")))
         {
             results.Add(await MapToResultAsync(entity));
         }
@@ -67,7 +71,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
     {
         var results = new List<DuelResult>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
-            filter: $"RowKey eq '{modelId}'"))
+            filter: TableClient.CreateQueryFilter($"RowKey eq {modelId.Value}")))
         {
             results.Add(await MapToResultAsync(entity));
         }

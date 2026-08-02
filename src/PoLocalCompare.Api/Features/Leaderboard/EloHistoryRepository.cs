@@ -32,7 +32,7 @@ public sealed class EloHistoryRepository : IEloHistoryRepository
     {
         var records = new List<EloRecord>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
-            filter: $"PartitionKey eq '{modelId}'",
+            filter: TableClient.CreateQueryFilter($"PartitionKey eq {modelId.Value}"),
             maxPerPage: 20))
         {
             records.Add(MapToRecord(entity));
@@ -48,7 +48,7 @@ public sealed class EloHistoryRepository : IEloHistoryRepository
     {
         var records = new List<EloRecord>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
-            filter: $"PartitionKey eq '{modelId}'"))
+            filter: TableClient.CreateQueryFilter($"PartitionKey eq {modelId.Value}")))
         {
             records.Add(MapToRecord(entity));
         }

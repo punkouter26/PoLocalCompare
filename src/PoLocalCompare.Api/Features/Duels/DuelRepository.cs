@@ -90,7 +90,7 @@ public sealed class DuelRepository : IDuelRepository
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
             filter: string.IsNullOrEmpty(beforeMonth)
                 ? null
-                : $"PartitionKey le '{beforeMonth}'",
+                : TableClient.CreateQueryFilter($"PartitionKey le {beforeMonth}"),
             maxPerPage: limit))
         {
             duels.Add(MapToDuel(entity));

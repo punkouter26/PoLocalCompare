@@ -164,12 +164,23 @@ public static class DuelsEndpoints
             // `limit` is optional: an absent (or 0) value defaults to 20. Declaring it
             // non-nullable/required previously returned 500 when callers omitted it.
             var clampedLimit = Math.Clamp(limit is null or 0 ? 20 : limit.Value, 1, 100);
+
+            // `before` is a partition cursor, so it is only ever a yyyyMM stamp. The repository
+            // binds it as an escaped literal regardless; rejecting the wrong shape here keeps a
+            // malformed cursor from silently paging through nothing.
+            if (before is not null && !IsMonthStamp(before))
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["before"] = ["Must be a yyyyMM month stamp, e.g. 202608."]
+                });
+
             var results = await handler.HandleAsync(new ListDuelsQuery(clampedLimit, before));
             return Results.Ok(results);
         })
         .WithName("ListDuels")
         .WithSummary("Lists duel summaries in reverse chronological order.")
-        .Produces<IReadOnlyList<DuelSummaryDto>>(StatusCodes.Status200OK);
+        .Produces<IReadOnlyList<DuelSummaryDto>>(StatusCodes.Status200OK)
+        .ProducesValidationProblem();
 
         // T081 — GET /api/duels/{duelId}/report (Lab Report export)
         group.MapGet("/{duelId}/report", async (
@@ -194,6 +205,20 @@ public static class DuelsEndpoints
         .Produces(StatusCodes.Status404NotFound);
 
         return app;
+    }
+
+    /// <summary>True for a bare <c>yyyyMM</c> stamp — the shape duel partition keys use.</summary>
+    private static bool IsMonthStamp(string value)
+    {
+        if (value.Length != 6) return false;
+
+        foreach (var c in value)
+        {
+            if (!char.IsAsciiDigit(c)) return false;
+        }
+
+        var month = int.Parse(value.AsSpan(4, 2));
+        return month is >= 1 and <= 12;
     }
 }
 
