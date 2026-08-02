@@ -27,6 +27,11 @@
                 disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
                 title="Sort by persisted HTML output quality score"
                 @onclick="@(() => SetSortAsync("Quality"))">🧪 Output Quality</button>
+        <button type="button" class="po-btn leaderboard__sort-btn @(IsCostSort ? "po-btn--primary" : "")"
+                aria-pressed="@Pressed(IsCostSort)"
+                disabled="@(!_entries.Any(e => e.AvgApiCostPerDuel.HasValue))"
+                title="Sort by average API cost per duel (cheapest first)"
+                @onclick="@(() => SetSortAsync("Cost"))">💰 Avg $/duel</button>
         <span class="leaderboard__divider" aria-hidden="true">|</span>
         <button type="button" class="po-btn leaderboard__sort-btn @(_activeOnly ? "po-btn--primary" : "")"
                 aria-pressed="@Pressed(_activeOnly)"
@@ -71,6 +76,7 @@
                         <th scope="col">W/L (Win %)</th>
                         <th scope="col" title="0-100 score from automated renderability + structure checks on each model's HTML output. Higher = more polished, self-contained HTML.">&#x1F9EA; Output Quality</th>
                         <th scope="col" title="Tokens generated per watt-hour. Higher = more energy efficient.">&#x1F331; Green Score</th>
+                        <th scope="col" title="Average API cost (USD) per duel across every priced result. Free local/Ollama models show &mdash;.">💰 Avg $/duel</th>
                         <th scope="col" title="ELO rating trend over the last 20 duels">ELO Trend</th>
                     </tr>
                 </thead>
@@ -137,6 +143,20 @@
                                 else
                                 {
                                     <span class="leaderboard__no-data" title="Run a local model duel to generate this score">&#8212;</span>
+                                }
+                            </td>
+                            <td>
+                                @if (entry.AvgApiCostPerDuel.HasValue)
+                                {
+                                    <span class="leaderboard__cost" title="Average across @entry.DuelCount priced duel(s)">$@entry.AvgApiCostPerDuel.Value.ToString("F4")</span>
+                                }
+                                else if (IsLocalLike(entry.ModelType))
+                                {
+                                    <span class="leaderboard__no-data" title="Local/Ollama models aren't billed per token. Energy cost is reported per-duel in the Arena.">free</span>
+                                }
+                                else
+                                {
+                                    <span class="leaderboard__no-data" title="No priced duels yet — once this model runs a duel that has a Foundry rate, the average will appear here.">&#8212;</span>
                                 }
                             </td>
                             <td>
@@ -240,7 +260,10 @@
     private string _sortBy = "Elo";
     private bool IsGreenSort => string.Equals(_sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase);
     private bool IsQualitySort => string.Equals(_sortBy, "Quality", StringComparison.OrdinalIgnoreCase);
-    private bool IsEloSort => !IsGreenSort && !IsQualitySort;
+    private bool IsCostSort => string.Equals(_sortBy, "Cost", StringComparison.OrdinalIgnoreCase);
+    private bool IsEloSort => !IsGreenSort && !IsQualitySort && !IsCostSort;
+
+    private static bool IsLocalLike(ModelType t) => t is ModelType.Local or ModelType.LocalService;
 
     /// <summary>aria-pressed needs the lowercase JS-style literal, not .NET's "True"/"False".</summary>
     private static string Pressed(bool on) => on ? "true" : "false";
@@ -262,6 +285,8 @@
         if (sortBy == "GreenScore" && !_entries.Any(e => e.GreenScoreAvg is > 0))
             return; // button is disabled; guard in case of race condition
         if (sortBy == "Quality" && !_entries.Any(e => e.OutputQualityAvg.HasValue))
+            return; // button is disabled; guard in case of race condition
+        if (sortBy == "Cost" && !_entries.Any(e => e.AvgApiCostPerDuel.HasValue))
             return; // button is disabled; guard in case of race condition
         _sortBy = sortBy;
         await LoadLeaderboardAsync();

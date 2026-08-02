@@ -80,4 +80,34 @@ public sealed class Model
     {
         DisplayName = string.Empty;
     }
+
+    /// <summary>
+    /// Returns a copy of this model with the two pricing fields overwritten. Needed because
+    /// <see cref="InputTokenPricePerMillion"/> and <see cref="OutputTokenPricePerMillion"/>
+    /// are <c>init</c>-only and C#'s init-only semantics track assignments across the instance,
+    /// not the constructor — even on a freshly-cloned object the compiler rejects a write.
+    /// <see cref="ETag"/> is preserved so the optimistic-concurrency check on the way out still
+    /// passes; mutable state (CurrentElo, DuelCount, WinCount, GreenScoreAvg) is taken from
+    /// the existing row, not reset to defaults.
+    /// </summary>
+    public Model WithPricing(decimal? inputPrice, decimal? outputPrice)
+    {
+        return new Model(
+            modelId: ModelId,
+            displayName: DisplayName,
+            modelType: ModelType,
+            tdpWatts: TdpWatts,
+            webLlmModelId: WebLlmModelId,
+            apiEndpointRef: ApiEndpointRef,
+            inputTokenPricePerMillion: inputPrice,
+            outputTokenPricePerMillion: outputPrice)
+        {
+            CurrentElo = CurrentElo,
+            DuelCount = DuelCount,
+            WinCount = WinCount,
+            GreenScoreAvg = GreenScoreAvg,
+            CreatedAt = CreatedAt,
+            ETag = ETag
+        };
+    }
 }

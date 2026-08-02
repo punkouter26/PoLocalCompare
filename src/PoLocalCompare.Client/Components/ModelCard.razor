@@ -39,8 +39,14 @@
     </div>
     @if (Model.InputTokenPricePerMillion.HasValue || Model.OutputTokenPricePerMillion.HasValue)
     {
-        <div class="model-card__pricing">
+        <div class="model-card__pricing" title="Microsoft Foundry list rates — used to estimate cost per duel.">
             in: $@FormatPrice(Model.InputTokenPricePerMillion ?? 0) &nbsp;·&nbsp; out: $@FormatPrice(Model.OutputTokenPricePerMillion ?? 0) <span class="model-card__pricing-unit">/ 1M tkns</span>
+        </div>
+    }
+    else
+    {
+        <div class="model-card__pricing model-card__pricing--free" title="@FreeTooltip">
+            @FreeLabel
         </div>
     }
 </div>
@@ -97,6 +103,24 @@
 
     private static string FormatPrice(decimal price) =>
         price == 0 ? "0" : price < 1 ? price.ToString("G4") : price.ToString("0.##");
+
+    /// <summary>
+    /// Local and Ollama models aren't billed per token, so the pricing row is replaced with
+    /// a "free" label that explains why and points to the energy cost the duel itself surfaces.
+    /// </summary>
+    private string FreeLabel => Model.ModelType switch
+    {
+        ModelType.Local => "free — runs in your browser (no token cost)",
+        ModelType.LocalService => "free — runs via your local Ollama daemon (no token cost)",
+        _ => "rate not set"
+    };
+
+    private string FreeTooltip => Model.ModelType switch
+    {
+        ModelType.Local => "WebLLM models run locally in the browser. The duel surfaces energy cost in its telemetry, but there is no per-token API rate.",
+        ModelType.LocalService => "Ollama models run on this machine. The duel surfaces energy cost in its telemetry, but there is no per-token API rate.",
+        _ => "No Foundry list rate has been assigned to this model yet."
+    };
 
     private string GetParameterLabel()
     {

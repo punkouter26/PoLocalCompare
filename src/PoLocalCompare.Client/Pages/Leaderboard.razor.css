@@ -241,3 +241,12 @@
 .leaderboard__no-data--note {
     font-style: italic;
 }
+
+/* Avg API cost per duel. The yellow token matches the per-side API cost in TelemetryHud, so
+   the colour says "this is a money figure" without adding a new token. Tabular numerics
+   keep "$0.0123" from shifting around between rows. */
+.leaderboard__cost {
+    color: var(--accent-yellow);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}

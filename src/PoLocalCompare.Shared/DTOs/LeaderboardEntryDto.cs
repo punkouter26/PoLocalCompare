@@ -20,5 +20,11 @@ public sealed class LeaderboardEntryDto
     public string? ApiEndpointRef { get; init; }
     public decimal? InputTokenPricePerMillion { get; init; }
     public decimal? OutputTokenPricePerMillion { get; init; }
+    /// <summary>
+    /// Average API cost (USD) per duel, aggregated across every result row the model has.
+    /// Null when the model has no priced duels yet — distinct from zero, which would mean
+    /// "ran and was free" (only possible for unpriced local/Ollama models).
+    /// </summary>
+    public double? AvgApiCostPerDuel { get; init; }
     public double[]? EloSparkline { get; init; }
 }

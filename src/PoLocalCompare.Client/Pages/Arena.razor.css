@@ -269,6 +269,39 @@
     text-align: center;
 }
 
+/* Duel-level cost summary. Sits between the view switcher and the OutputScorecard so the
+   number lands in the same visual band as the per-side API cost lines in TelemetryHud. */
+.arena__cost-total {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+    padding: 0.55rem 0.85rem;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.arena__cost-total-label {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.arena__cost-total-value {
+    color: var(--accent-yellow);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.arena__cost-total-breakdown {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
 /* The judge's stated reason, under the winner line. Quieter than the verdict itself —
    it is supporting evidence, not the headline. */
 .arena__judge-rationale {

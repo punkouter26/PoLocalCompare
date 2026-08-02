@@ -167,6 +167,20 @@
                 Mode="_viewMode" />
         }
 
+        @* ── Duel cost summary ─────────────────────────────────────────
+           Sums the two sides' API costs once both have a value. Shown above the scorecard so
+           the dollar figure is in the same visual band as the per-side API cost lines in the
+           telemetry HUDs. Suppressed when neither side has a rate (e.g. both local), because
+           there is no signal to sum. *@
+        @if (BothOutputsPresent() && (_leftResult?.ApiCostUsd.HasValue == true || _rightResult?.ApiCostUsd.HasValue == true))
+        {
+            <div class="arena__cost-total" role="status" aria-label="Estimated total cost for this duel">
+                <span class="arena__cost-total-label">💰 Estimated duel cost</span>
+                <span class="arena__cost-total-value">$@DuelTotalCost().ToString("F4")</span>
+                <span class="arena__cost-total-breakdown">(@LeftDisplayName $@FormatCost(_leftResult?.ApiCostUsd) + @RightDisplayName $@FormatCost(_rightResult?.ApiCostUsd))</span>
+            </div>
+        }
+
         @* ── Objective scorecard ──────────────────────────────────────────
            Placed above the verdict buttons: it is evidence for the vote, not a summary of it. *@
         @if (BothOutputsPresent())
@@ -368,6 +382,16 @@
 
     private string LeftDisplayName => _leftResult?.ModelName ?? _duel?.LeftModelId ?? "Left";
     private string RightDisplayName => _rightResult?.ModelName ?? _duel?.RightModelId ?? "Right";
+
+    /// <summary>
+    /// Sums the two sides' API costs. Models without a Foundry rate return null and contribute
+    /// 0, so a "free" local model paired with a paid remote just shows the remote's share.
+    /// </summary>
+    private double DuelTotalCost() =>
+        (_leftResult?.ApiCostUsd ?? 0) + (_rightResult?.ApiCostUsd ?? 0);
+
+    private static string FormatCost(double? value) =>
+        value.HasValue ? value.Value.ToString("F4") : "0 (no rate)";
 
     private static string ViewLabel(SourceViewMode mode) => mode switch
     {

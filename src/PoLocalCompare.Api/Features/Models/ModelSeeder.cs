@@ -38,8 +38,14 @@ public static class ModelSeeder
 
         // ── Azure remote models (po-aiservices-shared) ────────────────────
         // Only deployments that actually exist in the Foundry resource are seeded.
+        // Pricing below is Microsoft Foundry list rates as of 2026-08-02 — update in lockstep
+        // with the public price sheet (https://azure.microsoft.com/en-us/pricing/details/ai-foundry/)
+        // if a deployment is repriced. The cost UI (ModelCard, leaderboard avg-$/duel, Arena total)
+        // reads straight from these fields, so a stale number here is a stale number on screen.
         new Model(ModelId.From("01SEED000000000000000000M"), "GPT-5 Nano",     ModelType.Remote, apiEndpointRef: "gpt-5-nano",                    inputTokenPricePerMillion: 0.05m,  outputTokenPricePerMillion: 0.40m),
         new Model(ModelId.From("01SEED000000000000000000N"), "GPT-5.4 Nano",   ModelType.Remote, apiEndpointRef: "gpt-5.4-nano",                  inputTokenPricePerMillion: 0.20m,  outputTokenPricePerMillion: 1.25m),
+        new Model(ModelId.From("01SEED000000000000000000P"), "Phi-4",          ModelType.Remote, apiEndpointRef: "phi-4",                         inputTokenPricePerMillion: 0.125m, outputTokenPricePerMillion: 0.50m),
+        new Model(ModelId.From("01SEED000000000000000000Q"), "Phi-4 Mini",     ModelType.Remote, apiEndpointRef: "phi-4-mini-instruct",           inputTokenPricePerMillion: 0.075m, outputTokenPricePerMillion: 0.30m),
     ];
 
     public static async Task SeedAsync(IServiceProvider services)
@@ -50,28 +56,101 @@ public static class ModelSeeder
         using var scope = services.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IModelRepository>();
 
-        var existing = (await repo.GetAllAsync()).ToList();
-        if (existing.Count > 0)
-        {
-            logger.LogInformation("ModelSeeder: {Count} models already registered — skipping seed.", existing.Count);
-            return;
-        }
-
         // Ollama (LocalService) models require a local Ollama daemon that does not exist in the
         // cloud — only seed them in Development so the Production catalog has no dead entries.
         var modelsToSeed = environment.IsDevelopment()
             ? DefaultModels
             : DefaultModels.Where(m => m.ModelType != ModelType.LocalService).ToList();
 
-        logger.LogInformation("ModelSeeder: No models found — seeding {Count} default models.", modelsToSeed.Count);
-
-        foreach (var model in modelsToSeed)
+        var existing = (await repo.GetAllAsync()).ToList();
+        if (existing.Count == 0)
         {
-            await repo.SaveAsync(model);
-            logger.LogInformation("ModelSeeder: Registered '{DisplayName}'.", model.DisplayName);
+            logger.LogInformation("ModelSeeder: No models found — seeding {Count} default models.", modelsToSeed.Count);
+
+            foreach (var model in modelsToSeed)
+            {
+                await repo.SaveAsync(model);
+                logger.LogInformation("ModelSeeder: Registered '{DisplayName}'.", model.DisplayName);
+            }
+
+            logger.LogInformation("ModelSeeder: Seed complete.");
+            return;
         }
 
-        logger.LogInformation("ModelSeeder: Seed complete.");
+        logger.LogInformation("ModelSeeder: {Count} models already registered — skipping seed.", existing.Count);
+
+        // Reconcile the existing catalog against the seed list. Two kinds of changes can land
+        // here on a machine that has already run:
+        //
+        //   1. A seed entry that exists in Table Storage but was seeded before its row had a
+        //      price. Patch the two pricing columns only — never DisplayName, ELO, or any
+        //      other field a user could have changed in the meantime.
+        //
+        //   2. A seed entry that didn't exist in Table Storage yet (e.g. Phi-4 was added to
+        //      the seed list after the user's last `docker compose down -v`). Insert it. New
+        //      models start at default ELO/duels; nothing is overwritten because there is
+        //      nothing to overwrite.
+        //
+        // Both paths are idempotent and safe to run on every startup, which is what makes
+        // editing the seed list land on a running machine without a data-wiping reset.
+        var updated = 0;
+        var added = 0;
+        foreach (var seed in modelsToSeed)
+        {
+            var match = existing.FirstOrDefault(e => MatchesSeed(e, seed));
+            if (match is null)
+            {
+                // Path 2: new in the seed list, missing from storage. Use SaveAsync — it
+                // swallows 409s (idempotent), so a race with another node adding the same
+                // row is harmless.
+                await repo.SaveAsync(seed);
+                added++;
+                logger.LogInformation("ModelSeeder: Added new seed entry '{DisplayName}'.", seed.DisplayName);
+                continue;
+            }
+
+            if (match.InputTokenPricePerMillion.HasValue && match.OutputTokenPricePerMillion.HasValue) continue;
+
+            // No-op if both target prices are null (e.g. matching a local WebLLM model against
+            // an unpriced seed entry). Writing null over null would burn an ETag for no signal
+            // and produce a misleading "Backfilled" log line every startup.
+            if (!seed.InputTokenPricePerMillion.HasValue && !seed.OutputTokenPricePerMillion.HasValue) continue;
+
+            var priced = match.WithPricing(seed.InputTokenPricePerMillion, seed.OutputTokenPricePerMillion);
+            try
+            {
+                await repo.UpdateAsync(priced);
+                updated++;
+                logger.LogInformation("ModelSeeder: Backfilled pricing for '{DisplayName}'.", match.DisplayName);
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 412)
+            {
+                // Concurrent edit — a duel write, say, updated the same row in parallel. The
+                // pricing backfill is opportunistic, not load-bearing; skip and let the next
+                // startup catch it.
+                logger.LogInformation("ModelSeeder: Lost optimistic-concurrency race updating '{DisplayName}' — pricing backfill deferred.", match.DisplayName);
+            }
+        }
+        if (updated > 0)
+            logger.LogInformation("ModelSeeder: Pricing backfill complete — {Count} model(s) updated.", updated);
+        if (added > 0)
+            logger.LogInformation("ModelSeeder: Catalog reconciled — {Count} new model(s) added.", added);
+    }
+
+    /// <summary>
+    /// Matches a stored row to a seed entry by deployment name (remote / Ollama) or WebLLM
+    /// model id (local). <see cref="Model.ApiEndpointRef"/> and <see cref="Model.WebLlmModelId"/>
+    /// are both unique per model in the seed list, so either is a safe join key.
+    /// </summary>
+    private static bool MatchesSeed(Model existing, Model seed)
+    {
+        if (!string.IsNullOrWhiteSpace(seed.ApiEndpointRef)
+            && string.Equals(existing.ApiEndpointRef, seed.ApiEndpointRef, StringComparison.Ordinal))
+            return true;
+        if (!string.IsNullOrWhiteSpace(seed.WebLlmModelId)
+            && string.Equals(existing.WebLlmModelId, seed.WebLlmModelId, StringComparison.Ordinal))
+            return true;
+        return false;
     }
 }
 

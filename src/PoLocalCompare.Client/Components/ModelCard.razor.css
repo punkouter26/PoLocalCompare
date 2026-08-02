@@ -158,6 +158,12 @@
     opacity: 0.8;
 }
 
+.model-card__pricing--free {
+    color: var(--accent, #22c55e);
+    opacity: 0.85;
+    font-style: italic;
+}
+
 .model-card__pricing-unit {
     opacity: 0.6;
     font-size: 0.7rem;
