@@ -12,6 +12,7 @@ public sealed class RecordVerdictHandler
     private readonly IModelRepository _modelRepository;
     private readonly IEloHistoryRepository _eloHistoryRepository;
     private readonly HybridCache? _cache;
+    private readonly LobbyNotifier? _lobby;
     private readonly double _kFactor;
 
     /// <param name="cache">
@@ -20,18 +21,25 @@ public sealed class RecordVerdictHandler
     /// the HTTP endpoint — <see cref="AutoJudge"/> calls this handler directly, bypassing the
     /// endpoint, and would otherwise leave a stale leaderboard behind.
     /// </param>
+    /// <param name="lobby">
+    /// Optional for the same reason. Announcing from here rather than from the two callers is
+    /// what makes the activity ticker complete: this handler is the only path by which ELO
+    /// moves, so a verdict that reaches storage cannot fail to reach the ticker.
+    /// </param>
     public RecordVerdictHandler(
         IDuelRepository duelRepository,
         IModelRepository modelRepository,
         IEloHistoryRepository eloHistoryRepository,
         double kFactor = 32.0,
-        HybridCache? cache = null)
+        HybridCache? cache = null,
+        LobbyNotifier? lobby = null)
     {
         _duelRepository = duelRepository;
         _modelRepository = modelRepository;
         _eloHistoryRepository = eloHistoryRepository;
         _kFactor = kFactor;
         _cache = cache;
+        _lobby = lobby;
     }
 
     /// <summary>
@@ -168,7 +176,7 @@ public sealed class RecordVerdictHandler
         if (_cache is not null)
             await _cache.RemoveByTagAsync(CacheTags.Leaderboard);
 
-        return new VerdictResponseDto
+        var response = new VerdictResponseDto
         {
             DuelId = command.DuelId,
             Verdict = command.Verdict,
@@ -181,5 +189,15 @@ public sealed class RecordVerdictHandler
             Source = command.Source,
             JudgeRationale = command.JudgeRationale,
         };
+
+        // Announced last, after everything durable has landed. LobbyNotifier swallows its own
+        // failures, so a broken ticker cannot undo a recorded verdict.
+        if (_lobby is not null)
+        {
+            await _lobby.VerdictRecordedAsync(
+                duel, leftModel.DisplayName, rightModel.DisplayName, winner.DisplayName, response);
+        }
+
+        return response;
     }
 }

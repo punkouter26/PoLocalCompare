@@ -84,16 +84,25 @@ PoLocalCompare.slnx
 │   │   ├── Program.cs                  ← Composition root
 │   │   ├── ServiceCollectionExtensions.cs
 │   │   └── InfrastructureServiceExtensions.cs
-│   ├── PoLocalCompare.Shared/          ← DTOs, Enums and strongly-typed ids shared by WASM + API
+│   ├── PoLocalCompare.Shared/          ← DTOs, Enums, strongly-typed ids, and the pure logic
+│   │   │                                 both WASM and the API (or its tests) need
 │   │   ├── DTOs/                       ← DuelDto, ModelDto, LeaderboardEntryDto, VerdictRequestDto, etc.
 │   │   ├── Enums/
-│   │   └── Ids/                        ← DuelId / ModelId (readonly record struct + JSON converters)
+│   │   ├── Ids/                        ← DuelId / ModelId (readonly record struct + JSON converters)
+│   │   ├── Analysis/                   ← OutputAnalysis, LineDiff, HtmlPreview — browser-side
+│   │   │                                 comparison logic; lives here so PoLocalCompare.Unit
+│   │   │                                 can test it without referencing the WASM project
+│   │   ├── Prompts/                    ← PromptLibrary (curated starter + demo prompts)
+│   │   └── Demo/                       ← DemoPlanner (pure, seeded demo scheduling)
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
 │       ├── Pages/                      ← Home, WarRoom, Processing, Arena, Leaderboard,
-│       │                                 Archive, Login (model-health is a Home section)
-│       ├── Components/
+│       │                                 Archive, HeadToHead, Demo, Login
+│       │                                 (model-health is a Home section)
+│       ├── Components/                 ← incl. OutputScorecard, SourceCompare, TokenRace,
+│       │                                 PromptPicker, SandboxedViewport
 │       ├── Services/                   ← DuelApiClient, BffAuthenticationStateProvider,
-│       │                                 WebLlmService, SignalRDuelClient, AudioService,
+│       │                                 WebLlmService, SignalRDuelClient, LobbyTickerService,
+│       │                                 AudioService, PromptHistoryService,
 │       │                                 InferenceSessionStore, CorrelationHandler, ThemeService
 │       └── Layout/
 ├── tests/
@@ -175,9 +184,15 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
   from Key Vault / App Service settings. Issuer is validated against `AllowedTenants`.
 
 ### 4.5 Real-Time (SignalR)
-- `DuelHub` at `/hubs/duel`
-- Client: `SignalRDuelClient.cs` in WASM
-- Token streaming and model status updates flow through SignalR
+- `DuelHub` at `/hubs/duel`, with two groups: `duel:{id}` (per-duel, joined by `JoinDuel`) and
+  `lobby` (app-wide activity, joined by `JoinLobby`). Both hub methods only *subscribe* — every
+  server→client push goes through `IHubContext`, so no client can inject into another duel's feed.
+- Clients: `SignalRDuelClient.cs` (per duel, transient) and `LobbyTickerService.cs` (one connection
+  for the whole app session, feeding the nav-bar ticker).
+- Token streaming and model status updates flow through SignalR.
+- Lobby events are published by `LobbyNotifier`. The verdict event is raised from inside
+  `RecordVerdictHandler` — the single path by which ELO moves — so the feed is complete by
+  construction. The notifier swallows its own failures: the ticker must never fail a duel.
 
 ### 4.6 Elo System
 - K-factor: 32, Starting rating: 1200
@@ -262,9 +277,15 @@ app purely over HTTP.
 | E2E UI | `tests/PoLocalCompare.E2EUI` | Playwright, headed Chrome, mobile + desktop viewports |
 
 **Ratio contract (100 / 50 / 25 / 25).** Unit is the baseline; integration ≈ 50% of unit, each
-E2E tier ≈ 25%. Current (2026-08-01): **121 unit / 66 integration / 33 E2E-API / 46 E2E-UI cases**
+E2E tier ≈ 25%. Current (2026-08-02): **186 unit / 82 integration / 45 E2E-API / 46 E2E-UI cases**
 (23 UI methods × 2 viewports). Counts are test *cases*, so a `[Theory]` contributes one per
 `InlineData`/viewport. Keep new work inside those proportions.
+
+The unit tier is heavier than the 100 baseline because `PoLocalCompare.Shared` now holds genuinely
+pure logic — the diff engine, the HTML analyzer, the demo planner — which is exactly what that tier
+is for. Note it lands there *because* the logic lives in `Shared`: `PoLocalCompare.Unit` references
+only the Api project, so anything left inside `PoLocalCompare.Client` is untestable by any tier
+except E2E-UI, which is the one suite CI never runs. Put new browser-side logic in `Shared/`.
 
 ```bash
 dotnet test tests/PoLocalCompare.Unit          # pure logic, no Docker

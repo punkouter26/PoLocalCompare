@@ -8,6 +8,7 @@
 @inject AudioService AudioService
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject PromptHistoryService PromptHistory
 
 <PageTitle>Compare - PoLocalCompare</PageTitle>
 
@@ -22,6 +23,9 @@
             }
         </div>
         <p class="wizard__subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
+        <a href="/demo" class="wizard__demo-link">
+            <span aria-hidden="true">▶</span> Run the auto demo — 10 duels, judged automatically
+        </a>
         @if (_health is not null && !_healthHasRemotes)
         {
             <p class="wizard__health-warning">
@@ -194,6 +198,12 @@
                 <span class="wizard__textarea-hint">Long prompts may be truncated or cost more.</span>
             }
         </div>
+
+        <PromptPicker CurrentPrompt="@_prompt"
+                      Recent="_recentPrompts"
+                      OnPromptSelected="ApplyPromptAsync"
+                      OnForgetRecent="ForgetRecentAsync"
+                      OnClearRecent="ClearRecentAsync" />
     </section>
 
     @* ── Step 3: Compare ─────────────────────────────────────────────── *@
@@ -287,6 +297,8 @@
     private ModelDto? _replacePopoverModel;
     private bool? _webGpuSupported;   // null = not yet probed
 
+    private IReadOnlyList<RecentPrompt> _recentPrompts = [];
+
     private sealed class WebGpuProbe { public bool Supported { get; set; } }
 
     private bool HasModels => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
@@ -352,7 +364,28 @@
     protected override async Task OnInitializedAsync()
     {
         _prompt = Prompt ?? string.Empty;
+        _recentPrompts = await PromptHistory.GetAsync();
         await LoadAsync();
+    }
+
+    // ── Prompt sourcing ──────────────────────────────────────────────────────
+
+    private async Task ApplyPromptAsync(string text)
+    {
+        _prompt = text;
+        // Jump to Compare rather than leaving the choice off-screen above the fold: picking a
+        // prompt is usually the last thing left before the duel can start.
+        await Task.Yield();
+        ScrollToAsync(HasModels ? "wizard-step-3" : "wizard-step-1");
+    }
+
+    private async Task ForgetRecentAsync(string text) =>
+        _recentPrompts = await PromptHistory.RemoveAsync(text);
+
+    private async Task ClearRecentAsync()
+    {
+        await PromptHistory.ClearAsync();
+        _recentPrompts = [];
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -463,6 +496,11 @@
 
         try
         {
+            // Remembered before the request, not after: navigation to /processing follows
+            // immediately on success, and a prompt worth re-running is worth keeping even if
+            // the duel itself fails to start.
+            _recentPrompts = await PromptHistory.RememberAsync(_prompt);
+
             await AudioService.PlaySnareRollAsync();
             var dto = await ApiClient.CommenceDuelAsync(_leftModel!.ModelId, _rightModel!.ModelId, _prompt);
             if (dto is not null)

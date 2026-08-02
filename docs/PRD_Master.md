@@ -35,14 +35,16 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 
 | Method + Route | Slice | Notes |
 |---|---|---|
-| `POST /api/duels` | Duels | 202 + Location; enqueues background execution |
+| `POST /api/duels` | Duels | 202 + Location; enqueues background execution. Optional `autoJudgeDelaySeconds` overrides the grace window for that duel only (clamped 0–3600) |
 | `GET /api/duels` | Duels | Archive listing, `limit` clamped 1–100, `before` paging |
+| `GET /api/duels/demo-plan?rounds=&seed=` | Duels | Read-only; resolves the pairings + prompts for a demo run. Remote models only, `rounds` clamped 1–25 |
 | `GET /api/duels/{duelId}` | Duels | Full telemetry DTO |
 | `POST /api/duels/{duelId}/local-result` | Duels | WebLLM browser result ingest + Domain enrichment |
 | `POST /api/duels/{duelId}/verdict` | Duels | Elo update; ETag 412 retry-once; invalidates leaderboard cache |
 | `GET /api/duels/{duelId}/report` | Archive | Self-contained HTML download |
 | `GET /api/leaderboard?sortBy=` | Leaderboard | HybridCache, tag-invalidated |
 | `GET /api/leaderboard/{modelId}/killlist` | Leaderboard | Head-to-head aggregates |
+| `GET /api/leaderboard/h2h/{modelIdA}/{modelIdB}` | Leaderboard | Full record between one pair; 404 on unknown or identical ids. Record is exact, telemetry averages are sampled from the last 10 meetings |
 | `GET /api/models` | Models | LocalService hidden outside Development |
 | `GET /api/models/availability` | Models | Probes Ollama tags + Foundry deployments |
 | `POST /api/models` · `PATCH/DELETE /api/models/{id}` | Models | Registry CRUD |
@@ -51,7 +53,7 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 | `GET /api/ollama/gpu-status` · `/available-models` · `POST /benchmark` | Ollama | Local-only value; failures return empty/failure DTOs |
 | `GET /auth/me` · `/auth/login/microsoft` · `/auth/login/fake`¹ · `POST /auth/logout` | Auth | Anonymous; ¹non-Production only |
 | `GET /health` · `/api/diag/smoke` · `/api/diag/warnings` · `/diag` (Razor) | Diagnostics | Anonymous; no UI links |
-| `/hubs/duel` | SignalR | `RequireAuthorization()` |
+| `/hubs/duel` | SignalR | `RequireAuthorization()`. Client-invokable: `JoinDuel(duelId)`, `JoinLobby()` — both subscribe only. Server→client: `ModelStatusUpdate`, `DuelComplete`, `StartLocalInference`, `VerdictRecorded`, `LobbyEvent` |
 | `POST /api/dev/reset` · `/scalar` · `/openapi` | Dev-only | Development host only |
 
 ## 4. Data (Azure Table Storage — see DatabaseSchema.mmd)
@@ -104,6 +106,12 @@ Server owns the OIDC code flow (PKCE, authority `login.microsoftonline.com/commo
 11. **Test split restored (2026-08-01):** item 5 is **reversed**. NET_RULES §2 mandates four test projects — `PoLocalCompare.Unit`, `.Integration`, `.E2EAPI`, `.E2EUI` — so the folder-slices are assemblies again. The consolidation in item 5 read the standard as mandating two; it does not. The split buys something concrete beyond conformance: `PoLocalCompare.Unit` no longer references `Testcontainers` or `Microsoft.AspNetCore.Mvc.Testing`, so "unit tests need no Docker" is enforced by the project graph instead of by a `--filter FullyQualifiedName~Unit` convention that nothing checked. `PoLocalCompare.E2EUI` drops its `ProjectReference` entirely and drives the app over HTTP, which stops UI tests from silently coupling to server internals. `[Trait("Category","UI")]` is retained but is no longer load-bearing for suite selection.
 
 12. **Tests gate deploy (2026-08-01):** item 4 is **reversed** for the three server-side tiers. A `test` job now runs `PoLocalCompare.Unit`, `.Integration` and `.E2EAPI` and `build` depends on it, so a red suite blocks the deploy instead of shipping. Testcontainers works unmodified on the ubuntu runner. `PoLocalCompare.E2EUI` stays out: it drives a real headed Chrome and exercises WebGPU paths a runner has no GPU for, so it would be flaky rather than informative — it remains a local gate after UI changes. The infra-Bicep half of item 4 is unchanged.
+
+13. **Client-side comparison tooling (2026-08-02):** the Arena gained three things that are computed in the browser and never reach storage — a Rendered/Code/Diff switch (`SourceCompare`, LCS line diff with identical runs folded), a structural scorecard (`OutputAnalysis`), and an optimistic verdict that paints the winner on the frame of the click. Two constraints shaped this. First, the analysis is deliberately *separate* from the persisted `OutputQualityScore`: tightening a heuristic here must never retroactively change a stored duel, so `CompletenessScore` is presentational only and nothing on the scorecard touches ELO. Second, the runtime half — thrown errors, failed CDN assets, load time — needs the sandboxed frame to report back, which means prepending a probe `<script>` into the iframe's `srcdoc`. That injection is confined to the *preview*: the raw output is what gets persisted, analysed, diffed and shown by "View Source", so nothing a person judges or exports contains it. The frame has an opaque origin (`sandbox="allow-scripts"` with no `allow-same-origin`), so `postMessage` is the only channel out and `ev.origin` is always `"null"` and cannot authenticate — each frame is instead handed a random id and only registered ids are dispatched. The optimistic verdict paints winner/loser immediately but deliberately leaves ELO blank until the server responds, because inventing a rating change would be a guess presented as a result; if the auto-judge wins the race, the Arena states plainly that the pick was not counted rather than swapping the winner silently.
+
+14. **Demo mode and the auto-judge override (2026-08-02):** `/demo` runs ten duels back to back, unattended. They are **ordinary duels** — persisted, archived, auto-judged, and they move ELO — which is stated on the page before the start button rather than discovered afterwards on the leaderboard; the alternative (an `IsDemo` flag excluded from ELO) was rejected as it would put a second write path around the one choke point CLAUDE.md guards. The pool is **remote models only**: browser models run inference in the client's tab and stall without a GPU or with the tab backgrounded, and Ollama models seed in Development only, so neither is safe for "press play and walk away". `DemoPlanner` is pure and seeded, so the whole schedule — pairings and prompts — is resolved and displayed before anything is written; it flips left/right per round so that any position bias in the judge lands on both models equally rather than reading as a fact about one. Rounds run sequentially because `BackgroundTaskService` awaits each queued item anyway, so firing ten at once would queue behind each other with nothing to watch but the first. `POST /api/duels` gained an optional `autoJudgeDelaySeconds`, which the demo sets to 0; it is clamped 0–3600 and cannot enable the judge — `AiJudge:Enabled=false` still restores human-only verdicts (decision 9 stands).
+
+15. **Global activity ticker (2026-08-02):** `DuelHub` gained a second group, `lobby`, and `LobbyNotifier` publishes duel-started / duel-completed / verdict-recorded to it. The verdict announcement is emitted from inside `RecordVerdictHandler` rather than from its two callers, because that handler is the only path by which ELO moves — announcing there is what makes the feed complete by construction instead of by remembering to add a call at each site. Every notifier method swallows its own failures: the ticker is ambient decoration on the nav bar and a SignalR hiccup must never fail a duel or a verdict. `JoinLobby()` subscribes only and grants no ability to push, matching `JoinDuel`. The client's "awaiting judgment" count is seeded once from `/api/duels` on connect, because a live-events-only counter would read zero on every fresh tab regardless of the real backlog.
 
 ## 10. Diagram Index (this folder)
 

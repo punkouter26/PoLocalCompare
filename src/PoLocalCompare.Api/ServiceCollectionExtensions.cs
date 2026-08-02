@@ -12,10 +12,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetDuelHandler>();
         services.AddScoped<GetLeaderboardHandler>();
         services.AddScoped<GetKillListHandler>();
+        services.AddScoped<GetHeadToHeadHandler>();
         services.AddScoped<ListDuelsHandler>();
         services.AddScoped<ExportLabReportHandler>();
         services.AddSingleton<DuelExecutionService>();
         services.AddScoped<AutoJudge>();
+        services.AddScoped<LobbyNotifier>();
+        services.AddScoped<DemoPlanHandler>();
 
         services.AddScoped<RecordVerdictHandler>(sp =>
         {
@@ -26,7 +29,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<IModelRepository>(),
                 sp.GetRequiredService<IEloHistoryRepository>(),
                 kFactor,
-                sp.GetRequiredService<HybridCache>());
+                sp.GetRequiredService<HybridCache>(),
+                sp.GetRequiredService<LobbyNotifier>());
         });
 
         // HybridCache fronts read-heavy, slow-changing reads (leaderboard, live model-availability probes).

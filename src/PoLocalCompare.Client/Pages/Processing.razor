@@ -18,6 +18,20 @@
         <p class="processing-page__duel-id">Duel ID: @DuelIdText</p>
     </details>
 
+    <TokenRace
+        LeftName="@(_leftDisplayName ?? LeftLabel)"
+        RightName="@(_rightDisplayName ?? RightLabel)"
+        LeftStatus="@_leftStatus"
+        RightStatus="@_rightStatus"
+        LeftTokenCount="@_leftTokenCount"
+        RightTokenCount="@_rightTokenCount"
+        LeftVelocity="@_leftTokenVelocity"
+        RightVelocity="@_rightTokenVelocity"
+        LeftPeakVelocity="@_leftPeakVelocity"
+        RightPeakVelocity="@_rightPeakVelocity"
+        LeftHistory="_leftVelocityHistory"
+        RightHistory="_rightVelocityHistory" />
+
     <div class="processing-page__panels">
         <ProcessingPanel
             ModelName="@LeftLabel"
@@ -165,6 +179,21 @@
     private string? _rightHtmlPreview;
     private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
     private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
+
+    // Rolling tok/s samples behind the race sparklines. Bounded because status updates arrive
+    // per token batch for the whole run — an unbounded list would grow for 15 minutes and the
+    // sparkline only has ~100 horizontal units to draw into anyway.
+    private const int VelocityHistoryLength = 60;
+    private readonly List<double> _leftVelocityHistory = [];
+    private readonly List<double> _rightVelocityHistory = [];
+
+    private static void PushVelocity(List<double> history, double? velocity)
+    {
+        if (velocity is not > 0) return;
+
+        history.Add(velocity.Value);
+        if (history.Count > VelocityHistoryLength) history.RemoveAt(0);
+    }
 
     // Track in-flight local inference tasks to avoid double-starting
     private readonly HashSet<ModelId> _runningLocalModels = [];
@@ -334,6 +363,7 @@
             _leftElapsedMs = update.ElapsedMs;
             _leftTokenCount = update.TokenCount;
             if (update.TokenVelocity.HasValue) _leftTokenVelocity = update.TokenVelocity;
+            PushVelocity(_leftVelocityHistory, update.TokenVelocity);
             if (update.WarmUpMs.HasValue) _leftWarmUpMs = update.WarmUpMs;
             if (update.PeakTokenVelocity.HasValue) _leftPeakVelocity = update.PeakTokenVelocity;
             _leftIsStalled = update.IsStalled;
@@ -361,6 +391,7 @@
             _rightElapsedMs = update.ElapsedMs;
             _rightTokenCount = update.TokenCount;
             if (update.TokenVelocity.HasValue) _rightTokenVelocity = update.TokenVelocity;
+            PushVelocity(_rightVelocityHistory, update.TokenVelocity);
             if (update.WarmUpMs.HasValue) _rightWarmUpMs = update.WarmUpMs;
             if (update.PeakTokenVelocity.HasValue) _rightPeakVelocity = update.PeakTokenVelocity;
             _rightIsStalled = update.IsStalled;
@@ -403,6 +434,7 @@
             var vel = genMs > 0 && update.TokenCount > 0
                 ? Math.Round(update.TokenCount / (genMs / 1000.0), 1) : (double?)null;
             _leftTokenVelocity = vel;
+            PushVelocity(_leftVelocityHistory, vel);
             if (vel.HasValue && vel.Value > (_leftPeakVelocity ?? 0)) _leftPeakVelocity = vel;
             _leftIsStalled = update.Status == "Generating" &&
                 (DateTimeOffset.UtcNow - _leftLastTokenAt).TotalSeconds > 2;
@@ -435,6 +467,7 @@
             var vel = genMs > 0 && update.TokenCount > 0
                 ? Math.Round(update.TokenCount / (genMs / 1000.0), 1) : (double?)null;
             _rightTokenVelocity = vel;
+            PushVelocity(_rightVelocityHistory, vel);
             if (vel.HasValue && vel.Value > (_rightPeakVelocity ?? 0)) _rightPeakVelocity = vel;
             _rightIsStalled = update.Status == "Generating" &&
                 (DateTimeOffset.UtcNow - _rightLastTokenAt).TotalSeconds > 2;

@@ -1,0 +1,119 @@
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.Prompts
+
+@* Prompt sourcing for the Compare wizard: prompts you have actually run, plus a curated set.
+   Everything here is local — the recent list lives in localStorage and the library is compiled
+   in — so picking a prompt costs no network round-trip. *@
+
+<div class="prompt-picker">
+    @if (Recent.Count > 0)
+    {
+        <div class="prompt-picker__section">
+            <div class="prompt-picker__section-head">
+                <h3 class="prompt-picker__section-title">Your recent prompts</h3>
+                <button type="button" class="prompt-picker__link" @onclick="OnClearRecent">Clear all</button>
+            </div>
+            <ul class="prompt-picker__recent">
+                @foreach (var entry in Recent)
+                {
+                    <li class="prompt-picker__recent-item @(IsCurrent(entry.Text) ? "prompt-picker__recent-item--active" : "")">
+                        <button type="button"
+                                class="prompt-picker__recent-btn"
+                                title="@entry.Text"
+                                @onclick="() => SelectAsync(entry.Text)">
+                            <span class="prompt-picker__recent-text">@entry.Summary</span>
+                            <span class="prompt-picker__recent-age">@RelativeAge(entry.UsedAt)</span>
+                        </button>
+                        <button type="button"
+                                class="prompt-picker__recent-remove"
+                                aria-label="@($"Forget prompt: {entry.Summary}")"
+                                @onclick="() => OnForgetRecent.InvokeAsync(entry.Text)">
+                            <span aria-hidden="true">✕</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="prompt-picker__section">
+        <div class="prompt-picker__section-head">
+            <h3 class="prompt-picker__section-title">Prompt library</h3>
+            <span class="prompt-picker__section-hint">Each one asks for a single self-contained HTML file.</span>
+        </div>
+
+        <div class="prompt-picker__filters" role="group" aria-label="Filter prompts by category">
+            <button type="button"
+                    class="prompt-picker__chip @(_category == AllCategories ? "prompt-picker__chip--active" : "")"
+                    aria-pressed="@(_category == AllCategories ? "true" : "false")"
+                    @onclick="@(() => _category = AllCategories)">
+                All (@PromptLibrary.All.Count)
+            </button>
+            @foreach (var category in PromptLibrary.Categories)
+            {
+                var count = PromptLibrary.InCategory(category).Count;
+                <button type="button"
+                        class="prompt-picker__chip @(_category == category ? "prompt-picker__chip--active" : "")"
+                        aria-pressed="@(_category == category ? "true" : "false")"
+                        @onclick="@(() => _category = category)">
+                    @category (@count)
+                </button>
+            }
+        </div>
+
+        <div class="prompt-picker__grid">
+            @foreach (var template in PromptLibrary.InCategory(_category))
+            {
+                <button type="button"
+                        class="prompt-picker__card @(IsCurrent(template.Text) ? "prompt-picker__card--active" : "")"
+                        @onclick="() => SelectAsync(template.Text)">
+                    <span class="prompt-picker__card-head">
+                        <span class="prompt-picker__card-emoji" aria-hidden="true">@template.Emoji</span>
+                        <span class="prompt-picker__card-title">@template.Title</span>
+                        @if (template.SelfRunning)
+                        {
+                            <span class="prompt-picker__card-tag" title="Animates on its own — no interaction needed">auto</span>
+                        }
+                    </span>
+                    <span class="prompt-picker__card-text">@Excerpt(template.Text)</span>
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private const string AllCategories = "All";
+
+    [Parameter] public string? CurrentPrompt { get; set; }
+    [Parameter] public IReadOnlyList<RecentPrompt> Recent { get; set; } = [];
+    [Parameter] public EventCallback<string> OnPromptSelected { get; set; }
+    [Parameter] public EventCallback<string> OnForgetRecent { get; set; }
+    [Parameter] public EventCallback OnClearRecent { get; set; }
+
+    private string _category = AllCategories;
+
+    private bool IsCurrent(string text) =>
+        string.Equals(CurrentPrompt?.Trim(), text, StringComparison.Ordinal);
+
+    private Task SelectAsync(string text) => OnPromptSelected.InvokeAsync(text);
+
+    private static string Excerpt(string text) =>
+        text.Length <= 120 ? text : text[..120].TrimEnd() + "…";
+
+    /// <summary>
+    /// Coarse on purpose: the list is ordered most-recent-first, so the age only has to say
+    /// roughly how stale an entry is, and an exact timestamp would be noise at chip size.
+    /// </summary>
+    private static string RelativeAge(DateTimeOffset usedAt)
+    {
+        var elapsed = DateTimeOffset.UtcNow - usedAt;
+
+        if (elapsed < TimeSpan.Zero) return "just now";
+        if (elapsed.TotalMinutes < 1) return "just now";
+        if (elapsed.TotalHours < 1) return $"{(int)elapsed.TotalMinutes}m ago";
+        if (elapsed.TotalDays < 1) return $"{(int)elapsed.TotalHours}h ago";
+        if (elapsed.TotalDays < 30) return $"{(int)elapsed.TotalDays}d ago";
+        return usedAt.ToString("MMM yyyy");
+    }
+}

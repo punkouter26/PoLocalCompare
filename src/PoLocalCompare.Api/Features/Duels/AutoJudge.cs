@@ -61,13 +61,22 @@ public sealed class AutoJudge
     /// Waits out the grace window, then decides the duel if it is still unjudged. Never throws —
     /// a failed auto-judge must leave the duel judgeable by hand, not break duel execution.
     /// </summary>
-    public async Task RunAsync(DuelId duelId, CancellationToken cancellationToken)
+    /// <param name="delaySecondsOverride">
+    /// Replaces <see cref="AutoJudgeOptions.DelaySeconds"/> for this duel. Demo mode passes 0.
+    /// Note this cannot enable the judge: <see cref="AutoJudgeOptions.Enabled"/> is still the
+    /// master switch, so <c>AiJudge:Enabled=false</c> genuinely restores human-only verdicts.
+    /// </param>
+    public async Task RunAsync(
+        DuelId duelId,
+        CancellationToken cancellationToken,
+        int? delaySecondsOverride = null)
     {
         if (!_options.Enabled) return;
 
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(_options.DelaySeconds, 0, 3600)), cancellationToken);
+            var delaySeconds = delaySecondsOverride ?? _options.DelaySeconds;
+            await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(delaySeconds, 0, 3600)), cancellationToken);
 
             var duel = await _duelRepository.GetByIdAsync(duelId);
             if (duel is null)

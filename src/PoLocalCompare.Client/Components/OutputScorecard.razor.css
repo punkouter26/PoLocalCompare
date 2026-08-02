@@ -1,0 +1,178 @@
+.scorecard {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-block: var(--space-lg);
+}
+
+.scorecard__head {
+    margin-bottom: var(--space-md);
+}
+
+.scorecard__title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+}
+
+.scorecard__hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: var(--space-xs) 0 0;
+    max-width: 62ch;
+}
+
+/* ── Comparison table ─────────────────────────────────────────────────────── */
+
+.scorecard__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    table-layout: fixed;
+}
+
+/* Visible to assistive tech, not on screen: the heading above already names the section. */
+.scorecard__caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.scorecard__table thead th {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--border);
+    overflow-wrap: anywhere;
+}
+
+.scorecard__col-side {
+    width: 34%;
+    text-align: center;
+}
+
+.scorecard__col-metric {
+    width: 32%;
+    text-align: center;
+}
+
+.scorecard__table tbody tr:not(:last-child) > * {
+    border-bottom: 1px solid var(--border);
+}
+
+.scorecard__metric {
+    text-align: center;
+    padding: var(--space-sm) var(--space-xs);
+    font-weight: 500;
+}
+
+.scorecard__metric-name {
+    display: block;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.scorecard__metric-hint {
+    display: block;
+    color: var(--text-dim);
+    font-weight: 400;
+    font-size: 0.7rem;
+    margin-top: 1px;
+}
+
+.scorecard__value {
+    padding: var(--space-sm) var(--space-md);
+    text-align: center;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.scorecard__value--better {
+    color: var(--accent-green);
+    font-weight: 700;
+}
+
+.scorecard__win-mark {
+    font-size: 0.7rem;
+    opacity: 0.85;
+    margin-inline: var(--space-xs);
+}
+
+/* ── Per-side findings ────────────────────────────────────────────────────── */
+
+.scorecard__findings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-lg);
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border);
+}
+
+.scorecard__findings-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0 0 var(--space-sm);
+    overflow-wrap: anywhere;
+}
+
+.scorecard__finding {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: baseline;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    margin: 0 0 var(--space-xs);
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+.scorecard__finding--clean {
+    color: var(--accent-green);
+}
+
+.scorecard__finding--structural {
+    color: var(--accent-yellow);
+}
+
+.scorecard__finding--runtime {
+    color: var(--accent-red);
+}
+
+.scorecard__finding--a11y {
+    color: var(--accent-blue);
+}
+
+@media (max-width: 720px) {
+    .scorecard {
+        padding: var(--space-md);
+    }
+
+    .scorecard__table {
+        font-size: 0.78rem;
+    }
+
+    .scorecard__value {
+        padding: var(--space-sm) var(--space-xs);
+    }
+
+    .scorecard__findings {
+        grid-template-columns: 1fr;
+        gap: var(--space-md);
+    }
+}

@@ -1,4 +1,6 @@
-@using System.Text.RegularExpressions
+@using PoLocalCompare.Shared.Analysis
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 @* SandboxedViewport — renders model-generated HTML in an XSS-safe sandboxed iframe.
    sandbox="allow-scripts" permits JS execution required by generated HTML apps.
@@ -38,7 +40,7 @@
     else
     {
         <iframe
-            srcdoc="@_normalizedHtml"
+            srcdoc="@_frameHtml"
             sandbox="allow-scripts"
             allow="accelerometer; gyroscope"
             title="@ModelName output"
@@ -54,17 +56,39 @@
     [Parameter] public bool IsLoser { get; set; }
     [Parameter] public bool ShowWinner { get; set; }
 
+    /// <summary>
+    /// Opt in to measuring what the output does at run time — load time, thrown errors, failed
+    /// external resources. Off by default and never enabled for streaming previews, where the
+    /// document is incomplete by definition and every measurement would be noise.
+    /// </summary>
+    [Parameter] public bool ProbeRuntime { get; set; }
+
+    /// <summary>Raised as probe observations arrive; the same instance is mutated and re-raised.</summary>
+    [Parameter] public EventCallback<RuntimeProbeReport> OnProbeUpdated { get; set; }
+
     private readonly List<string> _diagnosticItems = [];
     private string _normalizedHtml = string.Empty;
+    private string _frameHtml = string.Empty;
     private int _qualityScore = 100;
+
+    // ── Runtime probe ─────────────────────────────────────────────────────────
+    private DotNetObjectReference<SandboxedViewport>? _selfRef;
+    private string? _probeId;
+    private string? _registeredProbeId;
+    private RuntimeProbeReport _report = new();
 
     protected override void OnParametersSet()
     {
         _diagnosticItems.Clear();
 
         var raw = HtmlContent ?? string.Empty;
-        var containsFence = ContainsMarkdownFence(raw);
-        _normalizedHtml = NormalizeHtml(raw);
+        var containsFence = HtmlPreview.ContainsFence(raw);
+        var normalized = HtmlPreview.Normalize(raw);
+
+        // Re-instrumenting an unchanged document would reset the counts the Arena is showing,
+        // so the probe id — and therefore the srcdoc — only changes when the output does.
+        var contentChanged = !string.Equals(normalized, _normalizedHtml, StringComparison.Ordinal);
+        _normalizedHtml = normalized;
 
         var hasDoctype = ContainsTag(_normalizedHtml, "!doctype");
         var hasHtml = ContainsTag(_normalizedHtml, "html");
@@ -101,54 +125,125 @@
         if (!hasScript) _qualityScore -= 10;
         if (_normalizedHtml.Length < 200 && !string.IsNullOrWhiteSpace(_normalizedHtml)) _qualityScore -= 10;
         _qualityScore = Math.Clamp(_qualityScore, 0, 100);
+
+        if (ProbeRuntime && !string.IsNullOrWhiteSpace(_normalizedHtml))
+        {
+            if (contentChanged || _probeId is null)
+            {
+                _probeId = Guid.NewGuid().ToString("N");
+                _report = new RuntimeProbeReport();
+            }
+            _frameHtml = ProbeScript(_probeId) + _normalizedHtml;
+        }
+        else
+        {
+            _probeId = null;
+            _frameHtml = _normalizedHtml;
+        }
     }
 
-    private static bool ContainsMarkdownFence(string content) =>
-        content.Contains("```", StringComparison.Ordinal);
-
-    private static string NormalizeHtml(string raw)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (string.IsNullOrWhiteSpace(raw))
+        if (_probeId == _registeredProbeId) return;
+
+        await UnregisterProbeAsync();
+
+        if (_probeId is null) return;
+
+        _selfRef ??= DotNetObjectReference.Create(this);
+        try
         {
-            return string.Empty;
+            await JS.InvokeVoidAsync("sandboxProbe.register", _probeId, _selfRef);
+            _registeredProbeId = _probeId;
+        }
+        catch (JSException)
+        {
+            // compare.js not loaded (or blocked) — the static scorecard still works without it.
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnProbeMessage(string type, string message)
+    {
+        switch (type)
+        {
+            case "loaded":
+                if (long.TryParse(message, out var ms)) _report.LoadMs = ms;
+                _report.Loaded = true;
+                break;
+            case "error":
+                _report.AddError(message);
+                break;
+            case "resource":
+                _report.AddResourceFailure(message);
+                break;
+            case "console":
+                _report.AddConsoleError(message);
+                break;
         }
 
-        var trimmed = raw.Trim();
+        if (OnProbeUpdated.HasDelegate)
+            await OnProbeUpdated.InvokeAsync(_report);
+    }
 
-        var fencedBlock = Regex.Match(
-            trimmed,
-            @"^\s*```(?:html)?\s*(?<body>[\s\S]*?)\s*```\s*$",
-            RegexOptions.IgnoreCase);
+    /// <summary>
+    /// Prepended to the document so it observes everything the model's own scripts do. It is
+    /// injected into the <em>preview</em> only: the persisted output, the structural analysis
+    /// and "View Source" all read the untouched raw string, so nothing a person judges or
+    /// exports contains this.
+    /// </summary>
+    /// <remarks>
+    /// The id is embedded as a bare quoted literal rather than JSON-encoded because it is always
+    /// <c>Guid.ToString("N")</c> — 32 hex characters, nothing a string literal could escape.
+    /// </remarks>
+    private static string ProbeScript(string probeId) =>
+        "<script>(function(){var i='" + probeId + "';" +
+        "function s(t,m){try{parent.postMessage({__plprobe:i,type:t,message:String(m).slice(0,300)},'*')}catch(e){}}" +
+        "window.addEventListener('error',function(e){" +
+        "if(e.target&&e.target!==window&&e.target.tagName){s('resource',e.target.tagName.toLowerCase()+': '+(e.target.src||e.target.href||'unknown'))}" +
+        "else{s('error',e.message||'Script error')}},true);" +
+        "window.addEventListener('unhandledrejection',function(e){s('error','Unhandled rejection: '+((e.reason&&e.reason.message)||e.reason))});" +
+        "var c=console.error;console.error=function(){try{c.apply(console,arguments)}catch(x){}" +
+        "s('console',Array.prototype.slice.call(arguments).join(' '))};" +
+        "window.addEventListener('load',function(){s('loaded',String(Math.round(performance.now())))});" +
+        "})();</script>\n";
 
-        if (fencedBlock.Success)
+    private async Task UnregisterProbeAsync()
+    {
+        if (_registeredProbeId is null) return;
+
+        try
         {
-            var body = fencedBlock.Groups["body"].Value.Trim();
-            if (!string.IsNullOrWhiteSpace(body))
-            {
-                return body;
-            }
+            await JS.InvokeVoidAsync("sandboxProbe.unregister", _registeredProbeId);
+        }
+        catch (JSException)
+        {
+            // Nothing to release.
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit already gone.
         }
 
-        var firstFence = Regex.Match(
-            trimmed,
-            @"```(?:html)?\s*(?<body>[\s\S]*?)\s*```",
-            RegexOptions.IgnoreCase);
+        _registeredProbeId = null;
+    }
 
-        if (firstFence.Success)
-        {
-            var body = firstFence.Groups["body"].Value.Trim();
-            if (!string.IsNullOrWhiteSpace(body))
-            {
-                return body;
-            }
-        }
-
-        return trimmed;
+    public async ValueTask DisposeAsync()
+    {
+        await UnregisterProbeAsync();
+        _selfRef?.Dispose();
+        _selfRef = null;
     }
 
     private static bool ContainsTag(string html, string tagName) =>
-        Regex.IsMatch(html, $@"<\s*{Regex.Escape(tagName)}\b", RegexOptions.IgnoreCase);
+        System.Text.RegularExpressions.Regex.IsMatch(
+            html,
+            $@"<\s*{System.Text.RegularExpressions.Regex.Escape(tagName)}\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private static bool LooksLikeHtml(string html) =>
-        Regex.IsMatch(html, @"<(?:!doctype|html|head|body|canvas|div|script|style)\b", RegexOptions.IgnoreCase);
+        System.Text.RegularExpressions.Regex.IsMatch(
+            html,
+            @"<(?:!doctype|html|head|body|canvas|div|script|style)\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 }

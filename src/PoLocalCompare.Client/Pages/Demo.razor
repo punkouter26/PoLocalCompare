@@ -1,0 +1,529 @@
+@page "/demo"
+@using PoLocalCompare.Client.Components
+@using PoLocalCompare.Client.Services
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@implements IAsyncDisposable
+@inject DuelApiClient ApiClient
+@inject NavigationManager Nav
+
+<PageTitle>Auto demo — PoLocalCompare</PageTitle>
+
+<div class="demo">
+    <header class="demo__header">
+        <h1 class="demo__title"><span aria-hidden="true">▶</span> Auto demo</h1>
+        <p class="demo__subtitle">
+            Runs @(_plan?.Rounds.Count ?? DefaultRounds) duels back to back on randomly paired remote models,
+            each judged automatically the moment it finishes.
+        </p>
+        @* Demo duels are indistinguishable from any other duel once written, so this has to be
+           stated before the button, not discovered afterwards on the leaderboard. *@
+        <p class="demo__warning">
+            <span aria-hidden="true">⚠</span>
+            These are real duels: they are saved to the archive, judged by the AI judge, and they move ELO.
+        </p>
+    </header>
+
+    @if (_loadError is not null)
+    {
+        <p class="demo__error">@_loadError</p>
+    }
+    else if (_plan is null)
+    {
+        <p class="demo__status">Planning the run…</p>
+    }
+    else if (!_plan.CanRun)
+    {
+        <div class="demo__unavailable">
+            <h2>Demo mode can't run here</h2>
+            <p>@_plan.UnavailableReason</p>
+            <a class="demo__btn" href="/">← Back to Compare</a>
+        </div>
+    }
+    else
+    {
+        <div class="demo__controls">
+            @if (_phase == Phase.Idle)
+            {
+                <button type="button" class="demo__btn demo__btn--primary" @onclick="StartAsync">
+                    ▶ Start @_plan.Rounds.Count duels
+                </button>
+            }
+            else if (_phase == Phase.Running)
+            {
+                <button type="button" class="demo__btn demo__btn--stop" @onclick="RequestStop" disabled="@_stopRequested">
+                    @(_stopRequested ? "Finishing current duel…" : "■ Stop after this duel")
+                </button>
+            }
+            else
+            {
+                <button type="button" class="demo__btn demo__btn--primary" @onclick="ResetAsync">↻ Run again</button>
+                <a class="demo__btn" href="/leaderboard">📊 See the leaderboard</a>
+            }
+
+            <span class="demo__progress" role="status">
+                @_completedCount of @_plan.Rounds.Count complete@(_phase == Phase.Running ? " — running…" : "")
+            </span>
+        </div>
+
+        @* ── Current duel ───────────────────────────────────────────────── *@
+        @if (_phase == Phase.Running && _current is not null)
+        {
+            <section class="demo__current" aria-label="Duel in progress">
+                <div class="demo__current-head">
+                    <span class="demo__round-badge">Duel @(_current.Round.Index + 1)</span>
+                    <span class="demo__current-prompt">
+                        <span aria-hidden="true">@_current.Round.PromptEmoji</span> @_current.Round.PromptTitle
+                    </span>
+                </div>
+
+                <TokenRace
+                    LeftName="@_current.Round.LeftModelName"
+                    RightName="@_current.Round.RightModelName"
+                    LeftStatus="@_current.LeftStatus"
+                    RightStatus="@_current.RightStatus"
+                    LeftTokenCount="@_current.LeftTokens"
+                    RightTokenCount="@_current.RightTokens"
+                    LeftVelocity="@_current.LeftVelocity"
+                    RightVelocity="@_current.RightVelocity"
+                    LeftPeakVelocity="@_current.LeftPeak"
+                    RightPeakVelocity="@_current.RightPeak"
+                    LeftHistory="_current.LeftHistory"
+                    RightHistory="_current.RightHistory" />
+
+                @if (_current.LeftPreview is not null || _current.RightPreview is not null)
+                {
+                    <div class="demo__previews">
+                        <div class="demo__preview">
+                            @if (_current.LeftPreview is not null)
+                            {
+                                <SandboxedViewport HtmlContent="@_current.LeftPreview"
+                                                   ModelName="@_current.Round.LeftModelName" IsLoser="false" />
+                            }
+                            else
+                            {
+                                <div class="demo__preview-waiting">@_current.Round.LeftModelName — waiting…</div>
+                            }
+                        </div>
+                        <div class="demo__preview">
+                            @if (_current.RightPreview is not null)
+                            {
+                                <SandboxedViewport HtmlContent="@_current.RightPreview"
+                                                   ModelName="@_current.Round.RightModelName" IsLoser="false" />
+                            }
+                            else
+                            {
+                                <div class="demo__preview-waiting">@_current.Round.RightModelName — waiting…</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        @* ── Standings ──────────────────────────────────────────────────── *@
+        @if (_completedCount > 0)
+        {
+            <section class="demo__standings" aria-label="Standings so far">
+                <h2 class="demo__section-title">Standings</h2>
+                <ul class="demo__standings-list">
+                    @foreach (var entry in Standings())
+                    {
+                        <li class="demo__standing">
+                            <span class="demo__standing-name">@entry.Name</span>
+                            <span class="demo__standing-bar" style="--fill: @entry.Share%"></span>
+                            <span class="demo__standing-count">@entry.Wins win@(entry.Wins == 1 ? "" : "s")</span>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        @* ── Queue ──────────────────────────────────────────────────────── *@
+        <section class="demo__queue" aria-label="Duel queue">
+            <h2 class="demo__section-title">The run</h2>
+            <ol class="demo__queue-list">
+                @foreach (var state in _rounds)
+                {
+                    <li class="demo__queue-item demo__queue-item--@StatusClass(state)">
+                        <span class="demo__queue-index">@(state.Round.Index + 1)</span>
+                        <span class="demo__queue-prompt">
+                            <span aria-hidden="true">@state.Round.PromptEmoji</span> @state.Round.PromptTitle
+                        </span>
+                        <span class="demo__queue-models">
+                            @state.Round.LeftModelName <em>vs</em> @state.Round.RightModelName
+                        </span>
+                        <span class="demo__queue-outcome">
+                            @if (state.Outcome == RoundOutcome.Judged && state.DuelId is { } judgedId)
+                            {
+                                <a href="@($"/arena/{judgedId}")" class="demo__queue-link">
+                                    🏆 @state.WinnerName@(state.EloShift is { } shift ? $" (+{shift:F1})" : "")
+                                </a>
+                            }
+                            else if (state.Outcome == RoundOutcome.Undecided && state.DuelId is { } undecidedId)
+                            {
+                                <a href="@($"/arena/{undecidedId}")" class="demo__queue-link demo__queue-link--muted">
+                                    ⚖ judge stood down — decide it
+                                </a>
+                            }
+                            else if (state.Outcome == RoundOutcome.Failed)
+                            {
+                                <span class="demo__queue-failed" title="@state.Error">✖ @(state.Error ?? "failed")</span>
+                            }
+                            else if (state.Outcome == RoundOutcome.Running)
+                            {
+                                <span class="demo__queue-running">● running</span>
+                            }
+                            else if (state.Outcome == RoundOutcome.Skipped)
+                            {
+                                <span class="demo__queue-skipped">skipped</span>
+                            }
+                            else
+                            {
+                                <span class="demo__queue-waiting">queued</span>
+                            }
+                        </span>
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+</div>
+
+@code {
+    private const int DefaultRounds = 10;
+
+    /// <summary>
+    /// Ceiling on one duel. The server's own watchdog is 900s; this is the client giving up on
+    /// watching so a single stuck duel cannot strand the rest of the run.
+    /// </summary>
+    private static readonly TimeSpan RoundTimeout = TimeSpan.FromMinutes(6);
+
+    private enum Phase { Idle, Running, Finished }
+
+    private enum RoundOutcome { Queued, Running, Judged, Undecided, Failed, Skipped }
+
+    private sealed class RoundState(DemoRoundDto round)
+    {
+        public DemoRoundDto Round { get; } = round;
+        public RoundOutcome Outcome { get; set; } = RoundOutcome.Queued;
+        public DuelId? DuelId { get; set; }
+        public string? WinnerName { get; set; }
+        public double? EloShift { get; set; }
+        public string? Error { get; set; }
+
+        public DuelStatus LeftStatus { get; set; } = DuelStatus.Initializing;
+        public DuelStatus RightStatus { get; set; } = DuelStatus.Initializing;
+        public int LeftTokens { get; set; }
+        public int RightTokens { get; set; }
+        public double? LeftVelocity { get; set; }
+        public double? RightVelocity { get; set; }
+        public double? LeftPeak { get; set; }
+        public double? RightPeak { get; set; }
+        public string? LeftPreview { get; set; }
+        public string? RightPreview { get; set; }
+        public List<double> LeftHistory { get; } = [];
+        public List<double> RightHistory { get; } = [];
+    }
+
+    private DemoPlanDto? _plan;
+    private string? _loadError;
+    private Phase _phase = Phase.Idle;
+    private bool _stopRequested;
+
+    private List<RoundState> _rounds = [];
+    private RoundState? _current;
+    private int _completedCount;
+
+    private SignalRDuelClient? _signalR;
+    private CancellationTokenSource? _runCts;
+
+    /// <summary>Set when the duel being watched reaches a verdict, so the run loop can advance.</summary>
+    private TaskCompletionSource<VerdictResponseDto?>? _verdictSignal;
+
+    protected override async Task OnInitializedAsync() => await LoadPlanAsync();
+
+    private async Task LoadPlanAsync()
+    {
+        _loadError = null;
+
+        try
+        {
+            _plan = await ApiClient.GetDemoPlanAsync(DefaultRounds);
+            _rounds = _plan?.Rounds.Select(r => new RoundState(r)).ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Could not plan the demo: {ex.Message}";
+        }
+    }
+
+    private void RequestStop() => _stopRequested = true;
+
+    private async Task ResetAsync()
+    {
+        _phase = Phase.Idle;
+        _stopRequested = false;
+        _completedCount = 0;
+        _current = null;
+        await LoadPlanAsync();
+    }
+
+    /// <summary>
+    /// Runs the plan one duel at a time. Sequential by necessity as much as by design:
+    /// BackgroundTaskService awaits each queued work item before dequeuing the next, so firing
+    /// all ten at once would queue behind each other anyway — with nothing to watch but the first.
+    /// </summary>
+    private async Task StartAsync()
+    {
+        if (_phase == Phase.Running || _plan is null) return;
+
+        _phase = Phase.Running;
+        _stopRequested = false;
+        _completedCount = 0;
+        _runCts = new CancellationTokenSource();
+        var token = _runCts.Token;
+
+        try
+        {
+            foreach (var state in _rounds)
+            {
+                if (token.IsCancellationRequested) break;
+
+                if (_stopRequested)
+                {
+                    state.Outcome = RoundOutcome.Skipped;
+                    continue;
+                }
+
+                _current = state;
+                state.Outcome = RoundOutcome.Running;
+                await InvokeAsync(StateHasChanged);
+
+                await RunRoundAsync(state, token);
+
+                _completedCount++;
+                _current = null;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away mid-run; the duels themselves continue server-side.
+        }
+        finally
+        {
+            await DisconnectAsync();
+            _current = null;
+            _phase = Phase.Finished;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RunRoundAsync(RoundState state, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // autoJudgeDelaySeconds: 0 — nobody is watching for a human pick, so the grace
+            // window would only be dead time between rounds.
+            var duel = await ApiClient.CommenceDuelAsync(
+                state.Round.LeftModelId,
+                state.Round.RightModelId,
+                state.Round.PromptText,
+                autoJudgeDelaySeconds: 0);
+
+            if (duel is null)
+            {
+                state.Outcome = RoundOutcome.Failed;
+                state.Error = "could not start";
+                return;
+            }
+
+            state.DuelId = duel.DuelId;
+
+            _verdictSignal = new TaskCompletionSource<VerdictResponseDto?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await ConnectAsync(duel.DuelId, state);
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(RoundTimeout);
+
+            var verdict = await AwaitVerdictAsync(duel.DuelId, timeout.Token);
+            ApplyVerdict(state, verdict);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The per-round timeout, not a stop request: the duel is still running server-side
+            // and remains judgeable from the Archive, so this is not a failure of the duel.
+            state.Outcome = RoundOutcome.Undecided;
+            state.Error = "timed out watching";
+        }
+        catch (Exception ex)
+        {
+            state.Outcome = RoundOutcome.Failed;
+            state.Error = ex.Message;
+        }
+        finally
+        {
+            await DisconnectAsync();
+            _verdictSignal = null;
+        }
+    }
+
+    /// <summary>
+    /// Waits for the verdict push, polling as a backstop. The hub delivers it in the normal
+    /// case; polling covers a dropped connection, which over ten rounds is worth assuming.
+    /// </summary>
+    private async Task<VerdictResponseDto?> AwaitVerdictAsync(DuelId duelId, CancellationToken cancellationToken)
+    {
+        var signal = _verdictSignal!.Task;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var completed = await Task.WhenAny(signal, Task.Delay(3000, cancellationToken));
+            if (completed == signal) return await signal;
+
+            var fresh = await ApiClient.GetDuelAsync(duelId);
+            if (fresh is not null && fresh.Verdict != DuelVerdict.Pending && fresh.WinnerModelId is not null)
+            {
+                return new VerdictResponseDto
+                {
+                    DuelId = fresh.DuelId,
+                    Verdict = fresh.Verdict,
+                    WinnerModelId = fresh.WinnerModelId,
+                    LoserModelId = fresh.LoserModelId,
+                    EloShiftWinner = fresh.EloShiftWinner,
+                    EloShiftLoser = fresh.EloShiftLoser,
+                    Source = fresh.VerdictSource,
+                    JudgeRationale = fresh.JudgeRationale,
+                };
+            }
+
+            // A finished duel the judge declined to decide (both models failed, or the judge was
+            // unreachable) stays Pending forever. Stop waiting and leave it for a human.
+            if (fresh?.CompletedAt is not null && fresh.Results.Count > 0 && HasSettled(fresh))
+                return null;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return null;
+    }
+
+    /// <summary>
+    /// True when the duel has finished and enough time has passed since completion that a judge
+    /// that was going to decide would have. Deliberately generous: AiJudge:TimeoutSeconds bounds
+    /// the judge call, and giving up early would mislabel a slow judge as a stood-down one.
+    /// </summary>
+    private static bool HasSettled(DuelDto duel) =>
+        duel.CompletedAt is { } completed
+        && DateTimeOffset.UtcNow - completed > TimeSpan.FromSeconds(75);
+
+    private void ApplyVerdict(RoundState state, VerdictResponseDto? verdict)
+    {
+        if (verdict?.WinnerModelId is null)
+        {
+            state.Outcome = RoundOutcome.Undecided;
+            return;
+        }
+
+        state.Outcome = RoundOutcome.Judged;
+        state.WinnerName = verdict.WinnerModelId == state.Round.LeftModelId
+            ? state.Round.LeftModelName
+            : state.Round.RightModelName;
+        state.EloShift = verdict.EloShiftWinner;
+    }
+
+    // ── SignalR ───────────────────────────────────────────────────────────────
+
+    private async Task ConnectAsync(DuelId duelId, RoundState state)
+    {
+        await DisconnectAsync();
+
+        _signalR = new SignalRDuelClient();
+        _signalR.OnModelStatusUpdate += update => OnStatusUpdate(state, update);
+        _signalR.OnVerdictRecorded += response => _verdictSignal?.TrySetResult(response);
+
+        await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), duelId);
+    }
+
+    private async Task DisconnectAsync()
+    {
+        if (_signalR is null) return;
+
+        var client = _signalR;
+        _signalR = null;
+        await client.DisposeAsync();
+    }
+
+    private void OnStatusUpdate(RoundState state, ModelStatusUpdateDto update)
+    {
+        var isLeft = update.Side == "Left";
+
+        if (isLeft)
+        {
+            state.LeftStatus = update.Status;
+            state.LeftTokens = update.TokenCount;
+            if (update.TokenVelocity.HasValue) state.LeftVelocity = update.TokenVelocity;
+            if (update.PeakTokenVelocity.HasValue) state.LeftPeak = update.PeakTokenVelocity;
+            if (update.HtmlPreview is not null) state.LeftPreview = update.HtmlPreview;
+            PushVelocity(state.LeftHistory, update.TokenVelocity);
+        }
+        else
+        {
+            state.RightStatus = update.Status;
+            state.RightTokens = update.TokenCount;
+            if (update.TokenVelocity.HasValue) state.RightVelocity = update.TokenVelocity;
+            if (update.PeakTokenVelocity.HasValue) state.RightPeak = update.PeakTokenVelocity;
+            if (update.HtmlPreview is not null) state.RightPreview = update.HtmlPreview;
+            PushVelocity(state.RightHistory, update.TokenVelocity);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static void PushVelocity(List<double> history, double? velocity)
+    {
+        if (velocity is not > 0) return;
+
+        history.Add(velocity.Value);
+        if (history.Count > 60) history.RemoveAt(0);
+    }
+
+    // ── Standings ─────────────────────────────────────────────────────────────
+
+    private sealed record Standing(string Name, int Wins, double Share);
+
+    private IEnumerable<Standing> Standings()
+    {
+        var wins = _rounds
+            .Where(r => r.Outcome == RoundOutcome.Judged && r.WinnerName is not null)
+            .GroupBy(r => r.WinnerName!)
+            .Select(g => (Name: g.Key, Wins: g.Count()))
+            .OrderByDescending(x => x.Wins)
+            .ToList();
+
+        if (wins.Count == 0) return [];
+
+        var leader = wins[0].Wins;
+        return wins.Select(x => new Standing(x.Name, x.Wins, leader == 0 ? 0 : x.Wins * 100.0 / leader));
+    }
+
+    private static string StatusClass(RoundState state) => state.Outcome switch
+    {
+        RoundOutcome.Running => "running",
+        RoundOutcome.Judged => "done",
+        RoundOutcome.Undecided => "undecided",
+        RoundOutcome.Failed => "failed",
+        RoundOutcome.Skipped => "skipped",
+        _ => "queued",
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        _runCts?.Cancel();
+        _runCts?.Dispose();
+        _verdictSignal?.TrySetCanceled();
+        await DisconnectAsync();
+    }
+}

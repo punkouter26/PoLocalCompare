@@ -1,0 +1,240 @@
+.source-compare {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    overflow: hidden;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+
+.source-compare__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+}
+
+.source-compare__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.source-compare__stat--changed { color: var(--accent-yellow); font-weight: 600; }
+.source-compare__stat--added { color: var(--accent-green); font-weight: 600; }
+.source-compare__stat--removed { color: var(--accent-red); font-weight: 600; }
+
+.source-compare__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.source-compare__btn {
+    min-height: var(--target-min);
+    padding: 0.25rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-1);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.source-compare__btn:hover {
+    color: var(--text);
+    border-color: var(--accent-blue);
+}
+
+.source-compare__btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* ── Shared code typography ───────────────────────────────────────────────── */
+
+.source-compare__code,
+.source-compare__diff {
+    font-family: 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+    font-size: 0.72rem;
+    line-height: 1.55;
+    overflow: auto;
+    max-height: 32rem;
+    background: var(--surface-1);
+}
+
+.source-compare__code:focus-visible,
+.source-compare__diff:focus-visible {
+    outline: none;
+    box-shadow: inset var(--focus-ring);
+}
+
+.source-compare__ln {
+    color: var(--text-dim);
+    text-align: right;
+    padding-inline: var(--space-sm);
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+    position: sticky;
+    left: 0;
+    background: inherit;
+}
+
+.source-compare__text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    padding-right: var(--space-sm);
+}
+
+/* ── Code view: two independent panes ─────────────────────────────────────── */
+
+.source-compare__panes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+}
+
+.source-compare__pane {
+    background: var(--surface-1);
+    min-width: 0;
+}
+
+.source-compare__pane-head {
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    overflow-wrap: anywhere;
+}
+
+.source-compare__line {
+    display: grid;
+    grid-template-columns: 3.2rem 1fr;
+}
+
+/* ── Diff view: one grid, so alignment needs no scroll syncing ────────────── */
+
+.source-compare__diff-head {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-family: system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.source-compare__diff-head > span {
+    padding: var(--space-xs) var(--space-md);
+    overflow-wrap: anywhere;
+}
+
+.source-compare__diff-head > span:first-child {
+    border-right: 1px solid var(--border);
+}
+
+.source-compare__row {
+    display: grid;
+    grid-template-columns: 3.2rem 1fr 3.2rem 1fr;
+    border-left: 3px solid transparent;
+}
+
+.source-compare__row > .source-compare__text:first-of-type {
+    border-right: 1px solid var(--border);
+}
+
+.source-compare__row--equal {
+    opacity: 0.62;
+}
+
+/* Tinted rather than solid: the code has to stay readable against it in both themes, and
+   colour is paired with the +/- gutter so it is never the only signal. */
+.source-compare__row--changed {
+    background: color-mix(in srgb, var(--accent-yellow) 12%, transparent);
+    border-left-color: var(--accent-yellow);
+}
+
+.source-compare__row--added {
+    background: color-mix(in srgb, var(--accent-green) 12%, transparent);
+    border-left-color: var(--accent-green);
+}
+
+.source-compare__row--removed {
+    background: color-mix(in srgb, var(--accent-red) 12%, transparent);
+    border-left-color: var(--accent-red);
+}
+
+.source-compare__fold {
+    display: block;
+    width: 100%;
+    min-height: var(--target-min);
+    padding: var(--space-xs) var(--space-md);
+    font-family: system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: none;
+    border-block: 1px solid var(--border);
+    text-align: left;
+    cursor: pointer;
+}
+
+.source-compare__fold:hover {
+    color: var(--accent-blue);
+}
+
+.source-compare__fold:focus-visible {
+    outline: none;
+    box-shadow: inset var(--focus-ring);
+}
+
+.source-compare__empty {
+    padding: var(--space-lg);
+    margin: 0;
+    text-align: center;
+    font-family: system-ui, sans-serif;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+    .source-compare__panes {
+        grid-template-columns: 1fr;
+    }
+
+    .source-compare__code,
+    .source-compare__diff {
+        max-height: 20rem;
+        font-size: 0.68rem;
+    }
+
+    .source-compare__row {
+        grid-template-columns: 2.4rem 1fr 2.4rem 1fr;
+    }
+
+    .source-compare__line {
+        grid-template-columns: 2.4rem 1fr;
+    }
+}

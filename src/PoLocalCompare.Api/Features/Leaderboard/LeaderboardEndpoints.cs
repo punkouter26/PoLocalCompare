@@ -39,6 +39,21 @@ public static class LeaderboardEndpoints
         .WithSummary("Returns aggregated head-to-head records for a model.")
         .Produces<IReadOnlyList<HeadToHeadDto>>();
 
+        group.MapGet("/h2h/{modelIdA}/{modelIdB}", async (
+            ModelId modelIdA,
+            ModelId modelIdB,
+            [FromServices] GetHeadToHeadHandler handler) =>
+        {
+            var detail = await handler.HandleAsync(modelIdA, modelIdB);
+            return detail is null
+                ? Results.NotFound(new { error = "One or both models were not found, or they are the same model." })
+                : Results.Ok(detail);
+        })
+        .WithName("GetHeadToHead")
+        .WithSummary("Returns the full record between two specific models.")
+        .Produces<HeadToHeadDetailDto>()
+        .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 }

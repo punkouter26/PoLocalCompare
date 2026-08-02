@@ -23,6 +23,46 @@
     font-style: italic;
 }
 
+/* ── Rendered / Code / Diff switcher ──────────────────────────────────────── */
+
+.arena__view-toggle {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    margin-bottom: 0.85rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.arena__view-btn {
+    min-height: var(--target-min);
+    padding: 0.3rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: calc(var(--radius-md) - 3px);
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.arena__view-btn:hover {
+    color: var(--text);
+}
+
+.arena__view-btn--active {
+    background: var(--surface-1);
+    color: var(--accent-blue);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.arena__view-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
 .arena__viewports {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -119,6 +159,14 @@
     font-weight: 700;
     padding: 0.35rem;
     border-radius: 4px;
+    /* The value counts up in C#; tabular figures stop the badge jittering as digits change. */
+    font-variant-numeric: tabular-nums;
+    animation: arena-elo-in 320ms var(--spring-bounce) both;
+}
+
+@keyframes arena-elo-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.96); }
+    to   { opacity: 1; transform: none; }
 }
 
 .arena__elo-badge--positive {
@@ -160,6 +208,28 @@
     top: 0;
     z-index: 10;
     box-shadow: 0 2px 8px #00000088;
+}
+
+/* The optimistic window: the pick is on screen but the server has not confirmed it. Muted
+   rather than green so a confirmed verdict and a predicted one never look the same. */
+.arena__verdict-recorded--pending {
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+}
+
+/* Shown when an optimistic pick lost the race to the auto-judge. It has to read as a
+   correction, not as flavour text — the user's click genuinely did not count. */
+.arena__override-notice {
+    text-align: center;
+    color: #fbbf24;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.5rem;
+    background: #1c1408;
+    border: 1px solid #78350f;
+    border-radius: 4px;
 }
 
 .arena__judge-note {

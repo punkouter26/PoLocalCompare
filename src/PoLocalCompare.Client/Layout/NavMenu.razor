@@ -1,4 +1,5 @@
 @implements IDisposable
+@using PoLocalCompare.Shared.DTOs
 <nav class="topnav navbar navbar-expand-md navbar-dark">
     @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ── *@
     @if (_usingMockData)
@@ -34,7 +35,42 @@
                         <span class="nav-text">Archive</span>
                     </NavLink>
                 </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="demo">
+                        <span class="nav-text">Demo</span>
+                    </NavLink>
+                </li>
             </ul>
+
+            @* ── Live activity ticker ──────────────────────────────────────
+               Polite, not assertive: duels finish while the user is reading, and an assertive
+               region would interrupt them every time one did. *@
+            @if (_tickerVisible)
+            {
+                <div class="nav-ticker" role="status" aria-live="polite" aria-label="Live duel activity">
+                    @if (Ticker.RunningCount > 0)
+                    {
+                        <span class="nav-ticker__pill nav-ticker__pill--running">
+                            <span class="nav-ticker__pulse" aria-hidden="true"></span>
+                            @Ticker.RunningCount running
+                        </span>
+                    }
+                    @if (Ticker.AwaitingVerdictCount > 0)
+                    {
+                        <a href="archive" class="nav-ticker__pill nav-ticker__pill--pending"
+                           title="Duels that finished but have no verdict yet">
+                            <span aria-hidden="true">⚖</span>
+                            @Ticker.AwaitingVerdictCount awaiting judgment
+                        </a>
+                    }
+                    @if (_latest is not null)
+                    {
+                        <a href="@LatestHref" class="nav-ticker__latest" title="@_latest.PromptSummary">
+                            @LatestText
+                        </a>
+                    }
+                </div>
+            }
 
             @* ── User identity / auth (standards §6) ── *@
             <div class="navbar-nav ms-auto align-items-center gap-2 nav-auth">
@@ -87,6 +123,7 @@
     [Inject] private AuthenticationStateProvider AuthState { get; set; } = default!;
     [Inject] private Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment { get; set; } = default!;
     [Inject] private ThemeService Theme { get; set; } = default!;
+    [Inject] private LobbyTickerService Ticker { get; set; } = default!;
 
     private bool collapseNavMenu = true;
     private string? _identity;
@@ -118,6 +155,41 @@
 
     private string ThemeTitle => $"Theme: {ThemeLabel}. Activate to switch.";
 
+    // ── Live ticker ──────────────────────────────────────────────────────────
+
+    private LobbyEventDto? _latest;
+
+    // Nothing to say is rendered as nothing at all: an empty ticker strip would take nav space
+    // on every page to communicate that no duels are happening.
+    private bool _tickerVisible =>
+        Ticker.RunningCount > 0 || Ticker.AwaitingVerdictCount > 0 || _latest is not null;
+
+    private string LatestHref => _latest is null ? "archive" : $"arena/{_latest.DuelId}";
+
+    private string LatestText => _latest switch
+    {
+        null => string.Empty,
+        { Kind: LobbyEventKind.VerdictRecorded } e =>
+            $"🏆 {e.WinnerModelName} beat {Opponent(e)}{EloSuffix(e)}",
+        { Kind: LobbyEventKind.DuelCompleted } e =>
+            $"✓ {e.LeftModelName} vs {e.RightModelName} finished",
+        var e => $"⚡ {e.LeftModelName} vs {e.RightModelName} started",
+    };
+
+    private static string Opponent(LobbyEventDto e) =>
+        string.Equals(e.WinnerModelName, e.LeftModelName, StringComparison.Ordinal)
+            ? e.RightModelName
+            : e.LeftModelName;
+
+    private static string EloSuffix(LobbyEventDto e) =>
+        e.EloShiftWinner is { } shift ? $" (+{shift:F1})" : string.Empty;
+
+    private void OnTickerChanged() => InvokeAsync(() =>
+    {
+        _latest = Ticker.Events.FirstOrDefault();
+        StateHasChanged();
+    });
+
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
 
     private async Task CycleThemeAsync()
@@ -147,6 +219,11 @@
 
         var useRealAi = Config["Features:UseRealAi"];
         _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;
+
+        // Not awaited: connecting the hub and seeding the pending count must not hold up the
+        // nav bar, which is the first thing rendered on every page.
+        Ticker.OnChanged += OnTickerChanged;
+        _ = Ticker.EnsureStartedAsync(Nav.BaseUri);
     }
 
     /// <summary>Resolves the current identity from the BFF session (/auth/me via the state provider).</summary>
@@ -200,5 +277,6 @@
     public void Dispose()
     {
         AuthState.AuthenticationStateChanged -= OnAuthStateChanged;
+        Ticker.OnChanged -= OnTickerChanged;
     }
 }

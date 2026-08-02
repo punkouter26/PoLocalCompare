@@ -44,18 +44,26 @@ public sealed class DuelExecutionService
         _taskQueue = taskQueue;
     }
 
-    public Task EnqueueAsync(DuelId duelId)
+    /// <param name="autoJudgeDelaySecondsOverride">
+    /// Replaces the configured grace window for this duel only — demo mode passes 0 so the run
+    /// does not pause between rounds waiting for a human who is not there.
+    /// </param>
+    public Task EnqueueAsync(DuelId duelId, int? autoJudgeDelaySecondsOverride = null)
     {
         // Queue the execution task for reliable background processing
         _taskQueue.QueueBackgroundWork(async ct =>
         {
             using var scope = _scopeFactory.CreateScope();
-            await ExecuteAsync(scope.ServiceProvider, duelId, ct);
+            await ExecuteAsync(scope.ServiceProvider, duelId, autoJudgeDelaySecondsOverride, ct);
         });
         return Task.CompletedTask;
     }
 
-    private async Task ExecuteAsync(IServiceProvider services, DuelId duelId, CancellationToken cancellationToken)
+    private async Task ExecuteAsync(
+        IServiceProvider services,
+        DuelId duelId,
+        int? autoJudgeDelaySecondsOverride,
+        CancellationToken cancellationToken)
     {
         var duelRepo = services.GetRequiredService<IDuelRepository>();
         var modelRepo = services.GetRequiredService<IModelRepository>();
@@ -84,6 +92,9 @@ public sealed class DuelExecutionService
                 DuelExecutionLog.ModelsNotFound(_logger, duelId);
                 return;
             }
+
+            var lobby = services.GetRequiredService<LobbyNotifier>();
+            await lobby.DuelStartedAsync(duel, leftModel.DisplayName, rightModel.DisplayName, cancellationToken);
 
             // 900-second watchdog (15 min) — allows for WebGPU shader JIT compilation on first run
             using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(900));
@@ -128,12 +139,15 @@ public sealed class DuelExecutionService
                     TimeLimitSeconds = 900,
                 });
 
+            await lobby.DuelCompletedAsync(duel, leftModel.DisplayName, rightModel.DisplayName, cancellationToken);
+
             // Hand off to the auto-judge, which waits out the grace window before deciding.
             // Run inline rather than as a second queued item: BackgroundTaskService awaits each
             // work item before dequeuing the next, so a queued delay would stall the next duel.
             // The duel is not finished until it has a verdict, so blocking here is the honest
             // shape — and AutoJudge.RunAsync never throws.
-            await services.GetRequiredService<AutoJudge>().RunAsync(duelId, cancellationToken);
+            await services.GetRequiredService<AutoJudge>()
+                .RunAsync(duelId, cancellationToken, autoJudgeDelaySecondsOverride);
         }
         catch (Exception ex)
         {

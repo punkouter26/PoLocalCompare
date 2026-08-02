@@ -1,0 +1,198 @@
+@using PoLocalCompare.Shared.Enums
+@using System.Globalization
+
+@* Turns the numbers the two panels already report into the thing they actually describe: a race.
+   Same telemetry, read as position and pace instead of as a table. *@
+
+<section class="token-race @(_photoFinish ? "token-race--finish" : "")" aria-labelledby="token-race-heading">
+    <div class="token-race__head">
+        <h2 id="token-race-heading" class="token-race__title">
+            <span aria-hidden="true">🏁</span> Live race
+        </h2>
+        @* One status region for the whole race: two competing live regions would interrupt
+           each other on every token. *@
+        <p class="token-race__ticker" role="status">@_ticker</p>
+    </div>
+
+    <div class="token-race__lanes">
+        @RenderLane(LeftName, "left", LeftStatus, LeftTokenCount, LeftVelocity, LeftPeakVelocity, LeftHistory, _leftProgress, _leftIsLeader)
+        @RenderLane(RightName, "right", RightStatus, RightTokenCount, RightVelocity, RightPeakVelocity, RightHistory, _rightProgress, _rightIsLeader)
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string LeftName { get; set; } = "Left";
+    [Parameter, EditorRequired] public string RightName { get; set; } = "Right";
+    [Parameter] public DuelStatus LeftStatus { get; set; }
+    [Parameter] public DuelStatus RightStatus { get; set; }
+    [Parameter] public int LeftTokenCount { get; set; }
+    [Parameter] public int RightTokenCount { get; set; }
+    [Parameter] public double? LeftVelocity { get; set; }
+    [Parameter] public double? RightVelocity { get; set; }
+    [Parameter] public double? LeftPeakVelocity { get; set; }
+    [Parameter] public double? RightPeakVelocity { get; set; }
+
+    /// <summary>Rolling tok/s samples, oldest first. Drives the pace sparkline.</summary>
+    [Parameter] public IReadOnlyList<double> LeftHistory { get; set; } = [];
+    [Parameter] public IReadOnlyList<double> RightHistory { get; set; } = [];
+
+    private double _leftProgress;
+    private double _rightProgress;
+    private bool _leftIsLeader;
+    private bool _rightIsLeader;
+    private bool _photoFinish;
+    private string _ticker = "Waiting for the first tokens…";
+
+    /// <summary>
+    /// Where the leader's marker sits. Leaving headroom keeps the front-runner visibly moving —
+    /// pegged at 100% it would look finished the moment it took the lead.
+    /// </summary>
+    private const double LeaderPosition = 88;
+
+    protected override void OnParametersSet()
+    {
+        var leftDone = LeftStatus is DuelStatus.Done or DuelStatus.Failed;
+        var rightDone = RightStatus is DuelStatus.Done or DuelStatus.Failed;
+
+        // The track is scaled to whoever is ahead, so both markers move as the leader advances
+        // rather than creeping toward an arbitrary fixed token target neither may reach.
+        var frontRunner = Math.Max(LeftTokenCount, RightTokenCount);
+
+        _leftProgress = leftDone ? 100 : Scale(LeftTokenCount, frontRunner);
+        _rightProgress = rightDone ? 100 : Scale(RightTokenCount, frontRunner);
+
+        _leftIsLeader = LeftTokenCount > RightTokenCount;
+        _rightIsLeader = RightTokenCount > LeftTokenCount;
+
+        // One side across the line while the other is still generating.
+        _photoFinish = (leftDone ^ rightDone) && frontRunner > 0;
+
+        _ticker = BuildTicker(leftDone, rightDone);
+    }
+
+    private static double Scale(int tokens, int frontRunner) =>
+        frontRunner <= 0 ? 0 : Math.Clamp(tokens / (double)frontRunner * LeaderPosition, 0, LeaderPosition);
+
+    private string BuildTicker(bool leftDone, bool rightDone)
+    {
+        if (leftDone && rightDone)
+            return "Both finished — opening the Arena…";
+
+        if (leftDone) return $"{LeftName} finished first — {RightName} still generating";
+        if (rightDone) return $"{RightName} finished first — {LeftName} still generating";
+
+        var left = LeftVelocity ?? 0;
+        var right = RightVelocity ?? 0;
+
+        if (left <= 0 && right <= 0)
+            return "Warming up — waiting for the first tokens…";
+
+        // Speed comparison only means something once both have a real rate; before that a
+        // "10× faster" reading is just one model having started earlier.
+        if (left > 0 && right > 0)
+        {
+            var ratio = left >= right ? left / right : right / left;
+            var faster = left >= right ? LeftName : RightName;
+
+            if (ratio >= 1.15)
+                return $"{faster} is {ratio.ToString("F1", CultureInfo.InvariantCulture)}× faster right now";
+
+            var gap = Math.Abs(LeftTokenCount - RightTokenCount);
+            if (gap == 0) return "Neck and neck";
+
+            var ahead = LeftTokenCount > RightTokenCount ? LeftName : RightName;
+            return $"Dead heat on pace — {ahead} leads by {gap:N0} tokens";
+        }
+
+        return left > 0
+            ? $"{LeftName} away first at {left.ToString("F0", CultureInfo.InvariantCulture)} tok/s"
+            : $"{RightName} away first at {right.ToString("F0", CultureInfo.InvariantCulture)} tok/s";
+    }
+
+    /// <summary>
+    /// Both sparklines share one vertical scale so the two traces can be compared directly;
+    /// normalising each to its own peak would make a slow model look identical to a fast one.
+    /// </summary>
+    private double SharedPeak()
+    {
+        var peak = 0.0;
+        foreach (var sample in LeftHistory) peak = Math.Max(peak, sample);
+        foreach (var sample in RightHistory) peak = Math.Max(peak, sample);
+        return peak <= 0 ? 1 : peak;
+    }
+
+    private string BuildSparkline(IReadOnlyList<double> history)
+    {
+        if (history.Count < 2) return string.Empty;
+
+        var peak = SharedPeak();
+        var stepX = 100.0 / (history.Count - 1);
+
+        return string.Join(' ', history.Select((sample, index) =>
+        {
+            var x = (index * stepX).ToString("F2", CultureInfo.InvariantCulture);
+            var y = (24 - Math.Clamp(sample / peak, 0, 1) * 22).ToString("F2", CultureInfo.InvariantCulture);
+            return $"{x},{y}";
+        }));
+    }
+
+    private static string StatusLabel(DuelStatus status) => status switch
+    {
+        DuelStatus.Done => "finished",
+        DuelStatus.Failed => "failed",
+        DuelStatus.Generating => "running",
+        _ => "starting",
+    };
+
+    private RenderFragment RenderLane(
+        string name,
+        string side,
+        DuelStatus status,
+        int tokens,
+        double? velocity,
+        double? peak,
+        IReadOnlyList<double> history,
+        double progress,
+        bool isLeader) => @<div class="token-race__lane token-race__lane--@side @(status == DuelStatus.Failed ? "token-race__lane--failed" : "")">
+        <div class="token-race__lane-head">
+            <span class="token-race__name">@name</span>
+            @if (isLeader && status == DuelStatus.Generating)
+            {
+                <span class="token-race__leader-tag" title="Currently ahead on tokens">LEADING</span>
+            }
+            <span class="token-race__status">@StatusLabel(status)</span>
+        </div>
+
+        <div class="token-race__track">
+            <div class="token-race__fill" style="--pos: @progress.ToString("F1", CultureInfo.InvariantCulture)%"></div>
+            <div class="token-race__runner @(status == DuelStatus.Generating ? "token-race__runner--moving" : "")"
+                 style="--pos: @progress.ToString("F1", CultureInfo.InvariantCulture)%"
+                 aria-hidden="true">
+                @(status == DuelStatus.Failed ? "💥" : status == DuelStatus.Done ? "🏁" : "🚀")
+            </div>
+        </div>
+
+        <div class="token-race__readout">
+            <span class="token-race__metric">
+                <strong>@tokens.ToString("N0")</strong> tokens
+            </span>
+            <span class="token-race__metric">
+                <strong>@((velocity ?? 0).ToString("F1", CultureInfo.InvariantCulture))</strong> tok/s
+            </span>
+            @if (peak is > 0)
+            {
+                <span class="token-race__metric token-race__metric--dim">
+                    peak @peak.Value.ToString("F0", CultureInfo.InvariantCulture)
+                </span>
+            }
+        </div>
+
+        @if (history.Count >= 2)
+        {
+            @* Decorative: every number it encodes is already in the readout above. *@
+            <svg class="token-race__spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                <polyline points="@BuildSparkline(history)" />
+            </svg>
+        }
+    </div>;
+}

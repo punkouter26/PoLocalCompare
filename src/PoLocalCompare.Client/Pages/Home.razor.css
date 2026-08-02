@@ -28,6 +28,35 @@
     color: var(--text);
 }
 
+/* Entry point to the unattended demo. Deliberately a quiet secondary link: it starts ten real
+   duels that persist and move ELO, so it should not sit next to Compare as an equal option. */
+.wizard__demo-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-height: var(--target-min);
+    margin-top: var(--space-sm);
+    padding: 0.25rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent-cyan);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    text-decoration: none;
+    transition: border-color var(--transition-fast);
+}
+
+.wizard__demo-link:hover {
+    border-color: var(--accent-cyan);
+    text-decoration: none;
+}
+
+.wizard__demo-link:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
 .wizard__subtitle {
     margin: 0;
     color: var(--text-muted);

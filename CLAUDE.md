@@ -119,7 +119,27 @@ which a filtered network can block. `download-models.py` vendors both (weights p
 
 **Editing `webllm-worker.js` requires bumping the cache-buster.** It is loaded as
 `new Worker('/js/webllm-worker.js?v=N')` from `webllm-interop.js`; without incrementing `N` the browser
-serves the old worker and your change appears to do nothing.
+serves the old worker and your change appears to do nothing. The same trap applies to every
+`<script src="/js/*.js?v=N">` in [index.html](src/PoLocalCompare.Client/wwwroot/index.html) —
+`util.js`, `diag-interop.js` and `compare.js` all carry their own `v=`.
+
+**Browser-side logic belongs in `PoLocalCompare.Shared`, not in the Client project.**
+`PoLocalCompare.Unit` references only the Api project, so anything pure that lives under
+`src/PoLocalCompare.Client/` cannot be reached by any tier except E2E-UI — the one suite CI never
+runs. That is why the diff engine, the HTML analyzer, the prompt library and the demo planner sit in
+`Shared/Analysis`, `Shared/Prompts` and `Shared/Demo` rather than beside the components that use
+them. Razor components stay thin wrappers over those statics.
+
+**The Arena's scorecard must never feed ELO.** `OutputAnalysis.CompletenessScore` is presentational
+and deliberately separate from the persisted `OutputQualityScore` — tightening a heuristic there must
+not retroactively change a stored duel. Likewise, the runtime probe injects a reporter `<script>` into
+the sandboxed *preview* only; the raw output is what gets persisted, analysed, diffed and shown by
+"View Source", so nothing a person judges or exports contains it.
+
+**Demo mode writes real duels.** `/demo` runs ten remote-vs-remote duels that persist, get judged and
+move ELO, using `POST /api/duels` with `autoJudgeDelaySeconds: 0`. It is not a sandbox — if you need
+a throwaway run, wipe Azurite afterwards. The override is clamped 0–3600 and cannot switch the judge
+on: `AiJudge:Enabled=false` still restores human-only verdicts.
 
 **Vertical slices.** Server code lives in `src/PoLocalCompare.Api/Features/<Feature>/` — endpoint,
 handlers, entities, and repository flat in one folder. `Common/` is only for genuinely cross-slice

@@ -25,12 +25,19 @@ public static class DuelsEndpoints
 
             try
             {
+                // Clamped to the same range AutoJudge itself enforces, so a caller cannot park a
+                // duel's judge an hour out. Passing 0 only skips the asker's own grace window.
+                var delayOverride = request.AutoJudgeDelaySeconds is { } requested
+                    ? Math.Clamp(requested, 0, 3600)
+                    : (int?)null;
+
                 var dto = await handler.HandleAsync(new CommenceDuelCommand(
                     request.LeftModelId,
                     request.RightModelId,
-                    request.PromptText));
+                    request.PromptText,
+                    delayOverride));
 
-                await executionService.EnqueueAsync(dto.DuelId);
+                await executionService.EnqueueAsync(dto.DuelId, delayOverride);
 
                 return Results.Accepted($"/api/duels/{dto.DuelId}", dto);
             }
@@ -182,6 +189,21 @@ public static class DuelsEndpoints
         .Produces<IReadOnlyList<DuelSummaryDto>>(StatusCodes.Status200OK)
         .ProducesValidationProblem();
 
+        // GET /api/duels/demo-plan — the schedule for an unattended demo run.
+        // Read-only: it resolves pairings and prompts but writes nothing. The client starts each
+        // duel through the ordinary POST /api/duels, so demo duels are real duels.
+        group.MapGet("/demo-plan", async (
+            [FromQuery] int? rounds,
+            [FromQuery] int? seed,
+            [FromServices] DemoPlanHandler handler) =>
+        {
+            var plan = await handler.HandleAsync(rounds ?? 0, seed);
+            return Results.Ok(plan);
+        })
+        .WithName("GetDemoPlan")
+        .WithSummary("Returns the pairings and prompts for a self-running demo.")
+        .Produces<DemoPlanDto>(StatusCodes.Status200OK);
+
         // T081 — GET /api/duels/{duelId}/report (Lab Report export)
         group.MapGet("/{duelId}/report", async (
             DuelId duelId,
@@ -222,10 +244,15 @@ public static class DuelsEndpoints
     }
 }
 
+/// <param name="AutoJudgeDelaySeconds">
+/// Optional per-duel grace window. Omit to use <c>AiJudge:DelaySeconds</c>; demo mode sends 0
+/// so an unattended run is never waiting on a human pick that will not come.
+/// </param>
 public sealed record CommenceDuelRequest(
     ModelId LeftModelId,
     ModelId RightModelId,
-    string PromptText);
+    string PromptText,
+    int? AutoJudgeDelaySeconds = null);
 
 public sealed record LocalResultRequest(
     ModelId ModelId,

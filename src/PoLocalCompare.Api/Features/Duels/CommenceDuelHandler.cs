@@ -57,7 +57,9 @@ public sealed class CommenceDuelHandler(
             StartedAt = duel.StartedAt,
             Verdict = DuelVerdict.Pending,
             TimeLimitSeconds = 300,
-            AutoJudgeDelaySeconds = autoJudgeOptions.Value.Enabled ? autoJudgeOptions.Value.DelaySeconds : 0,
+            AutoJudgeDelaySeconds = autoJudgeOptions.Value.Enabled
+                ? command.AutoJudgeDelaySecondsOverride ?? autoJudgeOptions.Value.DelaySeconds
+                : 0,
             IsPartial = false,
         };
     }

@@ -26,89 +26,140 @@
     {
         <p class="arena__prompt-label">Prompt: <em>@_duel.PromptText</em></p>
 
-        <div class="arena__viewports">
-            <div class="arena__viewport-panel">
-                <SandboxedViewport
-                    HtmlContent="@(_leftStreamingHtml ?? _leftResult?.HtmlOutputRaw ?? string.Empty)"
-                    ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
-                    IsLoser="@(_loserModelId == _duel.LeftModelId)"
-                    ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.LeftModelId)"
-                />
-                <div class="arena__hud">
-                    <TelemetryHud Result="_leftResult" />
-                </div>
-                @if (_leftResult?.IsFailure == true)
+        @* ── View switcher ────────────────────────────────────────────────
+           Rendered is what the models built; Code and Diff are for deciding *why* one is
+           better. Only offered once both outputs exist — there is nothing to diff mid-stream. *@
+        @if (BothOutputsPresent())
+        {
+            <div class="arena__view-toggle" role="group" aria-label="Output view">
+                @foreach (var mode in new[] { SourceViewMode.Rendered, SourceViewMode.Code, SourceViewMode.Diff })
                 {
-                    <div class="arena__failure-card">
-                        <div class="arena__failure-title">❌ @(_leftResult.ModelName ?? _duel.LeftModelId) failed</div>
-                        <div class="arena__failure-body">@(FirstLine(_leftResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
-                        <details class="arena__failure-details">
-                            <summary>Show technical details</summary>
-                            <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
-                        </details>
-                        <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
-                    </div>
-                }
-                @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
-                {
-                    <div class="arena__source-link">
-                        <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
-                            &lt;/&gt; View Source
-                        </button>
-                    </div>
-                }
-                @if (_eloShiftLeft.HasValue)
-                {
-                    <div class="arena__elo-badge @(_eloShiftLeft >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
-                        ELO @(_eloShiftLeft >= 0 ? "+" : "")@_eloShiftLeft.Value.ToString("F1")
-                    </div>
+                    <button type="button"
+                            class="arena__view-btn @(_viewMode == mode ? "arena__view-btn--active" : "")"
+                            aria-pressed="@(_viewMode == mode ? "true" : "false")"
+                            @onclick="() => _viewMode = mode">
+                        @ViewLabel(mode)
+                    </button>
                 }
             </div>
+        }
 
-            <div class="arena__viewport-panel">
-                <SandboxedViewport
-                    HtmlContent="@(_rightStreamingHtml ?? _rightResult?.HtmlOutputRaw ?? string.Empty)"
-                    ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
-                    IsLoser="@(_loserModelId == _duel.RightModelId)"
-                    ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.RightModelId)"
-                />
-                <div class="arena__hud">
-                    <TelemetryHud Result="_rightResult" />
+        @if (_viewMode == SourceViewMode.Rendered || !BothOutputsPresent())
+        {
+            <div class="arena__viewports">
+                <div class="arena__viewport-panel">
+                    <SandboxedViewport
+                        HtmlContent="@(_leftStreamingHtml ?? _leftResult?.HtmlOutputRaw ?? string.Empty)"
+                        ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
+                        IsLoser="@(_loserModelId == _duel.LeftModelId)"
+                        ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.LeftModelId)"
+                        ProbeRuntime="@(!_duelStillRunning)"
+                        OnProbeUpdated="OnLeftProbe"
+                    />
+                    <div class="arena__hud">
+                        <TelemetryHud Result="_leftResult" />
+                    </div>
+                    @if (_leftResult?.IsFailure == true)
+                    {
+                        <div class="arena__failure-card">
+                            <div class="arena__failure-title">❌ @(_leftResult.ModelName ?? _duel.LeftModelId) failed</div>
+                            <div class="arena__failure-body">@(FirstLine(_leftResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
+                            <details class="arena__failure-details">
+                                <summary>Show technical details</summary>
+                                <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
+                            </details>
+                            <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
+                    {
+                        <div class="arena__source-link">
+                            <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
+                                &lt;/&gt; View Source
+                            </button>
+                        </div>
+                    }
+                    @if (_eloShiftLeft.HasValue)
+                    {
+                        <div class="arena__elo-badge @(_eloShiftLeft >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
+                            ELO @(_eloDisplayLeft >= 0 ? "+" : "")@_eloDisplayLeft.ToString("F1")
+                        </div>
+                    }
                 </div>
-                @if (_rightResult?.IsFailure == true)
-                {
-                    <div class="arena__failure-card">
-                        <div class="arena__failure-title">❌ @(_rightResult.ModelName ?? _duel.RightModelId) failed</div>
-                        <div class="arena__failure-body">@(FirstLine(_rightResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
-                        <details class="arena__failure-details">
-                            <summary>Show technical details</summary>
-                            <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
-                        </details>
-                        <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
+
+                <div class="arena__viewport-panel">
+                    <SandboxedViewport
+                        HtmlContent="@(_rightStreamingHtml ?? _rightResult?.HtmlOutputRaw ?? string.Empty)"
+                        ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
+                        IsLoser="@(_loserModelId == _duel.RightModelId)"
+                        ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.RightModelId)"
+                        ProbeRuntime="@(!_duelStillRunning)"
+                        OnProbeUpdated="OnRightProbe"
+                    />
+                    <div class="arena__hud">
+                        <TelemetryHud Result="_rightResult" />
                     </div>
-                }
-                @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
-                {
-                    <div class="arena__source-link">
-                        <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
-                            &lt;/&gt; View Source
-                        </button>
-                    </div>
-                }
-                @if (_eloShiftRight.HasValue)
-                {
-                    <div class="arena__elo-badge @(_eloShiftRight >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
-                        ELO @(_eloShiftRight >= 0 ? "+" : "")@_eloShiftRight.Value.ToString("F1")
-                    </div>
-                }
+                    @if (_rightResult?.IsFailure == true)
+                    {
+                        <div class="arena__failure-card">
+                            <div class="arena__failure-title">❌ @(_rightResult.ModelName ?? _duel.RightModelId) failed</div>
+                            <div class="arena__failure-body">@(FirstLine(_rightResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
+                            <details class="arena__failure-details">
+                                <summary>Show technical details</summary>
+                                <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
+                            </details>
+                            <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
+                    {
+                        <div class="arena__source-link">
+                            <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
+                                &lt;/&gt; View Source
+                            </button>
+                        </div>
+                    }
+                    @if (_eloShiftRight.HasValue)
+                    {
+                        <div class="arena__elo-badge @(_eloShiftRight >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
+                            ELO @(_eloDisplayRight >= 0 ? "+" : "")@_eloDisplayRight.ToString("F1")
+                        </div>
+                    }
+                </div>
             </div>
-        </div>
+        }
+        else
+        {
+            <SourceCompare
+                LeftHtml="@_leftResult?.HtmlOutputRaw"
+                RightHtml="@_rightResult?.HtmlOutputRaw"
+                LeftName="@LeftDisplayName"
+                RightName="@RightDisplayName"
+                Mode="_viewMode" />
+        }
+
+        @* ── Objective scorecard ──────────────────────────────────────────
+           Placed above the verdict buttons: it is evidence for the vote, not a summary of it. *@
+        @if (BothOutputsPresent())
+        {
+            <OutputScorecard
+                LeftHtml="@_leftResult?.HtmlOutputRaw"
+                RightHtml="@_rightResult?.HtmlOutputRaw"
+                LeftName="@LeftDisplayName"
+                RightName="@RightDisplayName"
+                LeftProbe="_leftProbe"
+                RightProbe="_rightProbe" />
+        }
 
         @if (_verdictRecorded)
         {
             @* SC 4.1.3 Status Messages — announced without moving focus. *@
-            <div class="arena__verdict-recorded" role="status">
-                @if (_verdictSource == VerdictSource.Ai)
+            <div class="arena__verdict-recorded @(_optimistic ? "arena__verdict-recorded--pending" : "")" role="status">
+                @if (_optimistic)
+                {
+                    <span>Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong> — recording…</span>
+                }
+                else if (_verdictSource == VerdictSource.Ai)
                 {
                     <span>
                         Decided by the AI judge — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
@@ -123,6 +174,13 @@
                     <span>Verdict recorded ✓ — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong></span>
                 }
             </div>
+        }
+
+        @* A pick that lost the race to the auto-judge has to be corrected visibly, not
+           silently swapped underneath the person who made it. *@
+        @if (_overriddenNotice is not null)
+        {
+            <div class="arena__override-notice" role="status">@_overriddenNotice</div>
         }
 
         @if (_duelStillRunning)
@@ -187,6 +245,26 @@
                 Click="RetryDuelAsync"
                 class="arena__action-btn"
             />
+            @if (_verdictRecorded && !_optimistic)
+            {
+                <RadzenButton
+                    Text="🖼 Share result"
+                    ButtonStyle="ButtonStyle.Light"
+                    Size="ButtonSize.Large"
+                    Click="ShareResultAsync"
+                    class="arena__action-btn"
+                />
+            }
+            @if (BothOutputsPresent())
+            {
+                <RadzenButton
+                    Text="⚔ Head-to-head"
+                    ButtonStyle="ButtonStyle.Light"
+                    Size="ButtonSize.Large"
+                    Click="@(() => Nav.NavigateTo($"/h2h/{_duel!.LeftModelId}/{_duel.RightModelId}"))"
+                    class="arena__action-btn"
+                />
+            }
         </div>
 
         @if (_retryError is not null)
@@ -219,6 +297,24 @@
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
 
+    // ── Comparison views ──────────────────────────────────────────────────────
+    private SourceViewMode _viewMode = SourceViewMode.Rendered;
+    private RuntimeProbeReport? _leftProbe;
+    private RuntimeProbeReport? _rightProbe;
+
+    // ── Optimistic verdict ────────────────────────────────────────────────────
+    // The click flips the UI immediately and the server confirms afterwards. _optimistic marks
+    // the window where what is on screen is a prediction, so a losing race can be corrected
+    // rather than left standing as if it were the recorded outcome.
+    private bool _optimistic;
+    private string? _overriddenNotice;
+
+    // Animated ELO readouts. The badge counts up to the real shift instead of snapping, which
+    // is the only part of a verdict with any weight behind it.
+    private double _eloDisplayLeft;
+    private double _eloDisplayRight;
+    private CancellationTokenSource? _eloAnimationCts;
+
     // ── Auto-judge ────────────────────────────────────────────────────────────
     // The server owns the real clock (it starts when the duel completes); this countdown
     // only mirrors it so the user can see how long they have. Whoever writes the verdict
@@ -233,7 +329,33 @@
     private bool BothSidesFailed() =>
         _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
 
+    private bool BothOutputsPresent() =>
+        !string.IsNullOrWhiteSpace(_leftResult?.HtmlOutputRaw)
+        && !string.IsNullOrWhiteSpace(_rightResult?.HtmlOutputRaw);
+
+    private string LeftDisplayName => _leftResult?.ModelName ?? _duel?.LeftModelId ?? "Left";
+    private string RightDisplayName => _rightResult?.ModelName ?? _duel?.RightModelId ?? "Right";
+
+    private static string ViewLabel(SourceViewMode mode) => mode switch
+    {
+        SourceViewMode.Rendered => "🖼 Rendered",
+        SourceViewMode.Code => "</> Code",
+        _ => "⇄ Diff",
+    };
+
     private static string? FirstLine(string? reason) => FailureReasonText.FirstLine(reason);
+
+    private void OnLeftProbe(RuntimeProbeReport report)
+    {
+        _leftProbe = report;
+        StateHasChanged();
+    }
+
+    private void OnRightProbe(RuntimeProbeReport report)
+    {
+        _rightProbe = report;
+        StateHasChanged();
+    }
 
     // Live streaming preview while duel is in progress
     private string? _leftStreamingHtml;
@@ -285,6 +407,7 @@
                     _verdictSource = _duel.VerdictSource;
                     _judgeRationale = _duel.JudgeRationale;
                     ApplyEloShifts(_duel);
+                    SettleEloDisplay();
                 }
                 else if (!_duelStillRunning)
                 {
@@ -333,41 +456,228 @@
         _retrying = false;
     }
 
+    /// <summary>
+    /// Commits the pick on screen before the network confirms it. The server remains the
+    /// authority — every branch below either adopts what it recorded or rolls the guess back.
+    /// </summary>
     private async Task RecordVerdictAsync(DuelVerdict verdict)
     {
         if (_verdictRecorded || _submitting || _duel is null) return;
         _submitting = true;
+        _overriddenNotice = null;
 
         // Stop the visible countdown the moment they commit. The server-side judge is stopped
         // by the verdict itself — it re-reads the duel and stands down on anything but Pending.
         StopAutoJudgeCountdown();
+
+        // Optimistic paint: winner/loser badges land on the frame of the click rather than
+        // after a round-trip. ELO stays blank until the server says what it actually was —
+        // inventing a number here would be a guess presented as a result.
+        _verdictRecorded = true;
+        _optimistic = true;
+        _verdictSource = VerdictSource.Human;
+        _judgeRationale = null;
+        _winnerModelId = verdict == DuelVerdict.Left ? _duel.LeftModelId : _duel.RightModelId;
+        _loserModelId = verdict == DuelVerdict.Left ? _duel.RightModelId : _duel.LeftModelId;
+        StateHasChanged();
+
+        // Confirmation feedback fires now, not after the response, for the same reason.
+        await PulseAsync(30);
+        _ = AudioService.PlaySuccessAsync();
 
         try
         {
             var response = await ApiClient.RecordVerdictAsync(_duelId, new VerdictRequestDto { Verdict = verdict });
             if (response is not null)
             {
-                _verdictRecorded = true;
-                _winnerModelId = response.WinnerModelId;
-                _loserModelId = response.LoserModelId;
-                _verdictSource = response.Source;
-                _judgeRationale = response.JudgeRationale;
-
+                AdoptVerdict(response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
                 ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
-
-                await AudioService.PlaySuccessAsync();
+                await AnimateEloAsync();
             }
             else
             {
                 // Most likely a 409: the auto-judge landed its verdict first. Show what was
-                // actually recorded rather than leaving the buttons live over a decided duel.
-                await RefreshVerdictFromServerAsync();
+                // actually recorded rather than leaving the optimistic guess standing.
+                await ReconcileWithServerAsync(verdict);
+            }
+        }
+        catch (Exception ex)
+        {
+            // The write may still have landed — ask before deciding the click did nothing.
+            if (!await ReconcileWithServerAsync(verdict))
+            {
+                RollBackOptimisticVerdict();
+                _retryError = $"Could not record the verdict: {ex.Message}";
             }
         }
         finally
         {
             _submitting = false;
         }
+    }
+
+    /// <summary>
+    /// Re-reads the duel after an uncertain write and reconciles the optimistic paint with it.
+    /// Returns true when a verdict exists server-side.
+    /// </summary>
+    private async Task<bool> ReconcileWithServerAsync(DuelVerdict attempted)
+    {
+        var predictedWinner = _winnerModelId;
+
+        if (!await RefreshVerdictFromServerAsync()) return false;
+
+        if (!string.Equals(predictedWinner, _winnerModelId, StringComparison.Ordinal))
+        {
+            _overriddenNotice = _verdictSource == VerdictSource.Ai
+                ? $"The AI judge recorded its verdict first — {ResolveDisplayName(_winnerModelId)} won. Your pick was not counted."
+                : $"This duel was already decided — {ResolveDisplayName(_winnerModelId)} won.";
+        }
+
+        await AnimateEloAsync();
+        return true;
+    }
+
+    private void RollBackOptimisticVerdict()
+    {
+        _verdictRecorded = false;
+        _optimistic = false;
+        _winnerModelId = null;
+        _loserModelId = null;
+        _eloShiftLeft = null;
+        _eloShiftRight = null;
+        StartAutoJudgeCountdown();
+    }
+
+    private void AdoptVerdict(string? winner, string? loser, VerdictSource source, string? rationale)
+    {
+        _verdictRecorded = true;
+        _optimistic = false;
+        _winnerModelId = winner;
+        _loserModelId = loser;
+        _verdictSource = source;
+        _judgeRationale = rationale;
+    }
+
+    // ── ELO count-up ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Counts both badges from zero to their real shift over ~400ms. Respecting reduced-motion
+    /// is handled by settling instantly rather than by animating faster.
+    /// </summary>
+    private async Task AnimateEloAsync()
+    {
+        _eloAnimationCts?.Cancel();
+        _eloAnimationCts?.Dispose();
+        _eloAnimationCts = new CancellationTokenSource();
+        var token = _eloAnimationCts.Token;
+
+        bool reduceMotion;
+        try
+        {
+            reduceMotion = await JS.InvokeAsync<bool>(
+                "eval", "window.matchMedia('(prefers-reduced-motion: reduce)').matches");
+        }
+        catch (JSException)
+        {
+            reduceMotion = false;
+        }
+
+        if (reduceMotion)
+        {
+            SettleEloDisplay();
+            StateHasChanged();
+            return;
+        }
+
+        const int steps = 24;
+        var targetLeft = _eloShiftLeft ?? 0;
+        var targetRight = _eloShiftRight ?? 0;
+
+        try
+        {
+            for (var step = 1; step <= steps; step++)
+            {
+                // Cubic ease-out: fast enough to feel immediate, settling rather than stopping.
+                var progress = step / (double)steps;
+                var eased = 1 - Math.Pow(1 - progress, 3);
+
+                _eloDisplayLeft = targetLeft * eased;
+                _eloDisplayRight = targetRight * eased;
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(16, token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded or navigating away — land on the true values below regardless.
+        }
+
+        SettleEloDisplay();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SettleEloDisplay()
+    {
+        _eloDisplayLeft = _eloShiftLeft ?? 0;
+        _eloDisplayRight = _eloShiftRight ?? 0;
+    }
+
+    private async Task PulseAsync(int milliseconds)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("hapticPulse", milliseconds);
+        }
+        catch (JSException)
+        {
+            // No Vibration API here — the sound and the visual flip already carry the feedback.
+        }
+    }
+
+    // ── Share card ────────────────────────────────────────────────────────────
+
+    private async Task ShareResultAsync()
+    {
+        if (_duel is null || _winnerModelId is null) return;
+
+        var winnerSide = _winnerModelId == _duel.LeftModelId ? "left" : "right";
+
+        try
+        {
+            await JS.InvokeVoidAsync("renderShareCard", new
+            {
+                kind = "Duel result",
+                prompt = _duel.PromptText,
+                leftName = LeftDisplayName,
+                rightName = RightDisplayName,
+                leftStat = FormatShareStat(_leftResult, _eloShiftLeft),
+                rightStat = FormatShareStat(_rightResult, _eloShiftRight),
+                winner = winnerSide,
+                badge = _verdictSource == VerdictSource.Ai ? "⚖ AI-judged" : "👤 Human-judged",
+                footer = $"{_duel.StartedAt:yyyy-MM-dd} · PoLocalCompare",
+                fileName = $"duel-{_duel.DuelId}",
+            });
+        }
+        catch (JSException)
+        {
+            _retryError = "Could not render the share card in this browser.";
+        }
+    }
+
+    private static string FormatShareStat(DuelResultDto? result, double? eloShift)
+    {
+        if (result is null) return "no result";
+
+        var parts = new List<string>
+        {
+            $"{result.TokenVelocity:F0} tok/s",
+            $"{result.TotalDurationMs / 1000.0:F1}s",
+        };
+
+        if (eloShift.HasValue)
+            parts.Add($"ELO {(eloShift >= 0 ? "+" : "")}{eloShift.Value:F1}");
+
+        return string.Join("  ·  ", parts);
     }
 
     // ── Auto-judge countdown ──────────────────────────────────────────────────
@@ -424,7 +734,11 @@
             for (var attempt = 0; attempt < 45 && !_verdictRecorded; attempt++)
             {
                 await Task.Delay(1000, cancellationToken);
-                if (await RefreshVerdictFromServerAsync()) return;
+                if (await RefreshVerdictFromServerAsync())
+                {
+                    await AnimateEloAsync();
+                    return;
+                }
             }
 
             // The judge declined to decide (no output to compare, or an unreachable judge).
@@ -446,11 +760,7 @@
             return false;
 
         _duel = fresh;
-        _verdictRecorded = true;
-        _winnerModelId = fresh.WinnerModelId;
-        _loserModelId = fresh.LoserModelId;
-        _verdictSource = fresh.VerdictSource;
-        _judgeRationale = fresh.JudgeRationale;
+        AdoptVerdict(fresh.WinnerModelId, fresh.LoserModelId, fresh.VerdictSource, fresh.JudgeRationale);
         _autoJudgeRemaining = null;
         _autoJudgeDeciding = false;
         ApplyEloShifts(fresh);
@@ -460,17 +770,19 @@
 
     private void OnVerdictRecorded(VerdictResponseDto response)
     {
-        if (_verdictRecorded) return;
+        // A verdict the user just submitted comes back through the normal response path with
+        // its ELO animation; adopting the broadcast too would restart that mid-flight.
+        if (_verdictRecorded && !_optimistic) return;
 
-        _verdictRecorded = true;
-        _winnerModelId = response.WinnerModelId;
-        _loserModelId = response.LoserModelId;
-        _verdictSource = response.Source;
-        _judgeRationale = response.JudgeRationale;
+        AdoptVerdict(response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
         ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
 
         StopAutoJudgeCountdown();
-        InvokeAsync(StateHasChanged);
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await AnimateEloAsync();
+        });
     }
 
     private void ApplyEloShifts(DuelDto duel)
@@ -541,6 +853,8 @@
     {
         _locationChangingReg?.Dispose();
         StopAutoJudgeCountdown();
+        _eloAnimationCts?.Cancel();
+        _eloAnimationCts?.Dispose();
         if (_signalR is not null)
             await _signalR.DisposeAsync();
     }

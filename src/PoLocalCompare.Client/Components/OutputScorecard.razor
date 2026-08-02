@@ -1,0 +1,243 @@
+@using PoLocalCompare.Shared.Analysis
+
+@* Objective, client-computed comparison of the two outputs. Everything here is derived in the
+   browser from HTML the page already holds — no server round-trip, no model call. It is shown
+   before the verdict buttons on purpose: it is evidence to vote with, not a verdict. Nothing on
+   this card touches ELO. *@
+
+<section class="scorecard" aria-labelledby="scorecard-heading">
+    <div class="scorecard__head">
+        <h2 id="scorecard-heading" class="scorecard__title">
+            <span aria-hidden="true">🧪</span> Objective scorecard
+        </h2>
+        <p class="scorecard__hint">
+            Measured in your browser from the two outputs. Structural facts only — it can't tell you
+            which one followed the prompt.
+        </p>
+    </div>
+
+    <table class="scorecard__table">
+        <caption class="scorecard__caption">Structural comparison of both models' HTML output</caption>
+        <thead>
+            <tr>
+                <th scope="col" class="scorecard__col-side">@LeftName</th>
+                <th scope="col" class="scorecard__col-metric">Metric</th>
+                <th scope="col" class="scorecard__col-side">@RightName</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _rows)
+            {
+                <tr>
+                    <td class="scorecard__value @(row.LeftWins ? "scorecard__value--better" : "")">
+                        @if (row.LeftWins)
+                        {
+                            <span class="scorecard__win-mark" aria-label="Better">◀</span>
+                        }
+                        <span>@row.LeftText</span>
+                    </td>
+                    <th scope="row" class="scorecard__metric">
+                        <span class="scorecard__metric-name">@row.Label</span>
+                        @if (row.Hint is not null)
+                        {
+                            <span class="scorecard__metric-hint">@row.Hint</span>
+                        }
+                    </th>
+                    <td class="scorecard__value @(row.RightWins ? "scorecard__value--better" : "")">
+                        <span>@row.RightText</span>
+                        @if (row.RightWins)
+                        {
+                            <span class="scorecard__win-mark" aria-label="Better">▶</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="scorecard__findings">
+        <div class="scorecard__findings-col">
+            @RenderFindings(LeftName, _left, LeftProbe)
+        </div>
+        <div class="scorecard__findings-col">
+            @RenderFindings(RightName, _right, RightProbe)
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string? LeftHtml { get; set; }
+    [Parameter, EditorRequired] public string? RightHtml { get; set; }
+    [Parameter, EditorRequired] public string LeftName { get; set; } = "Left";
+    [Parameter, EditorRequired] public string RightName { get; set; } = "Right";
+
+    /// <summary>Runtime observations from the sandboxed preview; null when probing is off.</summary>
+    [Parameter] public RuntimeProbeReport? LeftProbe { get; set; }
+    [Parameter] public RuntimeProbeReport? RightProbe { get; set; }
+
+    private OutputAnalysis _left = OutputAnalysis.Empty;
+    private OutputAnalysis _right = OutputAnalysis.Empty;
+    private string? _analyzedLeftHtml;
+    private string? _analyzedRightHtml;
+    private List<Row> _rows = [];
+
+    /// <param name="Direction">
+    /// Which way is better. Neutral rows are shown without a winner mark — a bigger document or
+    /// more CSS rules is a difference, not an improvement, and marking one as "winning" would
+    /// quietly train people to vote for verbosity.
+    /// </param>
+    private sealed record Row(
+        string Label,
+        string? Hint,
+        string LeftText,
+        string RightText,
+        bool LeftWins,
+        bool RightWins);
+
+    protected override void OnParametersSet()
+    {
+        // Regex passes over two documents on every parent re-render would be wasteful, and the
+        // Arena re-renders on every streamed token while a duel is still running.
+        if (!string.Equals(_analyzedLeftHtml, LeftHtml, StringComparison.Ordinal))
+        {
+            _left = OutputAnalysis.Analyze(HtmlPreview.Normalize(LeftHtml));
+            _analyzedLeftHtml = LeftHtml;
+        }
+
+        if (!string.Equals(_analyzedRightHtml, RightHtml, StringComparison.Ordinal))
+        {
+            _right = OutputAnalysis.Analyze(HtmlPreview.Normalize(RightHtml));
+            _analyzedRightHtml = RightHtml;
+        }
+
+        _rows = BuildRows();
+    }
+
+    private List<Row> BuildRows()
+    {
+        var rows = new List<Row>
+        {
+            HigherIsBetter("Completeness", "scaffolding + substance",
+                _left.CompletenessScore, _right.CompletenessScore, v => $"{v}/100"),
+
+            Neutral("Size", null, FormatBytes(_left.SizeBytes), FormatBytes(_right.SizeBytes)),
+            Neutral("Elements", null, _left.TagCount.ToString("N0"), _right.TagCount.ToString("N0")),
+            Neutral("Distinct tags", null, _left.UniqueTagCount.ToString("N0"), _right.UniqueTagCount.ToString("N0")),
+            Neutral("Nesting depth", null, _left.MaxNestingDepth.ToString(), _right.MaxNestingDepth.ToString()),
+            Neutral("CSS rules", null, _left.CssRuleCount.ToString("N0"), _right.CssRuleCount.ToString("N0")),
+            Neutral("Script", "inline JS written", FormatChars(_left.ScriptChars), FormatChars(_right.ScriptChars)),
+
+            HigherIsBetter("Interactive", "things you can operate",
+                _left.InteractiveElementCount, _right.InteractiveElementCount, v => v.ToString("N0")),
+
+            LowerIsBetter("External deps", "each one can fail offline",
+                _left.ExternalResourceCount, _right.ExternalResourceCount, v => v.ToString("N0")),
+
+            LowerIsBetter("A11y issues", null,
+                _left.AccessibilityIssues.Count, _right.AccessibilityIssues.Count, v => v.ToString("N0")),
+
+            LowerIsBetter("Structural issues", null,
+                _left.StructuralIssues.Count, _right.StructuralIssues.Count, v => v.ToString("N0")),
+        };
+
+        // Runtime rows only appear once at least one frame has reported, otherwise both sides
+        // would read "0 errors" purely because nothing has run yet.
+        if (LeftProbe is not null || RightProbe is not null)
+        {
+            var leftLoaded = LeftProbe?.Loaded == true;
+            var rightLoaded = RightProbe?.Loaded == true;
+
+            if (leftLoaded || rightLoaded)
+            {
+                rows.Add(LowerIsBetter("Runtime errors", "thrown while rendering",
+                    LeftProbe?.ErrorCount ?? 0, RightProbe?.ErrorCount ?? 0, v => v.ToString("N0")));
+
+                rows.Add(LowerIsBetter("Failed assets", "CDN or image didn't load",
+                    LeftProbe?.ResourceFailureCount ?? 0, RightProbe?.ResourceFailureCount ?? 0, v => v.ToString("N0")));
+
+                rows.Add(new Row(
+                    "Render time", "to load event",
+                    leftLoaded ? FormatMs(LeftProbe?.LoadMs) : "—",
+                    rightLoaded ? FormatMs(RightProbe?.LoadMs) : "—",
+                    LeftWins: leftLoaded && rightLoaded && Beats(LeftProbe!.LoadMs, RightProbe!.LoadMs),
+                    RightWins: leftLoaded && rightLoaded && Beats(RightProbe!.LoadMs, LeftProbe!.LoadMs)));
+            }
+        }
+
+        return rows;
+    }
+
+    private static bool Beats(long? candidate, long? other) =>
+        candidate.HasValue && other.HasValue && candidate.Value < other.Value;
+
+    private static Row Neutral(string label, string? hint, string left, string right) =>
+        new(label, hint, left, right, false, false);
+
+    private static Row HigherIsBetter(string label, string? hint, int left, int right, Func<int, string> format) =>
+        new(label, hint, format(left), format(right), left > right, right > left);
+
+    private static Row LowerIsBetter(string label, string? hint, int left, int right, Func<int, string> format) =>
+        new(label, hint, format(left), format(right), left < right, right < left);
+
+    private static string FormatBytes(int bytes) =>
+        bytes >= 1024 * 1024 ? $"{bytes / (1024.0 * 1024):F1} MB"
+        : bytes >= 1024 ? $"{bytes / 1024.0:F1} KB"
+        : $"{bytes} B";
+
+    private static string FormatChars(int chars) =>
+        chars >= 1000 ? $"{chars / 1000.0:F1}k chars" : $"{chars} chars";
+
+    private static string FormatMs(long? ms) =>
+        ms is null ? "—" : ms >= 1000 ? $"{ms.Value / 1000.0:F2}s" : $"{ms}ms";
+
+    private RenderFragment RenderFindings(string name, OutputAnalysis analysis, RuntimeProbeReport? probe) => @<div>
+        <h3 class="scorecard__findings-title">@name</h3>
+
+        @if (analysis.StructuralIssues.Count == 0
+             && analysis.AccessibilityIssues.Count == 0
+             && probe?.HasAnyProblem != true)
+        {
+            <p class="scorecard__finding scorecard__finding--clean">
+                <span aria-hidden="true">✓</span>
+                @(probe?.Loaded == true ? "No structural or runtime issues found" : "No structural issues found")
+            </p>
+        }
+
+        @foreach (var issue in analysis.StructuralIssues)
+        {
+            <p class="scorecard__finding scorecard__finding--structural">
+                <span aria-hidden="true">⚠</span> @issue
+            </p>
+        }
+
+        @if (probe is not null)
+        {
+            @foreach (var error in probe.Errors)
+            {
+                <p class="scorecard__finding scorecard__finding--runtime">
+                    <span aria-hidden="true">✖</span> @error
+                </p>
+            }
+            @foreach (var failure in probe.ResourceFailures)
+            {
+                <p class="scorecard__finding scorecard__finding--runtime">
+                    <span aria-hidden="true">🔌</span> Failed to load @failure
+                </p>
+            }
+            @if (probe.ConsoleErrorCount > 0)
+            {
+                <p class="scorecard__finding scorecard__finding--runtime">
+                    <span aria-hidden="true">🖥</span>
+                    @probe.ConsoleErrorCount console error@(probe.ConsoleErrorCount == 1 ? "" : "s")
+                </p>
+            }
+        }
+
+        @foreach (var issue in analysis.AccessibilityIssues)
+        {
+            <p class="scorecard__finding scorecard__finding--a11y">
+                <span aria-hidden="true">♿</span> @issue
+            </p>
+        }
+    </div>;
+}
