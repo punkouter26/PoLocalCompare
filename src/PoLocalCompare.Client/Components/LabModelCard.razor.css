@@ -1,0 +1,283 @@
+/* Scoped styles for the single model card rendered inside ModelHealthPanel.
+   These rules previously lived in ModelHealthPanel.razor.css, where Blazor stamped
+   them with that component's scope id -- so none of them matched this component's
+   markup and the card rendered unstyled. Scoped CSS is per-.razor-file; they belong
+   here. */
+
+/* ── Model card ──────────────────────────────────────────────── */
+
+.lab__card {
+    background: #12121e;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    transition: border-color 0.2s;
+}
+
+.lab__card--running  { border-color: #3d5af1; background: #0d0d22; }
+
+.lab__card--complete { border-color: #267a4a; }
+
+.lab__card--error    { border-color: #7a2a2a; }
+
+.lab__card--cancelled { border-color: #3a3a3a; opacity: 0.7; }
+
+/* O3: Bold left border based on download state */
+
+.lab__card--border-ready  { border-left: 4px solid var(--accent-green); }
+
+.lab__card--border-missing { border-left: 4px solid #f59e0b; }
+
+.lab__card--border-error   { border-left: 4px solid var(--accent-red); }
+
+.lab__card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.lab__card-title {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.lab__card-title-main {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.lab__card-title-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.lab__model-name {
+    font-weight: 600;
+    color: #d0d0f0;
+    font-size: 0.9rem;
+    line-height: 1.25;
+}
+
+.lab__vram-badge {
+    font-size: 0.7rem;
+    color: #8a8aa0;
+    background: #1e1e30;
+    border: 1px solid #2e2e45;
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+}
+
+/* Tier modifiers are built from ModelDiagState.VramTier ("ok"/"caution"/"warn"),
+   so they never appear as literals in the markup. */
+.lab__vram-badge--ok    { color: #70c070; border-color: #2a4a2a; background: #0e1e0e; }
+.lab__vram-badge--caution { color: #c0a040; border-color: #3a3010; background: #1a1800; }
+.lab__vram-badge--warn  { color: #c06060; border-color: #4a2020; background: #1e0e0e; }
+.lab__vram-badge--ollama { color: #fb923c; border-color: #4a2a0a; background: #1e0e00; }
+
+.lab__vram-badge--remote { color: #7fb0ff; border-color: #1d3a6a; background: #0a1428; }
+
+.lab__vram-warn {
+    font-size: 0.75rem;
+    color: #c06060;
+    cursor: help;
+    line-height: 1;
+}
+
+.lab__vram-hint {
+    font-size: 0.66rem;
+    color: #b07a7a;
+    letter-spacing: 0.02em;
+}
+
+.lab__warm-badge {
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.lab__model-id {
+    font-size: 0.65rem;
+    color: #8a8aaa;
+    font-family: 'Cascadia Code', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.lab__download-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.lab__badge {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.lab__badge--checking { background: #1e1e10; color: #9a9a60; border: 1px solid #3a3a20; }
+
+.lab__badge--ok       { background: #0d1f18; color: #4caf7d; border: 1px solid #1a4a2a; }
+
+.lab__badge--missing  { background: var(--border); color: var(--text-muted); border: 1px solid #2d2d2d; }
+
+/* ── Progress ────────────────────────────────────────────────── */
+
+.lab__progress-track {
+    height: 4px;
+    background: #1e1e30;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.lab__progress-fill {
+    width: var(--fill, 0%);
+    height: 100%;
+    background: #3d5af1;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.lab__step-detail {
+    font-size: 0.7rem;
+    color: #7a7aa0;
+    font-family: 'Cascadia Code', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lab__error    { font-size: 0.75rem; color: #e05c5c; }
+
+.lab__cancelled { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Metrics row ─────────────────────────────────────────────── */
+
+.lab__metrics {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.25rem;
+}
+
+.lab__metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 54px;
+}
+
+.lab__metric-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6a6a8a;
+}
+
+.lab__metric-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #c8c8e8;
+}
+
+.lab__metric--highlight .lab__metric-value {
+    color: #6ef0a0;
+    font-size: 1.15rem;
+}
+
+/* ── Output ──────────────────────────────────────────────────── */
+
+.lab__output-toggle {
+    background: none;
+    border: none;
+    color: #5566cc;
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+}
+
+.lab__output-toggle:hover { color: #8899ff; }
+
+.lab__output {
+    background: #0a0a15;
+    border: 1px solid #1e1e2e;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 0;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
+
+/* ── Card action buttons ─────────────────────────────────────── */
+
+.lab__card-actions { flex-shrink: 0; }
+
+.lab__btn-sm {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 700;
+    transition: background 0.15s;
+}
+
+.lab__btn-sm:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.lab__btn-sm--run    { background: #2a3a8a; color: #99aaff; }
+
+.lab__btn-sm--run:not(:disabled):hover { background: #3d5af1; color: #fff; }
+
+.lab__btn-sm--cancel { background: #3a1a1a; color: #ff8888; }
+
+.lab__btn-sm--cancel:hover { background: #6a1a1a; }
+
+/* ── Download hint ──────────────────────────────────────────── */
+
+.lab__download-hint {
+    font-size: 0.67rem;
+    color: #7a6a4a;
+    margin-top: 0.2rem;
+}
+
+.lab__download-hint > summary {
+    cursor: pointer;
+    color: #8a7a5a;
+    user-select: none;
+    list-style: none;
+    padding: 0.1rem 0;
+}
+
+.lab__download-hint > summary:hover {
+    color: #b09060;
+}
+
+.lab__download-note {
+    display: block;
+    margin-top: 0.3rem;
+    color: #8a8aa5;
+    font-size: 0.62rem;
+    word-break: break-all;
+}
