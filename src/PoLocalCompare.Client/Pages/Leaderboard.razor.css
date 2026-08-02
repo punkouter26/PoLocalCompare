@@ -9,7 +9,7 @@
     font-size: 2rem;
     font-weight: 800;
     margin-bottom: 1rem;
-    color: #f9fafb;
+    color: var(--text);
 }
 
 .leaderboard__controls {

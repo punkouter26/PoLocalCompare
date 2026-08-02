@@ -34,7 +34,7 @@
     font-size: 1.4rem;
     font-weight: 700;
     margin: 0 0 0.6rem;
-    color: #f9fafb;
+    color: var(--text);
 }
 
 .not-found__message {

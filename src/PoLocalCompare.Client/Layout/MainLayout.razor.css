@@ -5,14 +5,18 @@
     min-height: 100vh;
 }
 
+/* Transparent, not a colour: html/body already paint --surface-base plus the page
+   gradient, and both follow the theme. These two used to be hardcoded #000000, which
+   was invisible while Radzen's always-dark stylesheet sat underneath -- once that went,
+   a light-theme page rendered near-black --text on a black canvas. */
 main {
     flex: 1;
-    background-color: #000000;
+    background-color: transparent;
     color: var(--text);
 }
 
 article.content {
-    background-color: #000000;
+    background-color: transparent;
     color: var(--text);
     padding-top: 1rem;
 }
