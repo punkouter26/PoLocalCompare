@@ -120,17 +120,17 @@
                           @bind:event="oninput"
                           placeholder="Prompt sent to each model to confirm it runs…"></textarea>
                 <div class="lab__btn-row">
-                    <button class="lab__btn lab__btn--primary"
+                    <button class="po-btn po-btn--primary"
                             @onclick="RunAllDownloaded"
                             disabled="@(_anyRunning || !_models.Any(m => m.IsDownloaded == true))">
                         Verify all ready
                     </button>
-                    <button class="lab__btn lab__btn--danger"
+                    <button class="po-btn po-btn--danger"
                             @onclick="CancelAll"
                             disabled="@(!_anyRunning)">
                         Cancel
                     </button>
-                    <button class="lab__btn lab__btn--secondary"
+                    <button class="po-btn po-btn--secondary"
                             @onclick="RefreshDownloadStatusAsync"
                             disabled="@_anyRunning">
                         Refresh

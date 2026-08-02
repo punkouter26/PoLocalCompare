@@ -25,14 +25,14 @@
         <div class="source-compare__actions">
             @if (Mode == SourceViewMode.Diff && _hasCollapsedSegments)
             {
-                <button type="button" class="source-compare__btn" @onclick="ToggleExpandAll">
+                <button type="button" class="po-btn po-btn--sm" @onclick="ToggleExpandAll">
                     @(_expandAll ? "Collapse identical" : "Expand identical")
                 </button>
             }
-            <button type="button" class="source-compare__btn" @onclick="() => CopyAsync(LeftHtml, true)">
+            <button type="button" class="po-btn po-btn--sm" @onclick="() => CopyAsync(LeftHtml, true)">
                 @(_copiedLeft ? "Copied ✓" : $"Copy {LeftName}")
             </button>
-            <button type="button" class="source-compare__btn" @onclick="() => CopyAsync(RightHtml, false)">
+            <button type="button" class="po-btn po-btn--sm" @onclick="() => CopyAsync(RightHtml, false)">
                 @(_copiedRight ? "Copied ✓" : $"Copy {RightName}")
             </button>
         </div>

@@ -1,4 +1,6 @@
-.login-page {
+/* Namespaced .login__ like every other surface. The buttons are .po-btn now, so
+   only the brand-mandated Microsoft field is restated below. */
+.login {
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -7,7 +9,7 @@
     padding: 1rem;
 }
 
-.login-card {
+.login__card {
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 16px;
@@ -21,13 +23,13 @@
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
 
-.login-brand {
+.login__brand {
     display: flex;
     align-items: center;
     gap: 0.6rem;
 }
 
-.login-brand-mark {
+.login__brand-mark {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -42,14 +44,14 @@
     letter-spacing: 0.04em;
 }
 
-.login-brand-name {
+.login__brand-name {
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--text);
     letter-spacing: -0.02em;
 }
 
-.login-subtitle {
+.login__subtitle {
     margin: -0.5rem 0 0;
     color: var(--text-muted);
     font-size: 0.82rem;
@@ -57,34 +59,26 @@
     text-transform: uppercase;
 }
 
-.btn-ms-login {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    width: 100%;
-    padding: 0.7rem 1.25rem;
-    /* Microsoft brand button: fixed white field with near-black text in BOTH themes.
-       Deliberately not tokenised — the mark is trademarked artwork, not app chrome. */
+/* Microsoft brand button: fixed white field with near-black text in BOTH themes.
+   Deliberately not tokenised and not a .po-btn modifier — the mark is trademarked
+   artwork with a mandated presentation. Geometry still comes from .po-btn. */
+.login__ms-btn {
     background: #ffffff;
     color: #1a1a1a;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.92rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
-    justify-content: center;
+    border-color: #ffffff;
 }
 
-.btn-ms-login:hover {
+.login__ms-btn:hover:not(:disabled) {
     background: #f0f0f0;
+    border-color: #f0f0f0;
+    color: #1a1a1a;
 }
 
-.ms-logo {
+.login__ms-logo {
     flex-shrink: 0;
 }
 
-.login-divider {
+.login__divider {
     display: flex;
     align-items: center;
     width: 100%;
@@ -93,32 +87,15 @@
     font-size: 0.78rem;
 }
 
-.login-divider::before,
-.login-divider::after {
+.login__divider::before,
+.login__divider::after {
     content: '';
     flex: 1;
     height: 1px;
     background: var(--surface-2);
 }
 
-.btn-guest-login {
-    width: 100%;
-    padding: 0.6rem 1.25rem;
-    background: transparent;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 0.88rem;
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
-}
-
-.btn-guest-login:hover {
-    border-color: var(--border-strong);
-    color: var(--text-muted);
-}
-
-.login-guest-note {
+.login__guest-note {
     margin: -0.5rem 0 0;
     font-size: 0.72rem;
     color: var(--text-dim);

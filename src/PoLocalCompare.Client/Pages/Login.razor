@@ -3,16 +3,16 @@
 @inject IConfiguration Config
 @inject IWebAssemblyHostEnvironment HostEnvironment
 
-<div class="login-page">
-    <div class="login-card">
-        <div class="login-brand">
-            <span class="login-brand-mark">PL</span>
-            <span class="login-brand-name">PoLocalCompare</span>
+<div class="login">
+    <div class="login__card">
+        <div class="login__brand">
+            <span class="login__brand-mark" aria-hidden="true">PL</span>
+            <span class="login__brand-name">PoLocalCompare</span>
         </div>
-        <p class="login-subtitle">LLM Duel Arena</p>
+        <p class="login__subtitle">LLM Duel Arena</p>
 
-        <button class="btn-ms-login" @onclick="LoginWithMicrosoft">
-            <svg class="ms-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="20" height="20">
+        <button class="po-btn po-btn--lg po-btn--block login__ms-btn" @onclick="LoginWithMicrosoft">
+            <svg class="login__ms-logo" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="20" height="20">
                 <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
                 <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
                 <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
@@ -23,11 +23,11 @@
 
         @if (_allowGuest)
         {
-            <div class="login-divider"><span>or</span></div>
-            <button class="btn-guest-login" @onclick="LoginAsGuest">
+            <div class="login__divider"><span>or</span></div>
+            <button class="po-btn po-btn--secondary po-btn--block" @onclick="LoginAsGuest">
                 Continue as Guest
             </button>
-            <p class="login-guest-note">Guest sessions persist across refreshes on this device.</p>
+            <p class="login__guest-note">Guest sessions persist across refreshes on this device.</p>
         }
     </div>
 </div>

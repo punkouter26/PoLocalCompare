@@ -269,6 +269,22 @@
     text-align: center;
 }
 
+/* Live region over the streaming previews. Had carried a class with no rule at all, so it
+   rendered as bare body text; matches .arena__stall-note so the two status lines agree. */
+.arena__generating-notice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 0 0 0.75rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--info-surface);
+    border: 1px solid var(--info-border);
+    border-radius: var(--radius-sm);
+}
+
 /* Duel-level cost summary. Sits between the view switcher and the OutputScorecard so the
    number lands in the same visual band as the per-side API cost lines in TelemetryHud. */
 .arena__cost-total {

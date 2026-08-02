@@ -10,7 +10,7 @@
 
 /* ── Model card ──────────────────────────────────────────────── */
 
-.lab__card {
+.lab-card__card {
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -21,30 +21,30 @@
     transition: border-color 0.2s;
 }
 
-.lab__card--running  { border-color: var(--accent-blue); background: var(--info-surface); }
+.lab-card__card--running  { border-color: var(--accent-blue); background: var(--info-surface); }
 
-.lab__card--complete { border-color: var(--success-border); }
+.lab-card__card--complete { border-color: var(--success-border); }
 
-.lab__card--error    { border-color: var(--danger-border); }
+.lab-card__card--error    { border-color: var(--danger-border); }
 
-.lab__card--cancelled { border-color: var(--border-strong); opacity: 0.7; }
+.lab-card__card--cancelled { border-color: var(--border-strong); opacity: 0.7; }
 
 /* O3: Bold left border based on download state */
 
-.lab__card--border-ready  { border-left: 4px solid var(--accent-green); }
+.lab-card__card--border-ready  { border-left: 4px solid var(--accent-green); }
 
-.lab__card--border-missing { border-left: 4px solid var(--accent-yellow); }
+.lab-card__card--border-missing { border-left: 4px solid var(--accent-yellow); }
 
-.lab__card--border-error   { border-left: 4px solid var(--accent-red); }
+.lab-card__card--border-error   { border-left: 4px solid var(--accent-red); }
 
-.lab__card-header {
+.lab-card__card-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.5rem;
 }
 
-.lab__card-title {
+.lab-card__card-title {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -52,28 +52,28 @@
     min-width: 0;
 }
 
-.lab__card-title-main {
+.lab-card__card-title-main {
     display: flex;
     align-items: center;
     gap: 0.35rem;
     min-width: 0;
 }
 
-.lab__card-title-meta {
+.lab-card__card-title-meta {
     display: flex;
     align-items: center;
     gap: 0.35rem;
     flex-wrap: wrap;
 }
 
-.lab__model-name {
+.lab-card__model-name {
     font-weight: 600;
     color: var(--text);
     font-size: 0.9rem;
     line-height: 1.25;
 }
 
-.lab__vram-badge {
+.lab-card__vram-badge {
     font-size: 0.7rem;
     color: var(--text-muted);
     background: var(--surface-2);
@@ -84,33 +84,33 @@
 
 /* Tier modifiers are built from ModelDiagState.VramTier ("ok"/"caution"/"warn"),
    so they never appear as literals in the markup. */
-.lab__vram-badge--ok      { color: var(--accent-green);  border-color: var(--success-border); background: var(--success-surface); }
-.lab__vram-badge--caution { color: var(--accent-yellow); border-color: var(--warn-border);    background: var(--warn-surface); }
-.lab__vram-badge--warn    { color: var(--accent-red);    border-color: var(--danger-border);  background: var(--danger-surface); }
-.lab__vram-badge--ollama  { color: var(--accent-yellow); border-color: var(--warn-border);    background: var(--warn-surface); }
-.lab__vram-badge--remote  { color: var(--accent-blue);   border-color: var(--info-border);    background: var(--info-surface); }
+.lab-card__vram-badge--ok      { color: var(--accent-green);  border-color: var(--success-border); background: var(--success-surface); }
+.lab-card__vram-badge--caution { color: var(--accent-yellow); border-color: var(--warn-border);    background: var(--warn-surface); }
+.lab-card__vram-badge--warn    { color: var(--accent-red);    border-color: var(--danger-border);  background: var(--danger-surface); }
+.lab-card__vram-badge--ollama  { color: var(--accent-yellow); border-color: var(--warn-border);    background: var(--warn-surface); }
+.lab-card__vram-badge--remote  { color: var(--accent-blue);   border-color: var(--info-border);    background: var(--info-surface); }
 
-.lab__vram-warn {
+.lab-card__vram-warn {
     font-size: 0.75rem;
     color: var(--accent-red);
     cursor: help;
     line-height: 1;
 }
 
-.lab__vram-hint {
+.lab-card__vram-hint {
     font-size: 0.66rem;
     color: var(--accent-red);
     letter-spacing: 0.02em;
 }
 
-.lab__warm-badge {
+.lab-card__warm-badge {
     font-size: 0.7rem;
     margin-left: 0.2rem;
     cursor: help;
     vertical-align: middle;
 }
 
-.lab__model-id {
+.lab-card__model-id {
     font-size: 0.65rem;
     color: var(--text-dim);
     font-family: 'Cascadia Code', monospace;
@@ -120,35 +120,35 @@
     max-width: 100%;
 }
 
-.lab__download-row {
+.lab-card__download-row {
     display: flex;
     align-items: center;
     gap: 0.4rem;
 }
 
-.lab__badge {
+.lab-card__badge {
     font-size: 0.72rem;
     padding: 0.15rem 0.45rem;
     border-radius: 4px;
     font-weight: 500;
 }
 
-.lab__badge--checking { background: var(--warn-surface);    color: var(--accent-yellow); border: 1px solid var(--warn-border); }
+.lab-card__badge--checking { background: var(--warn-surface);    color: var(--accent-yellow); border: 1px solid var(--warn-border); }
 
-.lab__badge--ok       { background: var(--success-surface); color: var(--accent-green);  border: 1px solid var(--success-border); }
+.lab-card__badge--ok       { background: var(--success-surface); color: var(--accent-green);  border: 1px solid var(--success-border); }
 
-.lab__badge--missing  { background: var(--surface-2);       color: var(--text-muted);    border: 1px solid var(--border-strong); }
+.lab-card__badge--missing  { background: var(--surface-2);       color: var(--text-muted);    border: 1px solid var(--border-strong); }
 
 /* ── Progress ────────────────────────────────────────────────── */
 
-.lab__progress-track {
+.lab-card__progress-track {
     height: 4px;
     background: var(--surface-2);
     border-radius: 2px;
     overflow: hidden;
 }
 
-.lab__progress-fill {
+.lab-card__progress-fill {
     width: var(--fill, 0%);
     height: 100%;
     background: var(--accent-blue);
@@ -156,7 +156,7 @@
     transition: width 0.4s ease;
 }
 
-.lab__step-detail {
+.lab-card__step-detail {
     font-size: 0.7rem;
     color: var(--text-muted);
     font-family: 'Cascadia Code', monospace;
@@ -165,47 +165,47 @@
     text-overflow: ellipsis;
 }
 
-.lab__error    { font-size: 0.75rem; color: var(--accent-red); }
+.lab-card__error    { font-size: 0.75rem; color: var(--accent-red); }
 
-.lab__cancelled { font-size: 0.75rem; color: var(--text-muted); }
+.lab-card__cancelled { font-size: 0.75rem; color: var(--text-muted); }
 
 /* ── Metrics row ─────────────────────────────────────────────── */
 
-.lab__metrics {
+.lab-card__metrics {
     display: flex;
     gap: 0.75rem;
     flex-wrap: wrap;
     margin-top: 0.25rem;
 }
 
-.lab__metric {
+.lab-card__metric {
     display: flex;
     flex-direction: column;
     align-items: center;
     min-width: 54px;
 }
 
-.lab__metric-label {
+.lab-card__metric-label {
     font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-dim);
 }
 
-.lab__metric-value {
+.lab-card__metric-value {
     font-size: 1rem;
     font-weight: 700;
     color: var(--text);
 }
 
-.lab__metric--highlight .lab__metric-value {
+.lab-card__metric--highlight .lab-card__metric-value {
     color: var(--accent-green);
     font-size: 1.15rem;
 }
 
 /* ── Output ──────────────────────────────────────────────────── */
 
-.lab__output-toggle {
+.lab-card__output-toggle {
     background: none;
     border: none;
     color: var(--accent-blue);
@@ -215,9 +215,9 @@
     text-align: left;
 }
 
-.lab__output-toggle:hover { color: var(--link-hover); }
+.lab-card__output-toggle:hover { color: var(--link-hover); }
 
-.lab__output {
+.lab-card__output {
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -234,44 +234,25 @@
 
 /* ── Card action buttons ─────────────────────────────────────── */
 
-.lab__card-actions { flex-shrink: 0; }
+.lab-card__card-actions { flex-shrink: 0; }
 
-.lab__btn-sm {
+/* Layout only — .po-btn owns the colour, padding and border. A square icon
+   button just needs to be square. */
+.lab-card__icon-btn {
     width: 40px;
-    height: 40px;
-    border-radius: 6px;
-    border: 1px solid transparent;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 700;
-    transition: background 0.15s, color 0.15s;
+    min-width: 40px;
+    padding: 0;
 }
-
-.lab__btn-sm:disabled { opacity: 0.35; cursor: not-allowed; }
-
-.lab__btn-sm--run    { background: var(--info-surface); border-color: var(--info-border); color: var(--accent-blue); }
-
-.lab__btn-sm--run:not(:disabled):hover { background: var(--accent-blue); color: #fff; }
-
-.lab__btn-sm--cancel { background: var(--danger-surface); border-color: var(--danger-border); color: var(--accent-red); }
-
-.lab__btn-sm--cancel:hover { background: var(--accent-red); color: #fff; }
-
-/* Only ever rendered next to the two above; it had no rule of its own and fell back
-   to the bare .lab__btn-sm base, which has no colour at all. */
-.lab__btn-sm--download { background: var(--warn-surface); border-color: var(--warn-border); color: var(--accent-yellow); }
-
-.lab__btn-sm--download:not(:disabled):hover { background: var(--accent-yellow); color: var(--surface-1); }
 
 /* ── Download hint ──────────────────────────────────────────── */
 
-.lab__download-hint {
+.lab-card__download-hint {
     font-size: 0.67rem;
     color: var(--text-muted);
     margin-top: 0.2rem;
 }
 
-.lab__download-hint > summary {
+.lab-card__download-hint > summary {
     cursor: pointer;
     color: var(--accent-yellow);
     user-select: none;
@@ -279,11 +260,11 @@
     padding: 0.1rem 0;
 }
 
-.lab__download-hint > summary:hover {
+.lab-card__download-hint > summary:hover {
     color: var(--text);
 }
 
-.lab__download-note {
+.lab-card__download-note {
     display: block;
     margin-top: 0.3rem;
     color: var(--text-dim);

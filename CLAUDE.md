@@ -137,18 +137,46 @@ them. Razor components stay thin wrappers over those statics.
 `OnStartLocalInference`, runs `WebLlmService`, and POSTs to `/api/duels/{id}/local-result`. A
 change that breaks that handler stalls every WebGPU pairing at `Initializing` with no error.
 
-**There is no UI component library.** Radzen was removed; buttons and tables are `.po-btn` and
-`.po-table` in [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens.
-Add variants there rather than reaching for a package — and note the app now has no reflective
-component instantiation except the Router's `NotFoundPage`, which is the only remaining reason
+**There is no UI component library, and `.po-btn` is the only button.** Radzen was removed; buttons
+and tables are `.po-btn` and `.po-table` in
+[app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens. Twelve
+per-surface button classes (`wizard__btn`, `demo__btn`, `h2h__btn`, `lab__btn`, `source-compare__btn`
+…) had each reimplemented the same thing locally and drifted apart; they were folded into `.po-btn`
+plus modifiers (`--sm --lg --block --primary --success --secondary --ghost --warn --danger`). A
+surface that needs a tweak adds a **layout-only** class alongside `.po-btn` — `arena__action-btn`,
+`archive__btn`, `leaderboard__sort-btn` and `lab-card__icon-btn` are the pattern. New *visual*
+variants go in `app.css` as a modifier, never in a `.razor.css`. The two exceptions are deliberate:
+`login__ms-btn` and `navmenu__ms-btn` restate a fixed white field because the Microsoft mark is
+trademarked artwork with a mandated presentation. Note also the app has no reflective component
+instantiation except the Router's `NotFoundPage`, which is the only remaining reason
 `PublishTrimmed` is off.
+
+**Every surface owns exactly one BEM block, named after its file.** `NavMenu` → `navmenu__`,
+`Login` → `login__`, `Home` → `home__`, `LabModelCard` → `lab-card__`, `ModelHealthPanel` → `lab__`.
+This is enforced by nothing, and it has broken twice: `Leaderboard.razor.css` carried both `lb__`
+and `leaderboard__`, and `LabModelCard` shared `lab__` with its parent panel — which is exactly the
+scope-id trap below waiting to happen. Do not introduce a second block into a stylesheet.
+
+**Classes in markup with no rule anywhere are a recurring defect.** The nav bar carried
+`nav-item`, `btn-sm` and `btn-outline-warning` long after Bootstrap was gone, and
+`arena__source-btn`, `arena__generating-notice`, `auth-spinner`, `h2h__sparkline-col` and
+`scorecard__findings-col` all styled nothing. Nothing warns. To check the whole app, diff the
+classes used in `.razor` markup against the selectors defined in any `.css`.
 
 **Scoped CSS is per-`.razor`-file, and nothing warns when it isn't.** `ModelHealthPanel.razor.css`
 had spent a long time styling `LabModelCard`'s markup, which silently matched nothing because
 Blazor stamps each stylesheet with its own component's scope id. If you move markup into a child
-component, move its rules into that component's own `.razor.css` (or use `::deep`). A class that is
-built by interpolation — `lab__vram-badge--@State.VramTier` — will also read as dead to any text
+component, move its rules into that component's own `.razor.css` (or use `::deep` — which is why
+`navmenu__link` rules need it, since `NavLink` renders the anchor outside the component's scope).
+A class that is built by interpolation — `lab-card__vram-badge--@State.VramTier`,
+`leaderboard__type-badge--@ModelTypeGroup.CssModifier(t)` — will also read as dead to any text
 scan, so check for those before deleting a rule.
+
+**Client code that isn't a component doesn't live in `Components/`.**
+`src/PoLocalCompare.Client/Presentation/` holds the view-models, enums and static helpers that
+`.razor` files lean on (`ModelDiagState`, `ModelTypeGroup`, `SourceViewMode`, `RuntimeProbeReport`,
+`FailureReasonText`). It is reachable only by E2E-UI, so genuinely testable logic still belongs in
+`PoLocalCompare.Shared` — see the note above.
 
 **The Arena's scorecard must never feed ELO.** `OutputAnalysis.CompletenessScore` is presentational
 and deliberately separate from the persisted `OutputQualityScore` — tightening a heuristic there must

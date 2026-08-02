@@ -37,29 +37,6 @@
     gap: var(--space-sm);
 }
 
-.source-compare__btn {
-    min-height: var(--target-min);
-    padding: 0.25rem 0.7rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    background: var(--surface-1);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.source-compare__btn:hover {
-    color: var(--text);
-    border-color: var(--accent-blue);
-}
-
-.source-compare__btn:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
-
 /* ── Shared code typography ───────────────────────────────────────────────── */
 
 .source-compare__code,

@@ -1,44 +1,44 @@
 @using PoLocalCompare.Client.Pages
 
-<div class="lab__card @GetCardClass(State) @GetCardDownloadClass(State)">
+<div class="lab-card__card @GetCardClass(State) @GetCardDownloadClass(State)">
 
     @* Header row *@
-    <div class="lab__card-header">
-        <div class="lab__card-title">
-            <div class="lab__card-title-main">
-                <span class="lab__model-name">@FormatDisplayName(State.Model.DisplayName)</span>
+    <div class="lab-card__card-header">
+        <div class="lab-card__card-title">
+            <div class="lab-card__card-title-main">
+                <span class="lab-card__model-name">@FormatDisplayName(State.Model.DisplayName)</span>
                 @if (!State.IsOllamaModel && State.VramTier == "warn")
                 {
-                    <span class="lab__vram-warn" aria-hidden="true" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
+                    <span class="lab-card__vram-warn" aria-hidden="true" title="High VRAM — may fail on integrated or low-VRAM GPUs">⚠</span>
                 }
             </div>
-            <div class="lab__card-title-meta">
+            <div class="lab-card__card-title-meta">
                 @if (State.IsRemoteModel)
                 {
-                    <span class="lab__vram-badge lab__vram-badge--remote" title="Runs on Azure AI Foundry">☁ Remote</span>
+                    <span class="lab-card__vram-badge lab-card__vram-badge--remote" title="Runs on Azure AI Foundry">☁ Remote</span>
                 }
                 else if (State.IsOllamaModel)
                 {
-                    <span class="lab__vram-badge lab__vram-badge--ollama" title="Runs via local Ollama daemon">🦙 Ollama</span>
+                    <span class="lab-card__vram-badge lab-card__vram-badge--ollama" title="Runs via local Ollama daemon">🦙 Ollama</span>
                 }
                 else if (State.VramMb > 0)
                 {
-                    <span class="lab__vram-badge lab__vram-badge--@State.VramTier"
+                    <span class="lab-card__vram-badge lab-card__vram-badge--@State.VramTier"
                           title="Estimated GPU VRAM required: @State.VramLabel">@State.VramLabel</span>
                 }
             </div>
             @if (!State.IsOllamaModel && State.VramTier == "warn")
             {
-                <span class="lab__vram-hint">High VRAM requirement</span>
+                <span class="lab-card__vram-hint">High VRAM requirement</span>
             }
         </div>
-        <div class="lab__card-actions">
+        <div class="lab-card__card-actions">
             @* Remote models are verified by reachability (no in-browser run). *@
             @if (!State.IsRemoteModel)
             {
                 @if (State.Status is DiagStatus.Idle or DiagStatus.Complete or DiagStatus.Error or DiagStatus.Cancelled)
                 {
-                    <button class="lab__btn-sm lab__btn-sm--run"
+                    <button class="po-btn po-btn--sm po-btn--primary lab-card__icon-btn"
                             title="Run diagnostic"
                             aria-label="Run diagnostic for @FormatDisplayName(State.Model.DisplayName)"
                             @onclick="HandleRun"
@@ -48,7 +48,7 @@
                 }
                 else
                 {
-                    <button class="lab__btn-sm lab__btn-sm--cancel"
+                    <button class="po-btn po-btn--sm po-btn--danger lab-card__icon-btn"
                             title="Cancel"
                             aria-label="Cancel diagnostic for @FormatDisplayName(State.Model.DisplayName)"
                             @onclick="HandleCancel">
@@ -60,130 +60,130 @@
     </div>
 
     @* Model ID chip — show ApiEndpointRef for Ollama, WebLlmModelId for browser *@
-    <div class="lab__model-id">@(State.IsOllamaModel ? State.Model.ApiEndpointRef : State.Model.WebLlmModelId)</div>
+    <div class="lab-card__model-id">@(State.IsOllamaModel ? State.Model.ApiEndpointRef : State.Model.WebLlmModelId)</div>
 
     @* Download status — Ollama & Remote models show availability instead *@
-    <div class="lab__download-row">
+    <div class="lab-card__download-row">
         @if (State.IsRemoteModel)
         {
             @if (State.IsDownloaded is null)
             {
-                <span class="lab__badge lab__badge--checking">⏳ Checking deployment…</span>
+                <span class="lab-card__badge lab-card__badge--checking">⏳ Checking deployment…</span>
             }
             else if (State.IsDownloaded == true)
             {
-                <span class="lab__badge lab__badge--ok">✅ Deployment reachable</span>
+                <span class="lab-card__badge lab-card__badge--ok">✅ Deployment reachable</span>
             }
             else
             {
-                <span class="lab__badge lab__badge--missing">⚠ Azure deployment unreachable</span>
+                <span class="lab-card__badge lab-card__badge--missing">⚠ Azure deployment unreachable</span>
             }
         }
         else if (State.IsOllamaModel)
         {
             @if (State.IsDownloaded is null)
             {
-                <span class="lab__badge lab__badge--checking">⏳ Checking Ollama…</span>
+                <span class="lab-card__badge lab-card__badge--checking">⏳ Checking Ollama…</span>
             }
             else if (State.IsDownloaded == true)
             {
-                <span class="lab__badge lab__badge--ok">✅ Available in Ollama</span>
+                <span class="lab-card__badge lab-card__badge--ok">✅ Available in Ollama</span>
             }
             else
             {
-                <span class="lab__badge lab__badge--missing">⚠ Not found in Ollama — run <code>ollama pull @State.Model.ApiEndpointRef</code></span>
+                <span class="lab-card__badge lab-card__badge--missing">⚠ Not found in Ollama — run <code>ollama pull @State.Model.ApiEndpointRef</code></span>
             }
         }
         else
         {
             @if (State.IsDownloaded is null)
             {
-                <span class="lab__badge lab__badge--checking">⏳ Checking…</span>
+                <span class="lab-card__badge lab-card__badge--checking">⏳ Checking…</span>
             }
             else if (State.IsDownloaded == true)
             {
-                <span class="lab__badge lab__badge--ok">@(State.UsesCdnAssets ? "☁ Ready via CDN" : "✅ Downloaded locally")</span>
+                <span class="lab-card__badge lab-card__badge--ok">@(State.UsesCdnAssets ? "☁ Ready via CDN" : "✅ Downloaded locally")</span>
             }
             else
             {
-                <span class="lab__badge lab__badge--missing">⚠ Model assets unavailable</span>
+                <span class="lab-card__badge lab-card__badge--missing">⚠ Model assets unavailable</span>
             }
         }
     </div>
     @if (!State.IsOllamaModel && !State.IsRemoteModel && State.IsDownloaded == false)
     {
-        <div class="lab__download-hint">
+        <div class="lab-card__download-hint">
             @if (State.Downloading)
             {
-                <span class="lab__badge lab__badge--checking">⏬ Downloading… (check back in a few minutes)</span>
+                <span class="lab-card__badge lab-card__badge--checking">⏬ Downloading… (check back in a few minutes)</span>
             }
             else
             {
-                <button class="lab__btn-sm lab__btn-sm--download"
+                <button class="po-btn po-btn--sm po-btn--warn lab-card__icon-btn"
                         title="Download from HuggingFace via server"
                         @onclick="HandleDownload">
                     ⬇ Download
                 </button>
             }
-            <span class="lab__download-note">Asset: /models/@State.Model.WebLlmModelId/mlc-chat-config.json</span>
+            <span class="lab-card__download-note">Asset: /models/@State.Model.WebLlmModelId/mlc-chat-config.json</span>
         </div>
     }
 
     @* Running: progress bar + step detail *@
     @if (State.Status is DiagStatus.Loading or DiagStatus.Generating)
     {
-        <div class="lab__progress-track">
-            <div class="lab__progress-fill" style="--fill: @(State.LoadProgress)%"></div>
+        <div class="lab-card__progress-track">
+            <div class="lab-card__progress-fill" style="--fill: @(State.LoadProgress)%"></div>
         </div>
-        <div class="lab__step-detail">@State.StepDetail</div>
+        <div class="lab-card__step-detail">@State.StepDetail</div>
     }
 
     @* Error *@
     @if (State.Status == DiagStatus.Error)
     {
-        <div class="lab__error">❌ @State.ErrorMessage</div>
+        <div class="lab-card__error">❌ @State.ErrorMessage</div>
     }
 
     @* Cancelled *@
     @if (State.Status == DiagStatus.Cancelled)
     {
-        <div class="lab__cancelled">⊘ Cancelled</div>
+        <div class="lab-card__cancelled">⊘ Cancelled</div>
     }
 
     @* Results *@
     @if (State.Status == DiagStatus.Complete)
     {
-        <div class="lab__metrics">
-            <div class="lab__metric">
-                <span class="lab__metric-label">Load</span>
-                <span class="lab__metric-value">
+        <div class="lab-card__metrics">
+            <div class="lab-card__metric">
+                <span class="lab-card__metric-label">Load</span>
+                <span class="lab-card__metric-value">
                     @FormatMs(State.LoadMs)
-                    @if (State.WarmCache) { <span class="lab__warm-badge" title="GPU shaders cached — subsequent loads are faster">⚡</span> }
+                    @if (State.WarmCache) { <span class="lab-card__warm-badge" title="GPU shaders cached — subsequent loads are faster">⚡</span> }
                 </span>
             </div>
-            <div class="lab__metric">
-                <span class="lab__metric-label">1st Token</span>
-                <span class="lab__metric-value">@FormatMs(State.FirstTokenMs)</span>
+            <div class="lab-card__metric">
+                <span class="lab-card__metric-label">1st Token</span>
+                <span class="lab-card__metric-value">@FormatMs(State.FirstTokenMs)</span>
             </div>
-            <div class="lab__metric lab__metric--highlight">
-                <span class="lab__metric-label">Tok/s</span>
-                <span class="lab__metric-value">@State.TokensPerSec</span>
+            <div class="lab-card__metric lab-card__metric--highlight">
+                <span class="lab-card__metric-label">Tok/s</span>
+                <span class="lab-card__metric-value">@State.TokensPerSec</span>
             </div>
-            <div class="lab__metric">
-                <span class="lab__metric-label">Tokens</span>
-                <span class="lab__metric-value">@State.TotalTokens</span>
+            <div class="lab-card__metric">
+                <span class="lab-card__metric-label">Tokens</span>
+                <span class="lab-card__metric-value">@State.TotalTokens</span>
             </div>
-            <div class="lab__metric">
-                <span class="lab__metric-label">Quality</span>
-                <span class="lab__metric-value">@CompletenessScore(State)%</span>
+            <div class="lab-card__metric">
+                <span class="lab-card__metric-label">Quality</span>
+                <span class="lab-card__metric-value">@CompletenessScore(State)%</span>
             </div>
         </div>
-        <button class="lab__output-toggle" @onclick="HandleToggleOutput">
+        <button class="lab-card__output-toggle" @onclick="HandleToggleOutput">
             @(State.ShowOutput ? "▲ Hide output" : "▼ Show output")
         </button>
         @if (State.ShowOutput)
         {
-            <pre class="lab__output">@State.Output</pre>
+            <pre class="lab-card__output">@State.Output</pre>
         }
     }
 </div>
@@ -208,18 +208,18 @@
 
     private static string GetCardClass(ModelDiagState s) => s.Status switch
     {
-        DiagStatus.Loading or DiagStatus.Generating => "lab__card--running",
-        DiagStatus.Complete                         => "lab__card--complete",
-        DiagStatus.Error                            => "lab__card--error",
-        DiagStatus.Cancelled                        => "lab__card--cancelled",
+        DiagStatus.Loading or DiagStatus.Generating => "lab-card__card--running",
+        DiagStatus.Complete                         => "lab-card__card--complete",
+        DiagStatus.Error                            => "lab-card__card--error",
+        DiagStatus.Cancelled                        => "lab-card__card--cancelled",
         _                                           => ""
     };
 
     private static string GetCardDownloadClass(ModelDiagState s)
     {
-        if (s.Status is DiagStatus.Error) return "lab__card--border-error";
-        if (s.IsDownloaded == true)  return "lab__card--border-ready";
-        if (s.IsDownloaded == false) return "lab__card--border-missing";
+        if (s.Status is DiagStatus.Error) return "lab-card__card--border-error";
+        if (s.IsDownloaded == true)  return "lab-card__card--border-ready";
+        if (s.IsDownloaded == false) return "lab-card__card--border-missing";
         return ""; // null = still checking
     }
 

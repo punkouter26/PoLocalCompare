@@ -19,8 +19,8 @@ public sealed class NavigationUiTests : UiTestBase
         var page = await SignedInPageAsync(width, height);
         await OpenNavIfCollapsedAsync(page);
 
-        var brand = await page.Locator(".navbar-brand").BoundingBoxAsync();
-        var auth = await page.Locator(".nav-auth").BoundingBoxAsync();
+        var brand = await page.Locator(".navmenu__brand").BoundingBoxAsync();
+        var auth = await page.Locator(".navmenu__auth").BoundingBoxAsync();
 
         Assert.NotNull(brand);
         Assert.NotNull(auth);
@@ -37,7 +37,7 @@ public sealed class NavigationUiTests : UiTestBase
         var page = await SignedInPageAsync(width, height);
         await OpenNavIfCollapsedAsync(page);
 
-        await Assertions.Expect(page.Locator(".nav-user-badge")).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator(".navmenu__user-badge")).ToBeVisibleAsync();
     }
 
     [Theory]

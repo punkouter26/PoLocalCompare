@@ -37,7 +37,7 @@
         <div class="demo__unavailable">
             <h2>Demo mode can't run here</h2>
             <p>@_plan.UnavailableReason</p>
-            <a class="demo__btn" href="/">← Back to Compare</a>
+            <a class="po-btn" href="/">← Back to Compare</a>
         </div>
     }
     else
@@ -45,20 +45,20 @@
         <div class="demo__controls">
             @if (_phase == Phase.Idle)
             {
-                <button type="button" class="demo__btn demo__btn--primary" @onclick="StartAsync">
+                <button type="button" class="po-btn po-btn--success" @onclick="StartAsync">
                     ▶ Start @_plan.Rounds.Count duels
                 </button>
             }
             else if (_phase == Phase.Running)
             {
-                <button type="button" class="demo__btn demo__btn--stop" @onclick="RequestStop" disabled="@_stopRequested">
+                <button type="button" class="po-btn po-btn--danger" @onclick="RequestStop" disabled="@_stopRequested">
                     @(_stopRequested ? "Finishing current duel…" : "■ Stop after this duel")
                 </button>
             }
             else
             {
-                <button type="button" class="demo__btn demo__btn--primary" @onclick="ResetAsync">↻ Run again</button>
-                <a class="demo__btn" href="/leaderboard">📊 See the leaderboard</a>
+                <button type="button" class="po-btn po-btn--success" @onclick="ResetAsync">↻ Run again</button>
+                <a class="po-btn" href="/leaderboard">📊 See the leaderboard</a>
             }
 
             <span class="demo__progress" role="status">

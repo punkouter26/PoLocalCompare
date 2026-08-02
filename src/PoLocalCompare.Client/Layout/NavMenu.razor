@@ -1,43 +1,43 @@
 @implements IDisposable
 @using PoLocalCompare.Shared.DTOs
-<nav class="topnav navbar navbar-expand-md navbar-dark">
+<nav class="navmenu">
     @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ── *@
     @if (_usingMockData)
     {
-        <div class="mock-data-banner" role="alert" aria-live="polite">
+        <div class="navmenu__mock-banner" role="alert" aria-live="polite">
             ⚠ USING MOCK DATA — Features:UseRealAi is disabled. AI responses are simulated.
         </div>
     }
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">
-            <span class="brand-mark" aria-hidden="true">PL</span>
-            <span class="brand-text">PoLocalCompare</span>
+    <div class="navmenu__inner">
+        <a class="navmenu__brand" href="">
+            <span class="navmenu__brand-mark" aria-hidden="true">PL</span>
+            <span>PoLocalCompare</span>
         </a>
 
-        <button title="Navigation menu" aria-label="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu" aria-expanded="@NavExpanded" aria-controls="navbarLinks">
-            <span class="navbar-toggler-icon"></span>
+        <button title="Navigation menu" aria-label="Navigation menu" class="navmenu__toggler" @onclick="ToggleNavMenu" aria-expanded="@NavExpanded" aria-controls="navbarLinks">
+            <span class="navmenu__toggler-icon" aria-hidden="true"></span>
         </button>
 
         <div class="@NavMenuCssClass" id="navbarLinks">
-            <ul class="navbar-nav me-auto mb-2 mb-md-0">
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                        <span class="nav-text">Compare</span>
+            <ul class="navmenu__links">
+                <li>
+                    <NavLink class="navmenu__link" href="" Match="NavLinkMatch.All">
+                        <span class="navmenu__link-text">Compare</span>
                     </NavLink>
                 </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="leaderboard">
-                        <span class="nav-text">Leaderboard</span>
+                <li>
+                    <NavLink class="navmenu__link" href="leaderboard">
+                        <span class="navmenu__link-text">Leaderboard</span>
                     </NavLink>
                 </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="archive">
-                        <span class="nav-text">Archive</span>
+                <li>
+                    <NavLink class="navmenu__link" href="archive">
+                        <span class="navmenu__link-text">Archive</span>
                     </NavLink>
                 </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="demo">
-                        <span class="nav-text">Demo</span>
+                <li>
+                    <NavLink class="navmenu__link" href="demo">
+                        <span class="navmenu__link-text">Demo</span>
                     </NavLink>
                 </li>
             </ul>
@@ -47,17 +47,17 @@
                region would interrupt them every time one did. *@
             @if (_tickerVisible)
             {
-                <div class="nav-ticker" role="status" aria-live="polite" aria-label="Live duel activity">
+                <div class="navmenu__ticker" role="status" aria-live="polite" aria-label="Live duel activity">
                     @if (Ticker.RunningCount > 0)
                     {
-                        <span class="nav-ticker__pill nav-ticker__pill--running">
-                            <span class="nav-ticker__pulse" aria-hidden="true"></span>
+                        <span class="navmenu__ticker-pill navmenu__ticker-pill--running">
+                            <span class="navmenu__ticker-pulse" aria-hidden="true"></span>
                             @Ticker.RunningCount running
                         </span>
                     }
                     @if (Ticker.AwaitingVerdictCount > 0)
                     {
-                        <a href="archive" class="nav-ticker__pill nav-ticker__pill--pending"
+                        <a href="archive" class="navmenu__ticker-pill navmenu__ticker-pill--pending"
                            title="Duels that finished but have no verdict yet">
                             <span aria-hidden="true">⚖</span>
                             @Ticker.AwaitingVerdictCount awaiting judgment
@@ -65,7 +65,7 @@
                     }
                     @if (_latest is not null)
                     {
-                        <a href="@LatestHref" class="nav-ticker__latest" title="@_latest.PromptSummary">
+                        <a href="@LatestHref" class="navmenu__ticker-latest" title="@_latest.PromptSummary">
                             @LatestText
                         </a>
                     }
@@ -73,30 +73,30 @@
             }
 
             @* ── User identity / auth (standards §6) ── *@
-            <div class="navbar-nav ms-auto align-items-center gap-2 nav-auth">
+            <div class="navmenu__auth">
                 @* Cycles System → Light → Dark. aria-live is on the label so a screen reader
                    announces the new state; the glyph itself is decorative. *@
                 <button type="button"
-                        class="nav-theme-toggle"
+                        class="po-btn po-btn--sm po-btn--secondary navmenu__theme-toggle"
                         @onclick="CycleThemeAsync"
                         title="@ThemeTitle"
                         aria-label="@ThemeTitle">
-                    <span class="nav-theme-toggle__glyph" aria-hidden="true">@ThemeGlyph</span>
-                    <span class="nav-theme-toggle__label">@ThemeLabel</span>
+                    <span class="navmenu__theme-glyph" aria-hidden="true">@ThemeGlyph</span>
+                    <span class="navmenu__theme-label">@ThemeLabel</span>
                 </button>
 
                 @if (_identity is not null)
                 {
-                    <span class="nav-user-badge @(_isGuest ? "nav-user-badge--guest" : "nav-user-badge--oauth")"
+                    <span class="navmenu__user-badge @(_isGuest ? "navmenu__user-badge--guest" : "navmenu__user-badge--oauth")"
                           title="@(_isGuest ? "Guest session — data is not persisted" : "Signed in via Microsoft")">
                         @_identity
                     </span>
-                    <button class="btn btn-sm btn-outline-secondary nav-logout" @onclick="LogoutAsync">Logout</button>
+                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="LogoutAsync">Logout</button>
                 }
                 else
                 {
-                    <button class="btn btn-sm btn-ms-nav" @onclick="LoginWithMicrosoft">
-                        <svg class="nav-ms-logo" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="14" height="14">
+                    <button class="po-btn po-btn--sm navmenu__ms-btn" @onclick="LoginWithMicrosoft">
+                        <svg class="navmenu__ms-logo" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="14" height="14">
                             <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
                             <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
                             <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
@@ -106,7 +106,7 @@
                     </button>
                     @if (_allowGuest)
                     {
-                        <button class="btn btn-sm btn-outline-warning nav-guest-btn" @onclick="LoginAsGuestAsync">
+                        <button class="po-btn po-btn--sm po-btn--warn" @onclick="LoginAsGuestAsync">
                             Guest
                         </button>
                     }
@@ -132,7 +132,7 @@
     private bool _allowGuest;
     private AppTheme _theme = AppTheme.System;
 
-    private string NavMenuCssClass => collapseNavMenu ? "navbar-collapse" : "navbar-collapse nav-open";
+    private string NavMenuCssClass => collapseNavMenu ? "navmenu__collapse" : "navmenu__collapse navmenu__collapse--open";
 
     // Rendered as a string, not a bool: Blazor treats a bool-valued attribute as an HTML
     // boolean attribute and omits it entirely when false, which would leave the collapsed

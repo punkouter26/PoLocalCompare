@@ -237,43 +237,6 @@
     gap: var(--space-sm);
 }
 
-.h2h__btn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2.25rem;
-    padding: 0.35rem 1rem;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    background: var(--surface-1);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    text-decoration: none;
-}
-
-.h2h__btn:hover {
-    color: var(--text);
-    border-color: var(--accent-blue);
-    text-decoration: none;
-}
-
-.h2h__btn--primary {
-    color: var(--on-accent-green);
-    background: var(--accent-green);
-    border-color: var(--accent-green);
-}
-
-.h2h__btn--primary:hover {
-    color: var(--on-accent-green);
-    filter: brightness(1.08);
-}
-
-.h2h__btn:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
-
 @media (max-width: 720px) {
     .h2h__sparklines {
         grid-template-columns: 1fr;

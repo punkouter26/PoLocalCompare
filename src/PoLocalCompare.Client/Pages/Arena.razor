@@ -102,8 +102,8 @@
                     }
                     @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
                     {
-                        <div class="arena__source-link">
-                            <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
+                        <div>
+                            <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
                                 &lt;/&gt; View Source
                             </button>
                         </div>
@@ -142,8 +142,8 @@
                     }
                     @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
                     {
-                        <div class="arena__source-link">
-                            <button class="arena__source-btn" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
+                        <div>
+                            <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
                                 &lt;/&gt; View Source
                             </button>
                         </div>

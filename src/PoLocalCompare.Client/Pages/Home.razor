@@ -12,23 +12,23 @@
 
 <PageTitle>Compare - PoLocalCompare</PageTitle>
 
-<div class="wizard">
+<div class="home">
     @* ── Header ──────────────────────────────────────────────────────── *@
-    <header class="wizard__header">
-        <div class="wizard__header-row">
-            <h1 class="wizard__title">Compare two models</h1>
+    <header class="home__header">
+        <div class="home__header-row">
+            <h1 class="home__title">Compare two models</h1>
             @if (_health is not null)
             {
-                <span class="wizard__health @HealthClass()" title="@HealthTooltip()">@HealthLabel()</span>
+                <span class="home__health @HealthClass()" title="@HealthTooltip()">@HealthLabel()</span>
             }
         </div>
-        <p class="wizard__subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
-        <a href="/demo" class="wizard__demo-link">
+        <p class="home__subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
+        <a href="/demo" class="home__demo-link">
             <span aria-hidden="true">▶</span> Run the auto demo — 10 duels, judged automatically
         </a>
         @if (_health is not null && !_healthHasRemotes)
         {
-            <p class="wizard__health-warning">
+            <p class="home__health-warning">
                 ⚠ Remote (Azure OpenAI) deployments are unavailable. Use a Browser or Ollama model to run duels.
             </p>
         }
@@ -36,23 +36,23 @@
 
     @* ── Stepper ─────────────────────────────────────────────────────── *@
     @* SC 2.1.1 Keyboard: each step is a real button so it is tabbable and Enter/Space operable. *@
-    <ol class="wizard__steps" aria-label="Setup progress">
+    <ol class="home__steps" aria-label="Setup progress">
         <li>
-            <button type="button" class="wizard__step @StepClass(1)" @onclick="@(() => ScrollToAsync("wizard-step-1"))">
-                <span class="wizard__step-num">1</span>
-                <span class="wizard__step-label">Models</span>
+            <button type="button" class="home__step @StepClass(1)" @onclick="@(() => ScrollToAsync("home-step-1"))">
+                <span class="home__step-num">1</span>
+                <span class="home__step-label">Models</span>
             </button>
         </li>
         <li>
-            <button type="button" class="wizard__step @StepClass(2)" @onclick="@(() => ScrollToAsync("wizard-step-2"))">
-                <span class="wizard__step-num">2</span>
-                <span class="wizard__step-label">Prompt</span>
+            <button type="button" class="home__step @StepClass(2)" @onclick="@(() => ScrollToAsync("home-step-2"))">
+                <span class="home__step-num">2</span>
+                <span class="home__step-label">Prompt</span>
             </button>
         </li>
         <li>
-            <button type="button" class="wizard__step @StepClass(3)" @onclick="@(() => ScrollToAsync("wizard-step-3"))">
-                <span class="wizard__step-num">3</span>
-                <span class="wizard__step-label">Compare</span>
+            <button type="button" class="home__step @StepClass(3)" @onclick="@(() => ScrollToAsync("home-step-3"))">
+                <span class="home__step-num">3</span>
+                <span class="home__step-label">Compare</span>
             </button>
         </li>
     </ol>
@@ -60,42 +60,42 @@
     @* ── Model health (collapsible; replaces the standalone Local Model Lab) ── *@
     @if (!_loading && _models.Count > 0)
     {
-        <div class="wizard__health-panel">
+        <div class="home__health-panel">
             <ModelHealthPanel Models="_models" />
         </div>
     }
 
     @* ── Step 1: Pick two models ─────────────────────────────────────── *@
-    <section id="wizard-step-1" class="wizard__panel" aria-labelledby="step-1-heading">
-        <div class="wizard__panel-head">
-            <span class="wizard__panel-step">Step 1</span>
-            <h2 id="step-1-heading" class="wizard__panel-title">Choose two models</h2>
-            <p class="wizard__panel-hint">Click a card to assign it. Click a selected card to remove it.</p>
+    <section id="home-step-1" class="home__panel" aria-labelledby="step-1-heading">
+        <div class="home__panel-head">
+            <span class="home__panel-step">Step 1</span>
+            <h2 id="step-1-heading" class="home__panel-title">Choose two models</h2>
+            <p class="home__panel-hint">Click a card to assign it. Click a selected card to remove it.</p>
         </div>
 
-        <div class="wizard__slots">
-            <div class="wizard__slot @(_leftModel is not null ? "wizard__slot--set" : "")">
-                <span class="wizard__slot-tag wizard__slot-tag--left">Left</span>
-                <span class="wizard__slot-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
+        <div class="home__slots">
+            <div class="home__slot @(_leftModel is not null ? "home__slot--set" : "")">
+                <span class="home__slot-tag home__slot-tag--left">Left</span>
+                <span class="home__slot-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
             </div>
-            <span class="wizard__slot-vs" aria-hidden="true">vs</span>
-            <div class="wizard__slot @(_rightModel is not null ? "wizard__slot--set" : "")">
-                <span class="wizard__slot-tag wizard__slot-tag--right">Right</span>
-                <span class="wizard__slot-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
+            <span class="home__slot-vs" aria-hidden="true">vs</span>
+            <div class="home__slot @(_rightModel is not null ? "home__slot--set" : "")">
+                <span class="home__slot-tag home__slot-tag--right">Right</span>
+                <span class="home__slot-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
             </div>
         </div>
 
         @* Replace-popover (Finding #5): when both slots full and user clicks a 3rd model *@
         @if (_replacePopoverModel is not null && _leftModel is not null && _rightModel is not null)
         {
-            <div class="wizard__popover" role="dialog" aria-label="Choose which slot to replace">
-                <p class="wizard__popover-text">Replace which slot with <strong>@_replacePopoverModel.DisplayName</strong>?</p>
-                <div class="wizard__popover-actions">
-                    <button class="wizard__btn wizard__btn--ghost wizard__btn--sm" @onclick="CancelReplace">Cancel</button>
-                    <button class="wizard__btn wizard__btn--ghost wizard__btn--sm" @onclick="@(() => ConfirmReplace("left"))">
+            <div class="home__popover" role="dialog" aria-label="Choose which slot to replace">
+                <p class="home__popover-text">Replace which slot with <strong>@_replacePopoverModel.DisplayName</strong>?</p>
+                <div class="home__popover-actions">
+                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="CancelReplace">Cancel</button>
+                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("left"))">
                         ← Replace Left (@_leftModel.DisplayName)
                     </button>
-                    <button class="wizard__btn wizard__btn--ghost wizard__btn--sm" @onclick="@(() => ConfirmReplace("right"))">
+                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("right"))">
                         Replace Right (@_rightModel.DisplayName) →
                     </button>
                 </div>
@@ -104,28 +104,28 @@
 
         @if (_loading)
         {
-            <div class="wizard__grid">
+            <div class="home__grid">
                 @for (var i = 0; i < 6; i++)
                 {
-                    <div class="skeleton wizard__skeleton" style="--stagger: @(i * 70)ms"></div>
+                    <div class="skeleton home__skeleton" style="--stagger: @(i * 70)ms"></div>
                 }
             </div>
         }
         else if (_loadError is not null)
         {
-            <p class="wizard__error">@_loadError</p>
-            <button class="wizard__btn wizard__btn--ghost" @onclick="LoadAsync">Retry</button>
+            <p class="home__error">@_loadError</p>
+            <button class="po-btn po-btn--secondary" @onclick="LoadAsync">Retry</button>
         }
         else if (_models.Count == 0)
         {
-            <p class="wizard__hint">No models are available right now.</p>
+            <p class="home__hint">No models are available right now.</p>
         }
         else
         {
-            <div class="wizard__filters" role="group" aria-label="Filter models by type">
+            <div class="home__filters" role="group" aria-label="Filter models by type">
                 @foreach (var f in _filters)
                 {
-                    <button class="wizard__btn wizard__btn--sm @(_modelFilter == f.Key ? "wizard__btn--primary" : "wizard__btn--ghost")"
+                    <button class="po-btn po-btn--sm @(_modelFilter == f.Key ? "po-btn--success" : "po-btn--secondary")"
                             @onclick="@(() => _modelFilter = f.Key)">
                         @f.Label (@ModelCountFor(f.Key))
                     </button>
@@ -133,18 +133,18 @@
             </div>
             @if (_webGpuSupported == false && _models.Any(m => m.ModelType == ModelType.Local))
             {
-                <p class="wizard__health-warning">
+                <p class="home__health-warning">
                     ⚠ Browser models need WebGPU (desktop Chrome or Edge) — they're disabled on this device. Use a Remote or Ollama model.
                 </p>
             }
             @* Grouped by type (Remote / Browser / Ollama) to mirror the Model Health panel. *@
             @foreach (var _group in FilteredModels.GroupBy(m => m.ModelType).OrderBy(g => ModelTypeGroup.Order(g.Key)))
             {
-                <div class="wizard__group-header">
-                    <span class="wizard__group-name">@ModelTypeGroup.Label(_group.Key)</span>
-                    <span class="wizard__group-count">@_group.Count() model@(_group.Count() == 1 ? "" : "s")</span>
+                <div class="home__group-header">
+                    <span class="home__group-name">@ModelTypeGroup.Label(_group.Key)</span>
+                    <span class="home__group-count">@_group.Count() model@(_group.Count() == 1 ? "" : "s")</span>
                 </div>
-                <div class="wizard__grid">
+                <div class="home__grid">
                     @foreach (var model in _group)
                     {
                         var isLeft = model.ModelId == _leftModel?.ModelId;
@@ -152,7 +152,7 @@
                         var remoteOffline = _health is not null && !_healthHasRemotes && model.ModelType == ModelType.Remote;
                         var browserNoGpu = model.ModelType == ModelType.Local && _webGpuSupported == false;
                         var isDisabled = remoteOffline || browserNoGpu;
-                        <div class="@(isDisabled ? "wizard__card-disabled" : "")">
+                        <div class="@(isDisabled ? "home__card-disabled" : "")">
                             @* IsDisabled drives tabindex/aria-disabled — the wrapper's
                                pointer-events:none blocks the mouse but not the keyboard. *@
                             <ModelCard Model="model"
@@ -162,7 +162,7 @@
                                        OnSelected="AssignModel" />
                             @if (isDisabled)
                             {
-                                <span class="wizard__card-badge">@(browserNoGpu ? "Needs WebGPU" : "Unavailable")</span>
+                                <span class="home__card-badge">@(browserNoGpu ? "Needs WebGPU" : "Unavailable")</span>
                             }
                         </div>
                     }
@@ -170,32 +170,32 @@
             }
             @if (!FilteredModels.Any())
             {
-                <p class="wizard__hint">No models of this type are available.</p>
+                <p class="home__hint">No models of this type are available.</p>
             }
         }
     </section>
 
     @* ── Step 2: Write prompt ────────────────────────────────────────── *@
-    <section id="wizard-step-2" class="wizard__panel" aria-labelledby="step-2-heading">
-        <div class="wizard__panel-head">
-            <span class="wizard__panel-step">Step 2</span>
-            <h2 id="step-2-heading" class="wizard__panel-title">Write your prompt</h2>
-            <p class="wizard__panel-hint">Both models will receive the same prompt. Be specific about what you want them to build.</p>
+    <section id="home-step-2" class="home__panel" aria-labelledby="step-2-heading">
+        <div class="home__panel-head">
+            <span class="home__panel-step">Step 2</span>
+            <h2 id="step-2-heading" class="home__panel-title">Write your prompt</h2>
+            <p class="home__panel-hint">Both models will receive the same prompt. Be specific about what you want them to build.</p>
         </div>
 
-        <textarea class="wizard__textarea @(_promptLongWarning ? "wizard__textarea--warn" : "")"
+        <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
                   placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
                   rows="5"
                   maxlength="4000"
                   @bind="_prompt"
                   @bind:event="oninput"></textarea>
-        <div class="wizard__textarea-meta">
-            <span class="@(_promptLongWarning ? "wizard__textarea-counter wizard__textarea-counter--warn" : "wizard__textarea-counter")">
+        <div class="home__textarea-meta">
+            <span class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
                 @_prompt.Length / 4000
             </span>
             @if (_promptLongWarning)
             {
-                <span class="wizard__textarea-hint">Long prompts may be truncated or cost more.</span>
+                <span class="home__textarea-hint">Long prompts may be truncated or cost more.</span>
             }
         </div>
 
@@ -207,22 +207,22 @@
     </section>
 
     @* ── Step 3: Compare ─────────────────────────────────────────────── *@
-    <section id="wizard-step-3" class="wizard__panel wizard__panel--cta" aria-labelledby="step-3-heading">
-        <div class="wizard__panel-head">
-            <span class="wizard__panel-step">Step 3</span>
-            <h2 id="step-3-heading" class="wizard__panel-title">Compare</h2>
-            <p class="wizard__panel-hint">@CompareHint</p>
+    <section id="home-step-3" class="home__panel home__panel--cta" aria-labelledby="step-3-heading">
+        <div class="home__panel-head">
+            <span class="home__panel-step">Step 3</span>
+            <h2 id="step-3-heading" class="home__panel-title">Compare</h2>
+            <p class="home__panel-hint">@CompareHint</p>
         </div>
 
-        <div class="wizard__compare-row">
-            <button class="wizard__btn wizard__btn--primary"
+        <div class="home__compare-row">
+            <button class="po-btn po-btn--success"
                     disabled="@(!CanCompare)"
                     @onclick="StartDuelAsync">
                 Compare →
             </button>
             @if (!string.IsNullOrWhiteSpace(_error))
             {
-                <span class="wizard__error">@_error</span>
+                <span class="home__error">@_error</span>
             }
         </div>
     </section>
@@ -230,23 +230,23 @@
     @* ── Recent duels (or onboarding example when empty) ──────────────── *@
     @if (VisibleRecentDuels.Any())
     {
-        <section class="wizard__recent">
-            <div class="wizard__recent-head">
-                <h2 class="wizard__recent-title">Recent duels</h2>
-                <a href="/archive" class="wizard__recent-link">View all →</a>
+        <section class="home__recent">
+            <div class="home__recent-head">
+                <h2 class="home__recent-title">Recent duels</h2>
+                <a href="/archive" class="home__recent-link">View all →</a>
             </div>
-            <ul class="wizard__recent-list">
+            <ul class="home__recent-list">
                 @foreach (var d in VisibleRecentDuels)
                 {
                     var href = d.Verdict == DuelVerdict.Pending ? $"/arena/{d.DuelId}" : "/archive";
                     <li>
-                        <a class="wizard__recent-item @(d.Verdict == DuelVerdict.Pending ? "wizard__recent-item--pending" : "")" href="@href">
-                            <span class="wizard__recent-prompt">@d.PromptSummary</span>
-                            <span class="wizard__recent-meta">
+                        <a class="home__recent-item @(d.Verdict == DuelVerdict.Pending ? "home__recent-item--pending" : "")" href="@href">
+                            <span class="home__recent-prompt">@d.PromptSummary</span>
+                            <span class="home__recent-meta">
                                 @CleanName(d.LeftModelName) <em>vs</em> @CleanName(d.RightModelName) ·
-                                @if (d.Verdict == DuelVerdict.Left) { <span class="wizard__recent-winner">🏆 @CleanName(d.LeftModelName)</span> }
-                                else if (d.Verdict == DuelVerdict.Right) { <span class="wizard__recent-winner">🏆 @CleanName(d.RightModelName)</span> }
-                                else { <span class="wizard__recent-pending">⚖ Judge</span> }
+                                @if (d.Verdict == DuelVerdict.Left) { <span class="home__recent-winner">🏆 @CleanName(d.LeftModelName)</span> }
+                                else if (d.Verdict == DuelVerdict.Right) { <span class="home__recent-winner">🏆 @CleanName(d.RightModelName)</span> }
+                                else { <span class="home__recent-pending">⚖ Judge</span> }
                             </span>
                         </a>
                     </li>
@@ -257,10 +257,10 @@
     else
     {
         @* Finding #4: onboarding example when there are no duels yet *@
-        <section class="wizard__onboard">
-            <h2 class="wizard__onboard-title">Try a starter duel</h2>
-            <p class="wizard__onboard-hint">New here? Click below to load a working prompt and two lightweight models.</p>
-            <button class="wizard__btn wizard__btn--ghost" @onclick="LoadStarterDuel">
+        <section class="home__onboard">
+            <h2 class="home__onboard-title">Try a starter duel</h2>
+            <p class="home__onboard-hint">New here? Click below to load a working prompt and two lightweight models.</p>
+            <button class="po-btn po-btn--secondary" @onclick="LoadStarterDuel">
                 ⚡ Load starter duel
             </button>
         </section>
@@ -269,9 +269,9 @@
     @* ── Sticky CTA bar (Finding #7) ─────────────────────────────────── *@
     @if (CanCompare)
     {
-        <div class="wizard__sticky-cta">
-            <span class="wizard__sticky-text">Ready: @_leftModel!.DisplayName vs @_rightModel!.DisplayName</span>
-            <button class="wizard__btn wizard__btn--primary wizard__btn--sm" @onclick="StartDuelAsync">
+        <div class="home__sticky-cta">
+            <span class="home__sticky-text">Ready: @_leftModel!.DisplayName vs @_rightModel!.DisplayName</span>
+            <button class="po-btn po-btn--sm po-btn--success" @onclick="StartDuelAsync">
                 Compare →
             </button>
         </div>
@@ -307,7 +307,7 @@
     private bool _promptLongWarning => _prompt.Length > 4000 * 0.8;
 
     private int ActiveStep => !HasModels ? 1 : !HasPrompt ? 2 : 3;
-    private string StepClass(int step) => step < ActiveStep ? "wizard__step--done" : step == ActiveStep ? "wizard__step--active" : "";
+    private string StepClass(int step) => step < ActiveStep ? "home__step--done" : step == ActiveStep ? "home__step--active" : "";
 
     private string CompareHint => (HasModels, HasPrompt) switch
     {
@@ -376,7 +376,7 @@
         // Jump to Compare rather than leaving the choice off-screen above the fold: picking a
         // prompt is usually the last thing left before the duel can start.
         await Task.Yield();
-        ScrollToAsync(HasModels ? "wizard-step-3" : "wizard-step-1");
+        ScrollToAsync(HasModels ? "home-step-3" : "home-step-1");
     }
 
     private async Task ForgetRecentAsync(string text) =>
@@ -515,7 +515,7 @@
     }
 
     private string HealthLabel() => _healthHasRemotes ? "🟢 Models ready" : "🟡 Remote offline";
-    private string HealthClass() => _healthHasRemotes ? "wizard__health--ok" : "wizard__health--warn";
+    private string HealthClass() => _healthHasRemotes ? "home__health--ok" : "home__health--warn";
     private string HealthTooltip()
     {
         if (_health is null) return "Health status unavailable";

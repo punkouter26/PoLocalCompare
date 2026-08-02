@@ -43,16 +43,6 @@
     margin-top: 0.85rem;
 }
 
-.archive__empty-cta {
-    text-decoration: none;
-    color: var(--on-accent-green);
-    background: var(--accent-green);
-    border: 1px solid var(--accent-green);
-    border-radius: 8px;
-    padding: 0.45rem 0.8rem;
-    font-weight: 700;
-}
-
 .archive__error {
     color: var(--accent-red);
 }

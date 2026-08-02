@@ -1,4 +1,4 @@
-.wizard {
+.home {
     max-width: 880px;
     margin: 0 auto;
     padding: 2rem 1.25rem 6rem;
@@ -6,12 +6,12 @@
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
-.wizard__header {
+.home__header {
     margin-bottom: 2rem;
     text-align: left;
 }
 
-.wizard__header-row {
+.home__header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -20,7 +20,7 @@
     margin-bottom: 0.5rem;
 }
 
-.wizard__title {
+.home__title {
     font-size: clamp(1.75rem, 3vw, 2.25rem);
     font-weight: 700;
     margin: 0;
@@ -30,7 +30,7 @@
 
 /* Entry point to the unattended demo. Deliberately a quiet secondary link: it starts ten real
    duels that persist and move ELO, so it should not sit next to Compare as an equal option. */
-.wizard__demo-link {
+.home__demo-link {
     display: inline-flex;
     align-items: center;
     gap: var(--space-sm);
@@ -47,24 +47,24 @@
     transition: border-color var(--transition-fast);
 }
 
-.wizard__demo-link:hover {
+.home__demo-link:hover {
     border-color: var(--accent-cyan);
     text-decoration: none;
 }
 
-.wizard__demo-link:focus-visible {
+.home__demo-link:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
 }
 
-.wizard__subtitle {
+.home__subtitle {
     margin: 0;
     color: var(--text-muted);
     font-size: 1rem;
 }
 
 /* ── Health pill (Finding #1) ───────────────────────────────────────── */
-.wizard__health {
+.home__health {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -77,19 +77,19 @@
     white-space: nowrap;
 }
 
-.wizard__health--ok {
+.home__health--ok {
     color: var(--accent-green);
     border-color: rgba(45, 220, 132, 0.4);
     background: rgba(45, 220, 132, 0.08);
 }
 
-.wizard__health--warn {
+.home__health--warn {
     color: var(--accent-yellow);
     border-color: rgba(234, 179, 8, 0.4);
     background: rgba(234, 179, 8, 0.08);
 }
 
-.wizard__health-warning {
+.home__health-warning {
     margin: 0.75rem 0 0;
     padding: 0.6rem 0.85rem;
     color: var(--accent-yellow);
@@ -100,7 +100,7 @@
 }
 
 /* ── Stepper ────────────────────────────────────────────────────────── */
-.wizard__steps {
+.home__steps {
     list-style: none;
     margin: 0 0 2rem;
     padding: 0;
@@ -110,7 +110,7 @@
 }
 
 /* Each step is a <button> inside its <li>; stretch it to fill the grid cell. */
-.wizard__step {
+.home__step {
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -127,11 +127,11 @@
     transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
-.wizard__step:hover {
+.home__step:hover {
     border-color: var(--text-muted);
 }
 
-.wizard__step-num {
+.home__step-num {
     width: 1.5rem;
     height: 1.5rem;
     border-radius: 50%;
@@ -145,38 +145,38 @@
     transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.wizard__step-label {
+.home__step-label {
     font-size: 0.9rem;
     font-weight: 500;
 }
 
-.wizard__step--active {
+.home__step--active {
     border-color: rgba(18, 184, 207, 0.5);
     color: var(--text);
     background: rgba(18, 184, 207, 0.06);
 }
 
-.wizard__step--active .wizard__step-num {
+.home__step--active .home__step-num {
     background: rgba(18, 184, 207, 0.25);
     color: var(--accent-cyan);
 }
 
-.wizard__step--done {
+.home__step--done {
     border-color: rgba(45, 220, 132, 0.4);
     color: var(--text);
 }
 
-.wizard__step--done .wizard__step-num {
+.home__step--done .home__step-num {
     background: rgba(45, 220, 132, 0.22);
     color: var(--accent-green);
 }
 
 @media (max-width: 520px) {
-    .wizard__step-label { font-size: 0.8rem; }
+    .home__step-label { font-size: 0.8rem; }
 }
 
 /* ── Panel (each step section) ──────────────────────────────────────── */
-.wizard__panel {
+.home__panel {
     margin-bottom: 1.5rem;
     padding: 1.25rem 1.25rem 1.5rem;
     border: 1px solid var(--border);
@@ -184,11 +184,11 @@
     background: var(--surface-1);
 }
 
-.wizard__panel-head {
+.home__panel-head {
     margin-bottom: 1rem;
 }
 
-.wizard__panel-step {
+.home__panel-step {
     display: inline-block;
     font-size: 0.7rem;
     font-weight: 700;
@@ -198,27 +198,27 @@
     margin-bottom: 0.35rem;
 }
 
-.wizard__panel-title {
+.home__panel-title {
     font-size: 1.15rem;
     font-weight: 600;
     margin: 0 0 0.25rem;
     color: var(--text);
 }
 
-.wizard__panel-hint {
+.home__panel-hint {
     margin: 0;
     font-size: 0.85rem;
     color: var(--text-muted);
 }
 
-.wizard__hint {
+.home__hint {
     margin: 0;
     font-size: 0.85rem;
     color: var(--text-muted);
 }
 
 /* ── Slots ──────────────────────────────────────────────────────────── */
-.wizard__slots {
+.home__slots {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: stretch;
@@ -226,7 +226,7 @@
     margin-bottom: 1.25rem;
 }
 
-.wizard__slot {
+.home__slot {
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -239,12 +239,12 @@
     transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.wizard__slot--set {
+.home__slot--set {
     border-color: rgba(45, 220, 132, 0.5);
     background: linear-gradient(135deg, rgba(45, 220, 132, 0.06), rgba(45, 220, 132, 0.02));
 }
 
-.wizard__slot-tag {
+.home__slot-tag {
     display: inline-block;
     width: max-content;
     font-size: 0.65rem;
@@ -255,17 +255,17 @@
     border-radius: 999px;
 }
 
-.wizard__slot-tag--left {
+.home__slot-tag--left {
     background: rgba(18, 184, 207, 0.18);
     color: var(--accent-cyan);
 }
 
-.wizard__slot-tag--right {
+.home__slot-tag--right {
     background: rgba(245, 158, 11, 0.18);
     color: var(--accent-yellow);
 }
 
-.wizard__slot-name {
+.home__slot-name {
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-muted);
@@ -274,11 +274,11 @@
     text-overflow: ellipsis;
 }
 
-.wizard__slot--set .wizard__slot-name {
+.home__slot--set .home__slot-name {
     color: var(--text);
 }
 
-.wizard__slot-vs {
+.home__slot-vs {
     display: flex;
     align-items: center;
     font-size: 0.75rem;
@@ -289,18 +289,18 @@
 }
 
 /* ── Model grid + disabled card overlay (Finding #1/#5) ─────────────── */
-.wizard__health-panel {
+.home__health-panel {
     margin-bottom: 1rem;
 }
 
-.wizard__filters {
+.home__filters {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
     margin-bottom: 0.75rem;
 }
 
-.wizard__group-header {
+.home__group-header {
     display: flex;
     align-items: baseline;
     gap: 0.6rem;
@@ -309,32 +309,32 @@
     border-bottom: 1px solid var(--border, var(--border));
 }
 
-.wizard__group-name {
+.home__group-name {
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.05em;
     color: var(--text, var(--text));
 }
 
-.wizard__group-count {
+.home__group-count {
     font-size: 0.72rem;
     color: var(--text-muted, var(--text-muted));
 }
 
-.wizard__grid {
+.home__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 0.75rem;
 }
 
-.wizard__card-disabled {
+.home__card-disabled {
     position: relative;
     opacity: 0.55;
     pointer-events: none;
     cursor: not-allowed;
 }
 
-.wizard__card-badge {
+.home__card-badge {
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
@@ -350,7 +350,7 @@
 }
 
 /* ── Replace popover (Finding #5) ───────────────────────────────────── */
-.wizard__popover {
+.home__popover {
     margin-bottom: 1rem;
     padding: 0.85rem 1rem;
     background: linear-gradient(135deg, rgba(18, 184, 207, 0.08), rgba(18, 184, 207, 0.02));
@@ -359,20 +359,20 @@
     animation: fadeIn 0.2s ease-out;
 }
 
-.wizard__popover-text {
+.home__popover-text {
     margin: 0 0 0.65rem;
     font-size: 0.9rem;
     color: var(--text);
 }
 
-.wizard__popover-actions {
+.home__popover-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
 }
 
 /* ── Textarea + char counter (Finding #6) ───────────────────────────── */
-.wizard__textarea {
+.home__textarea {
     width: 100%;
     box-sizing: border-box;
     min-height: 8.5rem;
@@ -388,21 +388,21 @@
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.wizard__textarea:focus {
+.home__textarea:focus {
     outline: none;
     border-color: var(--accent-cyan);
     box-shadow: 0 0 0 3px rgba(18, 184, 207, 0.18);
 }
 
-.wizard__textarea--warn {
+.home__textarea--warn {
     border-color: rgba(234, 179, 8, 0.6);
 }
 
-.wizard__textarea::placeholder {
+.home__textarea::placeholder {
     color: var(--text-dim);
 }
 
-.wizard__textarea-meta {
+.home__textarea-meta {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
@@ -411,99 +411,50 @@
     color: var(--text-muted);
 }
 
-.wizard__textarea-counter {
+.home__textarea-counter {
     font-variant-numeric: tabular-nums;
 }
 
-.wizard__textarea-counter--warn {
+.home__textarea-counter--warn {
     color: var(--accent-yellow);
     font-weight: 600;
 }
 
-.wizard__textarea-hint {
+.home__textarea-hint {
     color: var(--accent-yellow);
 }
 
 /* ── Compare CTA ────────────────────────────────────────────────────── */
-.wizard__panel--cta {
+.home__panel--cta {
     background: linear-gradient(135deg, rgba(45, 220, 132, 0.04), rgba(18, 184, 207, 0.04));
     border-color: rgba(45, 220, 132, 0.25);
 }
 
-.wizard__compare-row {
+.home__compare-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
 }
 
-.wizard__btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    border-radius: var(--radius-md);
-    padding: 0.7rem 1.4rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
-    border: 1px solid transparent;
-    font-family: inherit;
-}
-
-.wizard__btn--sm {
-    padding: 0.45rem 0.9rem;
-    font-size: 0.85rem;
-}
-
-.wizard__btn--primary {
-    background: var(--accent-green);
-    color: var(--on-accent-green);
-    border-color: var(--accent-green);
-}
-
-.wizard__btn--primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 20px rgba(45, 220, 132, 0.25);
-}
-
-.wizard__btn--primary:disabled {
-    background: var(--surface-2);
-    color: var(--text-muted);
-    border-color: var(--border);
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-
-.wizard__btn--ghost {
-    background: transparent;
-    color: var(--text);
-    border-color: var(--border);
-}
-
-.wizard__btn--ghost:hover {
-    border-color: var(--text-muted);
-}
-
-.wizard__error {
+.home__error {
     color: var(--accent-red);
     font-size: 0.85rem;
 }
 
 /* ── Recent duels ───────────────────────────────────────────────────── */
-.wizard__recent {
+.home__recent {
     margin-top: 2rem;
 }
 
-.wizard__recent-head {
+.home__recent-head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     margin-bottom: 0.75rem;
 }
 
-.wizard__recent-title {
+.home__recent-title {
     margin: 0;
     font-size: 0.78rem;
     font-weight: 700;
@@ -512,17 +463,17 @@
     letter-spacing: 0.1em;
 }
 
-.wizard__recent-link {
+.home__recent-link {
     color: var(--text-muted);
     font-size: 0.8rem;
     text-decoration: none;
 }
 
-.wizard__recent-link:hover {
+.home__recent-link:hover {
     color: var(--text);
 }
 
-.wizard__recent-list {
+.home__recent-list {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -531,7 +482,7 @@
     gap: 0.4rem;
 }
 
-.wizard__recent-item {
+.home__recent-item {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -546,15 +497,15 @@
     transition: border-color var(--transition-fast);
 }
 
-.wizard__recent-item:hover {
+.home__recent-item:hover {
     border-color: var(--text-muted);
 }
 
-.wizard__recent-item--pending {
+.home__recent-item--pending {
     border-left: 3px solid rgba(251, 191, 36, 0.7);
 }
 
-.wizard__recent-prompt {
+.home__recent-prompt {
     font-size: 0.85rem;
     color: var(--text);
     overflow: hidden;
@@ -564,30 +515,30 @@
     min-width: 0;
 }
 
-.wizard__recent-meta {
+.home__recent-meta {
     font-size: 0.78rem;
     color: var(--text-muted);
     white-space: nowrap;
 }
 
-.wizard__recent-meta em {
+.home__recent-meta em {
     font-style: normal;
     color: var(--text-dim);
     margin: 0 0.25rem;
 }
 
-.wizard__recent-winner {
+.home__recent-winner {
     color: var(--accent-green);
     font-weight: 600;
 }
 
-.wizard__recent-pending {
+.home__recent-pending {
     color: var(--accent-yellow);
     font-weight: 600;
 }
 
 /* ── Onboarding example (Finding #4) ────────────────────────────────── */
-.wizard__onboard {
+.home__onboard {
     margin-top: 2rem;
     padding: 1.25rem;
     border: 1px dashed var(--border);
@@ -596,21 +547,21 @@
     text-align: center;
 }
 
-.wizard__onboard-title {
+.home__onboard-title {
     margin: 0 0 0.4rem;
     font-size: 1rem;
     font-weight: 600;
     color: var(--text);
 }
 
-.wizard__onboard-hint {
+.home__onboard-hint {
     margin: 0 0 0.85rem;
     font-size: 0.85rem;
     color: var(--text-muted);
 }
 
 /* ── Sticky CTA bar (Finding #7) ────────────────────────────────────── */
-.wizard__sticky-cta {
+.home__sticky-cta {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -627,7 +578,7 @@
     animation: slideUp 0.3s ease-out;
 }
 
-.wizard__sticky-text {
+.home__sticky-text {
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--text);
@@ -637,13 +588,13 @@
 }
 
 @media (max-width: 520px) {
-    .wizard__sticky-text {
+    .home__sticky-text {
         font-size: 0.78rem;
     }
 }
 /* Loading placeholders in the model grid. Only the stagger is dynamic — the markup passes
    it as --stagger; everything else lives here rather than in an inline style. */
-.wizard__skeleton {
+.home__skeleton {
     height: 6.5rem;
     border-radius: var(--radius-md);
     animation-delay: var(--stagger, 0ms);

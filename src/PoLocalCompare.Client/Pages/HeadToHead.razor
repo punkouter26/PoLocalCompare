@@ -88,11 +88,11 @@
         @if (_detail.A.EloSparkline is { Length: > 1 } || _detail.B.EloSparkline is { Length: > 1 })
         {
             <div class="h2h__sparklines">
-                <div class="h2h__sparkline-col">
+                <div>
                     <span class="h2h__sparkline-label">@_detail.A.DisplayName — ELO trend</span>
                     <EloSparkline Values="_detail.A.EloSparkline" />
                 </div>
-                <div class="h2h__sparkline-col">
+                <div>
                     <span class="h2h__sparkline-label">@_detail.B.DisplayName — ELO trend</span>
                     <EloSparkline Values="_detail.B.EloSparkline" />
                 </div>
@@ -122,9 +122,9 @@
         }
 
         <div class="h2h__actions">
-            <a class="h2h__btn h2h__btn--primary" href="@RematchHref">⚔ Run a fresh duel</a>
-            <button type="button" class="h2h__btn" @onclick="ShareAsync">🖼 Share this record</button>
-            <a class="h2h__btn" href="/leaderboard">← Leaderboard</a>
+            <a class="po-btn po-btn--success" href="@RematchHref">⚔ Run a fresh duel</a>
+            <button type="button" class="po-btn" @onclick="ShareAsync">🖼 Share this record</button>
+            <a class="po-btn" href="/leaderboard">← Leaderboard</a>
         </div>
     }
 </div>

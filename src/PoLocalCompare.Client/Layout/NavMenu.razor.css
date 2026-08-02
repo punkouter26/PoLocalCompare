@@ -1,6 +1,9 @@
-/* ── Top horizontal navbar — portrait/phone-first ─────────────────────────── */
-.topnav {
-    background-color: var(--surface-base) !important;
+/* ── Top horizontal navbar — portrait/phone-first ───────────────────────────
+   Everything here is namespaced .navmenu__. The markup used to carry Bootstrap
+   class names (navbar-*, container-fluid, nav-item, btn-sm, btn-outline-*)
+   without Bootstrap being loaded, so several of them styled nothing at all. */
+.navmenu {
+    background-color: var(--surface-base);
     border-bottom: 1px solid var(--border);
     padding: 0 1rem;
     min-height: 3.5rem;
@@ -14,7 +17,7 @@
     box-sizing: border-box;
 }
 
-.container-fluid {
+.navmenu__inner {
     width: 100%;
     max-width: 1400px;
     margin: 0 auto;
@@ -25,23 +28,23 @@
     gap: 0.75rem;
 }
 
-.navbar-brand {
+.navmenu__brand {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     min-height: 44px;           /* ≥44px touch target */
     text-decoration: none;
-    color: var(--text) !important;
+    color: var(--text);
     font-weight: 700;
     font-size: 1.1rem;
     letter-spacing: -0.02em;
 }
 
-.navbar-brand:hover {
-    color: var(--accent-green) !important;
+.navmenu__brand:hover {
+    color: var(--accent-green);
 }
 
-.brand-mark {
+.navmenu__brand-mark {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -56,11 +59,9 @@
     letter-spacing: 0.04em;
 }
 
-.navbar-toggler {
+.navmenu__toggler {
     background-color: var(--surface-2);
-    border-color: var(--border);
-    border-width: 1px;
-    border-style: solid;
+    border: 1px solid var(--border);
     border-radius: 6px;
     width: 2.25rem;
     height: 2.25rem;
@@ -73,7 +74,7 @@
 /* Three bars drawn as a gradient. Previously white bars flipped by filter: invert(1),
    which resolved to black — visible on a light nav, invisible on a dark one. Painting
    them in --text drops the filter and works in both. */
-.navbar-toggler-icon {
+.navmenu__toggler-icon {
     display: inline-block;
     width: 1rem;
     height: 1rem;
@@ -85,14 +86,14 @@
         var(--text) 82%, var(--text) 100%);
 }
 
-.navbar-collapse {
+.navmenu__collapse {
     display: flex;
     align-items: center;
     min-width: 0;
     flex: 1 1 auto;
 }
 
-.navbar-nav {
+.navmenu__links {
     display: flex;
     align-items: center;
     gap: 0.375rem;
@@ -103,8 +104,10 @@
     min-width: 0;
 }
 
-/* ── Nav links ─────────────────────────────────────────────────────────────── */
-::deep .nav-link {
+/* ── Nav links ─────────────────────────────────────────────────────────────
+   ::deep because NavLink renders the anchor itself, outside this component's
+   scope id. The .active class is appended by NavLink, not by our markup. */
+::deep .navmenu__link {
     display: flex;
     align-items: center;
     gap: 0.25rem;
@@ -116,60 +119,57 @@
     transition: color 0.15s ease, background 0.15s ease;
 }
 
-::deep .nav-link:hover {
+::deep .navmenu__link:hover {
     color: var(--text);
     background: var(--surface-1);
 }
 
-::deep .nav-link.active {
+::deep .navmenu__link.active {
     color: var(--accent-green);
     background: rgba(34, 197, 94, 0.1);
     font-weight: 600;
 }
 
-.nav-text {
+.navmenu__link-text {
     font-size: 0.88rem;
 }
 
 /* ── Mobile collapsed menu ──────────────────────────────────────────────────── */
 @media (max-width: 767.98px) {
-    .container-fluid {
+    .navmenu__inner {
         flex-wrap: wrap;
         align-items: center;
     }
 
-    .navbar-toggler {
+    .navmenu__toggler {
         display: inline-flex;
     }
 
-    .navbar-collapse {
+    .navmenu__collapse {
         display: none;
         width: 100%;
         order: 3;
+        border-top: 1px solid var(--border);
+        padding: 0.5rem 0;
     }
 
-    .navbar-collapse.nav-open {
+    .navmenu__collapse--open {
         display: block;
     }
 
-    .navbar-nav {
+    .navmenu__links {
         width: 100%;
         flex-direction: column;
         align-items: stretch;
         gap: 0;
     }
 
-    .navbar-collapse {
-        border-top: 1px solid var(--border);
-        padding: 0.5rem 0;
-    }
-
-    ::deep .nav-link {
+    ::deep .navmenu__link {
         padding: 0.75rem 0.5rem;
         border-radius: 0;
     }
 
-    .nav-auth {
+    .navmenu__auth {
         width: 100%;
         justify-content: flex-start;
         padding: 0.5rem 0;
@@ -177,7 +177,7 @@
 }
 
 /* ── USING MOCK DATA banner (standards §7) ─────────────────────────────────── */
-.mock-data-banner {
+.navmenu__mock-banner {
     background: var(--accent-red);
     /* Literal white, not --text: the fill is always red, so themed text would go
        near-black on red in the light palette. */
@@ -191,14 +191,16 @@
     display: block;
 }
 
-/* ── Auth / GUEST identity (standards §6) ──────────────────────────────────── */.nav-auth {
+/* ── Auth / GUEST identity (standards §6) ──────────────────────────────────── */
+.navmenu__auth {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
-.nav-user-badge {
+.navmenu__user-badge {
     font-size: 0.78rem;
     font-weight: 600;
     padding: 0.25rem 0.6rem;
@@ -210,96 +212,56 @@
     text-overflow: ellipsis;
 }
 
-.nav-user-badge--guest {
+.navmenu__user-badge--guest {
     background: rgba(234, 179, 8, 0.15);
     color: var(--accent-yellow);
     border: 1px solid rgba(234, 179, 8, 0.4);
 }
 
-.nav-user-badge--oauth {
+.navmenu__user-badge--oauth {
     background: rgba(34, 197, 94, 0.12);
     color: var(--accent-green);
     border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
-.nav-guest-btn {
-    font-size: 0.78rem;
-    padding: 0.25rem 0.75rem;
-    white-space: nowrap;
-}
-
-.btn-ms-nav {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.78rem;
-    padding: 0.25rem 0.75rem;
-    white-space: nowrap;
-    /* Microsoft brand button: fixed white field with near-black text in BOTH themes.
-       Deliberately not tokenised — the mark is trademarked artwork, not app chrome. */
+/* Microsoft brand button: fixed white field with near-black text in BOTH themes.
+   Deliberately NOT tokenised and deliberately not a .po-btn modifier — the mark is
+   trademarked artwork with a mandated presentation, not app chrome. It still takes
+   .po-btn for geometry so it lines up with the buttons beside it. */
+.navmenu__ms-btn {
     background: #ffffff;
     color: #1a1a1a;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
+    border-color: #ffffff;
+    white-space: nowrap;
 }
 
-.btn-ms-nav:hover {
+.navmenu__ms-btn:hover:not(:disabled) {
     background: #f0f0f0;
+    border-color: #f0f0f0;
+    color: #1a1a1a;
 }
 
 /* Decorative Microsoft mark inside the sign-in button (aria-hidden). */
-.nav-ms-logo {
-    margin-right: 0.35rem;
+.navmenu__ms-logo {
     vertical-align: middle;
 }
 
-.nav-logout {
-    font-size: 0.75rem;
-    padding: 0.2rem 0.55rem;
-}
-
 /* ── Theme toggle (System → Light → Dark) ──────────────────────────────────── */
-.nav-theme-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    /* SC 2.5.8 requires a 24×24 minimum target. */
-    min-width: 24px;
-    min-height: 24px;
-    padding: 0.2rem 0.55rem;
-    font-size: 0.75rem;
-    line-height: 1;
-    color: var(--text-muted);
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.nav-theme-toggle:hover {
-    color: var(--text);
-    border-color: var(--border-strong);
-    background: var(--surface-2);
-}
-
-.nav-theme-toggle__glyph {
+.navmenu__theme-glyph {
     font-size: 0.95rem;
     line-height: 1;
 }
 
 @media (max-width: 575px) {
     /* Keep the glyph as the affordance on narrow screens; the label is redundant with aria-label. */
-    .nav-theme-toggle__label {
+    .navmenu__theme-label {
         display: none;
     }
 }
 
 /* ── Live activity ticker ─────────────────────────────────────────────────── */
 
-.nav-ticker {
+.navmenu__ticker {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -308,7 +270,7 @@
     font-size: 0.72rem;
 }
 
-.nav-ticker__pill {
+.navmenu__ticker-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -320,46 +282,46 @@
     border: 1px solid transparent;
 }
 
-.nav-ticker__pill--running {
+.navmenu__ticker-pill--running {
     color: var(--accent-cyan);
     border-color: color-mix(in srgb, var(--accent-cyan) 45%, transparent);
     background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
 }
 
-.nav-ticker__pill--pending {
+.navmenu__ticker-pill--pending {
     color: var(--accent-yellow);
     border-color: color-mix(in srgb, var(--accent-yellow) 45%, transparent);
     background: color-mix(in srgb, var(--accent-yellow) 12%, transparent);
 }
 
-.nav-ticker__pill--pending:hover {
+.navmenu__ticker-pill--pending:hover {
     background: color-mix(in srgb, var(--accent-yellow) 22%, transparent);
     text-decoration: none;
 }
 
-.nav-ticker__pill--pending:focus-visible {
+.navmenu__ticker-pill--pending:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
 }
 
 /* Motion is the point — it says "right now" — but it is paired with the count, so a user
    with reduced motion loses nothing but the animation. */
-.nav-ticker__pulse {
+.navmenu__ticker-pulse {
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 50%;
     background: currentColor;
-    animation: nav-ticker-pulse 1.4s ease-in-out infinite;
+    animation: navmenu-ticker-pulse 1.4s ease-in-out infinite;
 }
 
-@keyframes nav-ticker-pulse {
+@keyframes navmenu-ticker-pulse {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.25; }
 }
 
 /* The newest event. Truncates rather than wraps: the nav bar has a fixed height and a long
    model name must not push the auth controls onto a second row. */
-.nav-ticker__latest {
+.navmenu__ticker-latest {
     color: var(--text-muted);
     text-decoration: none;
     white-space: nowrap;
@@ -368,12 +330,12 @@
     max-width: 22ch;
 }
 
-.nav-ticker__latest:hover {
+.navmenu__ticker-latest:hover {
     color: var(--text);
     text-decoration: underline;
 }
 
-.nav-ticker__latest:focus-visible {
+.navmenu__ticker-latest:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
     border-radius: 4px;
@@ -382,18 +344,18 @@
 /* Below the nav breakpoint the ticker sits inside the collapsed menu, where horizontal space
    is no longer scarce but vertical space is — so it stays on one row and drops the excerpt. */
 @media (max-width: 767px) {
-    .nav-ticker {
+    .navmenu__ticker {
         margin: 0.4rem 0 0;
         flex-wrap: wrap;
     }
 
-    .nav-ticker__latest {
+    .navmenu__ticker-latest {
         max-width: 100%;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .nav-ticker__pulse {
+    .navmenu__ticker-pulse {
         animation: none;
     }
 }

@@ -59,7 +59,7 @@
                 <h2>🏁 No competitive history yet</h2>
                 <p>Run your first duel to generate ELO trends, win rates, and green-score comparisons.</p>
                 <div class="leaderboard__empty-actions">
-                    <a href="/" class="leaderboard__cta">⚔ Compare two models</a>
+                    <a href="/" class="po-btn po-btn--ghost">⚔ Compare two models</a>
                 </div>
             </div>
         }
@@ -91,26 +91,26 @@
                             <td>
                                 @if (dr == 1)
                                 {
-                                    <span class="lb__rank lb__rank--gold" title="#1 Ranked">&#x1F947;</span>
+                                    <span class="leaderboard__rank leaderboard__rank--gold" title="#1 Ranked">&#x1F947;</span>
                                 }
                                 else if (dr == 2)
                                 {
-                                    <span class="lb__rank lb__rank--silver" title="#2 Ranked">&#x1F948;</span>
+                                    <span class="leaderboard__rank leaderboard__rank--silver" title="#2 Ranked">&#x1F948;</span>
                                 }
                                 else if (dr == 3)
                                 {
-                                    <span class="lb__rank lb__rank--bronze" title="#3 Ranked">&#x1F949;</span>
+                                    <span class="leaderboard__rank leaderboard__rank--bronze" title="#3 Ranked">&#x1F949;</span>
                                 }
                                 else
                                 {
-                                    <span class="lb__rank">@dr</span>
+                                    <span class="leaderboard__rank">@dr</span>
                                 }
                             </td>
                             <td>
                                 @entry.DisplayName
                                 @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
                                 {
-                                    <span class="lb__type-badge lb__type-badge--@ModelTypeGroup.CssModifier(mtype)">
+                                    <span class="leaderboard__type-badge leaderboard__type-badge--@ModelTypeGroup.CssModifier(mtype)">
                                         @ModelTypeGroup.ShortLabel(mtype)
                                     </span>
                                 }

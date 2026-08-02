@@ -25,7 +25,7 @@ public sealed class PromptHistoryService(IJSRuntime js)
     private const string StorageKey = "polocalcompare.recentPrompts";
     private const int MaxEntries = 10;
 
-    /// <summary>Ignore trivial fragments — the wizard binds on every keystroke.</summary>
+    /// <summary>Ignore trivial fragments — the Compare page binds on every keystroke.</summary>
     private const int MinLength = 10;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()

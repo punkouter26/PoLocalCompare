@@ -195,7 +195,7 @@
     gap: 0.4rem;
 }
 
-/* Cursor affordance. Dimming is owned by the caller's .wizard__card-disabled wrapper,
+/* Cursor affordance. Dimming is owned by the caller's .home__card-disabled wrapper,
    so it is deliberately not repeated here — the two would compound into an
    unreadable opacity. */
 .model-card {

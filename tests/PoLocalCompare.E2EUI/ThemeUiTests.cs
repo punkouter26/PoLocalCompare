@@ -46,7 +46,7 @@ public sealed class ThemeUiTests : UiTestBase
 
         await OpenNavIfCollapsedAsync(page);
 
-        var toggle = page.Locator(".nav-theme-toggle");
+        var toggle = page.Locator(".navmenu__theme-toggle");
         await Assertions.Expect(toggle).ToBeVisibleAsync();
         await Assertions.Expect(toggle).ToHaveAttributeAsync("aria-label", new System.Text.RegularExpressions.Regex("Theme:"));
     }
@@ -60,7 +60,7 @@ public sealed class ThemeUiTests : UiTestBase
 
         await OpenNavIfCollapsedAsync(page);
 
-        var box = await page.Locator(".nav-theme-toggle").BoundingBoxAsync();
+        var box = await page.Locator(".navmenu__theme-toggle").BoundingBoxAsync();
 
         Assert.NotNull(box);
         Assert.True(box!.Width >= 24, $"Toggle width was {box.Width}.");
@@ -76,7 +76,7 @@ public sealed class ThemeUiTests : UiTestBase
         var page = await SignedInPageAsync(width, height, colorScheme: ColorScheme.Dark);
 
         await OpenNavIfCollapsedAsync(page);
-        await page.Locator(".nav-theme-toggle").ClickAsync();   // System → Light
+        await page.Locator(".navmenu__theme-toggle").ClickAsync();   // System → Light
 
         await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "light");
         Assert.Equal("rgb(247, 248, 251)", await BodyBackgroundAsync(page));
@@ -89,8 +89,8 @@ public sealed class ThemeUiTests : UiTestBase
         var page = await SignedInPageAsync(width, height, colorScheme: ColorScheme.Light);
 
         await OpenNavIfCollapsedAsync(page);
-        await page.Locator(".nav-theme-toggle").ClickAsync();   // System → Light
-        await page.Locator(".nav-theme-toggle").ClickAsync();   // Light  → Dark
+        await page.Locator(".navmenu__theme-toggle").ClickAsync();   // System → Light
+        await page.Locator(".navmenu__theme-toggle").ClickAsync();   // Light  → Dark
 
         await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
         Assert.Equal("rgb(0, 0, 0)", await BodyBackgroundAsync(page));
@@ -103,7 +103,7 @@ public sealed class ThemeUiTests : UiTestBase
         var page = await SignedInPageAsync(width, height, colorScheme: ColorScheme.Dark);
         await OpenNavIfCollapsedAsync(page);
 
-        var toggle = page.Locator(".nav-theme-toggle");
+        var toggle = page.Locator(".navmenu__theme-toggle");
 
         await toggle.ClickAsync();  // Light
         await toggle.ClickAsync();  // Dark
@@ -120,7 +120,7 @@ public sealed class ThemeUiTests : UiTestBase
         var page = await SignedInPageAsync(width, height, colorScheme: ColorScheme.Dark);
 
         await OpenNavIfCollapsedAsync(page);
-        await page.Locator(".nav-theme-toggle").ClickAsync();   // System → Light
+        await page.Locator(".navmenu__theme-toggle").ClickAsync();   // System → Light
         await page.ReloadAsync();
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
@@ -138,7 +138,7 @@ public sealed class ThemeUiTests : UiTestBase
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
         await OpenNavIfCollapsedAsync(page);
-        await page.Locator(".nav-theme-toggle").ClickAsync();   // store an explicit Light
+        await page.Locator(".navmenu__theme-toggle").ClickAsync();   // store an explicit Light
 
         await page.GotoAsync("/leaderboard");
         // DOMContentLoaded, not NetworkIdle: the assertion is that the attribute is present
@@ -163,7 +163,7 @@ public sealed class ThemeUiTests : UiTestBase
         var darkColor = await header.EvaluateAsync<string>("el => getComputedStyle(el).color");
 
         await OpenNavIfCollapsedAsync(page);
-        await page.Locator(".nav-theme-toggle").ClickAsync();   // System → Light
+        await page.Locator(".navmenu__theme-toggle").ClickAsync();   // System → Light
 
         await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "light");
         var lightColor = await header.EvaluateAsync<string>("el => getComputedStyle(el).color");

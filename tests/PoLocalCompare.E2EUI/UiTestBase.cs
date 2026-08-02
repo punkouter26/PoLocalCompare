@@ -59,17 +59,17 @@ public abstract class UiTestBase : IAsyncLifetime
 
     /// <summary>
     /// Opens the collapsed nav drawer on narrow viewports. Below 768px the session controls and
-    /// the theme toggle live inside <c>.navbar-collapse</c>, which is display:none until the
+    /// the theme toggle live inside <c>.navmenu__collapse</c>, which is display:none until the
     /// hamburger is pressed — so a mobile test has to press it, exactly as a person would.
     /// A no-op on desktop, where the bar is always expanded.
     /// </summary>
     protected static async Task OpenNavIfCollapsedAsync(IPage page)
     {
-        var toggler = page.Locator(".navbar-toggler");
+        var toggler = page.Locator(".navmenu__toggler");
         if (await toggler.IsVisibleAsync())
         {
             await toggler.ClickAsync();
-            await page.Locator(".navbar-collapse.nav-open").WaitForAsync(new() { Timeout = 5_000 });
+            await page.Locator(".navmenu__collapse--open").WaitForAsync(new() { Timeout = 5_000 });
         }
     }
 

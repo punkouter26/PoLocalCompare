@@ -8,7 +8,7 @@ using PoLocalCompare.Shared.Enums;
 namespace PoLocalCompare.Api.Features.Models;
 
 /// <summary>
-/// Answers "can this model actually run right now?" per registered model, so the compare wizard
+/// Answers "can this model actually run right now?" per registered model, so the Compare page
 /// only offers pairings that will not fail on submit.
 /// </summary>
 /// <remarks>
