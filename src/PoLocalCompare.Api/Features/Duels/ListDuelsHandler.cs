@@ -8,9 +8,9 @@ public sealed class ListDuelsHandler(
     IModelRepository modelRepository,
     IDuelResultRepository duelResultRepository)
 {
-    public async Task<IReadOnlyList<DuelSummaryDto>> HandleAsync(ListDuelsQuery query)
+    public async Task<IReadOnlyList<DuelSummaryDto>> HandleAsync(int limit = 20, string? beforeMonth = null)
     {
-        var duels = (await duelRepository.ListAsync(query.Limit, query.BeforeMonth)).ToList();
+        var duels = (await duelRepository.ListAsync(limit, beforeMonth)).ToList();
 
         // The roster is small and every page re-references the same handful of models, so one
         // GetAllAsync beats two GetByIdAsync per duel. Results live in per-duel partitions and

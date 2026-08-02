@@ -81,7 +81,6 @@ public static class InfrastructureServiceExtensions
         services.AddKeyedTransient<IRemoteInferenceProxy>("LocalService", (sp, _) => sp.GetRequiredService<OllamaInferenceProxy>());
 
         // Lab report renderer
-        services.AddScoped<ILabReportRenderer, HtmlLabReportRenderer>();
 
         // Key Vault
         services.AddKeyVaultSecrets(configuration);

@@ -4,9 +4,14 @@ using System.Text.RegularExpressions;
 
 namespace PoLocalCompare.Api.Features.Archive;
 
-public sealed class HtmlLabReportRenderer : ILabReportRenderer
+/// <summary>
+/// Renders a self-contained HTML Lab Report for a completed duel. Static: the body is a pure
+/// string transform with no state and no dependencies, and it had exactly one implementation
+/// and no test double behind the interface it used to sit behind.
+/// </summary>
+public static class HtmlLabReportRenderer
 {
-    public Task<string> RenderAsync(Duel duel, IEnumerable<DuelResult> results, IEnumerable<EloRecord> eloHistory)
+    public static string Render(Duel duel, IEnumerable<DuelResult> results, IEnumerable<EloRecord> eloHistory)
     {
         var resultList = results.ToList();
         var eloList = eloHistory.ToList();
@@ -130,7 +135,7 @@ public sealed class HtmlLabReportRenderer : ILabReportRenderer
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
 
-        return Task.FromResult(sb.ToString());
+        return sb.ToString();
     }
 
     private static void AppendTelemetryRow(StringBuilder sb, string metric, string left, string right)

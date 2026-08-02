@@ -15,6 +15,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetHeadToHeadHandler>();
         services.AddScoped<ListDuelsHandler>();
         services.AddScoped<ExportLabReportHandler>();
+        services.AddScoped<GetModelAvailabilityHandler>();
+        services.AddScoped<DownloadModelHandler>();
+        services.AddScoped<GetOllamaGpuStatusHandler>();
+        services.AddScoped<ListOllamaModelsHandler>();
+        services.AddScoped<BenchmarkOllamaModelHandler>();
         services.AddSingleton<DuelExecutionService>();
         services.AddScoped<AutoJudge>();
         services.AddScoped<LobbyNotifier>();

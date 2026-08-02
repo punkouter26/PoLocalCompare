@@ -23,12 +23,12 @@ public sealed class GetDuelHandler
         _autoJudgeOptions = autoJudgeOptions.Value;
     }
 
-    public async Task<DuelDto?> HandleAsync(GetDuelQuery query)
+    public async Task<DuelDto?> HandleAsync(DuelId duelId)
     {
-        var duel = await _duelRepository.GetByIdAsync(query.DuelId);
+        var duel = await _duelRepository.GetByIdAsync(duelId);
         if (duel is null) return null;
 
-        var results = await _duelResultRepository.GetByDuelIdAsync(query.DuelId);
+        var results = await _duelResultRepository.GetByDuelIdAsync(duelId);
 
         var resultDtos = new List<DuelResultDto>();
         foreach (var r in results)

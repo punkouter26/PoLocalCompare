@@ -348,6 +348,7 @@ try
     // ─── API endpoints ────────────────────────────────────────────────────────
     app.MapModelsEndpoints();
     app.MapDuelsEndpoints();
+    app.MapArchiveEndpoints();
     app.MapLeaderboardEndpoints();
     app.MapOllamaEndpoints();
 

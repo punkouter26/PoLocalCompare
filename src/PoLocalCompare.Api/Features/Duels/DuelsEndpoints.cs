@@ -70,7 +70,7 @@ public static class DuelsEndpoints
             DuelId duelId,
             [FromServices] GetDuelHandler handler) =>
         {
-            var dto = await handler.HandleAsync(new GetDuelQuery(duelId));
+            var dto = await handler.HandleAsync(duelId);
             return dto is null ? Results.NotFound() : Results.Ok(dto);
         })
         .WithName("GetDuel")
@@ -181,7 +181,7 @@ public static class DuelsEndpoints
                     ["before"] = ["Must be a yyyyMM month stamp, e.g. 202608."]
                 });
 
-            var results = await handler.HandleAsync(new ListDuelsQuery(clampedLimit, before));
+            var results = await handler.HandleAsync(clampedLimit, before);
             return Results.Ok(results);
         })
         .WithName("ListDuels")
@@ -203,28 +203,6 @@ public static class DuelsEndpoints
         .WithName("GetDemoPlan")
         .WithSummary("Returns the pairings and prompts for a self-running demo.")
         .Produces<DemoPlanDto>(StatusCodes.Status200OK);
-
-        // T081 — GET /api/duels/{duelId}/report (Lab Report export)
-        group.MapGet("/{duelId}/report", async (
-            DuelId duelId,
-            HttpContext httpContext,
-            [FromServices] ExportLabReportHandler handler) =>
-        {
-            var html = await handler.HandleAsync(new ExportLabReportCommand(duelId));
-            if (html is null)
-                return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
-
-            httpContext.Response.Headers["Content-Disposition"] = $"attachment; filename=\"lab-report-{duelId}.html\"";
-            return Results.Content(
-                html,
-                contentType: "text/html",
-                contentEncoding: System.Text.Encoding.UTF8,
-                statusCode: StatusCodes.Status200OK);
-        })
-        .WithName("ExportLabReport")
-        .WithSummary("Exports a self-contained HTML Lab Report for the specified duel.")
-        .Produces<string>(StatusCodes.Status200OK, contentType: "text/html")
-        .Produces(StatusCodes.Status404NotFound);
 
         return app;
     }
