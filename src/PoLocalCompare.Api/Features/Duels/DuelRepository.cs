@@ -123,6 +123,8 @@ public sealed class DuelRepository : IDuelRepository
             ["PromptFull"] = duel.PromptFull,
             ["LeftModelId"] = duel.LeftModelId.Value,
             ["RightModelId"] = duel.RightModelId.Value,
+            ["LeftModelName"] = duel.LeftModelName,
+            ["RightModelName"] = duel.RightModelName,
             ["StartedAt"] = duel.StartedAt,
             ["CompletedAt"] = duel.CompletedAt,
             ["Verdict"] = duel.Verdict.ToString(),
@@ -149,6 +151,10 @@ public sealed class DuelRepository : IDuelRepository
             PromptFull = entity.GetString("PromptFull") ?? string.Empty,
             LeftModelId = ModelId.FromOrDefault(entity.GetString("LeftModelId")),
             RightModelId = ModelId.FromOrDefault(entity.GetString("RightModelId")),
+            // Null on rows written before the snapshot existed; readers fall back to the
+            // live catalog and then to a neutral label, so old rows are no worse than before.
+            LeftModelName = entity.GetString("LeftModelName"),
+            RightModelName = entity.GetString("RightModelName"),
             StartedAt = entity.GetDateTimeOffset("StartedAt") ?? DateTimeOffset.MinValue,
             CompletedAt = entity.GetDateTimeOffset("CompletedAt"),
             Verdict = Enum.TryParse<DuelVerdict>(entity.GetString("Verdict"), out var v) ? v : DuelVerdict.Pending,

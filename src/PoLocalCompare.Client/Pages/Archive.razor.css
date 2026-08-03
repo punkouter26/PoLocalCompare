@@ -90,13 +90,6 @@
     border: 1px solid var(--border-strong);
 }
 
-.archive__expand-icon {
-    display: inline-block;
-    font-size: 1rem;
-    color: var(--text-muted);
-    line-height: 1;
-}
-
 .archive__model {
     color: var(--text);
 }

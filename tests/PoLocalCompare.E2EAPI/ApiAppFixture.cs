@@ -48,19 +48,25 @@ public sealed class ApiAppFixture : IAsyncLifetime
                     l.AddFilter("Testcontainers", LogLevel.Warning);
                 });
 
+                // Keyed to match DuelExecutionService's GetRequiredKeyedService lookup, and
+                // built per call from the real duel/model so the stored results belong to the
+                // duel that produced them. As a plain AddScoped this mock was never resolved,
+                // so every duel here ran the real Foundry proxy and failed.
                 var mockProxy = new Mock<IRemoteInferenceProxy>();
                 mockProxy
                     .Setup(p => p.RunInferenceAsync(
                         It.IsAny<Model>(), It.IsAny<DuelId>(), It.IsAny<string>(),
                         It.IsAny<Func<int, long, HtmlStreamStats?, Task>>(), It.IsAny<CancellationToken>()))
-                    .ReturnsAsync(new DuelResult(DuelId.From("e2e-duel"), ModelId.From("e2e-model"))
-                    {
-                        HtmlOutputRaw = "<html><body>E2E mock</body></html>",
-                        TokenCount = 21,
-                        TotalDurationMs = 250,
-                        IsFailure = false,
-                    });
-                services.AddScoped(_ => mockProxy.Object);
+                    .ReturnsAsync((Model model, DuelId duelId, string _, Func<int, long, HtmlStreamStats?, Task> _, CancellationToken _) =>
+                        new DuelResult(duelId, model.ModelId)
+                        {
+                            HtmlOutputRaw = "<html><body>E2E mock</body></html>",
+                            TokenCount = 21,
+                            TotalDurationMs = 250,
+                            IsFailure = false,
+                        });
+                services.AddKeyedScoped<IRemoteInferenceProxy>("Remote", (_, _) => mockProxy.Object);
+                services.AddKeyedScoped<IRemoteInferenceProxy>("LocalService", (_, _) => mockProxy.Object);
             });
         });
     }

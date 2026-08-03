@@ -1,16 +1,17 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
 
+@* Speed, cost and the green figures are what a duel is judged on; the shape-of-the-output
+   numbers are diagnostics and wait behind a disclosure. A failed result renders nothing at
+   all — every metric here reads zero on failure, and the Arena's failure card is the one
+   place that explains why. *@
 <div class="telemetry-hud">
-    @if (Result is not null)
+    @if (Result is null)
     {
-        @if (Result.IsFailure)
-        {
-            <div class="telemetry-hud__failure-badge">
-                ❌ FAILED — @(FirstLine(Result.FailureReason) ?? "Unknown error")
-            </div>
-        }
-
+        <div class="telemetry-hud__pending">Awaiting results…</div>
+    }
+    else if (!Result.IsFailure)
+    {
         <div class="telemetry-hud__grid">
             <div class="telemetry-hud__item">
                 <span class="telemetry-hud__label">Token Velocity</span>
@@ -20,32 +21,12 @@
                 <span class="telemetry-hud__label">Total Time</span>
                 <span class="telemetry-hud__value">@FormatMs(Result.TotalDurationMs)</span>
             </div>
-            <div class="telemetry-hud__item">
-                <span class="telemetry-hud__label">Warm-up</span>
-                <span class="telemetry-hud__value">@FormatMs(Result.WarmUpDurationMs)</span>
-            </div>
-            <div class="telemetry-hud__item">
-                <span class="telemetry-hud__label">Tokens</span>
-                <span class="telemetry-hud__value">@Result.TokenCount.ToString("N0")</span>
-            </div>
-            <div class="telemetry-hud__item">
-                <span class="telemetry-hud__label">Output Size</span>
-                <span class="telemetry-hud__value">@FormatBytes(Result.HtmlOutputSizeBytes)</span>
-            </div>
-            <div class="telemetry-hud__item">
-                <span class="telemetry-hud__label">Char Density</span>
-                <span class="telemetry-hud__value">@Result.CharacterDensityRatio.ToString("P1")</span>
-            </div>
 
-            @if (Result.EnergyWh.HasValue)
+            @if (Result.ApiCostUsd.HasValue)
             {
                 <div class="telemetry-hud__item">
-                    <span class="telemetry-hud__label">Energy</span>
-                    <span class="telemetry-hud__value telemetry-hud__value--green">@Result.EnergyWh.Value.ToString("F4") Wh</span>
-                </div>
-                <div class="telemetry-hud__item">
-                    <span class="telemetry-hud__label">Energy Cost</span>
-                    <span class="telemetry-hud__value">$@Result.EnergyCostUsd?.ToString("F6")</span>
+                    <span class="telemetry-hud__label">API Cost</span>
+                    <span class="telemetry-hud__value telemetry-hud__value--yellow">$@Result.ApiCostUsd.Value.ToString("F6")</span>
                 </div>
             }
 
@@ -56,26 +37,46 @@
                     <span class="telemetry-hud__value telemetry-hud__value--green">@Result.GreenScore.Value.ToString("F1") tok/Wh</span>
                 </div>
             }
-
-            @if (Result.ApiCostUsd.HasValue)
-            {
-                <div class="telemetry-hud__item">
-                    <span class="telemetry-hud__label">API Cost</span>
-                    <span class="telemetry-hud__value telemetry-hud__value--yellow">$@Result.ApiCostUsd.Value.ToString("F6")</span>
-                </div>
-            }
         </div>
-    }
-    else
-    {
-        <div class="telemetry-hud__pending">Awaiting results…</div>
+
+        <details class="telemetry-hud__more">
+            <summary class="telemetry-hud__more-summary">More metrics</summary>
+            <div class="telemetry-hud__grid">
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">Warm-up</span>
+                    <span class="telemetry-hud__value">@FormatMs(Result.WarmUpDurationMs)</span>
+                </div>
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">Tokens</span>
+                    <span class="telemetry-hud__value">@Result.TokenCount.ToString("N0")</span>
+                </div>
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">Output Size</span>
+                    <span class="telemetry-hud__value">@FormatBytes(Result.HtmlOutputSizeBytes)</span>
+                </div>
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">Char Density</span>
+                    <span class="telemetry-hud__value">@Result.CharacterDensityRatio.ToString("P1")</span>
+                </div>
+
+                @if (Result.EnergyWh.HasValue)
+                {
+                    <div class="telemetry-hud__item">
+                        <span class="telemetry-hud__label">Energy</span>
+                        <span class="telemetry-hud__value telemetry-hud__value--green">@Result.EnergyWh.Value.ToString("F4") Wh</span>
+                    </div>
+                    <div class="telemetry-hud__item">
+                        <span class="telemetry-hud__label">Energy Cost</span>
+                        <span class="telemetry-hud__value">$@Result.EnergyCostUsd?.ToString("F6")</span>
+                    </div>
+                }
+            </div>
+        </details>
     }
 </div>
 
 @code {
     [Parameter] public DuelResultDto? Result { get; set; }
-
-    private static string? FirstLine(string? s) => FailureReasonText.FirstLine(s);
 
     private static string FormatMs(long ms)
     {

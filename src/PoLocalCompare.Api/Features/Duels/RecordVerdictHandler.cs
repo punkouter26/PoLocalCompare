@@ -11,6 +11,7 @@ public sealed class RecordVerdictHandler
     private readonly IDuelRepository _duelRepository;
     private readonly IModelRepository _modelRepository;
     private readonly IEloHistoryRepository _eloHistoryRepository;
+    private readonly IDuelResultRepository? _duelResultRepository;
     private readonly HybridCache? _cache;
     private readonly LobbyNotifier? _lobby;
     private readonly double _kFactor;
@@ -26,13 +27,18 @@ public sealed class RecordVerdictHandler
     /// what makes the activity ticker complete: this handler is the only path by which ELO
     /// moves, so a verdict that reaches storage cannot fail to reach the ticker.
     /// </param>
+    /// <param name="duelResultRepository">
+    /// Optional for the same reason as the two above. Supplied under DI, where it enforces the
+    /// no-evidence rule described on <see cref="HandleAsync"/>.
+    /// </param>
     public RecordVerdictHandler(
         IDuelRepository duelRepository,
         IModelRepository modelRepository,
         IEloHistoryRepository eloHistoryRepository,
         double kFactor = 32.0,
         HybridCache? cache = null,
-        LobbyNotifier? lobby = null)
+        LobbyNotifier? lobby = null,
+        IDuelResultRepository? duelResultRepository = null)
     {
         _duelRepository = duelRepository;
         _modelRepository = modelRepository;
@@ -40,6 +46,7 @@ public sealed class RecordVerdictHandler
         _kFactor = kFactor;
         _cache = cache;
         _lobby = lobby;
+        _duelResultRepository = duelResultRepository;
     }
 
     /// <summary>
@@ -93,6 +100,8 @@ public sealed class RecordVerdictHandler
             await _duelRepository.UpdateAsync(duel);
             throw new InvalidOperationException("This duel has expired and cannot accept a verdict.");
         }
+
+        await GuardAgainstNoEvidenceAsync(duel);
 
         var leftModel = await _modelRepository.GetByIdAsync(duel.LeftModelId)
             ?? throw new KeyNotFoundException($"Model '{duel.LeftModelId}' not found.");
@@ -199,5 +208,38 @@ public sealed class RecordVerdictHandler
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Refuses a verdict when both models failed, so ELO cannot move on no evidence.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AutoJudge"/> already stands down in this case, but it is not the only writer:
+    /// the verdict endpoint reaches this handler directly, and the Arena's "both sides failed"
+    /// check was client-side only. A duel with both results failed had therefore been recorded
+    /// as a win with a ±16 ELO swing, which is exactly what this handler being the single gate
+    /// is supposed to prevent.
+    ///
+    /// Deliberately narrow: it fires only when both sides have a stored result AND both are
+    /// failures. A duel with no results yet is a different situation (nothing has run) and is
+    /// left alone, which also keeps fixtures that record a verdict without seeding results
+    /// working.
+    /// </remarks>
+    private async Task GuardAgainstNoEvidenceAsync(Duel duel)
+    {
+        if (_duelResultRepository is null) return;
+
+        var results = await _duelResultRepository.GetByDuelIdAsync(duel.DuelId);
+        var left = results.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
+        var right = results.FirstOrDefault(r => r.ModelId == duel.RightModelId);
+
+        if (left is null || right is null) return;
+
+        if (left.IsFailure && right.IsFailure)
+        {
+            throw new ArgumentException(
+                "Both models failed, so there is nothing to judge. Retry the duel instead.",
+                nameof(duel));
+        }
     }
 }

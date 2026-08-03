@@ -24,8 +24,11 @@ public sealed class HomeUiTests : UiTestBase
         await Assertions.Expect(page.Locator(".home__title")).ToContainTextAsync(
             "Compare two models", new() { Timeout = timeout });
 
-        // Step 3's CTA stays disabled until two models and a prompt are chosen.
-        var compare = page.Locator(".home__panel--cta .home__btn--primary");
+        // The Compare CTA is always visible — it is deliberately the one part of the flow that
+        // is not behind a disclosure — and stays disabled until two models and a prompt exist.
+        // (The old selector looked for .home__btn--primary, a class removed when the per-surface
+        // button classes were folded into .po-btn, so this assertion had stopped running.)
+        var compare = page.Locator(".home__panel--cta .po-btn");
         await Assertions.Expect(compare).ToBeVisibleAsync();
         await Assertions.Expect(compare).ToBeDisabledAsync();
     }

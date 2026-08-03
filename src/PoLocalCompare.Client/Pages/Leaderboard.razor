@@ -17,11 +17,16 @@
         @* aria-pressed carries the active sort to assistive tech; the colour alone would not. *@
         <button type="button" class="po-btn leaderboard__sort-btn @(IsEloSort ? "po-btn--primary" : "")"
                 aria-pressed="@Pressed(IsEloSort)" @onclick="@(() => SetSortAsync("Elo"))">ELO</button>
-        <button type="button" class="po-btn leaderboard__sort-btn @(IsGreenSort ? "po-btn--primary" : "")"
-                aria-pressed="@Pressed(IsGreenSort)"
-                disabled="@(!_entries.Any(e => e.GreenScoreAvg is > 0))"
-                title="@(!_entries.Any(e => e.GreenScoreAvg is > 0) ? "Run local (WebGPU) model duels to unlock Green Score" : "Sort by energy efficiency")"
-                @onclick="@(() => SetSortAsync("GreenScore"))">🌱 Green Score</button>
+        @* Green Score appears only once something has scored. Previously an unpopulated metric
+           cost a permanently disabled sort button, a table column of em-dashes, and a
+           full-width explainer — three pieces of chrome advertising an empty cell. *@
+        @if (HasGreenScores)
+        {
+            <button type="button" class="po-btn leaderboard__sort-btn @(IsGreenSort ? "po-btn--primary" : "")"
+                    aria-pressed="@Pressed(IsGreenSort)"
+                    title="Sort by energy efficiency"
+                    @onclick="@(() => SetSortAsync("GreenScore"))">🌱 Green Score</button>
+        }
         <button type="button" class="po-btn leaderboard__sort-btn @(IsQualitySort ? "po-btn--primary" : "")"
                 aria-pressed="@Pressed(IsQualitySort)"
                 disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
@@ -33,15 +38,14 @@
                 title="Sort by average API cost per duel (cheapest first)"
                 @onclick="@(() => SetSortAsync("Cost"))">💰 Avg $/duel</button>
         <span class="leaderboard__divider" aria-hidden="true">|</span>
-        <button type="button" class="po-btn leaderboard__sort-btn @(_activeOnly ? "po-btn--primary" : "")"
-                aria-pressed="@Pressed(_activeOnly)"
-                title="@(_activeOnly ? "Showing models with duels — click to show all" : "Showing all models — click to hide unplayed")"
-                @onclick="ToggleActiveOnly">@(_activeOnly ? "Active ✓" : "Show All")</button>
+        @* A checkbox, not a button. The button labelled the current state in one position
+           ("Active ✓") and the pending action in the other ("Show All"), so its label never
+           told you what pressing it would do. *@
+        <label class="leaderboard__filter">
+            <input type="checkbox" checked="@_activeOnly" @onchange="ToggleActiveOnly" />
+            Hide models with no duels
+        </label>
     </div>
-    @if (!_entries.Any(e => e.GreenScoreAvg is > 0) && !_loading)
-    {
-        <p class="leaderboard__green-info">🌱 Green Score unlocks after running local (WebGPU) model duels — start one from the <a href="/">Compare page</a>.</p>
-    }
 
     @if (_loading)
     {
@@ -72,10 +76,14 @@
                         <th scope="col">Rank</th>
                         <th scope="col">Model Name</th>
                         <th scope="col">ELO</th>
-                        <th scope="col">Duels</th>
-                        <th scope="col">W/L (Win %)</th>
+                        @* No Duels column: it was the sum of the W/L cell beside it (14/2 → 16),
+                           so the table stated the same number twice. *@
+                        <th scope="col" title="Wins/losses and win rate. The two added together are the model's duel count.">W/L (Win %)</th>
                         <th scope="col" title="0-100 score from automated renderability + structure checks on each model's HTML output. Higher = more polished, self-contained HTML.">&#x1F9EA; Output Quality</th>
-                        <th scope="col" title="Tokens generated per watt-hour. Higher = more energy efficient.">&#x1F331; Green Score</th>
+                        @if (HasGreenScores)
+                        {
+                            <th scope="col" title="Tokens generated per watt-hour. Higher = more energy efficient.">&#x1F331; Green Score</th>
+                        }
                         <th scope="col" title="Average API cost (USD) per duel across every priced result. Free local/Ollama models show &mdash;.">💰 Avg $/duel</th>
                         <th scope="col" title="ELO rating trend over the last 20 duels">ELO Trend</th>
                     </tr>
@@ -116,7 +124,6 @@
                                 }
                             </td>
                             <td>@((int)Math.Round(entry.CurrentElo))</td>
-                            <td>@entry.DuelCount</td>
                             <td>
                                 @{
                                     var losses = Math.Max(entry.DuelCount - entry.WinCount, 0);
@@ -135,16 +142,19 @@
                                     <span class="leaderboard__no-data" title="No scored outputs yet - run a duel to generate one">&#8212;</span>
                                 }
                             </td>
-                            <td>
-                                @if (entry.GreenScoreAvg.HasValue)
-                                {
-                                    <span title="@entry.GreenScoreAvg.Value.ToString("F1") tok/Wh">@entry.GreenScoreAvg.Value.ToString("F1")</span>
-                                }
-                                else
-                                {
-                                    <span class="leaderboard__no-data" title="Run a local model duel to generate this score">&#8212;</span>
-                                }
-                            </td>
+                            @if (HasGreenScores)
+                            {
+                                <td>
+                                    @if (entry.GreenScoreAvg.HasValue)
+                                    {
+                                        <span title="@entry.GreenScoreAvg.Value.ToString("F1") tok/Wh">@entry.GreenScoreAvg.Value.ToString("F1")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="leaderboard__no-data" title="Run a local model duel to generate this score">&#8212;</span>
+                                    }
+                                </td>
+                            }
                             <td>
                                 @if (entry.AvgApiCostPerDuel.HasValue)
                                 {
@@ -263,6 +273,9 @@
     private bool IsCostSort => string.Equals(_sortBy, "Cost", StringComparison.OrdinalIgnoreCase);
     private bool IsEloSort => !IsGreenSort && !IsQualitySort && !IsCostSort;
 
+    /// <summary>Gates the Green Score sort button and column — both are hidden until a duel scores one.</summary>
+    private bool HasGreenScores => _entries.Any(e => e.GreenScoreAvg is > 0);
+
     private static bool IsLocalLike(ModelType t) => t is ModelType.Local or ModelType.LocalService;
 
     /// <summary>aria-pressed needs the lowercase JS-style literal, not .NET's "True"/"False".</summary>
@@ -282,8 +295,8 @@
     {
         if (string.Equals(_sortBy, sortBy, StringComparison.OrdinalIgnoreCase))
             return;
-        if (sortBy == "GreenScore" && !_entries.Any(e => e.GreenScoreAvg is > 0))
-            return; // button is disabled; guard in case of race condition
+        if (sortBy == "GreenScore" && !HasGreenScores)
+            return; // button is not rendered; guard in case of race condition
         if (sortBy == "Quality" && !_entries.Any(e => e.OutputQualityAvg.HasValue))
             return; // button is disabled; guard in case of race condition
         if (sortBy == "Cost" && !_entries.Any(e => e.AvgApiCostPerDuel.HasValue))

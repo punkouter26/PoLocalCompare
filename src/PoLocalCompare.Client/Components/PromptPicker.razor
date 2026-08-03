@@ -36,11 +36,22 @@
         </div>
     }
 
+    @* The library is a disclosure, not a wall. Eighteen cards rendered unconditionally sat
+       between the textarea and the Compare button and were about half the page on both
+       viewports — the textarea is the primary input, so the catalogue waits to be asked for. *@
     <div class="prompt-picker__section">
-        <div class="prompt-picker__section-head">
-            <h3 class="prompt-picker__section-title">Prompt library</h3>
-            <span class="prompt-picker__section-hint">Each one asks for a single self-contained HTML file.</span>
-        </div>
+        <button type="button" class="po-btn po-btn--sm po-btn--secondary prompt-picker__disclosure"
+                aria-expanded="@(_libraryOpen ? "true" : "false")"
+                aria-controls="prompt-library"
+                @onclick="@(() => _libraryOpen = !_libraryOpen)">
+            <span aria-hidden="true">@(_libraryOpen ? "▾" : "▸")</span>
+            @(_libraryOpen ? "Hide prompt library" : $"Browse prompt library ({PromptLibrary.All.Count})")
+        </button>
+
+        @if (_libraryOpen)
+        {
+        <div id="prompt-library">
+        <p class="prompt-picker__section-hint">Each one asks for a single self-contained HTML file.</p>
 
         <div class="prompt-picker__filters" role="group" aria-label="Filter prompts by category">
             <button type="button"
@@ -79,6 +90,8 @@
                 </button>
             }
         </div>
+        </div>
+        }
     </div>
 </div>
 
@@ -92,11 +105,19 @@
     [Parameter] public EventCallback OnClearRecent { get; set; }
 
     private string _category = AllCategories;
+    private bool _libraryOpen;
+
+    // Picking a prompt answers the step, so the catalogue closes behind the choice.
+    private void CloseLibrary() => _libraryOpen = false;
 
     private bool IsCurrent(string text) =>
         string.Equals(CurrentPrompt?.Trim(), text, StringComparison.Ordinal);
 
-    private Task SelectAsync(string text) => OnPromptSelected.InvokeAsync(text);
+    private Task SelectAsync(string text)
+    {
+        CloseLibrary();
+        return OnPromptSelected.InvokeAsync(text);
+    }
 
     private static string Excerpt(string text) =>
         text.Length <= 120 ? text : text[..120].TrimEnd() + "…";

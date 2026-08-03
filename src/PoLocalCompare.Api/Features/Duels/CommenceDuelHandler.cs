@@ -43,7 +43,13 @@ public sealed class CommenceDuelHandler(
             promptFull,
             command.LeftModelId,
             command.RightModelId,
-            verdictDeadlineHours);
+            verdictDeadlineHours)
+        {
+            // Snapshotted at creation so the duel stays readable if either model is later
+            // retired from the catalog — see Duel.LeftModelName.
+            LeftModelName = leftModel.DisplayName,
+            RightModelName = rightModel.DisplayName,
+        };
 
         await duelRepository.SaveAsync(duel);
 

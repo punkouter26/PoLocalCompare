@@ -10,6 +10,18 @@ public sealed class Duel
     public string PromptFull { get; init; }
     public ModelId LeftModelId { get; init; }
     public ModelId RightModelId { get; init; }
+
+    /// <summary>
+    /// Display names captured when the duel was created. A duel is a historical record, so it
+    /// has to stay readable after a model is retired from the catalog — without this the
+    /// Archive resolved names by looking the IDs up live and rendered "[Deleted Model]" for
+    /// most of its rows. Readers still prefer the live catalog name (a rename should show
+    /// through) and fall back to the snapshot.
+    /// </summary>
+    public string? LeftModelName { get; set; }
+
+    /// <inheritdoc cref="LeftModelName"/>
+    public string? RightModelName { get; set; }
     public DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DuelVerdict Verdict { get; set; }

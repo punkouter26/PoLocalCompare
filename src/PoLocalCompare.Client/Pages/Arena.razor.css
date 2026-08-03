@@ -83,11 +83,18 @@
     }
 }
 
+/* The 600px floor reserves room for a rendered preview so the two sides line up while they
+   stream. A failed side has no preview — it is one small card — so the floor would leave a
+   half-screen of empty space above the verdict. */
 .arena__viewport-panel {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     min-height: 600px;
+}
+
+.arena__viewport-panel--failed {
+    min-height: 0;
 }
 
 .arena__hud {
@@ -191,6 +198,17 @@
 
 .arena__action-btn {
     min-width: 180px;
+}
+
+/* Follow-ups, not the decision: tighter, no forced width, and visually quieter than the
+   vote row above them. Six same-sized large buttons in one row gave the page no primary. */
+.arena__actions--secondary {
+    gap: 0.5rem;
+    padding-top: 0;
+}
+
+.arena__actions--secondary .arena__action-btn {
+    min-width: 0;
 }
 
 .arena__verdict-recorded {

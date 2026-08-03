@@ -75,19 +75,13 @@
 
         @if (_viewMode == SourceViewMode.Rendered || !BothOutputsPresent())
         {
+            @* A failed side renders its failure card INSTEAD of the viewport and telemetry, not
+               on top of them. The same failure used to be stated three times per side — the
+               viewport's "produced no renderable output" placeholder, the HUD's red FAILED
+               banner, and this card repeating the identical message — over a metric grid
+               reading 0.0 tok/s / 0ms / 0 tokens / 0 B. *@
             <div class="arena__viewports">
-                <div class="arena__viewport-panel">
-                    <SandboxedViewport
-                        HtmlContent="@(_leftStreamingHtml ?? _leftResult?.HtmlOutputRaw ?? string.Empty)"
-                        ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
-                        IsLoser="@(_loserModelId == _duel.LeftModelId)"
-                        ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.LeftModelId)"
-                        ProbeRuntime="@(!_duelStillRunning)"
-                        OnProbeUpdated="OnLeftProbe"
-                    />
-                    <div class="arena__hud">
-                        <TelemetryHud Result="_leftResult" />
-                    </div>
+                <div class="arena__viewport-panel @(_leftResult?.IsFailure == true ? "arena__viewport-panel--failed" : "")">
                     @if (_leftResult?.IsFailure == true)
                     {
                         <div class="arena__failure-card">
@@ -97,16 +91,30 @@
                                 <summary>Show technical details</summary>
                                 <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
                             </details>
-                            <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
+                            <div class="arena__failure-hint">Retry the duel, or start a new one with a different pairing.</div>
                         </div>
                     }
-                    @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
+                    else
                     {
-                        <div>
-                            <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
-                                &lt;/&gt; View Source
-                            </button>
+                        <SandboxedViewport
+                            HtmlContent="@(_leftStreamingHtml ?? _leftResult?.HtmlOutputRaw ?? string.Empty)"
+                            ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
+                            IsLoser="@(_loserModelId == _duel.LeftModelId)"
+                            ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.LeftModelId)"
+                            ProbeRuntime="@(!_duelStillRunning)"
+                            OnProbeUpdated="OnLeftProbe"
+                        />
+                        <div class="arena__hud">
+                            <TelemetryHud Result="_leftResult" />
                         </div>
+                        @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
+                        {
+                            <div>
+                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
+                                    &lt;/&gt; View Source
+                                </button>
+                            </div>
+                        }
                     }
                     @if (_eloShiftLeft.HasValue)
                     {
@@ -116,18 +124,7 @@
                     }
                 </div>
 
-                <div class="arena__viewport-panel">
-                    <SandboxedViewport
-                        HtmlContent="@(_rightStreamingHtml ?? _rightResult?.HtmlOutputRaw ?? string.Empty)"
-                        ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
-                        IsLoser="@(_loserModelId == _duel.RightModelId)"
-                        ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.RightModelId)"
-                        ProbeRuntime="@(!_duelStillRunning)"
-                        OnProbeUpdated="OnRightProbe"
-                    />
-                    <div class="arena__hud">
-                        <TelemetryHud Result="_rightResult" />
-                    </div>
+                <div class="arena__viewport-panel @(_rightResult?.IsFailure == true ? "arena__viewport-panel--failed" : "")">
                     @if (_rightResult?.IsFailure == true)
                     {
                         <div class="arena__failure-card">
@@ -137,16 +134,30 @@
                                 <summary>Show technical details</summary>
                                 <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
                             </details>
-                            <div class="arena__failure-hint">Start a new duel with a different model pairing.</div>
+                            <div class="arena__failure-hint">Retry the duel, or start a new one with a different pairing.</div>
                         </div>
                     }
-                    @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
+                    else
                     {
-                        <div>
-                            <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
-                                &lt;/&gt; View Source
-                            </button>
+                        <SandboxedViewport
+                            HtmlContent="@(_rightStreamingHtml ?? _rightResult?.HtmlOutputRaw ?? string.Empty)"
+                            ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
+                            IsLoser="@(_loserModelId == _duel.RightModelId)"
+                            ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.RightModelId)"
+                            ProbeRuntime="@(!_duelStillRunning)"
+                            OnProbeUpdated="OnRightProbe"
+                        />
+                        <div class="arena__hud">
+                            <TelemetryHud Result="_rightResult" />
                         </div>
+                        @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
+                        {
+                            <div>
+                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
+                                    &lt;/&gt; View Source
+                                </button>
+                            </div>
+                        }
                     }
                     @if (_eloShiftRight.HasValue)
                     {
@@ -261,27 +272,37 @@
             }
         }
 
-        <div class="arena__actions">
-            <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
-                    disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
-                    @onclick="@(() => RecordVerdictAsync(DuelVerdict.Left))">
-                👈 Winner: Left
-            </button>
-            <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
-                    disabled="@(_verdictRecorded || _submitting || _retrying || BothSidesFailed())"
-                    @onclick="@(() => RecordVerdictAsync(DuelVerdict.Right))">
-                Winner: Right 👉
-            </button>
+        @* Two tiers. Voting is the page's primary action and gets the large buttons — but only
+           while a vote is still possible: once a verdict exists they were rendered disabled
+           forever, leaving the page's headline control permanently dead. Everything else is a
+           follow-up and sits in a secondary row. *@
+        @if (CanStillVote)
+        {
+            <div class="arena__actions">
+                <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+                        disabled="@(_submitting || _retrying)"
+                        @onclick="@(() => RecordVerdictAsync(DuelVerdict.Left))">
+                    👈 Winner: @LeftDisplayName
+                </button>
+                <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+                        disabled="@(_submitting || _retrying)"
+                        @onclick="@(() => RecordVerdictAsync(DuelVerdict.Right))">
+                    Winner: @RightDisplayName 👉
+                </button>
+            </div>
+        }
+
+        <div class="arena__actions arena__actions--secondary">
             @* Re-runs the same pairing and prompt as a brand-new duel — useful when a
                model failed for a transient reason (model load, cache, rate limit). *@
-            <button type="button" class="po-btn po-btn--lg po-btn--secondary arena__action-btn"
+            <button type="button" class="po-btn po-btn--secondary arena__action-btn"
                     disabled="@(_retrying || _submitting || _duelStillRunning)"
                     @onclick="RetryDuelAsync">
                 @(_retrying ? "Starting…" : "🔄 Retry duel")
             </button>
             @if (_verdictRecorded && !_optimistic)
             {
-                <button type="button" class="po-btn po-btn--lg arena__action-btn"
+                <button type="button" class="po-btn arena__action-btn"
                         @onclick="ShareResultAsync">
                     🖼 Share result
                 </button>
@@ -289,11 +310,10 @@
             @* Available once both models are known — even if one is mid-stream or failed, a
                head-to-head link is still meaningful because the screen shows W/L counts per
                opponent regardless of who failed this round. *@
-            @if (_duel is not null)
+            @if (_duel is not null && !_duelStillRunning)
             {
-                <button type="button" class="po-btn po-btn--lg arena__action-btn"
-                        disabled="@(_duelStillRunning)"
-                        title="@(_duelStillRunning ? "Available once the duel finishes" : "Open the head-to-head record for these two models")"
+                <button type="button" class="po-btn arena__action-btn"
+                        title="Open the head-to-head record for these two models"
                         @onclick="@(() => Nav.NavigateTo($"/h2h/{_duel!.LeftModelId}/{_duel.RightModelId}"))">
                     ⚔ Head-to-head
                 </button>
@@ -303,13 +323,14 @@
                so the browser does the whole download without any interop. *@
             @if (_duel is not null && !_duelStillRunning)
             {
-                <a class="po-btn po-btn--lg arena__action-btn"
+                <a class="po-btn arena__action-btn"
                    href="@($"/api/duels/{_duelId}/report")"
                    download="@($"lab-report-{_duelId}.html")"
                    title="Download a self-contained HTML lab report for this duel">
                     ⬇ Lab report
                 </a>
             }
+            <a class="po-btn arena__action-btn" href="/">⚔ New duel</a>
         </div>
 
         @if (_retryError is not null)
@@ -379,6 +400,13 @@
     private bool BothOutputsPresent() =>
         !string.IsNullOrWhiteSpace(_leftResult?.HtmlOutputRaw)
         && !string.IsNullOrWhiteSpace(_rightResult?.HtmlOutputRaw);
+
+    /// <summary>
+    /// Whether a human vote can still land. Gates the vote buttons out of the DOM rather than
+    /// disabling them: once the verdict is in they can never become live again, and a dead
+    /// control in the primary position reads as a broken page.
+    /// </summary>
+    private bool CanStillVote => !_verdictRecorded && !BothSidesFailed() && !_duelStillRunning;
 
     private string LeftDisplayName => _leftResult?.ModelName ?? _duel?.LeftModelId ?? "Left";
     private string RightDisplayName => _rightResult?.ModelName ?? _duel?.RightModelId ?? "Right";

@@ -60,7 +60,8 @@
                         <th scope="col">Prompt</th>
                         <th scope="col">Left Model</th>
                         <th scope="col">Right Model</th>
-                        <th scope="col"><span class="visually-hidden">Expanded</span></th>
+                        @* No chevron column: the caption already says a row opens its details,
+                           and the selected row is marked by aria-selected and its own styling. *@
                         <th scope="col">Verdict</th>
                     </tr>
                 </thead>
@@ -86,19 +87,19 @@
                                     @FormatModelName(d.RightModelName, d.RightModelId)
                                 </span>
                             </td>
-                            <td><span class="archive__expand-icon" aria-hidden="true">@(d.DuelId == _selectedDuel?.DuelId ? "▾" : "›")</span></td>
                             <td>
-                                @switch (d.Verdict)
+                                @* Names the winner. "⬅ Left" made you map the chip back to a
+                                   column to learn anything, which is the one thing the verdict
+                                   column exists to tell you. *@
+                                @if (d.Verdict is DuelVerdict.Left or DuelVerdict.Right)
                                 {
-                                    case DuelVerdict.Left:
-                                        <span class="archive__verdict archive__verdict--win">⬅ Left</span>
-                                        break;
-                                    case DuelVerdict.Right:
-                                        <span class="archive__verdict archive__verdict--win">Right ➡</span>
-                                        break;
-                                    default:
-                                        <span class="archive__verdict archive__verdict--pending">No Verdict</span>
-                                        break;
+                                    <span class="archive__verdict archive__verdict--win" title="Winner of this duel">
+                                        🏆 @GetWinnerName(d)
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="archive__verdict archive__verdict--pending">No verdict</span>
                                 }
                             </td>
                         </tr>
@@ -149,7 +150,11 @@
         }
 
         <div class="archive__pagination">
-            <span class="archive__count">Showing @_filteredDuels.Count of @_duels.Count duel@(_duels.Count == 1 ? "" : "s")@(_hasMore ? " — more available" : " (all loaded)")</span>
+            @* The old copy read "Showing 20 of 20 duels — more available", because the first
+               number counted the filter and the second counted what had been loaded, while
+               "more available" spoke about the server. Three different populations, one
+               sentence. Now it counts one thing, and Load More says the rest. *@
+            <span class="archive__count">@CountSummary</span>
             @if (_hasMore)
             {
                 <button type="button" class="po-btn" @onclick="LoadMoreAsync">Load More</button>
@@ -184,6 +189,22 @@
         _filteredDuels = query
             .OrderByDescending(d => d.StartedAt)
             .ToList();
+    }
+
+    /// <summary>
+    /// One population per sentence: how many rows are on screen, and — only when a filter is
+    /// actually hiding something — how many were loaded in total.
+    /// </summary>
+    private string CountSummary
+    {
+        get
+        {
+            var shown = _filteredDuels.Count;
+            var noun = shown == 1 ? "duel" : "duels";
+            return _filteredDuels.Count == _duels.Count
+                ? $"{shown} {noun}"
+                : $"{shown} of {_duels.Count} loaded {noun}";
+        }
     }
 
     private void SetVerdictFilter(string label)
@@ -273,10 +294,13 @@
         return string.Equals(trimmed, modelId, StringComparison.OrdinalIgnoreCase);
     }
 
+    // "Retired", not "Deleted": the duel is intact, it is the catalog entry that is gone —
+    // usually a wiped Models table re-seeding under fresh IDs. Duels created from now on carry
+    // a name snapshot (Duel.LeftModelName) and resolve without ever reaching this.
     private static string FormatModelName(string? modelName, string modelId)
     {
         if (IsUnresolvedModelName(modelName, modelId))
-            return "[Deleted Model]";
+            return "Retired model";
 
         return modelName!.Trim();
     }

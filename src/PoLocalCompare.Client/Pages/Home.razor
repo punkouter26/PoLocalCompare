@@ -34,29 +34,6 @@
         }
     </header>
 
-    @* ── Stepper ─────────────────────────────────────────────────────── *@
-    @* SC 2.1.1 Keyboard: each step is a real button so it is tabbable and Enter/Space operable. *@
-    <ol class="home__steps" aria-label="Setup progress">
-        <li>
-            <button type="button" class="home__step @StepClass(1)" @onclick="@(() => ScrollToAsync("home-step-1"))">
-                <span class="home__step-num">1</span>
-                <span class="home__step-label">Models</span>
-            </button>
-        </li>
-        <li>
-            <button type="button" class="home__step @StepClass(2)" @onclick="@(() => ScrollToAsync("home-step-2"))">
-                <span class="home__step-num">2</span>
-                <span class="home__step-label">Prompt</span>
-            </button>
-        </li>
-        <li>
-            <button type="button" class="home__step @StepClass(3)" @onclick="@(() => ScrollToAsync("home-step-3"))">
-                <span class="home__step-num">3</span>
-                <span class="home__step-label">Compare</span>
-            </button>
-        </li>
-    </ol>
-
     @* ── Model health (collapsible; replaces the standalone Local Model Lab) ── *@
     @if (!_loading && _models.Count > 0)
     {
@@ -65,14 +42,28 @@
         </div>
     }
 
-    @* ── Step 1: Pick two models ─────────────────────────────────────── *@
-    <section id="home-step-1" class="home__panel" aria-labelledby="step-1-heading">
-        <div class="home__panel-head">
-            <span class="home__panel-step">Step 1</span>
-            <h2 id="step-1-heading" class="home__panel-title">Choose two models</h2>
-            <p class="home__panel-hint">Click a card to assign it. Click a selected card to remove it.</p>
-        </div>
+    @* ── Step 1: Pick two models ─────────────────────────────────────────
+       The panel headers ARE the stepper. A separate <ol> of step buttons used to sit above
+       them naming the same three steps a second time, and pressing one only scrolled — so
+       the page labelled every step twice and stepped through nothing. Each header is now a
+       disclosure button (APG accordion: heading wraps the button), and completing a step
+       opens the next one. *@
+    <section id="home-step-1" class="home__panel @(IsOpen(1) ? "home__panel--open" : "")" aria-labelledby="step-1-heading">
+        <h2 class="home__panel-headline">
+            <button type="button" id="step-1-heading" class="home__panel-head"
+                    aria-expanded="@Expanded(1)" @onclick="@(() => ToggleStep(1))">
+                <span class="home__panel-num @(HasModels ? "home__panel-num--done" : "")" aria-hidden="true">@(HasModels ? "✓" : "1")</span>
+                <span class="home__panel-heads">
+                    <span class="home__panel-title">Choose two models</span>
+                    <span class="home__panel-hint">@Step1Summary</span>
+                </span>
+                <span class="home__panel-chevron" aria-hidden="true">@(IsOpen(1) ? "▾" : "▸")</span>
+            </button>
+        </h2>
 
+        @if (IsOpen(1))
+        {
+        <div class="home__panel-body">
         <div class="home__slots">
             <div class="home__slot @(_leftModel is not null ? "home__slot--set" : "")">
                 <span class="home__slot-tag home__slot-tag--left">Left</span>
@@ -131,14 +122,11 @@
                     </button>
                 }
             </div>
-            @if (_webGpuSupported == false && _models.Any(m => m.ModelType == ModelType.Local))
-            {
-                <p class="home__health-warning">
-                    ⚠ Browser models need WebGPU (desktop Chrome or Edge) — they're disabled on this device. Use a Remote or Ollama model.
-                </p>
-            }
-            @* Grouped by type (Remote / Browser / Ollama) to mirror the Model Health panel. *@
-            @foreach (var _group in FilteredModels.GroupBy(m => m.ModelType).OrderBy(g => ModelTypeGroup.Order(g.Key)))
+            @* Grouped by type (Remote / Browser / Ollama) to mirror the Model Health panel.
+               Models that cannot run on this device are held back behind the toggle below
+               rather than rendered greyed-out inline: they were roughly half the list on a
+               machine without WebGPU, and an unpickable card is scrolling, not choice. *@
+            @foreach (var _group in SelectableModels.GroupBy(m => m.ModelType).OrderBy(g => ModelTypeGroup.Order(g.Key)))
             {
                 <div class="home__group-header">
                     <span class="home__group-name">@ModelTypeGroup.Label(_group.Key)</span>
@@ -149,82 +137,108 @@
                     {
                         var isLeft = model.ModelId == _leftModel?.ModelId;
                         var isRight = model.ModelId == _rightModel?.ModelId;
-                        var remoteOffline = _health is not null && !_healthHasRemotes && model.ModelType == ModelType.Remote;
-                        var browserNoGpu = model.ModelType == ModelType.Local && _webGpuSupported == false;
-                        var isDisabled = remoteOffline || browserNoGpu;
-                        <div class="@(isDisabled ? "home__card-disabled" : "")">
-                            @* IsDisabled drives tabindex/aria-disabled — the wrapper's
-                               pointer-events:none blocks the mouse but not the keyboard. *@
-                            <ModelCard Model="model"
-                                       IsSelected="@(isLeft || isRight)"
-                                       IsDisabled="@isDisabled"
-                                       Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
-                                       OnSelected="AssignModel" />
-                            @if (isDisabled)
-                            {
-                                <span class="home__card-badge">@(browserNoGpu ? "Needs WebGPU" : "Unavailable")</span>
-                            }
-                        </div>
+                        <ModelCard Model="model"
+                                   IsSelected="@(isLeft || isRight)"
+                                   Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
+                                   OnSelected="AssignModel" />
                     }
                 </div>
             }
-            @if (!FilteredModels.Any())
+            @if (!SelectableModels.Any())
             {
-                <p class="home__hint">No models of this type are available.</p>
+                <p class="home__hint">No models of this type can run here right now.</p>
             }
+
+            @if (UnavailableModels.Any())
+            {
+                <button type="button" class="po-btn po-btn--sm po-btn--ghost home__unavailable-toggle"
+                        aria-expanded="@(_showUnavailable ? "true" : "false")"
+                        @onclick="@(() => _showUnavailable = !_showUnavailable)">
+                    @(_showUnavailable ? "▾" : "▸") @UnavailableModels.Count() model@(UnavailableModels.Count() == 1 ? "" : "s") can't run here
+                </button>
+                @if (_showUnavailable)
+                {
+                    <p class="home__hint home__unavailable-why">@UnavailableReason</p>
+                    <div class="home__grid">
+                        @foreach (var model in UnavailableModels)
+                        {
+                            <div class="home__card-disabled">
+                                @* IsDisabled drives tabindex/aria-disabled — the wrapper's
+                                   pointer-events:none blocks the mouse but not the keyboard. *@
+                                <ModelCard Model="model" IsDisabled="true" />
+                                <span class="home__card-badge">@(IsBrowserWithoutGpu(model) ? "Needs WebGPU" : "Unavailable")</span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        }
+        </div>
         }
     </section>
 
     @* ── Step 2: Write prompt ────────────────────────────────────────── *@
-    <section id="home-step-2" class="home__panel" aria-labelledby="step-2-heading">
-        <div class="home__panel-head">
-            <span class="home__panel-step">Step 2</span>
-            <h2 id="step-2-heading" class="home__panel-title">Write your prompt</h2>
-            <p class="home__panel-hint">Both models will receive the same prompt. Be specific about what you want them to build.</p>
-        </div>
+    <section id="home-step-2" class="home__panel @(IsOpen(2) ? "home__panel--open" : "")" aria-labelledby="step-2-heading">
+        <h2 class="home__panel-headline">
+            <button type="button" id="step-2-heading" class="home__panel-head"
+                    aria-expanded="@Expanded(2)" @onclick="@(() => ToggleStep(2))">
+                <span class="home__panel-num @(HasPrompt ? "home__panel-num--done" : "")" aria-hidden="true">@(HasPrompt ? "✓" : "2")</span>
+                <span class="home__panel-heads">
+                    <span class="home__panel-title">Write your prompt</span>
+                    <span class="home__panel-hint">@Step2Summary</span>
+                </span>
+                <span class="home__panel-chevron" aria-hidden="true">@(IsOpen(2) ? "▾" : "▸")</span>
+            </button>
+        </h2>
 
-        <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
-                  placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
-                  rows="5"
-                  maxlength="4000"
-                  @bind="_prompt"
-                  @bind:event="oninput"></textarea>
-        <div class="home__textarea-meta">
-            <span class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
-                @_prompt.Length / 4000
-            </span>
-            @if (_promptLongWarning)
-            {
-                <span class="home__textarea-hint">Long prompts may be truncated or cost more.</span>
-            }
-        </div>
+        @if (IsOpen(2))
+        {
+            <div class="home__panel-body">
+            <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
+                      placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
+                      rows="5"
+                      maxlength="4000"
+                      @bind="_prompt"
+                      @bind:event="oninput"></textarea>
+            <div class="home__textarea-meta">
+                <span class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
+                    @_prompt.Length / 4000
+                </span>
+                @if (_promptLongWarning)
+                {
+                    <span class="home__textarea-hint">Long prompts may be truncated or cost more.</span>
+                }
+            </div>
 
-        <PromptPicker CurrentPrompt="@_prompt"
-                      Recent="_recentPrompts"
-                      OnPromptSelected="ApplyPromptAsync"
-                      OnForgetRecent="ForgetRecentAsync"
-                      OnClearRecent="ClearRecentAsync" />
+            <PromptPicker CurrentPrompt="@_prompt"
+                          Recent="_recentPrompts"
+                          OnPromptSelected="ApplyPromptAsync"
+                          OnForgetRecent="ForgetRecentAsync"
+                          OnClearRecent="ClearRecentAsync" />
+            </div>
+        }
     </section>
 
-    @* ── Step 3: Compare ─────────────────────────────────────────────── *@
+    @* ── Compare ─────────────────────────────────────────────────────────
+       Not a collapsible step: it is one button and one line of state, and the action a
+       page exists for should never be behind a disclosure. *@
     <section id="home-step-3" class="home__panel home__panel--cta" aria-labelledby="step-3-heading">
-        <div class="home__panel-head">
-            <span class="home__panel-step">Step 3</span>
-            <h2 id="step-3-heading" class="home__panel-title">Compare</h2>
-            <p class="home__panel-hint">@CompareHint</p>
-        </div>
-
         <div class="home__compare-row">
-            <button class="po-btn po-btn--success"
+            <span class="home__panel-num @(CanCompare ? "home__panel-num--done" : "")" aria-hidden="true">3</span>
+            <div class="home__compare-copy">
+                <h2 id="step-3-heading" class="home__panel-title">Compare</h2>
+                <p class="home__panel-hint">@CompareHint</p>
+            </div>
+            <button class="po-btn po-btn--success po-btn--lg"
                     disabled="@(!CanCompare)"
                     @onclick="StartDuelAsync">
                 Compare →
             </button>
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <span class="home__error">@_error</span>
-            }
         </div>
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <span class="home__error">@_error</span>
+        }
     </section>
 
     @* ── Recent duels (or onboarding example when empty) ──────────────── *@
@@ -306,8 +320,29 @@
     private bool CanCompare => HasModels && HasPrompt;
     private bool _promptLongWarning => _prompt.Length > 4000 * 0.8;
 
-    private int ActiveStep => !HasModels ? 1 : !HasPrompt ? 2 : 3;
-    private string StepClass(int step) => step < ActiveStep ? "home__step--done" : step == ActiveStep ? "home__step--active" : "";
+    // ── Step disclosure ──────────────────────────────────────────────────────
+    // Exactly one of steps 1 and 2 is open. Finishing a step advances the accordion, which
+    // is what makes it a stepper rather than three permanently-open panels stacked into a
+    // 6,600px scroll on mobile. Advancing happens on the *event* (a slot filled, a library
+    // prompt applied), never on derived state — deriving it would slam the panel shut under
+    // someone who cleared a slot to change their mind.
+    private int _openStep = 1;
+
+    private bool IsOpen(int step) => _openStep == step;
+    private string Expanded(int step) => IsOpen(step) ? "true" : "false";
+    private void ToggleStep(int step) => _openStep = _openStep == step ? 0 : step;
+
+    private string Step1Summary => (_leftModel, _rightModel) switch
+    {
+        (null, null) => "Click a card to assign it. Click a selected card to remove it.",
+        ({ } l, null) => $"{l.DisplayName} — pick one more",
+        (null, { } r) => $"{r.DisplayName} — pick one more",
+        var (l, r) => $"{l!.DisplayName} vs {r!.DisplayName}",
+    };
+
+    private string Step2Summary => HasPrompt
+        ? (_prompt.Length <= 70 ? _prompt : _prompt[..70].TrimEnd() + "…")
+        : "Both models will receive the same prompt.";
 
     private string CompareHint => (HasModels, HasPrompt) switch
     {
@@ -326,7 +361,27 @@
         ("ollama", "Ollama"),
     ];
 
+    private bool _showUnavailable;
+
     private IEnumerable<ModelDto> FilteredModels => _models.Where(MatchesFilter);
+
+    // ── Availability split ───────────────────────────────────────────────────
+    // A model the device cannot run is not a choice, so it does not belong in the choosing
+    // list. Both halves come from the same filter so the type chips still add up.
+    private bool IsBrowserWithoutGpu(ModelDto m) => m.ModelType == ModelType.Local && _webGpuSupported == false;
+
+    private bool IsRemoteOffline(ModelDto m) =>
+        _health is not null && !_healthHasRemotes && m.ModelType == ModelType.Remote;
+
+    private bool IsUnavailable(ModelDto m) => IsBrowserWithoutGpu(m) || IsRemoteOffline(m);
+
+    private IEnumerable<ModelDto> SelectableModels => FilteredModels.Where(m => !IsUnavailable(m));
+
+    private IEnumerable<ModelDto> UnavailableModels => FilteredModels.Where(IsUnavailable);
+
+    private string UnavailableReason => UnavailableModels.Any(IsBrowserWithoutGpu)
+        ? "Browser models need WebGPU (desktop Chrome or Edge). Remote and Ollama models run elsewhere and are unaffected."
+        : "Remote (Azure AI Foundry) deployments are unreachable right now.";
 
     private bool MatchesFilter(ModelDto m) => _modelFilter switch
     {
@@ -373,8 +428,9 @@
     private async Task ApplyPromptAsync(string text)
     {
         _prompt = text;
-        // Jump to Compare rather than leaving the choice off-screen above the fold: picking a
-        // prompt is usually the last thing left before the duel can start.
+        // Picking from the library finishes step 2, so close it and jump to whatever is still
+        // outstanding — Compare if the models are chosen, step 1 if they are not.
+        _openStep = HasModels ? 0 : 1;
         await Task.Yield();
         ScrollToAsync(HasModels ? "home-step-3" : "home-step-1");
     }
@@ -429,6 +485,10 @@
                 _leftModel = _models.FirstOrDefault(m => m.ModelId == LeftModelId);
             if (!string.IsNullOrWhiteSpace(RightModelId))
                 _rightModel = _models.FirstOrDefault(m => m.ModelId == RightModelId);
+
+            // Arriving from a "rerun this pairing" link lands on the first step that still
+            // needs an answer, not back at a choice the link already made.
+            if (HasModels) _openStep = HasPrompt ? 0 : 2;
         }
         catch (Exception ex)
         {
@@ -456,9 +516,17 @@
         if (_rightModel?.ModelId == model.ModelId) { _rightModel = null; return; }
 
         // Fill empty slot first.
-        if (_leftModel is null) { _leftModel = model; return; }
-        if (_rightModel is null) { _rightModel = model; return; }
+        if (_leftModel is null) { _leftModel = model; AdvanceIfModelsChosen(); return; }
+        if (_rightModel is null) { _rightModel = model; AdvanceIfModelsChosen(); return; }
         _rightModel = model;
+        AdvanceIfModelsChosen();
+    }
+
+    /// <summary>Opens the next unfinished step once both slots are full.</summary>
+    private void AdvanceIfModelsChosen()
+    {
+        if (!HasModels || _openStep != 1) return;
+        _openStep = HasPrompt ? 0 : 2;
     }
 
     private void ConfirmReplace(string slot)
@@ -481,6 +549,9 @@
         _leftModel ??= ordered.ElementAtOrDefault(0);
         _rightModel ??= ordered.FirstOrDefault(m => m.ModelId != _leftModel?.ModelId);
         _prompt = "Build a self-contained single HTML file with a click-counter app: a centered card showing a large number and a button. Clicking increments the count. Use a clean modern design with rounded corners and a gradient background.";
+        // Both steps are answered, so collapse them and leave Compare as the only thing to do.
+        _openStep = 0;
+        ScrollToAsync("home-step-3");
     }
 
     private void ScrollToAsync(string elementId)

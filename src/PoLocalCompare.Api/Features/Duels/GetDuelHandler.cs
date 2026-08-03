@@ -34,10 +34,15 @@ public sealed class GetDuelHandler
         foreach (var r in results)
         {
             var model = await _modelRepository.GetByIdAsync(r.ModelId);
+            // Falls back to whichever side of the duel this result belongs to, so the Arena
+            // names a retired model instead of printing its ULID.
+            var snapshot = r.ModelId == duel.LeftModelId ? duel.LeftModelName
+                         : r.ModelId == duel.RightModelId ? duel.RightModelName
+                         : null;
             resultDtos.Add(new DuelResultDto
             {
                 ModelId = r.ModelId,
-                ModelName = model?.DisplayName ?? r.ModelId,
+                ModelName = DuelModelNames.Resolve(model?.DisplayName, snapshot, r.ModelId),
                 WarmUpDurationMs = r.WarmUpDurationMs,
                 GenerationDurationMs = r.GenerationDurationMs,
                 TotalDurationMs = r.TotalDurationMs,

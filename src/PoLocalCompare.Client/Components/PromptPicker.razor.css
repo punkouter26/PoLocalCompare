@@ -26,6 +26,14 @@
 .prompt-picker__section-hint {
     font-size: 0.75rem;
     color: var(--text-dim);
+    display: block;
+    margin: 0.5rem 0;
+}
+
+/* Layout-only, alongside .po-btn: the library opens from here, so it needs to sit clear of
+   the textarea above it. */
+.prompt-picker__disclosure {
+    margin-top: 0.25rem;
 }
 
 .prompt-picker__link {

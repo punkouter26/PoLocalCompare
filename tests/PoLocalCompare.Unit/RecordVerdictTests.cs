@@ -183,4 +183,89 @@ public class RecordVerdictTests
         Assert.Equal(1, rightModel.DuelCount);
         Assert.Equal(0, rightModel.WinCount);
     }
+
+    // ── No evidence: both models failed ───────────────────────────────────
+    // AutoJudge already stands down here, but it is not the only writer — the verdict endpoint
+    // reaches the handler directly, and the Arena's check was client-side only. A real duel had
+    // been recorded as a win with a ±16 ELO swing while both sides carried a failure result.
+
+    [Fact]
+    public async Task HandleAsync_BothModelsFailed_ThrowsAndLeavesEloUntouched()
+    {
+        var leftModel = MakeLocalModel(ModelId.From("left-7"));
+        var rightModel = MakeLocalModel(ModelId.From("right-7"));
+        var duelId = DuelId.From("duel-7");
+        var duel = MakePendingDuel(duelId, leftModel.ModelId, rightModel.ModelId);
+
+        var duelRepo = new Mock<IDuelRepository>();
+        duelRepo.Setup(r => r.GetByIdAsync(duelId)).ReturnsAsync(duel);
+
+        var modelRepo = new Mock<IModelRepository>();
+        modelRepo.Setup(r => r.GetByIdAsync(leftModel.ModelId)).ReturnsAsync(leftModel);
+        modelRepo.Setup(r => r.GetByIdAsync(rightModel.ModelId)).ReturnsAsync(rightModel);
+
+        var eloRepo = new Mock<IEloHistoryRepository>();
+        var resultRepo = new Mock<IDuelResultRepository>();
+        resultRepo.Setup(r => r.GetByDuelIdAsync(duelId)).ReturnsAsync(
+        [
+            MakeResult(duelId, leftModel.ModelId, failed: true),
+            MakeResult(duelId, rightModel.ModelId, failed: true),
+        ]);
+
+        var handler = new RecordVerdictHandler(
+            duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32,
+            duelResultRepository: resultRepo.Object);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => handler.HandleAsync(new RecordVerdictCommand(duelId, DuelVerdict.Left)));
+
+        Assert.Equal(DuelVerdict.Pending, duel.Verdict);
+        Assert.Equal(1200, leftModel.CurrentElo);
+        Assert.Equal(1200, rightModel.CurrentElo);
+        Assert.Equal(0, leftModel.DuelCount);
+        eloRepo.Verify(r => r.SaveAsync(It.IsAny<EloRecord>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_OnlyOneModelFailed_StillRecordsTheWalkover()
+    {
+        // The guard is deliberately narrow: one side failing is a decidable duel (the other
+        // side wins by default), and AutoJudge awards exactly that.
+        var leftModel = MakeLocalModel(ModelId.From("left-8"));
+        var rightModel = MakeLocalModel(ModelId.From("right-8"));
+        var duelId = DuelId.From("duel-8");
+        var duel = MakePendingDuel(duelId, leftModel.ModelId, rightModel.ModelId);
+
+        var duelRepo = new Mock<IDuelRepository>();
+        duelRepo.Setup(r => r.GetByIdAsync(duelId)).ReturnsAsync(duel);
+
+        var modelRepo = new Mock<IModelRepository>();
+        modelRepo.Setup(r => r.GetByIdAsync(leftModel.ModelId)).ReturnsAsync(leftModel);
+        modelRepo.Setup(r => r.GetByIdAsync(rightModel.ModelId)).ReturnsAsync(rightModel);
+
+        var eloRepo = new Mock<IEloHistoryRepository>();
+        var resultRepo = new Mock<IDuelResultRepository>();
+        resultRepo.Setup(r => r.GetByDuelIdAsync(duelId)).ReturnsAsync(
+        [
+            MakeResult(duelId, leftModel.ModelId, failed: false),
+            MakeResult(duelId, rightModel.ModelId, failed: true),
+        ]);
+
+        var handler = new RecordVerdictHandler(
+            duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32,
+            duelResultRepository: resultRepo.Object);
+
+        var result = await handler.HandleAsync(new RecordVerdictCommand(duelId, DuelVerdict.Left));
+
+        Assert.NotNull(result);
+        Assert.Equal(leftModel.ModelId, result.WinnerModelId);
+    }
+
+    private static DuelResult MakeResult(DuelId duelId, ModelId modelId, bool failed) =>
+        new(duelId, modelId)
+        {
+            IsFailure = failed,
+            FailureReason = failed ? "Request failed" : null,
+            HtmlOutputRaw = failed ? string.Empty : "<html><body>ok</body></html>",
+        };
 }

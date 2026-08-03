@@ -42,16 +42,26 @@
 .leaderboard__rank--silver { filter: drop-shadow(0 0 4px rgba(180, 180, 180, 0.6)); }
 .leaderboard__rank--bronze { filter: drop-shadow(0 0 4px rgba(180, 100, 40, 0.5)); }
 
-.leaderboard__green-info {
-    font-size: 0.8rem;
+/* Filter checkbox: says what ticking it does, which the old state/action button could not. */
+.leaderboard__filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: var(--target-min);
+    font-size: 0.85rem;
     color: var(--text-muted);
-    margin: 0.25rem 0 0.75rem;
-    padding: 0.4rem 0.75rem;
-    border-left: 2px solid rgba(45, 220, 132, 0.4);
+    cursor: pointer;
 }
 
-.leaderboard__green-info a {
-    color: var(--accent-green);
+.leaderboard__filter input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--accent-green);
+    cursor: pointer;
+}
+
+.leaderboard__filter:hover {
+    color: var(--text);
 }
 
 .leaderboard__type-badge {

@@ -14,14 +14,29 @@
     backdrop-filter: blur(4px);
 }
 
-.telemetry-hud__failure-badge {
-    background: var(--accent-red);
-    color: #fff;
-    font-weight: 700;
-    padding: 0.3rem 0.5rem;
+/* Diagnostics disclosure. Closed by default — these are the numbers you go looking for,
+   not the ones you compare two models on. */
+.telemetry-hud__more {
+    margin-top: 0.5rem;
+}
+
+.telemetry-hud__more-summary {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    min-height: var(--target-min);
+    display: flex;
+    align-items: center;
+}
+
+.telemetry-hud__more-summary:hover {
+    color: var(--text);
+}
+
+.telemetry-hud__more-summary:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
     border-radius: 3px;
-    margin-bottom: 0.5rem;
-    font-size: 0.75rem;
 }
 
 .telemetry-hud__grid {

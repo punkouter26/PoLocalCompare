@@ -40,9 +40,9 @@ public sealed class ListDuelsHandler(
                     ? duel.PromptText[..80] + "…"
                     : duel.PromptText,
                 LeftModelId = duel.LeftModelId,
-                LeftModelName = leftModel?.DisplayName ?? duel.LeftModelId,
+                LeftModelName = DuelModelNames.Resolve(leftModel?.DisplayName, duel.LeftModelName, duel.LeftModelId),
                 RightModelId = duel.RightModelId,
-                RightModelName = rightModel?.DisplayName ?? duel.RightModelId,
+                RightModelName = DuelModelNames.Resolve(rightModel?.DisplayName, duel.RightModelName, duel.RightModelId),
                 StartedAt = duel.StartedAt,
                 CompletedAt = duel.CompletedAt,
                 Verdict = (DuelVerdict)duel.Verdict,

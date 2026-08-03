@@ -53,6 +53,17 @@ public sealed class IntegrationHost : IAsyncDisposable
 
                     // Inference is mocked: these tests are about persistence and the HTTP
                     // surface, and a real model call would be slow, costly and non-deterministic.
+                    //
+                    // Registered under BOTH keys, because DuelExecutionService resolves the proxy
+                    // with GetRequiredKeyedService("Remote"/"LocalService"). As a plain AddScoped
+                    // this mock was never resolved at all: every duel in this suite ran the real
+                    // Foundry proxy, failed for want of credentials, and stored two failure
+                    // results. That was invisible while a verdict could be recorded on a duel
+                    // where both models failed — which is precisely what RecordVerdictHandler now
+                    // refuses to do.
+                    //
+                    // Returns a fresh result per call keyed to the real duel and model, so the
+                    // stored rows are the ones the duel actually points at.
                     var proxy = new Mock<IRemoteInferenceProxy>();
                     proxy.Setup(p => p.RunInferenceAsync(
                             It.IsAny<Model>(),
@@ -60,15 +71,17 @@ public sealed class IntegrationHost : IAsyncDisposable
                             It.IsAny<string>(),
                             It.IsAny<Func<int, long, HtmlStreamStats?, Task>>(),
                             It.IsAny<CancellationToken>()))
-                        .ReturnsAsync(new DuelResult(DuelId.From("mock-duel"), ModelId.From("mock-model"))
-                        {
-                            HtmlOutputRaw = "<html><body>Mock output</body></html>",
-                            TokenCount = 42,
-                            TotalDurationMs = 500,
-                            IsFailure = false,
-                        });
+                        .ReturnsAsync((Model model, DuelId duelId, string _, Func<int, long, HtmlStreamStats?, Task> _, CancellationToken _) =>
+                            new DuelResult(duelId, model.ModelId)
+                            {
+                                HtmlOutputRaw = "<html><body>Mock output</body></html>",
+                                TokenCount = 42,
+                                TotalDurationMs = 500,
+                                IsFailure = false,
+                            });
 
-                    services.AddScoped(_ => proxy.Object);
+                    services.AddKeyedScoped<IRemoteInferenceProxy>("Remote", (_, _) => proxy.Object);
+                    services.AddKeyedScoped<IRemoteInferenceProxy>("LocalService", (_, _) => proxy.Object);
                 });
             });
 
