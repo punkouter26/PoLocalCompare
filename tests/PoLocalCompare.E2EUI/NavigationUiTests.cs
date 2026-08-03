@@ -32,6 +32,45 @@ public sealed class NavigationUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
+    public async Task Header_ItemsDoNotOverlapOrLeaveTheViewport(int width, int height)
+    {
+        // The header's items are nowrap. Any that is allowed to shrink is squeezed narrower
+        // than its own label, the label spills out of the box, and the next item paints on top
+        // of it — which is how the two ticker chips ended up printed over each other. Nothing
+        // else in the suite looks at geometry, so this is the only place that can catch it.
+        // Note the live ticker only takes part when duels are actually running.
+        var page = await SignedInPageAsync(width, height);
+        await OpenNavIfCollapsedAsync(page);
+
+        var problems = await page.EvaluateAsync<string[]>(
+            """
+            () => {
+                const sel = '.navmenu__brand, .navmenu__link, .navmenu__ticker-pill,'
+                          + ' .navmenu__ticker-latest, .navmenu__user-badge, .navmenu__auth > .po-btn';
+                const els = [...document.querySelectorAll(sel)].filter(e => e.offsetParent !== null);
+                const label = e => (e.textContent || e.className).trim().slice(0, 24);
+                const bad = [];
+                for (let i = 0; i < els.length; i++) {
+                    const a = els[i].getBoundingClientRect();
+                    if (a.right > window.innerWidth + 1)
+                        bad.push('clipped by the viewport: ' + label(els[i]));
+                    for (let j = i + 1; j < els.length; j++) {
+                        if (els[i].contains(els[j]) || els[j].contains(els[i])) continue;
+                        const b = els[j].getBoundingClientRect();
+                        if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+                            Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1)
+                            bad.push('overlap: ' + label(els[i]) + ' / ' + label(els[j]));
+                    }
+                }
+                return bad;
+            }
+            """);
+
+        Assert.True(problems.Length == 0, string.Join(" | ", problems));
+    }
+
+    [Theory]
+    [MemberData(nameof(Viewports))]
     public async Task Header_ShowsTheSignedInIdentity(int width, int height)
     {
         var page = await SignedInPageAsync(width, height);

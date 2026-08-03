@@ -9,9 +9,11 @@
         </div>
     }
     <div class="navmenu__inner">
-        <a class="navmenu__brand" href="">
+        @* aria-label, not the visible wordmark, carries the accessible name: below 992px the
+           wordmark is hidden to buy the bar room and the mark itself is decorative. *@
+        <a class="navmenu__brand" href="" aria-label="PoLocalCompare home">
             <span class="navmenu__brand-mark" aria-hidden="true">PL</span>
-            <span>PoLocalCompare</span>
+            <span class="navmenu__brand-text">PoLocalCompare</span>
         </a>
 
         <button title="Navigation menu" aria-label="Navigation menu" class="navmenu__toggler" @onclick="ToggleNavMenu" aria-expanded="@NavExpanded" aria-controls="navbarLinks">

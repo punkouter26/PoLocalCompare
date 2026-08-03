@@ -32,6 +32,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex: 0 0 auto;
+    white-space: nowrap;
     min-height: 44px;           /* ≥44px touch target */
     text-decoration: none;
     color: var(--text);
@@ -48,6 +50,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 auto;
     width: 1.65rem;
     height: 1.65rem;
     border-radius: 0.45rem;
@@ -89,6 +92,7 @@
 .navmenu__collapse {
     display: flex;
     align-items: center;
+    gap: 0.5rem;
     min-width: 0;
     flex: 1 1 auto;
 }
@@ -100,8 +104,14 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    flex-shrink: 1;
+    /* Never shrink: the links are nowrap, so a shrunken box would let its text
+       spill out and be overlapped by whatever sits next to it. */
+    flex: 0 0 auto;
     min-width: 0;
+}
+
+.navmenu__links > li {
+    flex: 0 0 auto;
 }
 
 /* ── Nav links ─────────────────────────────────────────────────────────────
@@ -111,6 +121,7 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    white-space: nowrap;
     color: var(--text-muted);
     padding: 0.5rem 0.85rem;
     border-radius: 6px;
@@ -200,6 +211,17 @@
     margin-left: auto;
 }
 
+/* The buttons keep their intrinsic width; only the identity badge below is allowed to
+   give ground, because it is the only child that truncates cleanly. */
+.navmenu__auth > .po-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.navmenu__theme-toggle {
+    padding-inline: 0.7rem;
+}
+
 .navmenu__user-badge {
     font-size: 0.78rem;
     font-weight: 600;
@@ -207,6 +229,8 @@
     border-radius: 999px;
     letter-spacing: 0.03em;
     white-space: nowrap;
+    flex: 0 1 auto;
+    min-width: 0;
     max-width: clamp(120px, 22vw, 260px);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -261,19 +285,28 @@
 
 /* ── Live activity ticker ─────────────────────────────────────────────────── */
 
+/* The strip gives up width before the links or the auth controls do (flex: 0 1 auto),
+   and clips rather than letting a pill escape its box — see the pill rule below. */
 .navmenu__ticker {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     min-width: 0;
-    margin-inline: 0.75rem;
+    flex: 0 1 auto;
+    overflow: hidden;
+    margin-inline: 0.5rem;
     font-size: 0.72rem;
 }
 
+/* flex: 0 0 auto is load-bearing. As a shrinkable item the pill was squeezed narrower
+   than its own nowrap label, which then overflowed the box and rendered on top of the
+   next pill — the two ticker chips printed over each other in the header. */
 .navmenu__ticker-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
+    flex: 0 0 auto;
+    max-width: 100%;
     padding: 0.1rem 0.55rem;
     border-radius: 9999px;
     font-weight: 700;
@@ -327,6 +360,10 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* The one part of the strip allowed to shrink — it ellipsises, so losing width
+       degrades gracefully instead of overflowing. */
+    flex: 0 1 auto;
+    min-width: 0;
     max-width: 22ch;
 }
 
@@ -341,9 +378,46 @@
     border-radius: 4px;
 }
 
+/* ── Desktop crowding ───────────────────────────────────────────────────────
+   Between the nav breakpoint and a comfortable width the bar carries brand + four
+   links + ticker + theme + identity + logout on one row. Rather than let them all
+   squeeze, the ticker — the only optional content, and duplicated on /archive —
+   drops out. Below 768px it moves into the collapsed menu and comes back in full.
+   The 1280px figure is measured, not guessed: brand + links + both pills + the auth
+   controls need ~1210px of intrinsic width, so below that the pills would be clipped
+   mid-word rather than merely tightened. */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+    .navmenu__ticker {
+        display: none;
+    }
+
+    /* Without the ticker the bar still overran the viewport here — the links and the auth
+       controls alone need more than ~870px — and the overflow was clipped, shearing the
+       Logout button in half. These three trims recover ~120px. */
+    .navmenu__theme-label {
+        display: none;
+    }
+
+    ::deep .navmenu__link {
+        padding-inline: 0.55rem;
+    }
+
+    .navmenu__user-badge {
+        max-width: 150px;
+    }
+}
+
+/* Last resort before the hamburger: drop the wordmark and keep the PL mark. The anchor's
+   name comes from its aria-label, so hiding the text costs nothing to a screen reader. */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .navmenu__brand-text {
+        display: none;
+    }
+}
+
 /* Below the nav breakpoint the ticker sits inside the collapsed menu, where horizontal space
    is no longer scarce but vertical space is — so it stays on one row and drops the excerpt. */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
     .navmenu__ticker {
         margin: 0.4rem 0 0;
         flex-wrap: wrap;
