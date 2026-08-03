@@ -50,6 +50,8 @@ internal static class SseChatStreamReader
         long? firstTokenMs = null; // time-to-first-token (actual warm-up per PRD)
         var counters = new HtmlStreamCounters();
         long lastCallbackAt = -CallbackThrottleMs; // trigger first callback immediately
+        string? finishReason = null;
+        int? providerCompletionTokens = null;
 
         try
         {
@@ -65,6 +67,7 @@ internal static class SseChatStreamReader
                 var data = line[6..];
                 if (data == "[DONE]") break;
 
+                TryReadCompletionMetadata(data, result, ref finishReason, ref providerCompletionTokens);
                 var token = TryReadDelta(data);
                 if (token is null) continue;
 
@@ -108,7 +111,9 @@ internal static class SseChatStreamReader
         var html = sb.ToString();
         result.HtmlOutputRaw = html;
         result.HtmlOutputSizeBytes = Encoding.UTF8.GetByteCount(html);
-        result.TokenCount = tokenCount;
+        result.TokenCount = providerCompletionTokens ?? tokenCount;
+        result.FinishReason = finishReason;
+        result.WasTruncated = string.Equals(finishReason, "length", StringComparison.OrdinalIgnoreCase);
         result.WarmUpDurationMs = firstTokenMs ?? warmUpMs; // first-token latency
         result.TotalDurationMs = sw.ElapsedMilliseconds;
         result.GenerationDurationMs = Math.Max(0L, result.TotalDurationMs - result.WarmUpDurationMs);
@@ -116,7 +121,47 @@ internal static class SseChatStreamReader
             ? Math.Round(tokenCount / (result.GenerationDurationMs / 1000.0), 1)
             : 0;
 
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            result.IsFailure = true;
+            result.FailureReason = string.IsNullOrWhiteSpace(finishReason)
+                ? "Inference completed without output."
+                : $"Inference completed without output (finish reason: {finishReason}).";
+        }
+
         return null;
+    }
+
+    private static void TryReadCompletionMetadata(
+        string data,
+        DuelResult result,
+        ref string? finishReason,
+        ref int? providerCompletionTokens)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0 &&
+                choices[0].TryGetProperty("finish_reason", out var reason) && reason.ValueKind == JsonValueKind.String)
+            {
+                finishReason = reason.GetString();
+            }
+
+            if (!doc.RootElement.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object) return;
+            if (usage.TryGetProperty("prompt_tokens", out var promptTokens) && promptTokens.TryGetInt32(out var promptCount))
+                result.PromptTokenCount = promptCount;
+            if (usage.TryGetProperty("completion_tokens", out var completionTokens) && completionTokens.TryGetInt32(out var completionCount))
+                providerCompletionTokens = completionCount;
+            if (usage.TryGetProperty("completion_tokens_details", out var details) &&
+                details.TryGetProperty("reasoning_tokens", out var reasoningTokens) && reasoningTokens.TryGetInt32(out var reasoningCount))
+            {
+                result.ReasoningTokenCount = reasoningCount;
+            }
+        }
+        catch (JsonException)
+        {
+            // The delta parser handles malformed provider frames the same way.
+        }
     }
 
     /// <summary>
@@ -129,9 +174,9 @@ internal static class SseChatStreamReader
         try
         {
             using var doc = JsonDocument.Parse(data);
-            if (doc.RootElement.TryGetProperty("choices", out var choices) &&
+            if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array &&
                 choices.GetArrayLength() > 0 &&
-                choices[0].TryGetProperty("delta", out var delta) &&
+                choices[0].TryGetProperty("delta", out var delta) && delta.ValueKind == JsonValueKind.Object &&
                 delta.TryGetProperty("content", out var contentEl) &&
                 contentEl.ValueKind == JsonValueKind.String)
             {

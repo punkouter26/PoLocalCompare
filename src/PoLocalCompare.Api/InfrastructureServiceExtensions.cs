@@ -42,7 +42,8 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IDuelResultRepository, DuelResultRepository>();
 
         // Typed HttpClients (standards §5.4) with uniform resilience (§5.6). Retries cover
-        // connection-level failures and 5xx/408/429 before the SSE stream starts; there is
+        // connection-level failures and 5xx/408 before the SSE stream starts; 429 handling is
+        // provider-specific because Foundry communicates a Retry-After window that must be honoured.
         // deliberately no per-attempt timeout because it would abort long streaming responses.
         //
         // Foundry timeout: cold-start first-token latency on some smaller deployments (e.g. Phi-4 Mini)
@@ -96,6 +97,6 @@ public static class InfrastructureServiceExtensions
             BackoffType = Polly.DelayBackoffType.Exponential,
             ShouldHandle = new Polly.PredicateBuilder<HttpResponseMessage>()
                 .Handle<HttpRequestException>()
-                .HandleResult(r => (int)r.StatusCode is >= 500 or 408 or 429),
+                .HandleResult(r => (int)r.StatusCode is >= 500 or 408),
         });
 }

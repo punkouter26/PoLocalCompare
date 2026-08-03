@@ -50,6 +50,24 @@
                     <span class="telemetry-hud__label">Tokens</span>
                     <span class="telemetry-hud__value">@Result.TokenCount.ToString("N0")</span>
                 </div>
+                @if (Result.PromptTokenCount.HasValue)
+                {
+                    <div class="telemetry-hud__item">
+                        <span class="telemetry-hud__label">Prompt Tokens</span>
+                        <span class="telemetry-hud__value">@Result.PromptTokenCount.Value.ToString("N0")</span>
+                    </div>
+                }
+                @if (Result.ReasoningTokenCount.HasValue)
+                {
+                    <div class="telemetry-hud__item">
+                        <span class="telemetry-hud__label">Reasoning Tokens</span>
+                        <span class="telemetry-hud__value">@Result.ReasoningTokenCount.Value.ToString("N0")</span>
+                    </div>
+                }
+                <div class="telemetry-hud__item">
+                    <span class="telemetry-hud__label">Completion</span>
+                    <span class="telemetry-hud__value">@(Result.WasTruncated ? "Truncated" : Result.FinishReason ?? "Unknown")</span>
+                </div>
                 <div class="telemetry-hud__item">
                     <span class="telemetry-hud__label">Output Size</span>
                     <span class="telemetry-hud__value">@FormatBytes(Result.HtmlOutputSizeBytes)</span>

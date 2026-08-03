@@ -9,7 +9,11 @@ public sealed class DuelResult
     public long GenerationDurationMs { get; set; }
     public long TotalDurationMs { get; set; }
     public int TokenCount { get; set; }
+    public int? PromptTokenCount { get; set; }
+    public int? ReasoningTokenCount { get; set; }
     public double TokenVelocity { get; set; }
+    public string? FinishReason { get; set; }
+    public bool WasTruncated { get; set; }
     public string HtmlOutputRaw { get; set; }
     public long HtmlOutputSizeBytes { get; set; }
     public double CharacterDensityRatio { get; set; }

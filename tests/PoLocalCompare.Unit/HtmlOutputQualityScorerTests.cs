@@ -79,6 +79,14 @@ public class HtmlOutputQualityScorerTests
     }
 
     [Fact]
+    public void Score_TruncatedHtml_LosesCompletionPoints()
+    {
+        var truncated = FullPage.Replace("</html>", string.Empty);
+
+        Assert.Equal(80, HtmlOutputQualityScorer.Score(truncated));
+    }
+
+    [Fact]
     public void Score_IsCaseInsensitiveAboutTagNames()
     {
         Assert.Equal(

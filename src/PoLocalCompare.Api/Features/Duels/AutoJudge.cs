@@ -144,12 +144,8 @@ public sealed class AutoJudge
             }
 
             // Make the "could not decide" reason persistent on the duel so a human arriving at
-            // the Arena from the demo queue gets the same hint the judge had. The two cases:
-            //   - both sides failed ⇒ nothing to compare (the Arena already shows a failure
-            //     card, but the explicit reason stops a judge coming back later from logging
-            //     the same placeholder again);
-            //   - one side failed ⇒ the partial-duel walkover the code below returns, in which
-            //     case no "stood down" note should remain on the saved duel.
+            // the Arena from the demo queue gets the same hint the judge had. A one-sided
+            // execution failure is not model-quality evidence, so it remains Pending too.
             if (decision is null)
             {
                 standDownReason = SynthesizeStandDownReason(left, right);
@@ -237,17 +233,16 @@ public sealed class AutoJudge
             return null;
         }
 
-        // One side produced nothing. The comparison is settled without spending a judge call,
-        // and the rationale records why so an AI-awarded walkover is not mistaken for a
-        // considered decision.
+        // One side produced nothing. This is an execution failure, not comparative evidence:
+        // leave the duel pending instead of moving ratings on an infrastructure walkover.
         if (leftOk != rightOk)
         {
-            var verdict = leftOk ? DuelVerdict.Left : DuelVerdict.Right;
             var failed = leftOk ? right : left;
             var why = string.IsNullOrWhiteSpace(failed?.FailureReason)
                 ? "produced no output"
                 : failed.FailureReason!.Split('\n', 2)[0].Trim();
-            return new JudgeDecision(verdict, $"Awarded by default — the other model {why}.");
+            AutoJudgeLog.StoodDown(_logger, duel.DuelId, $"one model failed: {why}");
+            return null;
         }
 
         return await _judge.JudgeAsync(
@@ -282,7 +277,7 @@ public sealed class AutoJudge
         var leftOk = left is not null && !left.IsFailure && !string.IsNullOrWhiteSpace(left.HtmlOutputRaw);
         var rightOk = right is not null && !right.IsFailure && !string.IsNullOrWhiteSpace(right.HtmlOutputRaw);
         if (!leftOk && !rightOk) return "Neither model produced output.";
-        return null; // single-side failure walkovers return a decision via DecideAsync, not null.
+        return "One model did not produce usable output; no rating was recorded.";
     }
 
     /// <summary>

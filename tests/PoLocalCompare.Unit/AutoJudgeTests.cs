@@ -184,10 +184,10 @@ public class AutoJudgeTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    // ── A walkover is settled without spending a judge call ───────────────────
+    // ── A walkover does not move ratings ─────────────────────────────────────
 
     [Fact]
-    public async Task RunAsync_OneModelFailed_AwardsSurvivorWithoutCallingJudge()
+    public async Task RunAsync_OneModelFailed_LeavesDuelPendingWithoutCallingJudge()
     {
         var duel = MakePendingDuel();
         var harness = BuildHarness(
@@ -197,9 +197,8 @@ public class AutoJudgeTests
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
 
-        Assert.Equal(DuelVerdict.Left, duel.Verdict);
-        Assert.Equal(VerdictSource.Ai, duel.VerdictSource);
-        Assert.Contains("Watchdog timeout", duel.JudgeRationale);
+        Assert.Equal(DuelVerdict.Pending, duel.Verdict);
+        Assert.Contains("One model did not produce usable output", duel.JudgeStoodDownReason);
         harness.Llm.Verify(j => j.JudgeAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }

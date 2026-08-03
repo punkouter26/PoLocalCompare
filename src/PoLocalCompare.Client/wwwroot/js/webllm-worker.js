@@ -260,7 +260,7 @@ self.onmessage = async (event) => {
                 { role: 'user', content: prompt },
             ],
             stream: true,
-            max_tokens: 8000,
+            max_tokens: 4096,
         });
 
         for await (const chunk of stream) {

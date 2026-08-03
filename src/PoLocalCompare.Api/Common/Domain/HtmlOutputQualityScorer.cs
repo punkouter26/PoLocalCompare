@@ -21,6 +21,9 @@ public static partial class HtmlOutputQualityScorer
     [GeneratedRegex(@"<\s*script\b", RegexOptions.IgnoreCase)]
     private static partial Regex ScriptTagRegex();
 
+    [GeneratedRegex(@"</\s*html\s*>", RegexOptions.IgnoreCase)]
+    private static partial Regex ClosingHtmlTagRegex();
+
     [GeneratedRegex(@"<(?:!doctype|html|head|body|canvas|div|script|style)\b", RegexOptions.IgnoreCase)]
     private static partial Regex LooksLikeHtmlRegex();
 
@@ -39,6 +42,7 @@ public static partial class HtmlOutputQualityScorer
         if (!HtmlTagRegex().IsMatch(text)) score -= 10;
         if (!BodyTagRegex().IsMatch(text)) score -= 10;
         if (!ScriptTagRegex().IsMatch(text)) score -= 10;
+        if (HtmlTagRegex().IsMatch(text) && !ClosingHtmlTagRegex().IsMatch(text)) score -= 20;
         if (text.Length < 200) score -= 10;
 
         return Math.Clamp(score, 0, 100);

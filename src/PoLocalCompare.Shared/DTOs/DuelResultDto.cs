@@ -10,7 +10,11 @@ public sealed class DuelResultDto
     public long GenerationDurationMs { get; init; }
     public long TotalDurationMs { get; init; }
     public int TokenCount { get; init; }
+    public int? PromptTokenCount { get; init; }
+    public int? ReasoningTokenCount { get; init; }
     public double TokenVelocity { get; init; }
+    public string? FinishReason { get; init; }
+    public bool WasTruncated { get; init; }
     public string HtmlOutputRaw { get; init; } = string.Empty;
     public long HtmlOutputSizeBytes { get; init; }
     public double CharacterDensityRatio { get; init; }

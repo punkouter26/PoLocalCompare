@@ -61,6 +61,11 @@ public static class FoundryChatRequest
             ["stream"] = stream,
         };
 
+        if (stream)
+        {
+            body["stream_options"] = new { include_usage = true };
+        }
+
         if (includeModelField)
         {
             body["model"] = deploymentName;

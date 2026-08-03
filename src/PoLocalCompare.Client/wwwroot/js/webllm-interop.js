@@ -117,7 +117,7 @@ window.startWebLlmInference = async function (dotnetRef, modelId, webLlmModelId,
         delete workers[modelId];
     }
 
-    const worker = new Worker('/js/webllm-worker.js?v=7', { type: 'module' });
+    const worker = new Worker('/js/webllm-worker.js?v=8', { type: 'module' });
     workers[modelId] = worker;
 
     worker.onmessage = (event) => {

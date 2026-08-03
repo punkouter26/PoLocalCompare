@@ -30,6 +30,7 @@ public sealed class FoundryInferenceProxy(
     {
         var result = new DuelResult(duelId, model.ModelId);
         var sw = Stopwatch.StartNew();
+        using var activity = InferenceTelemetry.ActivitySource.StartActivity("gen_ai.chat", ActivityKind.Client);
 
         var endpoint = _configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/');
         var apiKey = _configuration["AzureAiFoundry:ApiKey"];
@@ -51,12 +52,16 @@ public sealed class FoundryInferenceProxy(
             new { role = "user", content = promptFull }
         };
 
+        // Reasoning tokens are drawn from max_completion_tokens before visible output, so they
+        // need additional headroom to produce a comparable HTML document.
+        var maxTokens = FoundryChatRequest.IsReasoningModel(deploymentName) ? 16_384 : 4_096;
+
         // Reasoning models (gpt-5*, o-series) require max_completion_tokens and reject custom temperature.
         var deploymentRequestBody = FoundryChatRequest.Build(
-            deploymentName, messages, maxTokens: 4096, temperature: 0.7, stream: true, includeModelField: false);
+            deploymentName, messages, maxTokens, temperature: 0.7, stream: true, includeModelField: false);
 
         var modelInferenceRequestBody = FoundryChatRequest.Build(
-            deploymentName, messages, maxTokens: 4096, temperature: 0.7, stream: true, includeModelField: true);
+            deploymentName, messages, maxTokens, temperature: 0.7, stream: true, includeModelField: true);
 
         var deploymentJson = JsonSerializer.Serialize(deploymentRequestBody);
         var modelInferenceJson = JsonSerializer.Serialize(modelInferenceRequestBody);
@@ -92,10 +97,13 @@ public sealed class FoundryInferenceProxy(
                                                         or System.Net.HttpStatusCode.TooManyRequests;
                 if (isTransient && attempt < maxAttempts)
                 {
+                    var delay = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                        ? GetRetryAfter(response.Headers.RetryAfter)
+                        : TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                    var statusCode = response.StatusCode;
                     response.Dispose();
-                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
                     _logger.LogWarning("Transient {StatusCode} for {Target}, retry {Attempt}/{Max} in {Delay}s",
-                        (int)response.StatusCode, target, attempt, maxAttempts, delay.TotalSeconds);
+                        (int)statusCode, target, attempt, maxAttempts, delay.TotalSeconds);
                     await Task.Delay(delay, ct);
                     continue;
                 }
@@ -183,17 +191,36 @@ public sealed class FoundryInferenceProxy(
             return result;
         }
 
-        // Estimate API cost (if pricing is set on the model)
+        // Estimate API cost from provider-reported usage. TokenCount falls back to stream chunks
+        // only for providers that do not send usage, so cost remains explicitly approximate there.
         if (model.InputTokenPricePerMillion.HasValue || model.OutputTokenPricePerMillion.HasValue)
         {
+            var inputCost = ((result.PromptTokenCount ?? 0) / 1_000_000.0) * (double)(model.InputTokenPricePerMillion ?? 0);
             var outputCost = (result.TokenCount / 1_000_000.0) * (double)(model.OutputTokenPricePerMillion ?? 0);
-            result.ApiCostUsd = outputCost;
+            result.ApiCostUsd = inputCost + outputCost;
         }
+
+        activity?.SetTag("gen_ai.provider.name", "azure.ai.foundry");
+        activity?.SetTag("gen_ai.request.model", deploymentName);
+        activity?.SetTag("gen_ai.usage.input_tokens", result.PromptTokenCount);
+        activity?.SetTag("gen_ai.usage.output_tokens", result.TokenCount);
+        activity?.SetTag("gen_ai.response.finish_reasons", result.FinishReason);
+        activity?.SetTag("gen_ai.response.truncated", result.WasTruncated);
+        InferenceTelemetry.Record("azure.ai.foundry", deploymentName, result);
 
         _logger.LogInformation(
             "Inference complete for {Model}: {Tokens} tokens, {Bytes} bytes, {Ms}ms",
             deploymentName, result.TokenCount, result.HtmlOutputSizeBytes, result.TotalDurationMs);
 
         return result;
+    }
+
+    private static TimeSpan GetRetryAfter(RetryConditionHeaderValue? retryAfter)
+    {
+        if (retryAfter?.Delta is { } delta)
+            return TimeSpan.FromSeconds(Math.Clamp(delta.TotalSeconds, 1, 90));
+        if (retryAfter?.Date is { } retryAt)
+            return TimeSpan.FromSeconds(Math.Clamp((retryAt - DateTimeOffset.UtcNow).TotalSeconds, 1, 90));
+        return TimeSpan.FromSeconds(30);
     }
 }

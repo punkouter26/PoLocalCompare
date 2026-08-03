@@ -93,6 +93,7 @@ public static class DuelsEndpoints
                 });
 
             var normalizedHtml = HtmlOutputNormalizer.Normalize(request.HtmlOutputRaw);
+            var isEmptyOutput = string.IsNullOrWhiteSpace(normalizedHtml);
 
             var result = new DuelResult(duelId, request.ModelId)
             {
@@ -101,12 +102,12 @@ public static class DuelsEndpoints
                 TokenCount = request.TokenCount,
                 TotalDurationMs = request.TotalDurationMs,
                 WarmUpDurationMs = request.WarmUpDurationMs,
-                GenerationDurationMs = request.TotalDurationMs - request.WarmUpDurationMs,
+                GenerationDurationMs = Math.Max(0, request.TotalDurationMs - request.WarmUpDurationMs),
                 TokenVelocity = request.TotalDurationMs > 0
                     ? request.TokenCount / (request.TotalDurationMs / 1000.0)
                     : 0,
-                IsFailure = request.IsFailure,
-                FailureReason = request.FailureReason,
+                IsFailure = request.IsFailure || isEmptyOutput,
+                FailureReason = request.FailureReason ?? (isEmptyOutput ? "Browser inference completed without output." : null),
             };
 
             // Apply the shared Domain enrichment policy (density, quality, GreenStats) when the model is known.

@@ -98,7 +98,7 @@ window.runModelDiag = async function (dotnetRef, diagId, webLlmModelId, prompt, 
         delete _diagWorkers[diagId];
     }
 
-    const worker = new Worker('/js/webllm-worker.js?v=7', { type: 'module' });
+    const worker = new Worker('/js/webllm-worker.js?v=8', { type: 'module' });
     _diagWorkers[diagId] = worker;
 
     let firstTokenMs = -1;

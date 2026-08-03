@@ -109,7 +109,8 @@ try
                          || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase));
                  };
              })
-             .AddHttpClientInstrumentation();
+             .AddHttpClientInstrumentation()
+             .AddSource(InferenceTelemetry.Name);
             if (!string.IsNullOrEmpty(otlpEndpoint))
                 t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
             if (!string.IsNullOrWhiteSpace(aiCs))
@@ -118,7 +119,8 @@ try
         .WithMetrics(m =>
         {
             m.AddAspNetCoreInstrumentation()
-             .AddHttpClientInstrumentation();
+             .AddHttpClientInstrumentation()
+             .AddMeter(InferenceTelemetry.Name);
             if (!string.IsNullOrEmpty(otlpEndpoint))
                 m.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
             if (!string.IsNullOrWhiteSpace(aiCs))
