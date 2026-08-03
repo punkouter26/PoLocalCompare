@@ -27,18 +27,29 @@ public static class DemoPlanner
     /// <summary>Minimum pool size — a model cannot duel itself.</summary>
     public const int MinimumModels = 2;
 
+    /// <summary>
+    /// Plans a demo run from a pool of model ids. Two ids with the same display name (e.g. two
+    /// table rows both seeded as "Phi-4 Mini" with different capitalisation in their endpoint
+    /// ref) will produce a pair that reads as "Phi-4 Mini vs Phi-4 Mini" on the Arena, which is
+    /// indistinguishable from a self-duel and which judges unhelpfully. Pass <paramref name="nameResolver"/>
+    /// to filter duplicates up front; the id-only overload is kept for tests where the pool is
+    /// already known to be distinct.
+    /// </summary>
     public static IReadOnlyList<DemoRound> Plan(
         IReadOnlyList<ModelId> modelPool,
         int rounds = DefaultRounds,
-        int? seed = null)
+        int? seed = null,
+        Func<ModelId, string?>? nameResolver = null)
     {
-        if (modelPool.Count < MinimumModels || rounds <= 0)
+        var pool = nameResolver is null ? modelPool : DedupeByName(modelPool, nameResolver);
+
+        if (pool.Count < MinimumModels || rounds <= 0)
             return [];
 
         var random = seed is null ? new Random() : new Random(seed.Value);
 
         var prompts = Cycle(Shuffle(PromptLibrary.SelfRunning, random), rounds);
-        var pairings = Cycle(Shuffle(AllPairs(modelPool), random), rounds);
+        var pairings = Cycle(Shuffle(AllPairs(pool), random), rounds);
 
         var plan = new List<DemoRound>(rounds);
         for (var i = 0; i < rounds; i++)
@@ -58,6 +69,29 @@ public static class DemoPlanner
         }
 
         return plan;
+    }
+
+    /// <summary>
+    /// Drops models whose display name (case-insensitive, trimmed) collides with one already
+    /// kept in the output. First wins, preserving insertion order from the source pool so the
+    /// deterministic seed in tests stays meaningful. Exposed publicly so callers can report
+    /// the post-dedupe pool size without re-running the dedupe themselves.
+    /// </summary>
+    public static List<ModelId> DedupeByName(
+        IReadOnlyList<ModelId> pool,
+        Func<ModelId, string?> nameResolver)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<ModelId>(pool.Count);
+
+        foreach (var id in pool)
+        {
+            var name = nameResolver(id);
+            var key = string.IsNullOrWhiteSpace(name) ? id.Value : name.Trim();
+            if (seen.Add(key)) result.Add(id);
+        }
+
+        return result;
     }
 
     /// <summary>Every unordered pair in the pool, so a run spreads across matchups before repeating one.</summary>

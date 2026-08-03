@@ -120,4 +120,67 @@ public class DemoPlannerTests
 
         Assert.Equal(rounds, plan.Count);
     }
+
+    [Fact]
+    public void Plan_NeverPairsTwoModelsWithTheSameDisplayName()
+    {
+        // Regression: Table Storage ended up with two rows whose DisplayName was "Phi-4"
+        // (different ids, different apiEndpointRef capitalisation). The Arena rendered
+        // "Phi-4 vs Phi-4" because the planner only checked ModelId equality, not name. With
+        // a name resolver, the duplicate is dropped before pairing.
+        var pool = new List<ModelId>
+        {
+            ModelId.From("model-A"),
+            ModelId.From("model-B"),
+            ModelId.From("model-C"),
+            ModelId.From("model-D"),   // duplicate of A
+            ModelId.From("model-E"),   // duplicate of B (case-insensitive)
+        };
+        var names = new Dictionary<string, string>
+        {
+            ["model-A"] = "Phi-4",
+            ["model-B"] = "Phi-4 Mini",
+            ["model-C"] = "GPT-5 Nano",
+            ["model-D"] = "Phi-4",
+            ["model-E"] = "PHI-4 MINI",   // case-insensitive duplicate
+        };
+
+        var plan = DemoPlanner.Plan(
+            pool,
+            rounds: 20,
+            seed: 7,
+            nameResolver: id => names.TryGetValue(id.Value, out var n) ? n : null);
+
+        Assert.NotEmpty(plan);
+        Assert.All(plan, round =>
+        {
+            var leftName = names[round.LeftModelId.Value];
+            var rightName = names[round.RightModelId.Value];
+            Assert.NotEqual(leftName, rightName);
+        });
+    }
+
+    [Fact]
+    public void Plan_DropsDuplicatesByCaseInsensitiveName_FirstWins()
+    {
+        var pool = new List<ModelId>
+        {
+            ModelId.From("first-kept"),
+            ModelId.From("duplicate-later"),
+        };
+        var names = new Dictionary<string, string>
+        {
+            ["first-kept"]      = "Phi-4",
+            ["duplicate-later"] = "phi-4",   // same name, different casing
+        };
+
+        var plan = DemoPlanner.Plan(
+            pool,
+            rounds: 10,
+            seed: 1,
+            nameResolver: id => names.TryGetValue(id.Value, out var n) ? n : null);
+
+        // Only one model was kept, so the planner has nothing to pair and returns empty.
+        Assert.Empty(plan);
+    }
 }

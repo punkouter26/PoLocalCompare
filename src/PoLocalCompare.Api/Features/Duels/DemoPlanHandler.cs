@@ -39,11 +39,21 @@ public sealed class DemoPlanHandler(IModelRepository modelRepository)
         }
 
         var namesById = remoteModels.ToDictionary(model => model.ModelId, model => model.DisplayName);
-        var plan = DemoPlanner.Plan(remoteModels.Select(model => model.ModelId).ToList(), clampedRounds, seed);
+        var plan = DemoPlanner.Plan(
+            remoteModels.Select(model => model.ModelId).ToList(),
+            clampedRounds,
+            seed,
+            id => namesById.TryGetValue(id, out var n) ? n : null);
+
+        // Reflect the post-dedupe pool size so the UI's "N remote models available" header
+        // agrees with the number of distinct pairings the planner actually saw.
+        var availableForPairing = DemoPlanner.DedupeByName(
+            remoteModels.Select(model => model.ModelId).ToList(),
+            id => namesById.TryGetValue(id, out var n) ? n : null).Count;
 
         return new DemoPlanDto
         {
-            AvailableModels = remoteModels.Count,
+            AvailableModels = availableForPairing,
             Rounds = plan.Select(round => new DemoRoundDto
             {
                 Index = round.Index,
