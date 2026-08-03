@@ -110,14 +110,16 @@
     }
 
     /// <summary>
-    /// Both sparklines share one vertical scale so the two traces can be compared directly;
-    /// normalising each to its own peak would make a slow model look identical to a fast one.
+    /// Per-lane peak of the trace being drawn. A finished lane stops growing while the other
+    /// keeps appending; sharing a single peak across both lanes would squash the finished
+    /// trace flat once the running side surges past it. Each lane now scales against its
+    /// own historical maximum — the visual still matches between sides because the racing
+    /// sense (lead/lag) comes from the lane markers, not the sparklines themselves.
     /// </summary>
-    private double SharedPeak()
+    private static double PeakFor(IReadOnlyList<double> history)
     {
         var peak = 0.0;
-        foreach (var sample in LeftHistory) peak = Math.Max(peak, sample);
-        foreach (var sample in RightHistory) peak = Math.Max(peak, sample);
+        foreach (var sample in history) if (sample > peak) peak = sample;
         return peak <= 0 ? 1 : peak;
     }
 
@@ -125,7 +127,7 @@
     {
         if (history.Count < 2) return string.Empty;
 
-        var peak = SharedPeak();
+        var peak = PeakFor(history);
         var stepX = 100.0 / (history.Count - 1);
 
         return string.Join(' ', history.Select((sample, index) =>

@@ -9,6 +9,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject PromptHistoryService PromptHistory
+@inject WebGpuCapability WebGpu
 
 <PageTitle>Compare - PoLocalCompare</PageTitle>
 
@@ -280,14 +281,14 @@
         </section>
     }
 
-    @* ── Sticky CTA bar (Finding #7) ─────────────────────────────────── *@
+    @* ── Sticky ready bar (Finding #7) ─────────────────────────────────────
+       The Compare button itself lives in step 3; duplicating it here created two same-priority
+       primary controls on the same page. A short status pill ("Ready: …") tells a scrolled
+       user that the comparison is available without competing with the in-flow button. *@
     @if (CanCompare)
     {
-        <div class="home__sticky-cta">
-            <span class="home__sticky-text">Ready: @_leftModel!.DisplayName vs @_rightModel!.DisplayName</span>
-            <button class="po-btn po-btn--sm po-btn--success" @onclick="StartDuelAsync">
-                Compare →
-            </button>
+        <div class="home__sticky-cta" role="status">
+            <span class="home__sticky-text">Ready: @_leftModel!.DisplayName vs @_rightModel!.DisplayName — scroll to step 3 to compare</span>
         </div>
     }
 </div>
@@ -313,7 +314,7 @@
 
     private IReadOnlyList<RecentPrompt> _recentPrompts = [];
 
-    private sealed class WebGpuProbe { public bool Supported { get; set; } }
+    private sealed class WebGpuProbeCompat { public bool Supported { get; set; } }
 
     private bool HasModels => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
     private bool HasPrompt => !string.IsNullOrWhiteSpace(_prompt);
@@ -448,12 +449,9 @@
     {
         if (!firstRender) return;
         // Probe real WebGPU capability so Browser models can be gated when they can't run.
-        try
-        {
-            var probe = await JS.InvokeAsync<WebGpuProbe>("checkWebGpu");
-            _webGpuSupported = probe.Supported;
-        }
-        catch { _webGpuSupported = false; }
+        // Shared with ModelHealthPanel via WebGpuCapability — single adapter/device request.
+        var probe = await WebGpu.GetAsync();
+        _webGpuSupported = probe?.Supported;
         StateHasChanged();
     }
 

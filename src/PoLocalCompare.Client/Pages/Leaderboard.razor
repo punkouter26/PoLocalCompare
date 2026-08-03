@@ -94,6 +94,8 @@
                         var entry = _displayedEntries[i];
                         var dr = i + 1;
                         <tr tabindex="0"
+                            aria-controls="@KillListPanelId"
+                            aria-expanded="@(_selected?.ModelId == entry.ModelId ? "true" : "false")"
                             @onclick="() => OnRowSelect(entry)"
                             @onkeydown="e => OnRowKeyDown(e, entry)">
                             <td>
@@ -196,13 +198,13 @@
             <div class="leaderboard__summary">
                 <span>&#x1F4CA; <strong>@_entries.Count</strong> model@(_entries.Count == 1 ? "" : "s") ranked</span>
                 <span>&#x2694;&#xFE0F; <strong>@totalDuels</strong> duel@(totalDuels == 1 ? "" : "s") fought</span>
-                <span>&#x1F3C6; Top: <strong>@topModel</strong></span>
+                <span>&#x1F3C6; @TopLabel: <strong>@topModel</strong></span>
             </div>
         }
 
         @if (_selected is not null)
         {
-            <div class="leaderboard__killlist-panel">
+            <div id="@KillListPanelId" class="leaderboard__killlist-panel">
                 <div class="leaderboard__killlist-header">
                     <span class="leaderboard__killlist-title">@KillListPanelText</span>
                     <button type="button" class="po-btn leaderboard__killlist-close"
@@ -281,6 +283,20 @@
     /// <summary>aria-pressed needs the lowercase JS-style literal, not .NET's "True"/"False".</summary>
     private static string Pressed(bool on) => on ? "true" : "false";
     private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
+
+    /// <summary>Headline label mirrors the active sort — "Top ELO" / "Cheapest" / "Greenest"
+    /// / "Highest quality" — so a sorted-by-cost view doesn't claim the leader is the top.</summary>
+    private string TopLabel => _sortBy switch
+    {
+        "GreenScore" => "Greenest",
+        "Quality"    => "Highest quality",
+        "Cost"       => "Cheapest",
+        _            => "Top ELO",
+    };
+
+    /// <summary>Stable id referenced by each row's aria-controls, so a screen reader
+    /// knows which kill-list panel the row expanded.</summary>
+    private const string KillListPanelId = "leaderboard-killlist-panel";
 
     protected override async Task OnInitializedAsync()
     {

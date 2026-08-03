@@ -35,6 +35,10 @@ try
     builder.Services.AddScoped<LobbyTickerService>();
     builder.Services.AddScoped<WebLlmService>();
     builder.Services.AddTransient<SignalRDuelClient>();
+
+    // Single-flight WebGPU capability probe — shared between Home and ModelHealthPanel so
+    // only one adapter/device request is made even when both mount on the same page.
+    builder.Services.AddScoped<WebGpuCapability>();
     await builder.Build().RunAsync();
 }
 catch (Exception ex)

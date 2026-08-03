@@ -497,11 +497,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // UX#7: Block navigation away when verdict is still pending
+        // UX#7: Block navigation away when verdict is still pending. The prompt only fires
+        // when the user has time to vote — AutoJudgeDelaySeconds > 0 means the auto-judge
+        // will decide the duel on its own, so there is no reason to nag on the way out.
+        // (The previous condition inverted this and prompted exactly when it shouldn't.)
         _locationChangingReg = Nav.RegisterLocationChangingHandler(async ctx =>
         {
-            // A retry navigates deliberately to the new duel — don't nag about the old one,
-            // and don't nag at all when the auto-judge will decide it anyway.
             if (_duel?.Verdict == DuelVerdict.Pending && !_verdictRecorded && !_retrying
                 && _duel.AutoJudgeDelaySeconds <= 0)
             {

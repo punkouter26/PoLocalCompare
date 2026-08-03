@@ -5,49 +5,49 @@
    before the verdict buttons on purpose: it is evidence to vote with, not a verdict. Nothing on
    this card touches ELO. *@
 
-<section class="scorecard" aria-labelledby="scorecard-heading">
-    <div class="scorecard__head">
-        <h2 id="scorecard-heading" class="scorecard__title">
+<section class="output-scorecard" aria-labelledby="output-scorecard-heading">
+    <div class="output-scorecard__head">
+        <h2 id="output-scorecard-heading" class="output-scorecard__title">
             <span aria-hidden="true">🧪</span> Objective scorecard
         </h2>
-        <p class="scorecard__hint">
+        <p class="output-scorecard__hint">
             Measured in your browser from the two outputs. Structural facts only — it can't tell you
             which one followed the prompt.
         </p>
     </div>
 
-    <table class="scorecard__table">
+    <table class="output-scorecard__table">
         <caption class="visually-hidden">Structural comparison of both models' HTML output</caption>
         <thead>
             <tr>
-                <th scope="col" class="scorecard__col-side">@LeftName</th>
-                <th scope="col" class="scorecard__col-metric">Metric</th>
-                <th scope="col" class="scorecard__col-side">@RightName</th>
+                <th scope="col" class="output-scorecard__col-side">@LeftName</th>
+                <th scope="col" class="output-scorecard__col-metric">Metric</th>
+                <th scope="col" class="output-scorecard__col-side">@RightName</th>
             </tr>
         </thead>
         <tbody>
             @foreach (var row in _rows)
             {
                 <tr>
-                    <td class="scorecard__value @(row.LeftWins ? "scorecard__value--better" : "")">
+                    <td class="output-scorecard__value @(row.LeftWins ? "output-scorecard__value--better" : "")">
                         @if (row.LeftWins)
                         {
-                            <span class="scorecard__win-mark" aria-label="Better">◀</span>
+                            <span class="output-scorecard__win-mark" aria-label="Better">◀</span>
                         }
                         <span>@row.LeftText</span>
                     </td>
-                    <th scope="row" class="scorecard__metric">
-                        <span class="scorecard__metric-name">@row.Label</span>
+                    <th scope="row" class="output-scorecard__metric">
+                        <span class="output-scorecard__metric-name">@row.Label</span>
                         @if (row.Hint is not null)
                         {
-                            <span class="scorecard__metric-hint">@row.Hint</span>
+                            <span class="output-scorecard__metric-hint">@row.Hint</span>
                         }
                     </th>
-                    <td class="scorecard__value @(row.RightWins ? "scorecard__value--better" : "")">
+                    <td class="output-scorecard__value @(row.RightWins ? "output-scorecard__value--better" : "")">
                         <span>@row.RightText</span>
                         @if (row.RightWins)
                         {
-                            <span class="scorecard__win-mark" aria-label="Better">▶</span>
+                            <span class="output-scorecard__win-mark" aria-label="Better">▶</span>
                         }
                     </td>
                 </tr>
@@ -55,7 +55,7 @@
         </tbody>
     </table>
 
-    <div class="scorecard__findings">
+    <div class="output-scorecard__findings">
         <div>
             @RenderFindings(LeftName, _left, LeftProbe)
         </div>
@@ -191,13 +191,13 @@
         ms is null ? "—" : ms >= 1000 ? $"{ms.Value / 1000.0:F2}s" : $"{ms}ms";
 
     private RenderFragment RenderFindings(string name, OutputAnalysis analysis, RuntimeProbeReport? probe) => @<div>
-        <h3 class="scorecard__findings-title">@name</h3>
+        <h3 class="output-scorecard__findings-title">@name</h3>
 
         @if (analysis.StructuralIssues.Count == 0
              && analysis.AccessibilityIssues.Count == 0
              && probe?.HasAnyProblem != true)
         {
-            <p class="scorecard__finding scorecard__finding--clean">
+            <p class="output-scorecard__finding output-scorecard__finding--clean">
                 <span aria-hidden="true">✓</span>
                 @(probe?.Loaded == true ? "No structural or runtime issues found" : "No structural issues found")
             </p>
@@ -205,7 +205,7 @@
 
         @foreach (var issue in analysis.StructuralIssues)
         {
-            <p class="scorecard__finding scorecard__finding--structural">
+            <p class="output-scorecard__finding output-scorecard__finding--structural">
                 <span aria-hidden="true">⚠</span> @issue
             </p>
         }
@@ -214,19 +214,19 @@
         {
             @foreach (var error in probe.Errors)
             {
-                <p class="scorecard__finding scorecard__finding--runtime">
+                <p class="output-scorecard__finding output-scorecard__finding--runtime">
                     <span aria-hidden="true">✖</span> @error
                 </p>
             }
             @foreach (var failure in probe.ResourceFailures)
             {
-                <p class="scorecard__finding scorecard__finding--runtime">
+                <p class="output-scorecard__finding output-scorecard__finding--runtime">
                     <span aria-hidden="true">🔌</span> Failed to load @failure
                 </p>
             }
             @if (probe.ConsoleErrorCount > 0)
             {
-                <p class="scorecard__finding scorecard__finding--runtime">
+                <p class="output-scorecard__finding output-scorecard__finding--runtime">
                     <span aria-hidden="true">🖥</span>
                     @probe.ConsoleErrorCount console error@(probe.ConsoleErrorCount == 1 ? "" : "s")
                 </p>
@@ -235,7 +235,7 @@
 
         @foreach (var issue in analysis.AccessibilityIssues)
         {
-            <p class="scorecard__finding scorecard__finding--a11y">
+            <p class="output-scorecard__finding output-scorecard__finding--a11y">
                 <span aria-hidden="true">♿</span> @issue
             </p>
         }

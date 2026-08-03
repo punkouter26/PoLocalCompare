@@ -9,6 +9,7 @@
 @inject DuelApiClient ApiClient
 @inject IJSRuntime JS
 @inject IConfiguration Configuration
+@inject WebGpuCapability WebGpu
 
 @* Collapsible model-health section (replaces the standalone Local Model Lab page).
    Consolidated to a readiness snapshot + one-click verify run — no benchmark tables
@@ -193,15 +194,6 @@
     /// <summary>Models loaded by the host page; the panel filters to local + Ollama entries.</summary>
     [Parameter] public IReadOnlyList<ModelDto> Models { get; set; } = [];
 
-    private sealed class WebGpuInfo
-    {
-        public bool Supported { get; set; }
-        public string Vendor { get; set; } = "";
-        public string Architecture { get; set; } = "";
-        public string Device { get; set; } = "";
-        public string Reason { get; set; } = "";
-    }
-
     private sealed class WebNnInfo
     {
         public bool Supported { get; set; }
@@ -221,7 +213,7 @@
     private bool _probedOnce;
     private DateTime? _statusLastUpdatedUtc;
     private List<ModelDiagState> _models = [];
-    private WebGpuInfo? _webGpu;
+    private WebGpuCapability.WebGpuInfo? _webGpu;
     private WebNnInfo? _webNn;
     private string[] _browserModelCdnBaseUrlTemplates = [];
     private string _testPrompt = "In one sentence, explain what an API is.";
@@ -271,7 +263,9 @@
         ];
 
         // Cheap environment probes run up-front so the collapsed summary is meaningful.
-        _webGpu = await JS.InvokeAsync<WebGpuInfo>("checkWebGpu");
+        // WebGPU probe is shared with Home.razor via WebGpuCapability — one adapter/device
+        // request per page load, not two.
+        _webGpu = await WebGpu.GetAsync();
         _webNn = await JS.InvokeAsync<WebNnInfo>("checkWebNn");
         StateHasChanged();
     }

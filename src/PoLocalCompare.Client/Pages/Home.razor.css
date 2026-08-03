@@ -570,7 +570,9 @@
     color: var(--text-muted);
 }
 
-/* ── Sticky CTA bar (Finding #7) ────────────────────────────────────── */
+/* ── Sticky ready bar (Finding #7) ──────────────────────────────────────
+   A passive reminder, not a second primary control: when both slots are filled, the bar tells
+   a scrolled user that the comparison is set up. The actual Compare button lives in step 3. */
 .home__sticky-cta {
     position: fixed;
     bottom: 0;
@@ -578,12 +580,12 @@
     right: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 1rem;
-    padding: 0.75rem 1.25rem;
+    padding: 0.55rem 1.25rem;
     background: var(--glass-bg);
     backdrop-filter: blur(8px);
-    border-top: 1px solid rgba(45, 220, 132, 0.35);
+    border-top: 1px solid var(--border);
     z-index: 100;
     animation: slideUp 0.3s ease-out;
 }
