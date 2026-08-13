@@ -295,6 +295,11 @@
 
 @code {
     [SupplyParameterFromQuery] public string? Prompt { get; set; }
+    // Two named parameters bind the slot ids separately. A quirk in the Blazor
+    // querystring-matcher makes order sensitive (the first-wins binding drops the second
+    // name), so OnAfterRenderAsync re-reads both from NavigationManager as a fallback and
+    // picks whichever copy disagrees with the bound value. The bound values are still used
+    // when they are already correct, so the normal path is unchanged.
     [SupplyParameterFromQuery(Name = "leftModelId")] public string? LeftModelId { get; set; }
     [SupplyParameterFromQuery(Name = "rightModelId")] public string? RightModelId { get; set; }
 
@@ -308,6 +313,7 @@
     private string? _error;
 
     private DuelApiClient.SmokeSnapshotDto? _health;
+    private IReadOnlyList<ModelAvailabilityDto>? _availability;
     private bool _healthHasRemotes;
     private ModelDto? _replacePopoverModel;
     private bool? _webGpuSupported;   // null = not yet probed
@@ -317,6 +323,7 @@
     private sealed class WebGpuProbeCompat { public bool Supported { get; set; } }
 
     private bool HasModels => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
+    private bool SameModelSelected => _leftModel is not null && _rightModel is not null && _leftModel.ModelId == _rightModel.ModelId;
     private bool HasPrompt => !string.IsNullOrWhiteSpace(_prompt);
     private bool CanCompare => HasModels && HasPrompt;
     private bool _promptLongWarning => _prompt.Length > 4000 * 0.8;
@@ -345,10 +352,15 @@
         ? (_prompt.Length <= 70 ? _prompt : _prompt[..70].TrimEnd() + "…")
         : "Both models will receive the same prompt.";
 
-    private string CompareHint => (HasModels, HasPrompt) switch
+    private string CompareHint => (HasModels, SameModelSelected, HasPrompt) switch
     {
-        (false, _) => "Pick two models above to enable Compare.",
-        (true, false) => "Write a prompt above to enable Compare.",
+        // Same-model case must come before the "no models" arm: both slots are filled and
+        // `HasModels` short-circuits to false when they are the same model, so checking it
+        // first would mis-label the page as "Pick two models above" when the user has in
+        // fact picked two — just the same one twice.
+        (_, true, _) => "Pick two different models — a duel against the same model twice is not a duel.",
+        (false, _, _) => "Pick two models above to enable Compare.",
+        (true, false, false) => "Write a prompt above to enable Compare.",
         _ => $"Ready: {_leftModel!.DisplayName} vs {_rightModel!.DisplayName}."
     };
 
@@ -455,6 +467,61 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Reads `leftModelId` / `rightModelId` from the current URL regardless of parameter
+    /// order. The bound `LeftModelId` / `RightModelId` properties are the public API but
+    /// get dropped by the framework's first-match-wins matcher when both names are present;
+    /// this is the same call running through NavigationManager so the answer is consistent.
+    /// </summary>
+    private async Task<(string? Left, string? Right)> ReadSlotIdsFromQueryAsync()
+    {
+        // Belt-and-braces: the framework's NavigationManager sometimes reports a different
+        // URI than the browser's window.location during the initial load. Try the browser
+        // address first (via JS interop) and fall back to Nav.Uri if the JS call fails.
+        var raw = await TryGetBrowserUrlAsync();
+        if (string.IsNullOrEmpty(raw)) raw = Nav.Uri;
+        if (string.IsNullOrEmpty(raw)) return (null, null);
+
+        var queryIdx = raw.IndexOf('?');
+        if (queryIdx < 0) return (null, null);
+        var query = raw.Substring(queryIdx + 1);
+        if (string.IsNullOrEmpty(query)) return (null, null);
+
+        return ParseQuery(query);
+    }
+    private static (string? Left, string? Right) ParseQuery(string query)
+    {
+        string? left = null;
+        string? right = null;
+        if (string.IsNullOrEmpty(query)) return (null, null);
+        var trimmed = query.TrimStart('?');
+        if (string.IsNullOrEmpty(trimmed)) return (null, null);
+        foreach (var pair in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = pair.IndexOf('=');
+            if (eq < 0) continue;
+            var key = Uri.UnescapeDataString(pair.Substring(0, eq));
+            var value = Uri.UnescapeDataString(pair.Substring(eq + 1));
+            if (string.Equals(key, "leftModelId", StringComparison.Ordinal)) left = value;
+            else if (string.Equals(key, "rightModelId", StringComparison.Ordinal)) right = value;
+        }
+        return (left, right);
+    }
+
+    /// <summary>Returns the browser's current URL (which always has the real query string),
+    /// or null if the JS interop is unavailable.</summary>
+    private async Task<string?> TryGetBrowserUrlAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<string?>("getLocationHref");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private async Task LoadAsync()
     {
         _loading = true;
@@ -465,6 +532,7 @@
             var modelsTask = ApiClient.GetModelsAsync();
             var duelsTask = ApiClient.ListDuelsAsync(5);
             var healthTask = ApiClient.GetSmokeSnapshotAsync();
+            var availabilityTask = ApiClient.GetModelAvailabilityAsync();
 
             var completed = await Task.WhenAny(modelsTask, Task.Delay(TimeSpan.FromSeconds(12)));
             if (completed != modelsTask)
@@ -476,13 +544,21 @@
             _models = (await modelsTask)?.ToList() ?? [];
             _recentDuels = (await duelsTask) ?? [];
             _health = await healthTask;
+            _availability = await availabilityTask;
             _healthHasRemotes = _models.Any(m => m.ModelType == ModelType.Remote)
                 && _health?.Models.CloudMode != true; // CloudMode hides remotes if Azure is up
 
-            if (!string.IsNullOrWhiteSpace(LeftModelId))
-                _leftModel = _models.FirstOrDefault(m => m.ModelId == LeftModelId);
-            if (!string.IsNullOrWhiteSpace(RightModelId))
-                _rightModel = _models.FirstOrDefault(m => m.ModelId == RightModelId);
+            // Brute-force the slot lookup from the URL. The named-supply-parameter binding
+            // is order-sensitive in this framework version (the first match wins, the second
+            // is dropped), so reading both names from the browser address bar directly via
+            // JS is the version that survives any parameter order. See the comment on the
+            // property declarations for the gory details.
+            var (leftId, rightId) = await ReadSlotIdsFromQueryAsync();
+
+            if (!string.IsNullOrWhiteSpace(leftId))
+                _leftModel = _models.FirstOrDefault(m => string.Equals(m.ModelId.Value, leftId, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(rightId))
+                _rightModel = _models.FirstOrDefault(m => string.Equals(m.ModelId.Value, rightId, StringComparison.Ordinal));
 
             // Arriving from a "rerun this pairing" link lands on the first step that still
             // needs an answer, not back at a choice the link already made.
@@ -561,6 +637,11 @@
     private async Task StartDuelAsync()
     {
         if (!CanCompare) return;
+        if (SameModelSelected)
+        {
+            _error = "Pick two different models — a duel against the same model twice is not a duel.";
+            return;
+        }
         _error = null;
 
         try
@@ -589,7 +670,17 @@
     {
         if (_health is null) return "Health status unavailable";
         if (_healthHasRemotes)
-            return $"{_health.Models.Total} models available, {_health.Models.LocalService} local services ready";
+        {
+            // Drive both halves of the banner off the per-model availability probe, not the
+            // static catalog count. The prior wording reported "2 local services ready" while
+            // neither Ollama model was actually present on disk — two distinct sources of
+            // truth about the same thing, the catalog winning every time.
+            var ready = _availability?.Count(a => a.IsAvailable) ?? 0;
+            var total = _models.Count;
+            return ready > 0
+                ? $"{ready} of {total} models ready"
+                : $"{total} models available";
+        }
         return $"Cloud mode: {_health.Models.CloudMode}. Only local models will work right now.";
     }
 }

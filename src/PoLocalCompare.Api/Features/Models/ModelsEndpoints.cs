@@ -80,6 +80,27 @@ public static class ModelsEndpoints
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status404NotFound);
 
+        // GET /api/models/download-status/{webLlmModelId} — whether the per-model weights directory
+        // is present on disk under wwwroot/models/. The JS interop (diag-interop.js, webllm-interop.js)
+        // calls this on every page load to skip the CDN probe when the model is already local.
+        // A 404 here used to fire for every browser model card on every page (they then fell
+        // through to the CDN, so the page still worked, but the network tab was a 404 for every
+        // model). The endpoint now returns a structured 200 with downloaded=false so the JS
+        // converges to the same CDN path without an error in the log.
+        group.MapGet("/download-status/{webLlmModelId}", (
+            [FromRoute] string webLlmModelId,
+            IWebHostEnvironment environment) =>
+        {
+            var modelsRoot = Path.Combine(environment.WebRootPath ?? "wwwroot", "models", webLlmModelId);
+            var downloaded = Directory.Exists(modelsRoot)
+                && Directory.EnumerateFiles(modelsRoot, "mlc-chat-config.json").Any();
+            return Results.Ok(new { webLlmModelId, downloaded, localPath = downloaded ? modelsRoot : null });
+        })
+        .WithName("GetModelDownloadStatus")
+        .WithSummary("Reports whether the WebLLM model weights are present locally on disk.")
+        .Produces(StatusCodes.Status200OK)
+        .AllowAnonymous();
+
         group.MapPost("/{webLlmModelId}/download", async (
             [FromRoute] string webLlmModelId,
             [FromServices] DownloadModelHandler handler) =>

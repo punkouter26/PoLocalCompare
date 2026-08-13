@@ -152,7 +152,7 @@
                 rows.Add(LowerIsBetter("Runtime errors", "thrown while rendering",
                     LeftProbe?.ErrorCount ?? 0, RightProbe?.ErrorCount ?? 0, v => v.ToString("N0")));
 
-                rows.Add(LowerIsBetter("Failed assets", "CDN or image didn't load",
+                rows.Add(LowerIsBetter("Failed external assets", "CDN or image the page tried to load",
                     LeftProbe?.ResourceFailureCount ?? 0, RightProbe?.ResourceFailureCount ?? 0, v => v.ToString("N0")));
 
                 rows.Add(new Row(

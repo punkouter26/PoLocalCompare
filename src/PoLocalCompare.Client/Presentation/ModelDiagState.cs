@@ -36,7 +36,11 @@ public sealed class ModelDiagState
 
     private static readonly Dictionary<string, (int Mb, string Label)> _vramTable = new()
     {
-        ["SmolLM2-135M-Instruct-q0f32-MLC"]          = (720,  "720 MB"),
+        // SmolLM2-135M is f32-quantised (q0f32), so weights alone are ~540 MB; the published
+        // MLC artifact adds tokenizer + config overhead and lands near 580 MB on disk, which is
+        // about the same as the q4f32 360M variant. The 720 MB figure that used to be here was
+        // a copy-paste from Llama 3.2 1B and silently overstated the load on small GPUs.
+        ["SmolLM2-135M-Instruct-q0f32-MLC"]          = (580,  "580 MB"),
         ["SmolLM2-360M-Instruct-q4f32_1-MLC"]         = (580,  "580 MB"),
         ["SmolLM2-1.7B-Instruct-q4f16_1-MLC"]         = (1774, "1.8 GB"),
         ["Qwen2.5-0.5B-Instruct-q4f32_1-MLC"]         = (1060, "1.1 GB"),

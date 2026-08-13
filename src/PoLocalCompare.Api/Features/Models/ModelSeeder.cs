@@ -63,6 +63,19 @@ public static class ModelSeeder
             : DefaultModels.Where(m => m.ModelType != ModelType.LocalService).ToList();
 
         var existing = (await repo.GetAllAsync()).ToList();
+
+        // De-dupe (Path 3): a one-time manual add in some dev environments left a `Phi-4`
+        // (or `Phi-4 Mini`) catalog row next to the seed replica with a non-seed id. Both
+        // rows render in the picker, both probe `Deployment reachable`, and the user can pick
+        // them on opposite sides — running a duel against the same model twice. Remove the
+        // non-seed replica when the seed has a matching display name so the catalog on a
+        // running machine converges without requiring `docker compose down -v`.
+        var deduped = await DedupeByNameAsync(repo, existing, modelsToSeed, logger);
+        if (deduped > 0)
+        {
+            existing = (await repo.GetAllAsync()).ToList();
+        }
+
         if (existing.Count == 0)
         {
             logger.LogInformation("ModelSeeder: No models found — seeding {Count} default models.", modelsToSeed.Count);
@@ -151,6 +164,46 @@ public static class ModelSeeder
             && string.Equals(existing.WebLlmModelId, seed.WebLlmModelId, StringComparison.Ordinal))
             return true;
         return false;
+    }
+
+    /// <summary>
+    /// Remove catalog rows whose ModelId is not in the seed list and whose DisplayName
+    /// matches a seed entry by name. The seed replica (the one with the seed id) is kept.
+    /// Skips rows whose name is not in the seed list — those are user-registered models and
+    /// must outlive a seed reconciliation.
+    /// </summary>
+    private static async Task<int> DedupeByNameAsync(
+        IModelRepository repo,
+        IReadOnlyList<Model> existing,
+        IReadOnlyList<Model> seedModels,
+        ILogger logger)
+    {
+        var seedIds = new HashSet<ModelId>(seedModels.Select(m => m.ModelId));
+        var seedNames = new HashSet<string>(
+            seedModels.Select(m => m.DisplayName),
+            StringComparer.OrdinalIgnoreCase);
+
+        var removals = existing
+            .Where(m => !seedIds.Contains(m.ModelId))
+            .Where(m => !string.IsNullOrWhiteSpace(m.DisplayName)
+                     && seedNames.Contains(m.DisplayName))
+            .ToList();
+
+        foreach (var orphan in removals)
+        {
+            try
+            {
+                await repo.DeleteAsync(orphan.ModelId);
+                logger.LogInformation("ModelSeeder: Removed duplicate non-seed id '{ModelId}' for '{DisplayName}'.",
+                    orphan.ModelId, orphan.DisplayName);
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+            {
+                // Row already gone — fine, the next sweep won't see it.
+            }
+        }
+
+        return removals.Count;
     }
 }
 

@@ -119,7 +119,7 @@
                     @if (_eloShiftLeft.HasValue)
                     {
                         <div class="arena__elo-badge @(_eloShiftLeft >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
-                            ELO @(_eloDisplayLeft >= 0 ? "+" : "")@_eloDisplayLeft.ToString("F1")
+                            ELO @(_eloDisplayLeft >= 0 ? "+" : "")@FormatElo(_eloDisplayLeft)
                         </div>
                     }
                 </div>
@@ -162,7 +162,7 @@
                     @if (_eloShiftRight.HasValue)
                     {
                         <div class="arena__elo-badge @(_eloShiftRight >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
-                            ELO @(_eloDisplayRight >= 0 ? "+" : "")@_eloDisplayRight.ToString("F1")
+                            ELO @(_eloDisplayRight >= 0 ? "+" : "")@FormatElo(_eloDisplayRight)
                         </div>
                     }
                 </div>
@@ -420,6 +420,18 @@
 
     private static string FormatCost(double? value) =>
         value.HasValue ? value.Value.ToString("F4") : "0 (no rate)";
+
+    /// <summary>
+    /// ELO deltas are stored with a tenth to leave room for fractional ratings, but a
+    /// typical shift is a whole number (K=32, draw or near-draw outcomes). Showing "16.0"
+    /// instead of "16" was a presentation bug — the badge looked like a remaining-decimal
+    /// continuation, not a finished number. Whole values render as an integer; everything
+    /// else keeps one decimal so the precision of the original record is visible.
+    /// </summary>
+    private static string FormatElo(double value) =>
+        Math.Abs(value - Math.Round(value)) < 0.05
+            ? ((int)Math.Round(value)).ToString()
+            : value.ToString("F1");
 
     private static string ViewLabel(SourceViewMode mode) => mode switch
     {

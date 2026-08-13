@@ -82,23 +82,28 @@ public sealed class DuelRepository : IDuelRepository
         limit = Math.Clamp(limit, 1, 100);
         var duels = new List<Duel>();
 
-        // Query partitions from most recent month backward
-        var startMonth = beforeMonth ?? DateTimeOffset.UtcNow.ToString("yyyyMM");
-
-        // Azure Table Storage doesn't support cross-partition ordering, so fetch per-partition
-        // and aggregate in memory for this small-scale tool
+        // Azure Table Storage doesn't honour cross-partition ordering, and the SDK returns
+        // whatever the first partition yields when `maxPerPage` matches the requested limit —
+        // so a `limit=20` query previously returned 20 rows from a single partition and never
+        // touched the month that actually held the newest duel. Fetch a generous upper bound,
+        // sort in memory by the timestamp the page actually renders, and take the top `limit`.
+        // The cap is still small (a duel row is ~1 KB), so the memory cost is negligible.
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
             filter: string.IsNullOrEmpty(beforeMonth)
                 ? null
                 : TableClient.CreateQueryFilter($"PartitionKey le {beforeMonth}"),
-            maxPerPage: limit))
+            maxPerPage: 1000))
         {
             duels.Add(MapToDuel(entity));
-            if (duels.Count >= limit) break;
         }
 
-        // Sort newest first (ULID RowKey is lexicographically time-ordered)
-        return duels.OrderByDescending(d => d.DuelId).Take(limit);
+        // Sort newest first by the timestamp the page renders. The ULID lexicographic order
+        // would also work, but `CompletedAt` is what the Archive shows and people occasionally
+        // back-date a record, so displaying the same sort the UI uses keeps page and API in
+        // lockstep even when the implementation drifts.
+        return duels
+            .OrderByDescending(d => d.CompletedAt ?? d.StartedAt)
+            .Take(limit);
     }
 
     private static string GetPartitionKey(DuelId duelId)

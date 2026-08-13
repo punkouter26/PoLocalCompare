@@ -71,3 +71,13 @@ window.scrollElementIntoView = function (id, options) {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView(options || { behavior: 'smooth', block: 'nearest' });
 };
+
+/**
+ * Returns the browser's current `window.location.href` as a string. Used by Home.razor when
+ * the URL has query parameters (slot ids) that Blazor's named-supply-parameter matcher
+ * occasionally drops — having the raw value as a fallback lets the page read the slots
+ * regardless of how the framework bound the parameters.
+ */
+window.getLocationHref = function () {
+    return window.location.href;
+};

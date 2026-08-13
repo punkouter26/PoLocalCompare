@@ -42,9 +42,16 @@ public sealed class GetKillListHandler
         return grouped.Select(x => new HeadToHeadDto
         {
             OpponentModelId = x.OpponentModelId,
+            // Mirror the Archive's "Retired model" placeholder: the catalog entry may have
+            // been wiped after the duel finished, and rendering the raw 25-32 char ULID here
+            // was a readability bug — both the Leaderboard and Archive use the same fallback.
             OpponentName = allModels.TryGetValue(x.OpponentModelId, out var displayName)
                 ? displayName
-                : x.OpponentModelId,
+                : (PoLocalCompare.Api.Features.Duels.DuelModelNames
+                    .Resolve(liveDisplayName: null, snapshotName: null, x.OpponentModelId)
+                    == x.OpponentModelId
+                    ? "Retired model"
+                    : x.OpponentModelId),
             Wins = x.Wins,
             Losses = x.Losses,
             LastDuelId = x.LastDuelId,

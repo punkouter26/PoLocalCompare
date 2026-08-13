@@ -167,6 +167,19 @@ public static class BffAuthentication
             return Results.Ok(new AuthStateDto(true, name, roles));
         }).AllowAnonymous();
 
+        // GET /auth/login — bare login entry point. Redirects to the configured provider
+        // (fake in dev, Microsoft otherwise) so stale bookmarks like /auth/login?fakeReturnUrl=/ 
+        // don't hit the SPA fallback and render a 404.
+        auth.MapGet("/login", (HttpContext ctx, string? returnUrl, string? fakeReturnUrl) =>
+        {
+            var target = fakeEnabled ? "/login/fake" : "/login/microsoft";
+            var safeReturn = SanitizeReturnUrl(returnUrl) ?? SanitizeReturnUrl(fakeReturnUrl);
+            var query = !string.IsNullOrEmpty(safeReturn) && safeReturn != "/"
+                ? $"?returnUrl={Uri.EscapeDataString(safeReturn)}"
+                : string.Empty;
+            return Results.Redirect(target + query);
+        }).AllowAnonymous();
+
         // GET /auth/login/microsoft — start the server-side OIDC code flow.
         auth.MapGet("/login/microsoft", (string? returnUrl) =>
         {
