@@ -24,6 +24,15 @@
     max-width: 62ch;
 }
 
+/* The rows that agreed, and the ones that measured nothing, in a line each rather than a
+   row each. */
+.output-scorecard__identical {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: var(--space-sm) 0 0;
+    max-width: 72ch;
+}
+
 /* ── Comparison table ─────────────────────────────────────────────────────── */
 
 .output-scorecard__table {

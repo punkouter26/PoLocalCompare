@@ -183,8 +183,11 @@ public sealed class FoundryDuelJudge : IDuelJudge
         var (slot, reason) = parsed.Value;
         if (slot == "Tie")
         {
+            // A tie is a decision the judge reached, so it travels back as one. Returning null
+            // here (as this used to) threw the answer away and left the duel Pending, which the
+            // Archive renders identically to "nobody has judged this yet".
             JudgeLog.Decided(_logger, "Tie", slot, reason);
-            return null;
+            return new JudgeDecision(DuelVerdict.Tie, reason);
         }
 
         var verdict = (slot == "A") == leftIsA ? DuelVerdict.Left : DuelVerdict.Right;

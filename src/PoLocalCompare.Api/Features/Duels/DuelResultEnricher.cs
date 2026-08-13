@@ -40,7 +40,6 @@ public static partial class DuelResultEnricher
             var energyWh = GreenStatsCalculator.ComputeEnergyWh(model.TdpWatts.Value, result.TotalDurationMs);
             result.EnergyWh = energyWh;
             result.EnergyCostUsd = GreenStatsCalculator.ComputeEnergyCostUsd(energyWh, electricityRateUsdPerKwh);
-            result.GreenScore = GreenStatsCalculator.ComputeGreenScore(result.TokenCount, energyWh);
         }
     }
 

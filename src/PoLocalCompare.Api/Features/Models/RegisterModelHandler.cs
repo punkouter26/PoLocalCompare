@@ -46,7 +46,7 @@ public sealed class RegisterModelHandler
         CurrentElo = model.CurrentElo,
         DuelCount = model.DuelCount,
         WinCount = model.WinCount,
-        GreenScoreAvg = model.GreenScoreAvg,
+        DrawCount = model.DrawCount,
         TdpWatts = model.TdpWatts,
         ApiEndpointRef = model.ApiEndpointRef,
         WebLlmModelId = model.WebLlmModelId,

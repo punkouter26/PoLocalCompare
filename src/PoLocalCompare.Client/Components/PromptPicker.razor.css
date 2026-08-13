@@ -5,6 +5,14 @@
     margin-top: var(--space-md);
 }
 
+/* Each section is a column so its head, list and disclosure stack with one gap rather than
+   relying on the margins of whatever happens to be inside it. */
+.prompt-picker__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
 .prompt-picker__section-head {
     display: flex;
     align-items: baseline;

@@ -12,7 +12,9 @@ public sealed class ModelDto
     public double CurrentElo { get; init; }
     public int DuelCount { get; init; }
     public int WinCount { get; init; }
-    public double GreenScoreAvg { get; init; }
+
+    /// <summary>Judged draws. Losses are <c>DuelCount - WinCount - DrawCount</c>.</summary>
+    public int DrawCount { get; init; }
     public double? TdpWatts { get; init; }
     public string? WebLlmModelId { get; init; }
     public string? ApiEndpointRef { get; init; }

@@ -31,8 +31,14 @@ public sealed class LobbyEventDto
     public string LeftModelName { get; init; } = string.Empty;
     public string RightModelName { get; init; } = string.Empty;
 
-    /// <summary>Set only on <see cref="LobbyEventKind.VerdictRecorded"/>.</summary>
+    /// <summary>Set only on <see cref="LobbyEventKind.VerdictRecorded"/>, and null on a tie.</summary>
     public string? WinnerModelName { get; init; }
+
+    /// <summary>
+    /// The verdict itself; set only on a verdict event. Carried because a tie has no winner
+    /// name, and the ticker would otherwise render "🏆  beat …" with an empty gap.
+    /// </summary>
+    public DuelVerdict? Verdict { get; init; }
 
     /// <summary>Whether a person or the auto-judge decided it; set only on a verdict event.</summary>
     public VerdictSource? Source { get; init; }

@@ -12,6 +12,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- GHSA-q939-rpr3-3284: SSH.NET 2024.2.0, pulled transitively by Testcontainers 4.4.0
+         (test projects only — nothing in src/ references it). With TreatWarningsAsErrors on,
+         the NU1903 advisory fails the whole solution build, which blocks the deploy-gating
+         test run. Suppressed until a Testcontainers release moves off the vulnerable version;
+         remove this line when bumping Testcontainers. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-q939-rpr3-3284" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="MinVer" PrivateAssets="all" />
   </ItemGroup>
 </Project>

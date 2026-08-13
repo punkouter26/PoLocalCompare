@@ -84,6 +84,14 @@
     border: 1px solid var(--success-border);
 }
 
+/* A judged tie is an outcome, so it reads as one — coloured and bordered like a win rather
+   than greyed out like the "nothing happened yet" chip beside it. */
+.archive__verdict--tie {
+    background: var(--info-surface, var(--surface-2));
+    color: var(--accent-blue);
+    border: 1px solid var(--accent-blue);
+}
+
 .archive__verdict--pending {
     background: var(--surface-2);
     color: var(--text-muted);
@@ -107,9 +115,17 @@
     padding: 24px;
 }
 
+.archive__detail-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md, 1rem);
+    margin-bottom: 16px;
+}
+
 .archive__detail-title {
     color: var(--accent-green);
-    margin-bottom: 16px;
+    margin: 0;
 }
 
 .archive__detail-meta p {

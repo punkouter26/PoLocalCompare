@@ -103,12 +103,13 @@ public sealed class LeaderboardTests : IAsyncLifetime
         Assert.True(eloMap[modelB] > eloMap[modelC], "Model B (1 win) should have higher ELO than C (0 wins).");
     }
 
-    // ── Green Score sort reorders independently of ELO ────────────────────
+    // ── An unknown sort key falls back to ELO rather than erroring ────────
 
     [Fact]
-    public async Task GetLeaderboard_SortByGreenScore_OrdersDifferentFromElo()
+    public async Task GetLeaderboard_UnknownSortKey_FallsBackToEloOrdering()
     {
-        // Register models (remote models have null green score — sort to bottom)
+        // GreenScore used to be a supported key. A stale bookmark must not 500 — the handler
+        // treats anything it does not recognise as the default ELO sort.
         var remoteA = await RegisterRemoteModelAsync("Remote A sort");
         var remoteB = await RegisterRemoteModelAsync("Remote B sort");
 
@@ -117,16 +118,18 @@ public sealed class LeaderboardTests : IAsyncLifetime
         var eloResponse = await _client.GetAsync("/api/leaderboard?sortBy=Elo");
         Assert.Equal(HttpStatusCode.OK, eloResponse.StatusCode);
 
-        var greenResponse = await _client.GetAsync("/api/leaderboard?sortBy=GreenScore");
-        Assert.Equal(HttpStatusCode.OK, greenResponse.StatusCode);
+        var unknownResponse = await _client.GetAsync("/api/leaderboard?sortBy=GreenScore");
+        Assert.Equal(HttpStatusCode.OK, unknownResponse.StatusCode);
 
-        // Both requests should succeed (even if the order is the same for remote-only models)
         var eloEntries = await eloResponse.Content.ReadFromJsonAsync<JsonElement[]>();
-        var greenEntries = await greenResponse.Content.ReadFromJsonAsync<JsonElement[]>();
+        var unknownEntries = await unknownResponse.Content.ReadFromJsonAsync<JsonElement[]>();
 
         Assert.NotNull(eloEntries);
-        Assert.NotNull(greenEntries);
-        Assert.Equal(eloEntries.Length, greenEntries.Length);
+        Assert.NotNull(unknownEntries);
+        Assert.Equal(eloEntries.Length, unknownEntries.Length);
+        Assert.Equal(
+            eloEntries.Select(e => e.GetProperty("displayName").GetString()),
+            unknownEntries.Select(e => e.GetProperty("displayName").GetString()));
     }
 
     // ── GET /api/leaderboard/{id}/killlist shows correct win/loss ─────────

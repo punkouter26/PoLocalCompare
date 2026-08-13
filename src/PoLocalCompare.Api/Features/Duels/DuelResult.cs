@@ -28,8 +28,6 @@ public sealed class DuelResult
     // Remote models only
     public double? ApiCostUsd { get; set; }
 
-    // Local models only
-    public double? GreenScore { get; set; }
 
     public DuelResult(DuelId duelId, ModelId modelId)
     {

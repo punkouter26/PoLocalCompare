@@ -93,29 +93,27 @@
 
                 @if (_current.LeftPreview is not null || _current.RightPreview is not null)
                 {
+                    @* No per-side wrapper: .demo__previews is the grid and each viewport is a
+                       cell, so the wrappers styled nothing and only added a level. *@
                     <div class="demo__previews">
-                        <div class="demo__preview">
-                            @if (_current.LeftPreview is not null)
-                            {
-                                <SandboxedViewport HtmlContent="@_current.LeftPreview"
-                                                   ModelName="@_current.Round.LeftModelName" IsLoser="false" />
-                            }
-                            else
-                            {
-                                <div class="demo__preview-waiting">@_current.Round.LeftModelName — waiting…</div>
-                            }
-                        </div>
-                        <div class="demo__preview">
-                            @if (_current.RightPreview is not null)
-                            {
-                                <SandboxedViewport HtmlContent="@_current.RightPreview"
-                                                   ModelName="@_current.Round.RightModelName" IsLoser="false" />
-                            }
-                            else
-                            {
-                                <div class="demo__preview-waiting">@_current.Round.RightModelName — waiting…</div>
-                            }
-                        </div>
+                        @if (_current.LeftPreview is not null)
+                        {
+                            <SandboxedViewport HtmlContent="@_current.LeftPreview"
+                                               ModelName="@_current.Round.LeftModelName" IsLoser="false" />
+                        }
+                        else
+                        {
+                            <div class="demo__preview-waiting">@_current.Round.LeftModelName — waiting…</div>
+                        }
+                        @if (_current.RightPreview is not null)
+                        {
+                            <SandboxedViewport HtmlContent="@_current.RightPreview"
+                                               ModelName="@_current.Round.RightModelName" IsLoser="false" />
+                        }
+                        else
+                        {
+                            <div class="demo__preview-waiting">@_current.Round.RightModelName — waiting…</div>
+                        }
                     </div>
                 }
             </section>
@@ -140,7 +138,7 @@
         }
 
         @* ── Queue ──────────────────────────────────────────────────────── *@
-        <section class="demo__queue" aria-label="Duel queue">
+        <section aria-label="Duel queue">
             <h2 class="demo__section-title">The run</h2>
             <ol class="demo__queue-list">
                 @foreach (var state in _rounds)
@@ -158,6 +156,13 @@
                             {
                                 <a href="@($"/arena/{judgedId}")" class="demo__queue-link">
                                     🏆 @state.WinnerName@(state.EloShift is { } shift ? $" (+{shift:F1})" : "")
+                                </a>
+                            }
+                            else if (state.Outcome == RoundOutcome.Tied && state.DuelId is { } tiedId)
+                            {
+                                <a href="@($"/arena/{tiedId}")" class="demo__queue-link"
+                                   title="The judge found both outputs equivalent. No rating moved.">
+                                    🤝 tie
                                 </a>
                             }
                             else if (state.Outcome == RoundOutcome.JudgeStoodDown && state.DuelId is { } rateLimitId)
@@ -208,7 +213,7 @@
 
     private enum Phase { Idle, Running, Finished }
 
-    private enum RoundOutcome { Queued, Running, Judged, Undecided, JudgeStoodDown, Failed, Skipped }
+    private enum RoundOutcome { Queued, Running, Judged, Tied, Undecided, JudgeStoodDown, Failed, Skipped }
 
     private sealed class RoundState(DemoRoundDto round)
     {
@@ -393,7 +398,11 @@
             if (completed == signal) return await signal;
 
             var fresh = await ApiClient.GetDuelAsync(duelId);
-            if (fresh is not null && fresh.Verdict != DuelVerdict.Pending && fresh.WinnerModelId is not null)
+            // A tie is a landed verdict with no winner id, so it has to satisfy this on the
+            // verdict alone or the demo waits out the full timeout on an already-decided duel.
+            if (fresh is not null
+                && fresh.Verdict != DuelVerdict.Pending
+                && (fresh.Verdict == DuelVerdict.Tie || fresh.WinnerModelId is not null))
             {
                 return new VerdictResponseDto
                 {
@@ -443,6 +452,14 @@
 
     private void ApplyVerdict(RoundState state, VerdictResponseDto? verdict)
     {
+        // A tie is a decided round — it just has no winner to name. Checked before the
+        // winner-is-null branch below, which exists for rounds nobody decided at all.
+        if (verdict?.Verdict == DuelVerdict.Tie)
+        {
+            state.Outcome = RoundOutcome.Tied;
+            return;
+        }
+
         if (verdict?.WinnerModelId is null)
         {
             // The server stamps `JudgeStoodDownReason` when the auto-judge tried and failed (most
@@ -542,6 +559,7 @@
     {
         RoundOutcome.Running => "running",
         RoundOutcome.Judged => "done",
+        RoundOutcome.Tied => "done",
         RoundOutcome.Undecided => "undecided",
         RoundOutcome.Failed => "failed",
         RoundOutcome.Skipped => "skipped",

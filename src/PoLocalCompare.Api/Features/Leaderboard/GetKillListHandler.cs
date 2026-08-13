@@ -24,12 +24,14 @@ public sealed class GetKillListHandler
                 var last = group.OrderByDescending(x => x.RecordedAt).First();
                 var wins = group.Count(x => string.Equals(x.Outcome, "Win", StringComparison.OrdinalIgnoreCase));
                 var losses = group.Count(x => string.Equals(x.Outcome, "Loss", StringComparison.OrdinalIgnoreCase));
+                var draws = group.Count(x => string.Equals(x.Outcome, "Draw", StringComparison.OrdinalIgnoreCase));
 
                 return new
                 {
                     OpponentModelId = group.Key,
                     Wins = wins,
                     Losses = losses,
+                    Draws = draws,
                     LastDuelId = last.DuelId,
                     LastDuelAt = last.RecordedAt,
                 };
@@ -42,18 +44,17 @@ public sealed class GetKillListHandler
         return grouped.Select(x => new HeadToHeadDto
         {
             OpponentModelId = x.OpponentModelId,
-            // Mirror the Archive's "Retired model" placeholder: the catalog entry may have
-            // been wiped after the duel finished, and rendering the raw 25-32 char ULID here
-            // was a readability bug — both the Leaderboard and Archive use the same fallback.
+            // One shared resolver, not a local reimplementation of it: the catalog entry may
+            // have been wiped after the duel finished, and rendering the raw ULID here was a
+            // readability bug. There is no snapshot name on a history row, so a miss on the
+            // catalog falls straight through to the placeholder.
             OpponentName = allModels.TryGetValue(x.OpponentModelId, out var displayName)
                 ? displayName
-                : (PoLocalCompare.Api.Features.Duels.DuelModelNames
-                    .Resolve(liveDisplayName: null, snapshotName: null, x.OpponentModelId)
-                    == x.OpponentModelId
-                    ? "Retired model"
-                    : x.OpponentModelId),
+                : ModelDisplayName.ResolveForDisplay(null, null, x.OpponentModelId),
             Wins = x.Wins,
             Losses = x.Losses,
+            Draws = x.Draws,
+            TotalDuels = x.Wins + x.Losses + x.Draws,
             LastDuelId = x.LastDuelId,
             LastDuelAt = x.LastDuelAt,
         }).ToList();

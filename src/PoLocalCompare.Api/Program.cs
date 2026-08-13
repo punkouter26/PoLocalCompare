@@ -227,7 +227,25 @@ try
     {
         await AzuriteSetup.EnsureTablesExistAsync(app.Services);
         if (!app.Configuration.GetValue<bool>("Testing:SkipSeeding"))
+        {
             await ModelSeeder.SeedAsync(app.Services);
+
+            // Runs after seeding, because it matches orphaned duel history against the catalog
+            // the seeder has just written. It is a no-op once there is nothing left to remap,
+            // so it is cheap to leave in the startup path rather than making it a manual step
+            // someone has to know about. Never fatal: bad history is worth less than a
+            // running app, and the endpoint below can retry it.
+            using var remapScope = app.Services.CreateScope();
+            var remapper = remapScope.ServiceProvider.GetRequiredService<OrphanModelIdRemapper>();
+            try
+            {
+                await remapper.RunAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Orphaned model-id remap failed at startup; POST /api/dev/remap-model-ids to retry.");
+            }
+        }
     }
     else
     {
@@ -389,11 +407,16 @@ try
                 e["CurrentElo"] = 1200.0;
                 e["DuelCount"] = 0;
                 e["WinCount"] = 0;
-                e["GreenScoreAvg"] = 0.0;
+                e["DrawCount"] = 0;
                 await mc.UpsertEntityAsync(e, TableUpdateMode.Replace);
             }
             return Results.Ok(new { reset = true, message = "Duels/results/elo cleared; model ELO reset to 1200" });
         }).AllowAnonymous();
+
+        // Manual retry for the startup remap. Idempotent — running it twice reports zero
+        // orphans the second time.
+        app.MapPost("/api/dev/remap-model-ids", async (OrphanModelIdRemapper remapper, CancellationToken ct) =>
+            Results.Ok(await remapper.RunAsync(ct))).AllowAnonymous();
     }
 
     // ─── Blazor WASM static assets + fallback (T014) ─────────────────────────

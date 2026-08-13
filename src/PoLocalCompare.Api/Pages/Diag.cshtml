@@ -30,12 +30,22 @@
             z-index: 10;
         }
         .diag-header__title { font-weight: 700; font-size: 1rem; color: #fff; margin: 0; }
+        /* SC 2.5.8 Target Size — these were 15px tall, well under the 24px minimum the rest
+           of the app holds to. Padding rather than font-size keeps the header compact. */
         .diag-header__back {
             color: #22c55e;
             text-decoration: none;
             font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            padding: 0 0.25rem;
         }
         .diag-header__back:hover { text-decoration: underline; }
+        .diag-header__back:focus-visible { outline: 2px solid #40e48e; outline-offset: 2px; }
+        /* An inline link in prose is exempt from the target minimum, so the one in the lead
+           paragraph opts back out rather than inflating the line height around it. */
+        .diag-lead .diag-header__back { min-height: 0; padding: 0; display: inline; }
         .diag-body { padding: 1.5rem; max-width: 980px; }
         h1 { color: #40e48e; font-size: 1.5rem; margin: 0 0 0.4rem; }
         .diag-lead {
@@ -84,8 +94,14 @@
         p { margin: 0.35rem 0; color: #e5e7eb; }
         strong { color: #22c55e; }
         code { color: #7dd3fc; background: #111814; padding: 0.1rem 0.3rem; border-radius: 3px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; color: #7b8d86; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.4rem 0.5rem; border-bottom: 1px solid #1b2622; }
+        /* Tables scroll inside their own box. Without this the Configuration Keys table pushed
+           the document to 425px on a 390px viewport and the whole page scrolled sideways.
+           tabindex=0 in the markup makes the scroll area keyboard-operable (SC 2.1.1). */
+        .diag-table-wrap { overflow-x: auto; }
+        .diag-table-wrap:focus-visible { outline: 2px solid #40e48e; outline-offset: 2px; }
+        table { width: 100%; border-collapse: collapse; min-width: 22rem; }
+        /* #7b8d86 on #0a0f0d is 4.0:1 — under the 4.5:1 minimum for this size (SC 1.4.3). */
+        th { text-align: left; color: #9fb2ab; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.4rem 0.5rem; border-bottom: 1px solid #1b2622; }
         td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #0d1411; color: #d1d5db; }
         td:first-child { color: #9ca3af; }
         tr:last-child td { border-bottom: none; }
@@ -112,12 +128,14 @@
     </style>
 </head>
 <body>
-    <div class="diag-header">
+    @* Landmarks: axe flagged nine unlandmarked regions and no <main> at all. Header/main are
+       the whole fix — every section already sits inside the body div. *@
+    <header class="diag-header">
         <span class="diag-header__title">PoLocalCompare</span>
         <a class="diag-header__back" href="/">← Back to App</a>
         <a class="diag-header__back" href="/health">Health JSON</a>
-    </div>
-    <div class="diag-body">
+    </header>
+    <main class="diag-body">
         <h1>Diagnostics</h1>
         <p class="diag-lead">
             Runtime observability snapshot for local troubleshooting. Use this page first when startup or middleware behavior looks inconsistent.
@@ -144,7 +162,8 @@
         </div>
 
         <section>
-            <h2>Connections</h2>
+            <h2 id="diag-connections">Connections</h2>
+            <div class="diag-table-wrap" tabindex="0" role="region" aria-labelledby="diag-connections">
             <table>
                 <thead><tr><th>Dependency</th><th>Status</th><th>Latency</th><th>Detail</th></tr></thead>
                 <tbody>
@@ -162,6 +181,7 @@
                     }
                 </tbody>
             </table>
+            </div>
         </section>
 
         <section>
@@ -171,7 +191,8 @@
         </section>
 
         <section>
-            <h2>Configuration Keys</h2>
+            <h2 id="diag-config">Configuration Keys</h2>
+            <div class="diag-table-wrap" tabindex="0" role="region" aria-labelledby="diag-config">
             <table>
                 <thead><tr><th>Key</th><th>Value</th></tr></thead>
                 <tbody>
@@ -181,6 +202,7 @@
                     }
                 </tbody>
             </table>
+            </div>
         </section>
 
         <section>
@@ -204,6 +226,6 @@
                 })();
             </script>
         </section>
-    </div>
+    </main>
 </body>
 </html>

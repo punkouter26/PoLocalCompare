@@ -27,9 +27,12 @@
     font-variant-numeric: tabular-nums;
 }
 
-.source-compare__stat--changed { color: var(--accent-yellow); font-weight: 600; }
-.source-compare__stat--added { color: var(--accent-green); font-weight: 600; }
-.source-compare__stat--removed { color: var(--accent-red); font-weight: 600; }
+/* The weight was repeated on all three modifiers and missing from the plain "identical" stat,
+   so the four counts in one row did not match each other. It belongs on the base. */
+.source-compare__stat { font-weight: 600; }
+.source-compare__stat--changed { color: var(--accent-yellow); }
+.source-compare__stat--added { color: var(--accent-green); }
+.source-compare__stat--removed { color: var(--accent-red); }
 
 .source-compare__actions {
     display: flex;

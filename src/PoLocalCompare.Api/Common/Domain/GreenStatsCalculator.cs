@@ -2,9 +2,15 @@
 namespace PoLocalCompare.Api.Common.Domain;
 
 /// <summary>
-/// Pure arithmetic Green Stats calculator — no I/O, no external dependencies.
-/// Computes energy consumption, cost, and green score for local model duel results.
+/// Pure arithmetic energy calculator — no I/O, no external dependencies.
+/// Computes energy consumption and cost for local model duel results.
 /// </summary>
+/// <remarks>
+/// It also used to compute a "Green Score" (tokens per watt-hour), which was carried through
+/// the result entity, the model aggregate, three DTOs, the leaderboard and head-to-head
+/// handlers and the lab report — and rendered nowhere a person would find it. Energy and cost
+/// stayed because the telemetry panel actually shows them.
+/// </remarks>
 public static class GreenStatsCalculator
 {
     /// <summary>
@@ -28,18 +34,5 @@ public static class GreenStatsCalculator
     public static double ComputeEnergyCostUsd(double energyWh, double rateUsdPerKwh)
     {
         return Math.Round(energyWh / 1000.0 * rateUsdPerKwh, 8);
-    }
-
-    /// <summary>
-    /// Computes the Green Score as tokens generated per watt-hour.
-    /// Higher is better — more output per unit of energy.
-    /// </summary>
-    /// <param name="tokenCount">Number of tokens generated.</param>
-    /// <param name="energyWh">Energy consumed in watt-hours.</param>
-    /// <returns>Green Score (tokens/Wh). Returns 0 if energyWh is zero.</returns>
-    public static double ComputeGreenScore(int tokenCount, double energyWh)
-    {
-        if (energyWh <= 0) return 0;
-        return Math.Round(tokenCount / energyWh, 2);
     }
 }

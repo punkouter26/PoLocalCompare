@@ -32,7 +32,7 @@
         ELO: <strong>@Model.CurrentElo.ToString("F0")</strong>
     </div>
     <div class="model-card__stats">
-        Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Model.DuelCount - Model.WinCount)
+        Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Math.Max(Model.DuelCount - Model.WinCount - Model.DrawCount, 0))@(Model.DrawCount > 0 ? $"/{Model.DrawCount}" : "")
     </div>
     <div class="model-card__params">
         Params: <span class="model-card__params-value">@GetParameterLabel()</span>

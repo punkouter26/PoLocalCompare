@@ -24,5 +24,4 @@ public sealed class DuelResultDto
     public double? EnergyWh { get; init; }
     public double? EnergyCostUsd { get; init; }
     public double? ApiCostUsd { get; init; }
-    public double? GreenScore { get; init; }
 }

@@ -12,7 +12,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetDuelHandler>();
         services.AddScoped<GetLeaderboardHandler>();
         services.AddScoped<GetKillListHandler>();
-        services.AddScoped<GetHeadToHeadHandler>();
         services.AddScoped<ListDuelsHandler>();
         services.AddScoped<ExportLabReportHandler>();
         services.AddScoped<GetModelAvailabilityHandler>();
@@ -24,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AutoJudge>();
         services.AddScoped<LobbyNotifier>();
         services.AddScoped<DemoPlanHandler>();
+        services.AddScoped<OrphanModelIdRemapper>();
 
         services.AddScoped<RecordVerdictHandler>(sp =>
         {

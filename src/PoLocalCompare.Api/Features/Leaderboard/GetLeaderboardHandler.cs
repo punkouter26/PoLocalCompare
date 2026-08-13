@@ -39,25 +39,18 @@ public sealed class GetLeaderboardHandler(
                 CurrentElo = Math.Round(model.CurrentElo, 1),
                 DuelCount = model.DuelCount,
                 WinCount = model.WinCount,
+                DrawCount = model.DrawCount,
                 InputTokenPricePerMillion = model.InputTokenPricePerMillion,
                 OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
                 AvgApiCostPerDuel = avgCost,
                 OutputQualityAvg = modelResults.Count > 0
                     ? modelResults.Average(r => r.OutputQualityScore)
                     : null,
-                GreenScoreAvg = model.GreenScoreAvg > 0 ? model.GreenScoreAvg : null,
                 EloSparkline = sparkline,
             };
         })).ToList();
 
-        var sorted = string.Equals(sortBy, "GreenScore", StringComparison.OrdinalIgnoreCase)
-            ? rows
-                .OrderByDescending(x => x.GreenScoreAvg.HasValue)
-                .ThenByDescending(x => x.GreenScoreAvg)
-                .ThenByDescending(x => x.CurrentElo)
-                .ThenBy(x => x.DisplayName)
-                .ToList()
-            : string.Equals(sortBy, "Quality", StringComparison.OrdinalIgnoreCase)
+        var sorted = string.Equals(sortBy, "Quality", StringComparison.OrdinalIgnoreCase)
             ? rows
                 .OrderByDescending(x => x.OutputQualityAvg.HasValue)
                 .ThenByDescending(x => x.OutputQualityAvg)
@@ -86,11 +79,11 @@ public sealed class GetLeaderboardHandler(
                 CurrentElo = entry.CurrentElo,
                 DuelCount = entry.DuelCount,
                 WinCount = entry.WinCount,
+                DrawCount = entry.DrawCount,
                 InputTokenPricePerMillion = entry.InputTokenPricePerMillion,
                 OutputTokenPricePerMillion = entry.OutputTokenPricePerMillion,
                 AvgApiCostPerDuel = entry.AvgApiCostPerDuel,
                 OutputQualityAvg = entry.OutputQualityAvg,
-                GreenScoreAvg = entry.GreenScoreAvg,
                 EloSparkline = entry.EloSparkline,
             })
             .ToList();

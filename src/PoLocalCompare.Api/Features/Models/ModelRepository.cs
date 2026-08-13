@@ -81,7 +81,7 @@ public sealed class ModelRepository : IModelRepository
             ["CurrentElo"] = model.CurrentElo,
             ["DuelCount"] = model.DuelCount,
             ["WinCount"] = model.WinCount,
-            ["GreenScoreAvg"] = model.GreenScoreAvg,
+            ["DrawCount"] = model.DrawCount,
             ["TdpWatts"] = model.TdpWatts,
             ["WebLlmModelId"] = model.WebLlmModelId,
             ["ApiEndpointRef"] = model.ApiEndpointRef,
@@ -106,7 +106,8 @@ public sealed class ModelRepository : IModelRepository
             CurrentElo = entity.GetDouble("CurrentElo") ?? 1200,
             DuelCount = entity.GetInt32("DuelCount") ?? 0,
             WinCount = entity.GetInt32("WinCount") ?? 0,
-            GreenScoreAvg = entity.GetDouble("GreenScoreAvg") ?? 0,
+            // Absent on rows written before ties existed; 0 is the correct backfill.
+            DrawCount = entity.GetInt32("DrawCount") ?? 0,
             TdpWatts = entity.GetDouble("TdpWatts"),
             WebLlmModelId = entity.GetString("WebLlmModelId"),
             ApiEndpointRef = entity.GetString("ApiEndpointRef"),

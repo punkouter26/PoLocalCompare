@@ -16,7 +16,10 @@
     --border-strong: #c2c9d6;
     --text: #10141c;
     --text-muted: #55607a;
-    --text-dim: #78829a;
+    /* Was #78829a — 3.84:1 on --surface-1 and 3.69:1 on the near-white panel surfaces, so
+       every use of it failed SC 1.4.3. #646d82 is 5.2:1 on white and 4.8:1 on #f6f7f9, and
+       still reads a step dimmer than --text-muted. */
+    --text-dim: #646d82;
     --surface-accent: #e8edf8;
 
     /* Accents are darkened for light mode: the dark-theme values sit near 2:1 on
@@ -91,7 +94,10 @@
     --border-strong: #c2c9d6;
     --text: #10141c;
     --text-muted: #55607a;
-    --text-dim: #78829a;
+    /* Was #78829a — 3.84:1 on --surface-1 and 3.69:1 on the near-white panel surfaces, so
+       every use of it failed SC 1.4.3. #646d82 is 5.2:1 on white and 4.8:1 on #f6f7f9, and
+       still reads a step dimmer than --text-muted. */
+    --text-dim: #646d82;
     --surface-accent: #e8edf8;
 
     --accent-green: #0f7a45;

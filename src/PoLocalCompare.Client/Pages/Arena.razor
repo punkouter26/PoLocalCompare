@@ -10,8 +10,10 @@
 @inject IJSRuntime JS
 @inject WebLlmService WebLlm
 
+<PageTitle>Arena — PoLocalCompare</PageTitle>
+
 <div class="arena">
-    <h1 class="arena__title">Arena - Judge the Duel</h1>
+    <h1 class="arena__title">Arena — Judge the Duel</h1>
 
     @if (_loading)
     {
@@ -19,7 +21,13 @@
     }
     else if (_duel is null)
     {
-        <p class="arena__error">Duel not found.</p>
+        <div class="arena__not-found">
+            <p class="arena__error">That duel no longer exists — it may have been wiped with the local storage, or the link may be mistyped.</p>
+            <div class="arena__actions arena__actions--secondary">
+                <a class="po-btn po-btn--primary arena__action-btn" href="/">⚔ Start a new duel</a>
+                <a class="po-btn arena__action-btn" href="/archive">📁 Browse the archive</a>
+            </div>
+        </div>
     }
     else
     {
@@ -213,6 +221,20 @@
                 {
                     <span>Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong> — recording…</span>
                 }
+                else if (_verdictValue == DuelVerdict.Tie)
+                {
+                    @* A tie has no winner to name, so it says what happened instead — and says
+                       explicitly that ratings did not move, because "no winner" otherwise reads
+                       as "the judge never ran". *@
+                    <span>
+                        <span aria-hidden="true">🤝</span>
+                        Judged a tie — both outputs were found equivalent, so no rating moved.
+                    </span>
+                    @if (!string.IsNullOrWhiteSpace(_judgeRationale))
+                    {
+                        <span class="arena__judge-rationale">“@_judgeRationale”</span>
+                    }
+                }
                 else if (_verdictSource == VerdictSource.Ai)
                 {
                     <span>
@@ -292,46 +314,62 @@
             </div>
         }
 
-        <div class="arena__actions arena__actions--secondary">
-            @* Re-runs the same pairing and prompt as a brand-new duel — useful when a
-               model failed for a transient reason (model load, cache, rate limit). *@
-            <button type="button" class="po-btn po-btn--secondary arena__action-btn"
-                    disabled="@(_retrying || _submitting || _duelStillRunning)"
-                    @onclick="RetryDuelAsync">
-                @(_retrying ? "Starting…" : "🔄 Retry duel")
-            </button>
-            @if (_verdictRecorded && !_optimistic)
+        @* ── Follow-ups ────────────────────────────────────────────────────
+           Nothing here while the duel is still streaming: the page is a live view at that
+           point and every one of these was either disabled or hidden anyway, so the row was
+           an empty band under the race.
+
+           Once it has finished, the exits are New duel and Archive — two, both leading
+           somewhere. The old row carried five same-weight buttons (Retry / Share / Head-to-head
+           / Lab report / New duel) plus the two vote buttons above it: eleven controls on a
+           decided duel. Head-to-head is gone with the page it opened; Retry now appears only
+           when a side actually failed, which is what it is for; and the two export actions —
+           which are not exits — sit behind a disclosure instead of competing with them. *@
+        @if (!_duelStillRunning)
+        {
+            <div class="arena__actions arena__actions--secondary">
+                <a class="po-btn po-btn--primary arena__action-btn" href="/">⚔ New duel</a>
+                <a class="po-btn arena__action-btn" href="/archive">📁 Archive</a>
+
+                @* Re-runs the same pairing and prompt as a brand-new duel. Shown only when a
+                   model failed, because a transient failure (model load, cache, rate limit) is
+                   the situation it exists for — on a clean duel it competed with New duel while
+                   meaning almost the same thing. *@
+                @if (EitherSideFailed())
+                {
+                    <button type="button" class="po-btn po-btn--warn arena__action-btn"
+                            disabled="@(_retrying || _submitting)"
+                            @onclick="RetryDuelAsync">
+                        @(_retrying ? "Starting…" : "🔄 Retry duel")
+                    </button>
+                }
+            </div>
+
+            @if (_duel is not null)
             {
-                <button type="button" class="po-btn arena__action-btn"
-                        @onclick="ShareResultAsync">
-                    🖼 Share result
-                </button>
+                <details class="arena__export">
+                    <summary class="arena__export-summary">Export this duel</summary>
+                    <div class="arena__actions arena__actions--secondary">
+                        @if (_verdictRecorded && !_optimistic)
+                        {
+                            <button type="button" class="po-btn po-btn--sm arena__action-btn"
+                                    @onclick="ShareResultAsync">
+                                🖼 Share result
+                            </button>
+                        }
+                        @* Plain anchor rather than a fetch + blob: the endpoint already sets
+                           Content-Disposition, and a same-origin GET carries the BFF session
+                           cookie, so the browser does the whole download without any interop. *@
+                        <a class="po-btn po-btn--sm arena__action-btn"
+                           href="@($"/api/duels/{_duelId}/report")"
+                           download="@($"lab-report-{_duelId}.html")"
+                           title="Download a self-contained HTML lab report for this duel">
+                            ⬇ Lab report
+                        </a>
+                    </div>
+                </details>
             }
-            @* Available once both models are known — even if one is mid-stream or failed, a
-               head-to-head link is still meaningful because the screen shows W/L counts per
-               opponent regardless of who failed this round. *@
-            @if (_duel is not null && !_duelStillRunning)
-            {
-                <button type="button" class="po-btn arena__action-btn"
-                        title="Open the head-to-head record for these two models"
-                        @onclick="@(() => Nav.NavigateTo($"/h2h/{_duel!.LeftModelId}/{_duel.RightModelId}"))">
-                    ⚔ Head-to-head
-                </button>
-            }
-            @* Plain anchor rather than a fetch + blob: the endpoint already sets
-               Content-Disposition, and a same-origin GET carries the BFF session cookie,
-               so the browser does the whole download without any interop. *@
-            @if (_duel is not null && !_duelStillRunning)
-            {
-                <a class="po-btn arena__action-btn"
-                   href="@($"/api/duels/{_duelId}/report")"
-                   download="@($"lab-report-{_duelId}.html")"
-                   title="Download a self-contained HTML lab report for this duel">
-                    ⬇ Lab report
-                </a>
-            }
-            <a class="po-btn arena__action-btn" href="/">⚔ New duel</a>
-        </div>
+        }
 
         @if (_retryError is not null)
         {
@@ -388,6 +426,13 @@
     // only mirrors it so the user can see how long they have. Whoever writes the verdict
     // first wins — a human click inside the window makes the server-side judge stand down.
     private VerdictSource _verdictSource = VerdictSource.Human;
+
+    /// <summary>
+    /// The recorded verdict itself. Needed alongside <see cref="_winnerModelId"/> because a tie
+    /// is a real verdict with no winner — keying "was this decided?" off the winner id alone
+    /// treats a tie as still-pending and restarts the judge countdown on a finished duel.
+    /// </summary>
+    private DuelVerdict _verdictValue = DuelVerdict.Pending;
     private string? _judgeRationale;
     private int? _autoJudgeRemaining;
     private bool _autoJudgeDeciding;
@@ -396,6 +441,10 @@
     // Both models failed → there's nothing to judge; the UI prompts a fresh duel instead.
     private bool BothSidesFailed() =>
         _leftResult?.IsFailure == true && _rightResult?.IsFailure == true;
+
+    /// <summary>Gates "Retry duel" — a failure on either side is the case it exists for.</summary>
+    private bool EitherSideFailed() =>
+        _leftResult?.IsFailure == true || _rightResult?.IsFailure == true;
 
     private bool BothOutputsPresent() =>
         !string.IsNullOrWhiteSpace(_leftResult?.HtmlOutputRaw)
@@ -551,10 +600,14 @@
                     _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
                     _ = RunStallTimerAsync(_stallTimer);
                 }
-                // If verdict already recorded, restore state
-                if (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null)
+                // If a verdict already exists, restore it. A tie counts: it is terminal and has
+                // no winner id, so testing the winner id alone would drop it back into the
+                // countdown branch below and re-arm a judge that has already spoken.
+                if (_duel.Verdict is DuelVerdict.Tie
+                    || (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null))
                 {
                     _verdictRecorded = true;
+                    _verdictValue = _duel.Verdict;
                     _winnerModelId = _duel.WinnerModelId;
                     _loserModelId = _duel.LoserModelId;
                     _verdictSource = _duel.VerdictSource;
@@ -643,7 +696,7 @@
             var response = await ApiClient.RecordVerdictAsync(_duelId, new VerdictRequestDto { Verdict = verdict });
             if (response is not null)
             {
-                AdoptVerdict(response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
+                AdoptVerdict(response.Verdict, response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
                 ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
                 await AnimateEloAsync();
             }
@@ -681,9 +734,11 @@
 
         if (!string.Equals(predictedWinner, _winnerModelId, StringComparison.Ordinal))
         {
-            _overriddenNotice = _verdictSource == VerdictSource.Ai
-                ? $"The AI judge recorded its verdict first — {ResolveDisplayName(_winnerModelId)} won. Your pick was not counted."
-                : $"This duel was already decided — {ResolveDisplayName(_winnerModelId)} won.";
+            _overriddenNotice = _verdictValue == DuelVerdict.Tie
+                ? "The AI judge recorded a tie first — it found both outputs equivalent. Your pick was not counted."
+                : _verdictSource == VerdictSource.Ai
+                    ? $"The AI judge recorded its verdict first — {ResolveDisplayName(_winnerModelId)} won. Your pick was not counted."
+                    : $"This duel was already decided — {ResolveDisplayName(_winnerModelId)} won.";
         }
 
         await AnimateEloAsync();
@@ -694,6 +749,7 @@
     {
         _verdictRecorded = false;
         _optimistic = false;
+        _verdictValue = DuelVerdict.Pending;
         _winnerModelId = null;
         _loserModelId = null;
         _eloShiftLeft = null;
@@ -701,10 +757,11 @@
         StartAutoJudgeCountdown();
     }
 
-    private void AdoptVerdict(string? winner, string? loser, VerdictSource source, string? rationale)
+    private void AdoptVerdict(DuelVerdict verdict, string? winner, string? loser, VerdictSource source, string? rationale)
     {
         _verdictRecorded = true;
         _optimistic = false;
+        _verdictValue = verdict;
         _winnerModelId = winner;
         _loserModelId = loser;
         _verdictSource = source;
@@ -909,11 +966,16 @@
     private async Task<bool> RefreshVerdictFromServerAsync()
     {
         var fresh = await ApiClient.GetDuelAsync(_duelId);
-        if (fresh is null || fresh.Verdict == DuelVerdict.Pending || fresh.WinnerModelId is null)
+        // A tie is terminal but carries no winner id, so it has to pass this gate on the verdict
+        // alone — otherwise the poll below never stops and the page waits out all 45 attempts on
+        // a duel that was decided on the first one.
+        if (fresh is null
+            || fresh.Verdict == DuelVerdict.Pending
+            || (fresh.Verdict != DuelVerdict.Tie && fresh.WinnerModelId is null))
             return false;
 
         _duel = fresh;
-        AdoptVerdict(fresh.WinnerModelId, fresh.LoserModelId, fresh.VerdictSource, fresh.JudgeRationale);
+        AdoptVerdict(fresh.Verdict, fresh.WinnerModelId, fresh.LoserModelId, fresh.VerdictSource, fresh.JudgeRationale);
         _autoJudgeRemaining = null;
         _autoJudgeDeciding = false;
         ApplyEloShifts(fresh);
@@ -927,7 +989,7 @@
         // its ELO animation; adopting the broadcast too would restart that mid-flight.
         if (_verdictRecorded && !_optimistic) return;
 
-        AdoptVerdict(response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
+        AdoptVerdict(response.Verdict, response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
         ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
 
         StopAutoJudgeCountdown();

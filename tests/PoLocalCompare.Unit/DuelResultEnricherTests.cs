@@ -62,11 +62,11 @@ public class DuelResultEnricherTests
 
         DuelResultEnricher.Enrich(result, model, Rate);
         var first = (result.HtmlOutputRaw, result.HtmlOutputSizeBytes, result.OutputQualityScore,
-                     result.CharacterDensityRatio, result.EnergyWh, result.GreenScore);
+                     result.CharacterDensityRatio, result.EnergyWh, result.EnergyCostUsd);
 
         DuelResultEnricher.Enrich(result, model, Rate);
         var second = (result.HtmlOutputRaw, result.HtmlOutputSizeBytes, result.OutputQualityScore,
-                      result.CharacterDensityRatio, result.EnergyWh, result.GreenScore);
+                      result.CharacterDensityRatio, result.EnergyWh, result.EnergyCostUsd);
 
         Assert.Equal(first, second);
     }
@@ -119,7 +119,6 @@ public class DuelResultEnricherTests
 
         Assert.NotNull(result.EnergyWh);
         Assert.NotNull(result.EnergyCostUsd);
-        Assert.NotNull(result.GreenScore);
     }
 
     [Fact]
@@ -130,21 +129,20 @@ public class DuelResultEnricherTests
         DuelResultEnricher.Enrich(result, OllamaModel(), Rate);
 
         Assert.NotNull(result.EnergyWh);
-        Assert.NotNull(result.GreenScore);
+        Assert.NotNull(result.EnergyCostUsd);
     }
 
     [Fact]
     public void Enrich_RemoteModel_GetsNoGreenStats()
     {
         // A cloud model's energy use is not ours to measure; reporting a number would
-        // put an invented value on the Green Score leaderboard.
+        // put an invented value on the telemetry panel.
         var result = Result("<html><body>x</body></html>");
 
         DuelResultEnricher.Enrich(result, RemoteModel(), Rate);
 
         Assert.Null(result.EnergyWh);
         Assert.Null(result.EnergyCostUsd);
-        Assert.Null(result.GreenScore);
     }
 
     [Fact]
@@ -158,7 +156,7 @@ public class DuelResultEnricherTests
         DuelResultEnricher.Enrich(result, OllamaModel(tdp: null), Rate);
 
         Assert.Null(result.EnergyWh);
-        Assert.Null(result.GreenScore);
+        Assert.Null(result.EnergyCostUsd);
     }
 
     [Fact]
@@ -172,15 +170,15 @@ public class DuelResultEnricherTests
     [Fact]
     public void Enrich_FailedResult_GetsNoGreenStats()
     {
-        // A failure burned energy but produced no tokens; scoring it would reward
-        // failing fast with an infinite-looking efficiency.
+        // A failure burned energy but produced no tokens; reporting a cost for it would
+        // bill a duel that never delivered anything.
         var result = Result(string.Empty);
         result.IsFailure = true;
 
         DuelResultEnricher.Enrich(result, LocalModel(), Rate);
 
         Assert.Null(result.EnergyWh);
-        Assert.Null(result.GreenScore);
+        Assert.Null(result.EnergyCostUsd);
     }
 
     [Fact]
@@ -193,11 +191,10 @@ public class DuelResultEnricherTests
         var expectedWh = GreenStatsCalculator.ComputeEnergyWh(115, 30_000);
         Assert.Equal(expectedWh, result.EnergyWh);
         Assert.Equal(GreenStatsCalculator.ComputeEnergyCostUsd(expectedWh, Rate), result.EnergyCostUsd);
-        Assert.Equal(GreenStatsCalculator.ComputeGreenScore(500, expectedWh), result.GreenScore);
     }
 
     [Fact]
-    public void Enrich_LongerRunForSameTokens_ScoresLessGreen()
+    public void Enrich_LongerRunUsesMoreEnergy()
     {
         var quick = Result("<html><body>x</body></html>", tokens: 500, ms: 10_000);
         var slow = Result("<html><body>x</body></html>", tokens: 500, ms: 60_000);
@@ -205,7 +202,7 @@ public class DuelResultEnricherTests
         DuelResultEnricher.Enrich(quick, LocalModel(), Rate);
         DuelResultEnricher.Enrich(slow, LocalModel(), Rate);
 
-        Assert.True(slow.GreenScore < quick.GreenScore);
+        Assert.True(slow.EnergyWh > quick.EnergyWh);
     }
 
     [Fact]

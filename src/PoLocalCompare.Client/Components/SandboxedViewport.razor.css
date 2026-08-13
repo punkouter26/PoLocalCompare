@@ -12,9 +12,15 @@
     height: 100%;
 }
 
+/* The losing side is marked, not hidden.
+   This used to be `filter: grayscale(80%) brightness(0.5); opacity: 0.6`, which dragged every
+   colour underneath it below 4.5:1 — the header, the LOSER badge and the diagnostics line all
+   failed contrast in both themes (2.3–3.1:1), and the output itself became grey-on-grey. The
+   losing output is exactly what a person needs to read to check the verdict, so the loss is
+   now signalled by the badge and a red edge that cost the content nothing. */
 .sandboxed-viewport--loser {
-    filter: grayscale(80%) brightness(0.5);
-    opacity: 0.6;
+    border-color: var(--accent-red);
+    box-shadow: inset 3px 0 0 0 var(--accent-red);
 }
 
 .sandboxed-viewport__header {

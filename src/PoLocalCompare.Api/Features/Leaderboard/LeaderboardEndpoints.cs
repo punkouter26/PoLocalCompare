@@ -25,7 +25,7 @@ public static class LeaderboardEndpoints
             return Results.Ok(rows);
         })
         .WithName("GetLeaderboard")
-        .WithSummary("Returns all models ranked by ELO or Green Score.")
+        .WithSummary("Returns all models ranked by ELO, output quality or average cost.")
         .Produces<IReadOnlyList<LeaderboardEntryDto>>();
 
         group.MapGet("/{modelId}/killlist", async (
@@ -39,21 +39,9 @@ public static class LeaderboardEndpoints
         .WithSummary("Returns aggregated head-to-head records for a model.")
         .Produces<IReadOnlyList<HeadToHeadDto>>();
 
-        group.MapGet("/h2h/{modelIdA}/{modelIdB}", async (
-            ModelId modelIdA,
-            ModelId modelIdB,
-            [FromServices] GetHeadToHeadHandler handler) =>
-        {
-            var detail = await handler.HandleAsync(modelIdA, modelIdB);
-            return detail is null
-                ? Results.NotFound(new { error = "One or both models were not found, or they are the same model." })
-                : Results.Ok(detail);
-        })
-        .WithName("GetHeadToHead")
-        .WithSummary("Returns the full record between two specific models.")
-        .Produces<HeadToHeadDetailDto>()
-        .Produces(StatusCodes.Status404NotFound);
-
+        // The /h2h/{a}/{b} endpoint and its handler are gone with the /h2h page. The kill-list
+        // above already answers "how do these two compare" for every opponent at once, and it
+        // does so without a second model lookup that 404s whenever either id has been retired.
         return app;
     }
 }

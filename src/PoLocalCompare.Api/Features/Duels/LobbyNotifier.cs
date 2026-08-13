@@ -66,6 +66,7 @@ public sealed class LobbyNotifier(IHubContext<DuelHub> hubContext, ILogger<Lobby
             LeftModelName = leftModelName,
             RightModelName = rightModelName,
             WinnerModelName = winnerModelName,
+            Verdict = response.Verdict,
             Source = response.Source,
             EloShiftWinner = response.EloShiftWinner,
         }, duel.DuelId, cancellationToken);

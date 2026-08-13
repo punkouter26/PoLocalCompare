@@ -42,6 +42,12 @@
     gap: var(--space-md);
 }
 
+/* The lane is the element the --left/--right/--failed modifiers hang off to recolour the fill
+   inside it; it also owns the stacking so the runner can sit over the track. */
+.token-race__lane {
+    position: relative;
+}
+
 .token-race__lane-head {
     display: flex;
     align-items: center;

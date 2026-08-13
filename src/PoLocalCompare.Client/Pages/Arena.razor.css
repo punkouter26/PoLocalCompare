@@ -23,6 +23,16 @@
     font-style: italic;
 }
 
+/* A dead-end duel id is a full stop, so it gets somewhere to go rather than one italic line. */
+.arena__not-found {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4, 1rem);
+    padding-block: var(--space-6, 1.5rem);
+    max-inline-size: 46rem;
+}
+
 /* ── Rendered / Code / Diff switcher ──────────────────────────────────────── */
 
 .arena__view-toggle {
@@ -209,6 +219,28 @@
 
 .arena__actions--secondary .arena__action-btn {
     min-width: 0;
+}
+
+/* Exports are available, not advertised: a disclosure keeps them off the same visual tier as
+   the two exits without hiding them from anyone who wants them. */
+.arena__export {
+    margin-top: var(--space-sm, 0.5rem);
+    text-align: center;
+}
+
+.arena__export-summary {
+    display: inline-block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    min-block-size: var(--target-min, 24px);
+}
+
+.arena__export-summary:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
 }
 
 .arena__verdict-recorded {

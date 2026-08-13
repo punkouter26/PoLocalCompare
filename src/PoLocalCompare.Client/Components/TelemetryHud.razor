@@ -29,14 +29,6 @@
                     <span class="telemetry-hud__value telemetry-hud__value--yellow">$@Result.ApiCostUsd.Value.ToString("F6")</span>
                 </div>
             }
-
-            @if (Result.GreenScore.HasValue)
-            {
-                <div class="telemetry-hud__item telemetry-hud__item--wide">
-                    <span class="telemetry-hud__label">🌿 Green Score</span>
-                    <span class="telemetry-hud__value telemetry-hud__value--green">@Result.GreenScore.Value.ToString("F1") tok/Wh</span>
-                </div>
-            }
         </div>
 
         <details class="telemetry-hud__more">

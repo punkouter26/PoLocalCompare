@@ -99,8 +99,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
             ["FailureReason"] = result.FailureReason,
             ["EnergyWh"] = result.EnergyWh,
             ["EnergyCostUsd"] = result.EnergyCostUsd,
-            ["ApiCostUsd"] = result.ApiCostUsd,
-            ["GreenScore"] = result.GreenScore
+            ["ApiCostUsd"] = result.ApiCostUsd
         };
     }
 
@@ -138,8 +137,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
             FailureReason = entity.GetString("FailureReason"),
             EnergyWh = entity.GetDouble("EnergyWh"),
             EnergyCostUsd = entity.GetDouble("EnergyCostUsd"),
-            ApiCostUsd = entity.GetDouble("ApiCostUsd"),
-            GreenScore = entity.GetDouble("GreenScore")
+            ApiCostUsd = entity.GetDouble("ApiCostUsd")
         };
     }
 }

@@ -60,9 +60,22 @@ public sealed class DuelApiClient
         return await response.Content.ReadFromJsonAsync<VerdictResponseDto>(JsonOptions);
     }
 
+    /// <summary>
+    /// Reads one duel, or null when the id names nothing.
+    /// </summary>
+    /// <remarks>
+    /// Uses <c>GetAsync</c> rather than <c>GetFromJsonAsync</c> so a 404 becomes the null this
+    /// signature already promises. The old version threw, which escaped past the Arena's
+    /// "Duel not found" branch to the ErrorBoundary — a mistyped or deleted duel id rendered a
+    /// raw <c>HttpRequestException</c> stack instead of a message. This is also the polling
+    /// path used while awaiting a verdict, where a transient failure must not tear the page down.
+    /// </remarks>
     public async Task<DuelDto?> GetDuelAsync(DuelId duelId)
     {
-        return await _http.GetFromJsonAsync<DuelDto>($"/api/duels/{duelId}", JsonOptions);
+        var response = await _http.GetAsync($"/api/duels/{duelId}");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<DuelDto>(JsonOptions);
     }
 
     public async Task PostLocalResultAsync(
@@ -109,18 +122,6 @@ public sealed class DuelApiClient
     {
         return await _http.GetFromJsonAsync<IReadOnlyList<HeadToHeadDto>>(
             $"/api/leaderboard/{modelId}/killlist", JsonOptions);
-    }
-
-    /// <summary>Returns null when either model is unknown, or when both ids are the same model.</summary>
-    public async Task<HeadToHeadDetailDto?> GetHeadToHeadAsync(ModelId modelIdA, ModelId modelIdB)
-    {
-        var response = await _http.GetAsync(
-            $"/api/leaderboard/h2h/{Uri.EscapeDataString(modelIdA.Value)}/{Uri.EscapeDataString(modelIdB.Value)}");
-
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
-
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<HeadToHeadDetailDto>(JsonOptions);
     }
 
     // ── Models ───────────────────────────────────────────────────────────────

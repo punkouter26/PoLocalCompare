@@ -151,21 +151,23 @@
     font-weight: 600;
 }
 
+/* No opacity on any of these. The tokens are contrast-checked per theme, and multiplying them
+   by 0.6–0.85 quietly pushed all fourteen pricing nodes on the Compare page below 4.5:1.
+   (--accent, the old --free colour's token, was never defined anywhere — the #22c55e fallback
+   was doing all the work, and it fails on a white card.) */
 .model-card__pricing {
     color: var(--text-muted);
     font-size: 0.75rem;
     margin-top: 0.25rem;
-    opacity: 0.8;
 }
 
 .model-card__pricing--free {
-    color: var(--accent, #22c55e);
-    opacity: 0.85;
+    color: var(--accent-green);
     font-style: italic;
 }
 
 .model-card__pricing-unit {
-    opacity: 0.6;
+    color: var(--text-dim);
     font-size: 0.7rem;
 }
 

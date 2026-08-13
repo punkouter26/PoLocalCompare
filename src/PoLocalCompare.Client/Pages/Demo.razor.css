@@ -236,7 +236,9 @@
 .demo__queue-item--undecided { border-left-color: var(--accent-yellow); }
 .demo__queue-item--failed { border-left-color: var(--accent-red); }
 .demo__queue-item--skipped { opacity: 0.55; }
-.demo__queue-item--queued { opacity: 0.75; }
+/* No opacity here. Fading the whole row blended every colour inside it toward the background
+   and put 31 nodes under 4.5:1 — the row already says "queued" in words. */
+.demo__queue-item--queued .demo__queue-index { color: var(--text-dim); }
 
 .demo__queue-index {
     font-weight: 800;

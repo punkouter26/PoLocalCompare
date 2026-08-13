@@ -11,7 +11,12 @@ public sealed class Model
     public double CurrentElo { get; set; }
     public int DuelCount { get; set; }
     public int WinCount { get; set; }
-    public double GreenScoreAvg { get; set; }
+
+    /// <summary>
+    /// Duels the judge called a tie. Tracked separately so losses stay derivable as
+    /// <c>DuelCount - WinCount - DrawCount</c>; without it every draw would read as a loss.
+    /// </summary>
+    public int DrawCount { get; set; }
 
     // Local models only
     public double? TdpWatts { get; init; }
@@ -66,7 +71,7 @@ public sealed class Model
         CurrentElo = 1200;
         DuelCount = 0;
         WinCount = 0;
-        GreenScoreAvg = 0;
+        DrawCount = 0;
         TdpWatts = tdpWatts;
         WebLlmModelId = webLlmModelId;
         ApiEndpointRef = apiEndpointRef;
@@ -87,8 +92,8 @@ public sealed class Model
     /// are <c>init</c>-only and C#'s init-only semantics track assignments across the instance,
     /// not the constructor — even on a freshly-cloned object the compiler rejects a write.
     /// <see cref="ETag"/> is preserved so the optimistic-concurrency check on the way out still
-    /// passes; mutable state (CurrentElo, DuelCount, WinCount, GreenScoreAvg) is taken from
-    /// the existing row, not reset to defaults.
+    /// passes; mutable state (CurrentElo, DuelCount, WinCount, DrawCount) is taken from the
+    /// existing row, not reset to defaults.
     /// </summary>
     public Model WithPricing(decimal? inputPrice, decimal? outputPrice)
     {
@@ -105,7 +110,7 @@ public sealed class Model
             CurrentElo = CurrentElo,
             DuelCount = DuelCount,
             WinCount = WinCount,
-            GreenScoreAvg = GreenScoreAvg,
+            DrawCount = DrawCount,
             CreatedAt = CreatedAt,
             ETag = ETag
         };

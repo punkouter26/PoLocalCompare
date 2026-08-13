@@ -11,7 +11,7 @@
 @inject PromptHistoryService PromptHistory
 @inject WebGpuCapability WebGpu
 
-<PageTitle>Compare - PoLocalCompare</PageTitle>
+<PageTitle>Compare — PoLocalCompare</PageTitle>
 
 <div class="home">
     @* ── Header ──────────────────────────────────────────────────────── *@
@@ -258,9 +258,10 @@
                         <a class="home__recent-item @(d.Verdict == DuelVerdict.Pending ? "home__recent-item--pending" : "")" href="@href">
                             <span class="home__recent-prompt">@d.PromptSummary</span>
                             <span class="home__recent-meta">
-                                @CleanName(d.LeftModelName) <em>vs</em> @CleanName(d.RightModelName) ·
-                                @if (d.Verdict == DuelVerdict.Left) { <span class="home__recent-winner">🏆 @CleanName(d.LeftModelName)</span> }
-                                else if (d.Verdict == DuelVerdict.Right) { <span class="home__recent-winner">🏆 @CleanName(d.RightModelName)</span> }
+                                @CleanName(d.LeftModelName, d.LeftModelId) <em>vs</em> @CleanName(d.RightModelName, d.RightModelId) ·
+                                @if (d.Verdict == DuelVerdict.Left) { <span class="home__recent-winner">🏆 @CleanName(d.LeftModelName, d.LeftModelId)</span> }
+                                else if (d.Verdict == DuelVerdict.Right) { <span class="home__recent-winner">🏆 @CleanName(d.RightModelName, d.RightModelId)</span> }
+                                else if (d.Verdict == DuelVerdict.Tie) { <span class="home__recent-tie">🤝 Tie</span> }
                                 else { <span class="home__recent-pending">⚖ Judge</span> }
                             </span>
                         </a>
@@ -412,22 +413,21 @@
         _         => _models.Count,
     };
 
-    // Older/seed duel records stored a raw model ID in the name field (26-char ULIDs
-    // and 25-char "01SEED…" seeds). Show a neutral label instead of leaking the ID.
-    // Matches an unbroken run of 16+ uppercase letters/digits (no spaces, dashes or
-    // dots — real display names like "GPT-5.4 Nano" always have one) or a GUID.
-    private static readonly System.Text.RegularExpressions.Regex _idLike =
-        new(@"^([0-9A-Z]{16,}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$");
+    // Older duel records stored a raw model ID in the name field, so the recent list has to
+    // recognise one. This used to be a local regex answering the same question as the Archive's
+    // own copy and the kill-list handler's third copy — and answering it differently ("Unknown
+    // model" here, "Retired model" there). It now compares the name against the id the row
+    // carries, which is exact rather than shape-matching, and shares the Archive's wording.
+    private static string CleanName(string? name, ModelId modelId)
+        => ModelDisplayName.ResolveForDisplay(name, null, modelId);
 
-    private static string CleanName(string? name)
-        => string.IsNullOrWhiteSpace(name) || _idLike.IsMatch(name.Trim()) ? "Unknown model" : name;
-
-    private static bool IsIdLike(string? name)
-        => !string.IsNullOrWhiteSpace(name) && _idLike.IsMatch(name.Trim());
+    private static bool IsIdLike(string? name, ModelId modelId)
+        => ModelDisplayName.IsUnresolved(name, modelId);
 
     // Hide legacy/seed duels whose model names are both unresolved IDs — they're noise.
     private IEnumerable<DuelSummaryDto> VisibleRecentDuels =>
-        _recentDuels.Where(d => !(IsIdLike(d.LeftModelName) && IsIdLike(d.RightModelName)));
+        _recentDuels.Where(d => !(IsIdLike(d.LeftModelName, d.LeftModelId)
+                               && IsIdLike(d.RightModelName, d.RightModelId)));
 
     protected override async Task OnInitializedAsync()
     {

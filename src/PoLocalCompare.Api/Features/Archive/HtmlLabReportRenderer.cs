@@ -87,7 +87,6 @@ public static class HtmlLabReportRenderer
         AppendTelemetryRow(sb, "Energy (Wh)", leftResult?.EnergyWh?.ToString("F4") ?? "—", rightResult?.EnergyWh?.ToString("F4") ?? "—");
         AppendTelemetryRow(sb, "Energy Cost (USD)", leftResult?.EnergyCostUsd?.ToString("F6") ?? "—", rightResult?.EnergyCostUsd?.ToString("F6") ?? "—");
         AppendTelemetryRow(sb, "API Cost (USD)", leftResult?.ApiCostUsd?.ToString("F4") ?? "—", rightResult?.ApiCostUsd?.ToString("F4") ?? "—");
-        AppendTelemetryRow(sb, "Green Score", leftResult?.GreenScore?.ToString("F2") ?? "—", rightResult?.GreenScore?.ToString("F2") ?? "—");
         AppendTelemetryRow(sb, "Failure", leftResult?.IsFailure == true ? leftResult.FailureReason ?? "Yes" : "No", rightResult?.IsFailure == true ? rightResult.FailureReason ?? "Yes" : "No");
         sb.AppendLine("      </tbody>");
         sb.AppendLine("    </table>");

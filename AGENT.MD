@@ -95,7 +95,7 @@ PoLocalCompare.slnx
 │   │   ├── Prompts/                    ← PromptLibrary (curated starter + demo prompts)
 │   │   └── Demo/                       ← DemoPlanner (pure, seeded demo scheduling)
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
-│       ├── Pages/                      ← Home, Arena, Leaderboard, Archive, HeadToHead,
+│       ├── Pages/                      ← Home, Arena, Leaderboard, Archive,
 │       │                                 Demo, Login, NotFound
 │       │                                 (model-health is a Home section; Arena both
 │       │                                  streams a running duel and judges it)

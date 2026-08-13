@@ -6,7 +6,6 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject DuelApiClient ApiClient
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>Archive — PoLocalCompare</PageTitle>
 
@@ -34,7 +33,7 @@
     else
     {
         <div class="archive__filters">
-            @foreach (var label in new[] { "All", "Won", "No Verdict" })
+            @foreach (var label in new[] { "All", "Won", "Tie", "Unjudged" })
             {
                 <button class="archive__filter-chip @(_verdictFilter == label ? "archive__filter-chip--active" : "")"
                         @onclick="() => SetVerdictFilter(label)">
@@ -49,10 +48,60 @@
                 <button class="archive__filter-reset" @onclick="ResetFilters">Show all duels</button>
             </div>
         }
+        @* The detail panel sits above the table, not below it. Below a 20-row grid it opened
+           roughly 1,100px off-screen, so selecting the top row scrolled you to the bottom of
+           the page and away from the list you were reading. Here it opens in place, the list
+           stays visible underneath, and no scroll is needed at all. *@
+        @if (_selectedDuel is not null)
+        {
+            <div class="archive__detail" id="archive-detail">
+                <div class="archive__detail-head">
+                    <h2 class="archive__detail-title">Duel Details</h2>
+                    <button type="button" class="po-btn po-btn--sm po-btn--ghost"
+                            aria-label="Close duel details"
+                            @onclick="@(() => _selectedDuel = null)">✕</button>
+                </div>
+
+                <div class="archive__detail-meta">
+                    <p><strong>Prompt:</strong> @_selectedDuel.PromptSummary</p>
+                    <p><strong>Left:</strong> @FormatModelName(_selectedDuel.LeftModelName, _selectedDuel.LeftModelId) &nbsp;&nbsp; <strong>Right:</strong> @FormatModelName(_selectedDuel.RightModelName, _selectedDuel.RightModelId)</p>
+                    <p><strong>Started:</strong> @_selectedDuel.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+                    @if (_selectedDuel.CompletedAt.HasValue)
+                    {
+                        <p><strong>Completed:</strong> @_selectedDuel.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+                    }
+                    <p><strong>Outcome:</strong> @OutcomeText(_selectedDuel)</p>
+                </div>
+
+                <div class="archive__detail-actions">
+                    <button type="button" class="po-btn archive__btn"
+                            @onclick="@(() => Nav.NavigateTo($"/arena/{_selectedDuel.DuelId}"))">
+                        👁 View Output
+                    </button>
+                    <button type="button" class="po-btn archive__btn" @onclick="GoToReChallenge">
+                        ⚧ Re-Challenge
+                    </button>
+                    @* Same endpoint the Arena links to; the BFF cookie rides along on a
+                       same-origin GET, so no interop is needed to download it. *@
+                    <a class="po-btn archive__btn"
+                       href="@($"/api/duels/{_selectedDuel.DuelId}/report")"
+                       download="@($"lab-report-{_selectedDuel.DuelId}.html")">
+                        ⬇ Lab report
+                    </a>
+                    @if (_selectedDuel.Verdict == DuelVerdict.Pending)
+                    {
+                        <button type="button" class="po-btn po-btn--primary archive__btn" @onclick="GoToArena">
+                            ⚔ Judge This Duel
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
         @* Rows are keyboard-operable (WCAG 2.2 SC 2.1.1): tabbable, and Enter/Space
            selects, because clicking a row is the only way to open the detail panel. *@
         <div class="po-table-wrap">
-            <table class="po-table po-table--selectable archive__grid">
+            <table class="po-table po-table--selectable">
                 <caption class="archive__grid-caption">Recorded duels — select a row for details</caption>
                 <thead>
                     <tr>
@@ -97,9 +146,17 @@
                                         🏆 @GetWinnerName(d)
                                     </span>
                                 }
+                                else if (d.Verdict == DuelVerdict.Tie)
+                                {
+                                    <span class="archive__verdict archive__verdict--tie"
+                                          title="The judge compared both outputs and found them equivalent. No rating moved.">
+                                        🤝 Tie
+                                    </span>
+                                }
                                 else
                                 {
-                                    <span class="archive__verdict archive__verdict--pending">No verdict</span>
+                                    <span class="archive__verdict archive__verdict--pending"
+                                          title="Nobody has judged this duel yet.">Unjudged</span>
                                 }
                             </td>
                         </tr>
@@ -107,47 +164,6 @@
                 </tbody>
             </table>
         </div>
-
-        @if (_selectedDuel is not null)
-        {
-            <div class="archive__detail" id="archive-detail">
-                <h2 class="archive__detail-title">Duel Details</h2>
-
-                <div class="archive__detail-meta">
-                    <p><strong>Prompt:</strong> @_selectedDuel.PromptSummary</p>
-                    <p><strong>Left:</strong> @FormatModelName(_selectedDuel.LeftModelName, _selectedDuel.LeftModelId) &nbsp;&nbsp; <strong>Right:</strong> @FormatModelName(_selectedDuel.RightModelName, _selectedDuel.RightModelId)</p>
-                    <p><strong>Started:</strong> @_selectedDuel.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
-                    @if (_selectedDuel.CompletedAt.HasValue)
-                    {
-                        <p><strong>Completed:</strong> @_selectedDuel.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
-                    }
-                    <p><strong>Winner:</strong> @(GetWinnerName(_selectedDuel))</p>
-                </div>
-
-                <div class="archive__detail-actions">
-                    <button type="button" class="po-btn archive__btn"
-                            @onclick="@(() => Nav.NavigateTo($"/arena/{_selectedDuel.DuelId}"))">
-                        👁 View Output
-                    </button>
-                    <button type="button" class="po-btn archive__btn" @onclick="GoToReChallenge">
-                        ⚧ Re-Challenge
-                    </button>
-                    @* Same endpoint the Arena links to; the BFF cookie rides along on a
-                       same-origin GET, so no interop is needed to download it. *@
-                    <a class="po-btn archive__btn"
-                       href="@($"/api/duels/{_selectedDuel.DuelId}/report")"
-                       download="@($"lab-report-{_selectedDuel.DuelId}.html")">
-                        ⬇ Lab report
-                    </a>
-                    @if (_selectedDuel.Verdict == DuelVerdict.Pending)
-                    {
-                        <button type="button" class="po-btn po-btn--primary archive__btn" @onclick="GoToArena">
-                            ⚔ Judge This Duel
-                        </button>
-                    }
-                </div>
-            </div>
-        }
 
         <div class="archive__pagination">
             @* The old copy read "Showing 20 of 20 duels — more available", because the first
@@ -183,7 +199,8 @@
         IEnumerable<DuelSummaryDto> query = _verdictFilter switch
         {
             "Won" => _duels.Where(d => d.Verdict is DuelVerdict.Left or DuelVerdict.Right),
-            "No Verdict" => _duels.Where(d => d.Verdict == DuelVerdict.Pending),
+            "Tie" => _duels.Where(d => d.Verdict == DuelVerdict.Tie),
+            "Unjudged" => _duels.Where(d => d.Verdict == DuelVerdict.Pending),
             _ => _duels
         };
         _filteredDuels = query
@@ -265,19 +282,29 @@
         }
     }
 
-    private async Task OnRowSelect(DuelSummaryDto duel)
-    {
-        _selectedDuel = duel;
-        await InvokeAsync(StateHasChanged);
-        await JS.InvokeVoidAsync("scrollElementIntoView", "archive-detail");
-    }
+    // No scroll-into-view any more: the panel renders directly above the table, so it is
+    // already on screen when it opens. Selecting the same row again closes it.
+    private void OnRowSelect(DuelSummaryDto duel) =>
+        _selectedDuel = _selectedDuel?.DuelId == duel.DuelId ? null : duel;
 
     /// <summary>Keyboard equivalent of clicking a row (SC 2.1.1).</summary>
-    private async Task OnRowKeyDown(KeyboardEventArgs e, DuelSummaryDto duel)
+    private void OnRowKeyDown(KeyboardEventArgs e, DuelSummaryDto duel)
     {
         if (e.Key is "Enter" or " ")
-            await OnRowSelect(duel);
+            OnRowSelect(duel);
     }
+
+    /// <summary>
+    /// One line naming what actually happened. A tie and an unjudged duel both have no winner
+    /// but are not the same event, and the old "Winner: —" said nothing about which one it was.
+    /// </summary>
+    private static string OutcomeText(DuelSummaryDto d) => d.Verdict switch
+    {
+        DuelVerdict.Tie => "Tie — the judge found both outputs equivalent, so no rating moved.",
+        DuelVerdict.Pending => "Not judged yet.",
+        DuelVerdict.Expired => "Expired before anyone judged it.",
+        _ => GetWinnerName(d),
+    };
 
     private static string GetWinnerName(DuelSummaryDto d)
     {
@@ -287,23 +314,13 @@
         return ShortModelId(d.WinnerModelId);
     }
 
-    private static bool IsUnresolvedModelName(string? modelName, string modelId)
-    {
-        if (string.IsNullOrWhiteSpace(modelName)) return true;
-        var trimmed = modelName.Trim();
-        return string.Equals(trimmed, modelId, StringComparison.OrdinalIgnoreCase);
-    }
+    // Both delegate to the one shared resolver rather than restating its rules here; see
+    // ModelDisplayName for why an unresolved id shows as "Retired model".
+    private static bool IsUnresolvedModelName(string? modelName, ModelId modelId) =>
+        ModelDisplayName.IsUnresolved(modelName, modelId);
 
-    // "Retired", not "Deleted": the duel is intact, it is the catalog entry that is gone —
-    // usually a wiped Models table re-seeding under fresh IDs. Duels created from now on carry
-    // a name snapshot (Duel.LeftModelName) and resolve without ever reaching this.
-    private static string FormatModelName(string? modelName, string modelId)
-    {
-        if (IsUnresolvedModelName(modelName, modelId))
-            return "Retired model";
-
-        return modelName!.Trim();
-    }
+    private static string FormatModelName(string? modelName, ModelId modelId) =>
+        ModelDisplayName.ResolveForDisplay(modelName, null, modelId);
 
     private static string ShortModelId(string? modelId)
     {

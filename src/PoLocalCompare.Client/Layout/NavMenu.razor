@@ -1,5 +1,6 @@
 @implements IDisposable
 @using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
 <nav class="navmenu">
     @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ── *@
     @if (_usingMockData)
@@ -171,6 +172,8 @@
     private string LatestText => _latest switch
     {
         null => string.Empty,
+        { Kind: LobbyEventKind.VerdictRecorded, Verdict: DuelVerdict.Tie } e =>
+            $"🤝 {e.LeftModelName} vs {e.RightModelName} — judged a tie",
         { Kind: LobbyEventKind.VerdictRecorded } e =>
             $"🏆 {e.WinnerModelName} beat {Opponent(e)}{EloSuffix(e)}",
         { Kind: LobbyEventKind.DuelCompleted } e =>

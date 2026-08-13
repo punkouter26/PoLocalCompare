@@ -42,7 +42,7 @@ public sealed class GetDuelHandler
             resultDtos.Add(new DuelResultDto
             {
                 ModelId = r.ModelId,
-                ModelName = DuelModelNames.Resolve(model?.DisplayName, snapshot, r.ModelId),
+                ModelName = ModelDisplayName.Resolve(model?.DisplayName, snapshot, r.ModelId),
                 WarmUpDurationMs = r.WarmUpDurationMs,
                 GenerationDurationMs = r.GenerationDurationMs,
                 TotalDurationMs = r.TotalDurationMs,
@@ -61,7 +61,6 @@ public sealed class GetDuelHandler
                 EnergyWh = r.EnergyWh,
                 EnergyCostUsd = r.EnergyCostUsd,
                 ApiCostUsd = r.ApiCostUsd,
-                GreenScore = r.GreenScore,
             });
         }
 

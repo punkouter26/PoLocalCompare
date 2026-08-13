@@ -55,6 +55,24 @@
         </tbody>
     </table>
 
+    @* The metrics that came out the same say something ("these two are structurally alike")
+       but they do not need a row each to say it. *@
+    @if (_identical.Count > 0)
+    {
+        <p class="output-scorecard__identical">
+            <span aria-hidden="true">=</span>
+            Identical on @string.Join(", ", _identical.Select(r => $"{r.Label.ToLowerInvariant()} ({r.LeftText})")).
+        </p>
+    }
+    @if (_suppressedZeroCount > 0)
+    {
+        <p class="output-scorecard__identical">
+            <span aria-hidden="true">·</span>
+            @_suppressedZeroCount metric@(_suppressedZeroCount == 1 ? "" : "s") measured nothing on either
+            side (no scripts, dependencies or issues) and @(_suppressedZeroCount == 1 ? "is" : "are") not listed.
+        </p>
+    }
+
     <div class="output-scorecard__findings">
         <div>
             @RenderFindings(LeftName, _left, LeftProbe)
@@ -80,11 +98,22 @@
     private string? _analyzedLeftHtml;
     private string? _analyzedRightHtml;
     private List<Row> _rows = [];
+    private List<Row> _identical = [];
+    private int _suppressedZeroCount;
 
     /// <param name="Direction">
     /// Which way is better. Neutral rows are shown without a winner mark — a bigger document or
     /// more CSS rules is a difference, not an improvement, and marking one as "winning" would
     /// quietly train people to vote for verbosity.
+    /// </param>
+    /// <param name="Always">
+    /// Kept in the table even when both sides read the same. Completeness is the headline
+    /// number the rest of the card qualifies, so removing it when the two agree would leave
+    /// the scorecard with nothing to lead on.
+    /// </param>
+    /// <param name="IsZeroOnBothSides">
+    /// Neither model produced anything this row measures — no scripts, no external deps, no
+    /// issues. There is nothing to compare, so the row is dropped rather than printed as 0/0.
     /// </param>
     private sealed record Row(
         string Label,
@@ -92,7 +121,12 @@
         string LeftText,
         string RightText,
         bool LeftWins,
-        bool RightWins);
+        bool RightWins,
+        bool IsZeroOnBothSides = false,
+        bool Always = false)
+    {
+        public bool SameOnBothSides => string.Equals(LeftText, RightText, StringComparison.Ordinal);
+    }
 
     protected override void OnParametersSet()
     {
@@ -110,7 +144,15 @@
             _analyzedRightHtml = RightHtml;
         }
 
-        _rows = BuildRows();
+        var all = BuildRows();
+
+        // A comparison table earns its space by showing comparisons. Of the fourteen rows this
+        // used to render unconditionally, eleven were "0 / 0" on a short answer — a wall of
+        // zeros about markup neither model wrote. Rows with no signal are dropped, rows that
+        // agree collapse into one line underneath, and the table keeps only real differences.
+        _rows = all.Where(r => r.Always || !r.SameOnBothSides).ToList();
+        _identical = all.Where(r => !r.Always && r.SameOnBothSides && !r.IsZeroOnBothSides).ToList();
+        _suppressedZeroCount = all.Count(r => !r.Always && r.IsZeroOnBothSides);
     }
 
     private List<Row> BuildRows()
@@ -118,14 +160,20 @@
         var rows = new List<Row>
         {
             HigherIsBetter("Completeness", "scaffolding + substance",
-                _left.CompletenessScore, _right.CompletenessScore, v => $"{v}/100"),
+                _left.CompletenessScore, _right.CompletenessScore, v => $"{v}/100", always: true),
 
-            Neutral("Size", null, FormatBytes(_left.SizeBytes), FormatBytes(_right.SizeBytes)),
-            Neutral("Elements", null, _left.TagCount.ToString("N0"), _right.TagCount.ToString("N0")),
-            Neutral("Distinct tags", null, _left.UniqueTagCount.ToString("N0"), _right.UniqueTagCount.ToString("N0")),
-            Neutral("Nesting depth", null, _left.MaxNestingDepth.ToString(), _right.MaxNestingDepth.ToString()),
-            Neutral("CSS rules", null, _left.CssRuleCount.ToString("N0"), _right.CssRuleCount.ToString("N0")),
-            Neutral("Script", "inline JS written", FormatChars(_left.ScriptChars), FormatChars(_right.ScriptChars)),
+            Neutral("Size", null, FormatBytes(_left.SizeBytes), FormatBytes(_right.SizeBytes),
+                _left.SizeBytes, _right.SizeBytes),
+            Neutral("Elements", null, _left.TagCount.ToString("N0"), _right.TagCount.ToString("N0"),
+                _left.TagCount, _right.TagCount),
+            Neutral("Distinct tags", null, _left.UniqueTagCount.ToString("N0"), _right.UniqueTagCount.ToString("N0"),
+                _left.UniqueTagCount, _right.UniqueTagCount),
+            Neutral("Nesting depth", null, _left.MaxNestingDepth.ToString(), _right.MaxNestingDepth.ToString(),
+                _left.MaxNestingDepth, _right.MaxNestingDepth),
+            Neutral("CSS rules", null, _left.CssRuleCount.ToString("N0"), _right.CssRuleCount.ToString("N0"),
+                _left.CssRuleCount, _right.CssRuleCount),
+            Neutral("Script", "inline JS written", FormatChars(_left.ScriptChars), FormatChars(_right.ScriptChars),
+                _left.ScriptChars, _right.ScriptChars),
 
             HigherIsBetter("Interactive", "things you can operate",
                 _left.InteractiveElementCount, _right.InteractiveElementCount, v => v.ToString("N0")),
@@ -170,14 +218,16 @@
     private static bool Beats(long? candidate, long? other) =>
         candidate.HasValue && other.HasValue && candidate.Value < other.Value;
 
-    private static Row Neutral(string label, string? hint, string left, string right) =>
-        new(label, hint, left, right, false, false);
+    private static Row Neutral(string label, string? hint, string left, string right, int leftRaw = 1, int rightRaw = 1) =>
+        new(label, hint, left, right, false, false, IsZeroOnBothSides: leftRaw == 0 && rightRaw == 0);
 
-    private static Row HigherIsBetter(string label, string? hint, int left, int right, Func<int, string> format) =>
-        new(label, hint, format(left), format(right), left > right, right > left);
+    private static Row HigherIsBetter(string label, string? hint, int left, int right, Func<int, string> format, bool always = false) =>
+        new(label, hint, format(left), format(right), left > right, right > left,
+            IsZeroOnBothSides: left == 0 && right == 0, Always: always);
 
     private static Row LowerIsBetter(string label, string? hint, int left, int right, Func<int, string> format) =>
-        new(label, hint, format(left), format(right), left < right, right < left);
+        new(label, hint, format(left), format(right), left < right, right < left,
+            IsZeroOnBothSides: left == 0 && right == 0);
 
     private static string FormatBytes(int bytes) =>
         bytes >= 1024 * 1024 ? $"{bytes / (1024.0 * 1024):F1} MB"

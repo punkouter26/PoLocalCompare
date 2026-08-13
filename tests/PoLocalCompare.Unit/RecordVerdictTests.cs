@@ -73,6 +73,73 @@ public class RecordVerdictTests
         Assert.Equal(ModelId.From("left-2"), result.LoserModelId);
     }
 
+    // ── Tie: a decision with no winner ─────────────────────────────────────
+
+    [Fact]
+    public async Task HandleAsync_Tie_MovesNoEloAndNamesNoWinner()
+    {
+        var leftModel = MakeLocalModel(ModelId.From("left-t"));
+        var rightModel = MakeLocalModel(ModelId.From("right-t"));
+        var duel = MakePendingDuel(DuelId.From("duel-t"), leftModel.ModelId, rightModel.ModelId);
+
+        var duelRepo = new Mock<IDuelRepository>();
+        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-t"))).ReturnsAsync(duel);
+
+        var modelRepo = new Mock<IModelRepository>();
+        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-t"))).ReturnsAsync(leftModel);
+        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-t"))).ReturnsAsync(rightModel);
+
+        var eloRepo = new Mock<IEloHistoryRepository>();
+
+        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
+        var result = await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-t"), DuelVerdict.Tie));
+
+        Assert.NotNull(result);
+        Assert.Equal(DuelVerdict.Tie, result.Verdict);
+        Assert.Null(result.WinnerModelId);
+        Assert.Null(result.LoserModelId);
+        // Equal evidence is not a reason to separate two models: ratings must not move.
+        Assert.Equal(1200, leftModel.CurrentElo);
+        Assert.Equal(1200, rightModel.CurrentElo);
+        // ...but the duel still happened, and it lands in the record as a draw.
+        Assert.Equal(1, leftModel.DuelCount);
+        Assert.Equal(1, leftModel.DrawCount);
+        Assert.Equal(0, leftModel.WinCount);
+        Assert.Equal(1, rightModel.DrawCount);
+        Assert.Equal(DuelVerdict.Tie, duel.Verdict);
+        Assert.Null(duel.WinnerModelId);
+    }
+
+    [Fact]
+    public async Task HandleAsync_Tie_WritesADrawHistoryRowForBothSides()
+    {
+        var leftModel = MakeLocalModel(ModelId.From("left-t2"));
+        var rightModel = MakeLocalModel(ModelId.From("right-t2"));
+        var duel = MakePendingDuel(DuelId.From("duel-t2"), leftModel.ModelId, rightModel.ModelId);
+
+        var duelRepo = new Mock<IDuelRepository>();
+        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-t2"))).ReturnsAsync(duel);
+
+        var modelRepo = new Mock<IModelRepository>();
+        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-t2"))).ReturnsAsync(leftModel);
+        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-t2"))).ReturnsAsync(rightModel);
+
+        var saved = new List<EloRecord>();
+        var eloRepo = new Mock<IEloHistoryRepository>();
+        eloRepo.Setup(r => r.SaveAsync(It.IsAny<EloRecord>()))
+            .Callback<EloRecord>(saved.Add)
+            .Returns(Task.CompletedTask);
+
+        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
+        await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-t2"), DuelVerdict.Tie));
+
+        // Both sides get a row (the sparkline and the kill list read per-model partitions),
+        // flat rather than absent: eloAfter == eloBefore.
+        Assert.Equal(2, saved.Count);
+        Assert.All(saved, r => Assert.Equal("Draw", r.Outcome));
+        Assert.All(saved, r => Assert.Equal(r.EloBefore, r.EloAfter));
+    }
+
     // ── Duplicate verdict → 409 (InvalidOperationException) ──────────────
 
     [Fact]

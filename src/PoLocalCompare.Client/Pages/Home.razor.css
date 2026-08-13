@@ -477,6 +477,10 @@
     color: var(--text-muted);
     font-size: 0.8rem;
     text-decoration: none;
+    /* Standalone link, so SC 2.5.8's inline-prose exemption does not apply — it was 18px tall. */
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--target-min, 24px);
 }
 
 .home__recent-link:hover {
@@ -539,6 +543,11 @@
 
 .home__recent-winner {
     color: var(--accent-green);
+    font-weight: 600;
+}
+
+.home__recent-tie {
+    color: var(--accent-blue);
     font-weight: 600;
 }
 
