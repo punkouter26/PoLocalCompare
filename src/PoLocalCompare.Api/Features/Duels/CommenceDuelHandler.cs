@@ -1,6 +1,7 @@
 // SOLID: Open/Closed — new model types extend without modifying handler
 using Microsoft.Extensions.Options;
 using NUlid;
+using PoLocalCompare.Api.Auth;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -49,6 +50,9 @@ public sealed class CommenceDuelHandler(
             // retired from the catalog — see Duel.LeftModelName.
             LeftModelName = leftModel.DisplayName,
             RightModelName = rightModel.DisplayName,
+            // Forensic only — never used for authorization. "anonymous" is the sentinel the
+            // endpoint injects when the open gate is in effect and no claim is present.
+            OwnerId = command.Actor ?? IdentityResolver.AnonymousActor,
         };
 
         await duelRepository.SaveAsync(duel);
@@ -67,6 +71,8 @@ public sealed class CommenceDuelHandler(
                 ? command.AutoJudgeDelaySecondsOverride ?? autoJudgeOptions.Value.DelaySeconds
                 : 0,
             IsPartial = false,
+            OwnerId = duel.OwnerId,
+            VerdictBy = duel.VerdictBy,
         };
     }
 }

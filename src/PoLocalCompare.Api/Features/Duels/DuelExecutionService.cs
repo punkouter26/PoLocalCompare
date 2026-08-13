@@ -137,6 +137,8 @@ public sealed class DuelExecutionService
                     CompletedAt = duel.CompletedAt,
                     Verdict = DuelVerdict.Pending,
                     TimeLimitSeconds = 900,
+                    OwnerId = duel.OwnerId,
+                    VerdictBy = duel.VerdictBy,
                 });
 
             await lobby.DuelCompletedAsync(duel, leftModel.DisplayName, rightModel.DisplayName, cancellationToken);

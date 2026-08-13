@@ -17,6 +17,19 @@
     margin-bottom: 1rem;
 }
 
+.arena__owner-line {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    margin: -0.75rem 0 1rem;
+}
+
+.arena__judge-by {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    margin-top: 0.25rem;
+}
+
 .arena__loading,
 .arena__error {
     color: var(--text-muted);

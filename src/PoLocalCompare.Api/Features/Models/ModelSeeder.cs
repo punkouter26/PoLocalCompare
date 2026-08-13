@@ -46,6 +46,20 @@ public static class ModelSeeder
         new Model(ModelId.From("01SEED000000000000000000N"), "GPT-5.4 Nano",   ModelType.Remote, apiEndpointRef: "gpt-5.4-nano",                  inputTokenPricePerMillion: 0.20m,  outputTokenPricePerMillion: 1.25m),
         new Model(ModelId.From("01SEED000000000000000000P"), "Phi-4",          ModelType.Remote, apiEndpointRef: "phi-4",                         inputTokenPricePerMillion: 0.125m, outputTokenPricePerMillion: 0.50m),
         new Model(ModelId.From("01SEED000000000000000000Q"), "Phi-4 Mini",     ModelType.Remote, apiEndpointRef: "phi-4-mini-instruct",           inputTokenPricePerMillion: 0.075m, outputTokenPricePerMillion: 0.30m),
+        new Model(ModelId.From("01SEED000000000000000000R"), "GPT-5.4 Mini",   ModelType.Remote, apiEndpointRef: "gpt-5.4-mini",                  inputTokenPricePerMillion: 0.75m,  outputTokenPricePerMillion: 4.50m),
+
+        // Added 2026-08-13. Pricing is deliberately null: the Foundry list rates for these were
+        // not verified at the time they were seeded, and a guessed number here becomes a wrong
+        // number on the ModelCard, the leaderboard avg-$/duel and the Arena total. Filling the
+        // two pricing arguments in later patches the existing rows automatically — the
+        // reconcile loop below backfills any seed entry whose stored row has null prices.
+        new Model(ModelId.From("01SEED000000000000000000S"), "GPT-5.4",        ModelType.Remote, apiEndpointRef: "gpt-5.4"),
+        new Model(ModelId.From("01SEED000000000000000000T"), "GPT-5 Mini",     ModelType.Remote, apiEndpointRef: "gpt-5-mini"),
+        new Model(ModelId.From("01SEED000000000000000000V"), "GPT-4.1 Mini",   ModelType.Remote, apiEndpointRef: "gpt-4.1-mini"),
+        new Model(ModelId.From("01SEED000000000000000000W"), "Llama 3.3 70B",  ModelType.Remote, apiEndpointRef: "Llama-3.3-70B-Instruct"),
+        new Model(ModelId.From("01SEED000000000000000000X"), "Codestral 2501", ModelType.Remote, apiEndpointRef: "Codestral-2501"),
+        new Model(ModelId.From("01SEED000000000000000000Y"), "Kimi K2.7 Code", ModelType.Remote, apiEndpointRef: "Kimi-K2.7-Code"),
+        new Model(ModelId.From("01SEED000000000000000000Z"), "Grok 4.1 Fast",  ModelType.Remote, apiEndpointRef: "grok-4-1-fast-non-reasoning"),
     ];
 
     public static async Task SeedAsync(IServiceProvider services)

@@ -143,6 +143,8 @@ public sealed class DuelRepository : IDuelRepository
             ["JudgeRationale"] = duel.JudgeRationale,
             ["JudgeModel"] = duel.JudgeModel,
             ["JudgeStoodDownReason"] = duel.JudgeStoodDownReason,
+            ["OwnerId"] = duel.OwnerId,
+            ["VerdictBy"] = duel.VerdictBy,
         };
         return entity;
     }
@@ -177,6 +179,9 @@ public sealed class DuelRepository : IDuelRepository
             JudgeRationale = entity.GetString("JudgeRationale"),
             JudgeModel = entity.GetString("JudgeModel"),
             JudgeStoodDownReason = entity.GetString("JudgeStoodDownReason"),
+            // Both nullable so rows written before the schema addition still deserialise.
+            OwnerId = entity.GetString("OwnerId"),
+            VerdictBy = entity.GetString("VerdictBy"),
             ETag = entity.ETag.ToString(),
         };
         return duel;

@@ -32,6 +32,10 @@
     else
     {
         <p class="arena__prompt-label">Prompt: <em>@_duel.PromptText</em></p>
+        @if (!string.IsNullOrWhiteSpace(_duel.OwnerId))
+        {
+            <p class="arena__owner-line">Started by <strong>@_duel.OwnerId</strong></p>
+        }
 
         @* ── Live race ────────────────────────────────────────────────────
            Only while generating. Previously this, the streaming previews and the whole
@@ -248,6 +252,17 @@
                 else
                 {
                     <span>Verdict recorded ✓ — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong></span>
+                }
+                @* Forensic attribution — visible to the user, but never used for authorization.
+                   For Human verdicts this is the clicker; for AI verdicts this is null and we
+                   fall back to the deployment name on the rationale line above. *@
+                @if (_verdictSource == VerdictSource.Human && !string.IsNullOrWhiteSpace(_duel.VerdictBy))
+                {
+                    <span class="arena__judge-by">Judged by <strong>@_duel.VerdictBy</strong></span>
+                }
+                else if (_verdictSource == VerdictSource.Ai && !string.IsNullOrWhiteSpace(_duel.JudgeModel))
+                {
+                    <span class="arena__judge-by">Judge: <strong>@_duel.JudgeModel</strong></span>
                 }
             </div>
         }

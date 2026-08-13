@@ -136,8 +136,12 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task Commence_Anonymous_Returns401()
+    public async Task Commence_Anonymous_PassesTheOpenGate_ButFailsOnMissingModel()
     {
+        // Features:AllowAnonymousWrites opens the gate for un-authenticated callers in dev/test.
+        // The fixture sets the flag on, so anon posts pass auth and reach the handler — which
+        // then fails on the missing model with 404. Tests that care about the response from a
+        // fully-valid request should use CreateAuthenticatedClient().
         using var client = app.CreateAnonymousClient();
 
         var response = await client.PostAsJsonAsync("/api/duels", new
@@ -147,7 +151,7 @@ public sealed class DuelContractTests(ApiAppFixture app)
             PromptText = "Build an HTML calculator.",
         });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     // ── Read ───────────────────────────────────────────────────────────────
@@ -287,14 +291,16 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task Verdict_Anonymous_Returns401()
+    public async Task Verdict_Anonymous_PassesTheOpenGate_ButFailsOnMissingDuel()
     {
+        // The verdict endpoint is opened by Features:AllowAnonymousWrites in dev/test, so an
+        // anon call surfaces the underlying 404 (duel not found) rather than a 401.
         using var client = app.CreateAnonymousClient();
 
         var response = await client.PostAsJsonAsync(
             "/api/duels/01AAAAAAAAAAAAAAAAAAAAAAAA/verdict", new { Verdict = "Left" });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -380,14 +386,19 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task LocalResult_Anonymous_Returns401()
+    public async Task LocalResult_Anonymous_IsAlwaysAllowed()
     {
+        // The browser WebLLM worker posts without an auth cookie, so /local-result is always
+        // anonymous — the duel's owner is whoever created the duel, not whoever posts the
+        // HTML back. The endpoint returns 400 here because ModelId is empty; the salient
+        // assertion is that the response is not 401.
         using var client = app.CreateAnonymousClient();
 
         var response = await client.PostAsJsonAsync(
-            "/api/duels/01AAAAAAAAAAAAAAAAAAAAAAAA/local-result", new { ModelId = "m" });
+            "/api/duels/01AAAAAAAAAAAAAAAAAAAAAAAA/local-result", new { ModelId = "" });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // ── Archive export ─────────────────────────────────────────────────────

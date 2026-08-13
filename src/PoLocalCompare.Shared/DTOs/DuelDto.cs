@@ -28,6 +28,9 @@ public sealed class DuelDto
     /// <summary>The auto-judge's stated reason, when <see cref="VerdictSource"/> is Ai.</summary>
     public string? JudgeRationale { get; init; }
 
+    /// <summary>Deployment name of the model that judged, when <see cref="VerdictSource"/> is Ai.</summary>
+    public string? JudgeModel { get; init; }
+
     /// <summary>
     /// Seconds the Arena waits for a human pick before the auto-judge decides; 0 means the
     /// auto-judge is off. The window is measured from <see cref="CompletedAt"/>, not from when
@@ -42,4 +45,18 @@ public sealed class DuelDto
     /// that were judged, or never tried.
     /// </summary>
     public string? JudgeStoodDownReason { get; init; }
+
+    /// <summary>
+    /// preferred_username of whoever created the duel, or <c>"anonymous"</c> when the open
+    /// gate was in effect and no claim was present. Forensic — never used for authorization.
+    /// Null on rows written before the schema added this field.
+    /// </summary>
+    public string? OwnerId { get; init; }
+
+    /// <summary>
+    /// preferred_username of whoever clicked the verdict, or <c>"anonymous"</c> when the gate
+    /// was open. Null for AI verdicts (use <see cref="JudgeModel"/> instead) and for duels
+    /// written before the schema added this field.
+    /// </summary>
+    public string? VerdictBy { get; init; }
 }

@@ -82,10 +82,13 @@ public sealed class GetDuelHandler
             Results = resultDtos,
             VerdictSource = duel.VerdictSource,
             JudgeRationale = duel.JudgeRationale,
+            JudgeModel = duel.JudgeModel,
             JudgeStoodDownReason = duel.Verdict == DuelVerdict.Pending
                 ? duel.JudgeStoodDownReason
                 : null,
             AutoJudgeDelaySeconds = _autoJudgeOptions.Enabled ? _autoJudgeOptions.DelaySeconds : 0,
+            OwnerId = duel.OwnerId,
+            VerdictBy = duel.VerdictBy,
         };
     }
 }

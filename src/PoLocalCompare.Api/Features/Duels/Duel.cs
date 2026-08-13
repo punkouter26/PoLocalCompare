@@ -54,6 +54,20 @@ public sealed class Duel
     /// <summary>True when only one model completed (partial duel).</summary>
     public bool IsPartial { get; set; }
 
+    /// <summary>
+    /// Actor that created the duel (preferred_username claim, or "anonymous" when the gate
+    /// is open). Forensically stamped, never used for authorization. Nullable so existing
+    /// rows deserialise cleanly after the schema addition.
+    /// </summary>
+    public string? OwnerId { get; set; }
+
+    /// <summary>
+    /// Actor that recorded the verdict (preferred_username claim, or "anonymous"). For the
+    /// AI judge this is null — <see cref="JudgeModel"/> names the deployment instead. First
+    /// write wins; the second write throws inside <c>RecordVerdictHandler</c>.
+    /// </summary>
+    public string? VerdictBy { get; set; }
+
     /// <summary>Storage concurrency token; set when loaded from Table Storage (standards §5.5).</summary>
     public string? ETag { get; set; }
 

@@ -7,11 +7,16 @@ namespace PoLocalCompare.Api.Features.Duels;
 /// is what a person judging by hand needs. It is never persisted — it governs this execution,
 /// not the duel record.
 /// </param>
+/// <param name="Actor">
+/// preferred_username of the caller, or "anonymous" when the open gate is in effect. Stamped
+/// onto <c>Duel.OwnerId</c> for forensic audit. Never used for authorization.
+/// </param>
 public sealed record CommenceDuelCommand(
     ModelId LeftModelId,
     ModelId RightModelId,
     string PromptText,
-    int? AutoJudgeDelaySecondsOverride = null)
+    int? AutoJudgeDelaySecondsOverride = null,
+    string? Actor = null)
 {
     public const int MaxPromptLength = 10000;
     public const int MinPromptLength = 10;

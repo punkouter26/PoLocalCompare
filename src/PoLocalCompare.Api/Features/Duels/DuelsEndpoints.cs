@@ -2,18 +2,33 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Azure;
+using PoLocalCompare.Api.Auth;
 using PoLocalCompare.Shared.DTOs;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Api.Features.Duels;
 
 public static class DuelsEndpoints
 {
-    public static IEndpointRouteBuilder MapDuelsEndpoints(this IEndpointRouteBuilder app)
+    /// <summary>
+    /// Reads (GET /api/duels, GET /api/duels/{id}, GET /api/duels/demo-plan) stay authenticated
+    /// so the leaderboard and archive can't be scraped anonymously. Writes are opened when
+    /// <c>Features:AllowAnonymousWrites</c> is true (Development default). The flag is read
+    /// once at startup; flipping it requires a restart.
+    /// </summary>
+    public static IEndpointRouteBuilder MapDuelsEndpoints(this IEndpointRouteBuilder app, bool allowAnonymousWrites = false)
     {
         var group = app.MapGroup("/api/duels").WithTags("Duels").RequireAuthorization();
 
-        group.MapPost("/", async (
+        // Helper: capture the RouteHandlerBuilder so the per-endpoint AllowAnonymous() override
+        // can be applied AFTER the chain that already built it. Calling AllowAnonymous() on the
+        // group itself would lose to the group's RequireAuthorization() registration order.
+        static RouteHandlerBuilder OpenIf(bool allow, RouteHandlerBuilder builder) =>
+            allow ? builder.AllowAnonymous() : builder;
+
+        var commenceDuel = OpenIf(allowAnonymousWrites, group.MapPost("/", async (
             [FromBody] CommenceDuelRequest request,
+            HttpContext httpContext,
             [FromServices] CommenceDuelHandler handler,
             [FromServices] DuelExecutionService executionService) =>
         {
@@ -31,11 +46,16 @@ public static class DuelsEndpoints
                     ? Math.Clamp(requested, 0, 3600)
                     : (int?)null;
 
+                // Resolve the actor forensically — IdentityResolver returns "anonymous" when no
+                // preferred_username claim is present. The handler stamps it onto Duel.OwnerId.
+                var actor = IdentityResolver.ResolveActor(httpContext.User);
+
                 var dto = await handler.HandleAsync(new CommenceDuelCommand(
                     request.LeftModelId,
                     request.RightModelId,
                     request.PromptText,
-                    delayOverride));
+                    delayOverride,
+                    actor));
 
                 await executionService.EnqueueAsync(dto.DuelId, delayOverride);
 
@@ -64,7 +84,7 @@ public static class DuelsEndpoints
         .WithSummary("Starts a new duel between two models.")
         .Produces<DuelDto>(StatusCodes.Status202Accepted)
         .ProducesValidationProblem()
-        .Produces(StatusCodes.Status404NotFound);
+        .Produces(StatusCodes.Status404NotFound));
 
         group.MapGet("/{duelId}", async (
             DuelId duelId,
@@ -78,7 +98,9 @@ public static class DuelsEndpoints
         .Produces<DuelDto>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status404NotFound);
 
-        // Called by the Blazor client after local (WebLLM) inference completes
+        // Called by the Blazor client after local (WebLLM) inference completes. Always anonymous:
+        // the browser worker invoking this endpoint is not authenticated, and the duel's owner
+        // is whoever created the duel — not whoever posts the HTML back.
         group.MapPost("/{duelId}/local-result", async (
             DuelId duelId,
             [FromBody] LocalResultRequest request,
@@ -122,21 +144,23 @@ public static class DuelsEndpoints
 
             return Results.Ok();
         })
+        .AllowAnonymous()
         .WithName("PostLocalResult")
         .WithSummary("Receives the HTML output from a client-side (WebLLM) local model inference.")
         .Produces(StatusCodes.Status200OK)
         .ProducesValidationProblem();
 
-        // POST /api/duels/{duelId}/verdict
-        group.MapPost("/{duelId}/verdict", async (
+        var recordVerdict = OpenIf(allowAnonymousWrites, group.MapPost("/{duelId}/verdict", async (
             DuelId duelId,
             [FromBody] VerdictRequestDto request,
+            HttpContext httpContext,
             [FromServices] RecordVerdictHandler handler) =>
         {
             try
             {
+                var actor = IdentityResolver.ResolveActor(httpContext.User);
                 var response = await handler.HandleWithRetryAsync(
-                    new RecordVerdictCommand(duelId, request.Verdict));
+                    new RecordVerdictCommand(duelId, request.Verdict, VerdictSource.Human, Actor: actor));
 
                 if (response is null)
                     return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
@@ -161,7 +185,7 @@ public static class DuelsEndpoints
         .Produces<VerdictResponseDto>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status404NotFound)
         .Produces(StatusCodes.Status409Conflict)
-        .Produces(StatusCodes.Status422UnprocessableEntity);
+        .Produces(StatusCodes.Status422UnprocessableEntity));
 
         // T077 — GET /api/duels (archive listing with pagination)
         group.MapGet("/", async (

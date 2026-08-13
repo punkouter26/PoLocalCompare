@@ -91,7 +91,7 @@
                 @if (_identity is not null)
                 {
                     <span class="navmenu__user-badge @(_isGuest ? "navmenu__user-badge--guest" : "navmenu__user-badge--oauth")"
-                          title="@(_isGuest ? "Guest session — data is not persisted" : "Signed in via Microsoft")">
+                          title="@(_isGuest ? "Guest session" : "Signed in via Microsoft")">
                         @_identity
                     </span>
                     <button class="po-btn po-btn--sm po-btn--secondary" @onclick="LogoutAsync">Logout</button>

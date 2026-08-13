@@ -1,6 +1,7 @@
 // SOLID: Single Responsibility — verdict recording coordinates ELO + persistence only
 using Azure;
 using Microsoft.Extensions.Caching.Hybrid;
+using PoLocalCompare.Api.Auth;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -160,6 +161,10 @@ public sealed class RecordVerdictHandler
         duel.EloShiftWinner = eloShiftWinner;
         duel.EloShiftLoser = eloShiftLoser;
         duel.CompletedAt ??= DateTimeOffset.UtcNow;
+        // For Human verdicts, record who clicked. The AI judge passes null Actor and its
+        // decision is then attributed via JudgeModel rather than VerdictBy.
+        if (command.Source == VerdictSource.Human)
+            duel.VerdictBy = command.Actor ?? IdentityResolver.AnonymousActor;
         await _duelRepository.UpdateAsync(duel);
 
         // Persist EloRecord snapshots for both models
@@ -252,6 +257,8 @@ public sealed class RecordVerdictHandler
         duel.EloShiftWinner = 0;
         duel.EloShiftLoser = 0;
         duel.CompletedAt ??= DateTimeOffset.UtcNow;
+        if (command.Source == VerdictSource.Human)
+            duel.VerdictBy = command.Actor ?? IdentityResolver.AnonymousActor;
         await _duelRepository.UpdateAsync(duel);
 
         await _eloHistoryRepository.SaveAsync(new EloRecord(
