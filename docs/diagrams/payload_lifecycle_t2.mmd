@@ -1,0 +1,43 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','secondaryColor':'#e0e7ff','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'15px','actorBkg':'#c7d2fe','actorBorder':'#3730a3','actorTextColor':'#0b1220','signalColor':'#0f172a','signalTextColor':'#0b1220','labelBoxBkg':'#fde68a','labelBoxBorderColor':'#92400e','labelTextColor':'#111827','noteBkgColor':'#fef3c7','noteTextColor':'#111827','noteBorderColor':'#92400e','sequenceNumberColor':'#ffffff'}}}%%
+sequenceDiagram
+    autonumber
+    actor U as Operator
+    participant SPA as Blazor SPA
+    participant API as Minimal API
+    participant EXEC as DuelExecutionService
+    participant PX as Inference proxy
+    participant HUB as DuelHub
+    participant ST as Table + Blob
+    participant J as AutoJudge
+
+    U->>SPA: Submit prompt + 2 models (Home)
+    SPA->>API: POST /api/duels (cookie)
+    API->>ST: Create Duel (Pending)
+    API-->>SPA: 202 Accepted + duelId
+    SPA->>SPA: Navigate /arena/{duelId}
+    SPA->>HUB: JoinDuel(duelId)
+    API->>EXEC: EnqueueAsync → BackgroundTaskQueue
+
+    par Left model
+        EXEC->>PX: RunInferenceAsync
+        PX-->>EXEC: SSE token chunks
+        EXEC->>HUB: ModelStatusUpdate (Generating)
+    and Right model (browser)
+        EXEC->>HUB: StartLocalInference
+        HUB-->>SPA: run WebLLM in worker
+        SPA->>API: POST /{id}/local-result
+        API->>ST: Save DuelResult
+    end
+
+    EXEC->>ST: Save both DuelResults
+    EXEC->>HUB: DuelComplete
+    HUB-->>SPA: swap to verdict UI
+
+    alt Human picks inside AiJudge:DelaySeconds
+        U->>API: POST /{id}/verdict
+    else Grace window elapses
+        J->>J: Wait DelaySeconds, re-read duel
+        J->>API: Judge decides (A / B / Tie)
+    end
+    API->>ST: RecordVerdictHandler → Elo + EloHistory
+    API->>HUB: VerdictRecorded + lobby event

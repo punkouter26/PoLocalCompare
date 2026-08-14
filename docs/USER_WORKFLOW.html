@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>User Workflow — PoLocalCompare</title>
+<link rel="stylesheet" href="assets/report.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <h1>User Workflow &amp; Payload Lifecycle</h1>
+    <p class="sub">One request, followed all the way down: UI submit → Minimal API <code>POST</code> → middleware → orchestrator → AI providers → Table and Blob Storage — and every way it can fail on the way back.</p>
+    <div class="meta">
+      <span>Generated 2026-08-13</span>
+      <span>Primary path: POST /api/duels</span>
+      <span>Failure modes: 401 · 404 · 409 · 412 · 429 · 503 · watchdog</span>
+      <span>3 density tiers</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="tierbar" aria-label="Detail level">
+    <strong>Detail level</strong>
+    <button class="tierbtn" data-tier="1" aria-pressed="false">① Very basic · 30 s</button>
+    <button class="tierbtn" data-tier="2" aria-pressed="false">② Basic · overview</button>
+    <button class="tierbtn" data-tier="3" aria-pressed="false">③ Complete · full trace</button>
+    <button class="tierbtn" data-tier="all" aria-pressed="true">Show all</button>
+  </nav>
+
+  <!-- ═══════════════════ TIER 1 ═══════════════════ -->
+  <section class="tier" data-tier="1">
+    <div class="tier-head"><h2>Tier 1 — Very basic</h2><span class="badge t1">read in 30 seconds</span></div>
+
+    <div class="card">
+      <h3>What a user actually does</h3>
+      <ol class="steps">
+        <li><h4>Sign in</h4><p>Any Microsoft account. In development there is also a "Continue as Guest" button.</p></li>
+        <li><h4>Pick two models and a prompt</h4><p>From a curated list of 18 prompts, or type your own. Only models confirmed reachable are offered.</p></li>
+        <li><h4>Watch them race</h4><p>Both start at once. Tokens stream live with a speed read-out for each side.</p></li>
+        <li><h4>Judge</h4><p>Pick a winner from the two rendered pages. If you do not pick within 60 seconds, an AI judge decides instead.</p></li>
+        <li><h4>See the leaderboard move</h4><p>Elo updates, and the duel joins the archive where you can export it as a self-contained HTML report.</p></li>
+      </ol>
+    </div>
+
+    <figure class="diagram">
+      <div class="plate"><img src="assets/payload_lifecycle_t1.svg" alt="You pick two models and a prompt, the API runs both, saves the outputs, shows them side by side, and records a verdict that moves Elo"></div>
+      <figcaption>Tier 1 lifecycle — <code>DOCS/diagrams/payload_lifecycle_t1.mmd</code></figcaption>
+    </figure>
+
+    <div class="note warn"><strong>Two things surprise people.</strong> A duel keeps running even if you close the tab — except for browser models, whose inference lives in <em>your</em> tab and dies with it. And <code>/demo</code> is not a sandbox: its ten duels are real, are judged, and move the real leaderboard.</div>
+  </section>
+
+  <!-- ═══════════════════ TIER 2 ═══════════════════ -->
+  <section class="tier" data-tier="2">
+    <div class="tier-head"><h2>Tier 2 — Basic overview</h2><span class="badge t2">the path through the system</span></div>
+
+    <figure class="diagram">
+      <div class="plate"><img src="assets/payload_lifecycle_t2.svg" alt="Sequence: operator submits, API creates the duel and returns 202, the SPA navigates to the arena and joins the hub, server and browser paths run in parallel, results are saved, and a human or the auto-judge records a verdict"></div>
+      <figcaption>Tier 2 sequence — <code>DOCS/diagrams/payload_lifecycle_t2.mmd</code></figcaption>
+    </figure>
+
+    <h3>The five hops</h3>
+    <ol class="steps">
+      <li>
+        <h4>UI submit — <code>Home.razor</code></h4>
+        <p>Two model ids and a prompt go to <code>DuelApiClient.CommenceDuelAsync</code>. The browser attaches the <code>PoLocalCompare.Session</code> cookie automatically (same origin, <code>SameSite=Strict</code>) and <code>CorrelationHandler</code> stamps <code>X-Correlation-ID</code> so the request can be followed through the logs.</p>
+        <p class="where">src/PoLocalCompare.Client/Pages/Home.razor → Services/DuelApiClient.cs:46</p>
+      </li>
+      <li>
+        <h4>Minimal API POST — <code>/api/duels</code></h4>
+        <p>Validates that <code>PromptText</code> is non-empty, clamps any <code>autoJudgeDelaySeconds</code> override to 0–3600, resolves the actor from <code>preferred_username</code>, writes the <code>Duel</code> row as <code>Pending</code>, queues execution, and returns <strong>202 Accepted</strong> with the duel id. The work has not started yet — that is the point of 202.</p>
+        <p class="where">Features/Duels/DuelsEndpoints.cs:29 → CommenceDuelHandler.cs</p>
+      </li>
+      <li>
+        <h4>Middleware — ten stages, in this order</h4>
+        <p>Serilog logging → RFC 7807 exception handler → CSP header → <code>/_framework</code> cache control → Blazor + static files → routing → authentication → authorization → endpoints → SPA fallback. Static files are deliberately served <em>before</em> authentication, or the deny-by-default policy would 401 the WASM runtime that contains the login screen.</p>
+        <p class="where">src/PoLocalCompare.Api/Program.cs:260–431</p>
+      </li>
+      <li>
+        <h4>Orchestrator — <code>DuelExecutionService</code></h4>
+        <p>Dequeued by <code>BackgroundTaskService</code> in its own DI scope. Opens a 900-second watchdog, resolves an inference strategy per model type, and runs both sides under <code>Task.WhenAll</code>. Server-side models stream through a proxy; browser models get a <code>StartLocalInference</code> push over SignalR and are then polled for.</p>
+        <p class="where">Features/Duels/DuelExecutionService.cs:63</p>
+      </li>
+      <li>
+        <h4>Providers → storage</h4>
+        <p>Foundry and Ollama stream SSE; the browser worker posts its finished output back. Each result is enriched (character density, quality score, energy) and written to the <code>DuelResults</code> table — or to the <code>duel-html-outputs</code> blob container with a <code>blob://</code> pointer left behind, if the HTML exceeds 64 KB.</p>
+        <p class="where">Common/Inference/*.cs → Features/Duels/DuelResultRepository.cs</p>
+      </li>
+    </ol>
+
+    <h3>Then the verdict</h3>
+    <div class="grid two">
+      <div class="card">
+        <h4>Human path</h4>
+        <p>The Arena swaps to the verdict UI on <code>DuelComplete</code>. Picking a side posts to <code>/api/duels/{id}/verdict</code> with <code>VerdictSource.Human</code> and the actor's username. A human who picks inside the grace window always wins the race — the auto-judge re-reads the duel and stands down on anything but <code>Pending</code>.</p>
+      </div>
+      <div class="card">
+        <h4>Auto-judge path</h4>
+        <p>After <code>AiJudge:DelaySeconds</code> (60 by default; demo mode passes 0), <code>gpt-5.4-nano</code> is asked which output followed the prompt better — unless exactly one side failed, in which case the survivor takes a walkover and no judge call is made at all. It answers under a strict JSON schema — <code>A</code>, <code>B</code> or <code>Tie</code> — with the two documents assigned to slots by a coin flip so the well-known position bias lands on Left and Right equally.</p>
+      </div>
+    </div>
+
+    <figure class="diagram">
+      <div class="plate"><img src="assets/duel_state_t2.svg" alt="Duel state machine: Pending to Left, Right, Tie or Expired, with a self-loop for judge stand-down"></div>
+      <figcaption>Verdict state machine — <code>DOCS/diagrams/duel_state_t2.mmd</code></figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════════════ TIER 3 ═══════════════════ -->
+  <section class="tier" data-tier="3">
+    <div class="tier-head"><h2>Tier 3 — Complete end-to-end trace</h2><span class="badge t3">every hop, every failure mode</span></div>
+
+    <h3>Payload lifecycle sequence (required output)</h3>
+    <figure class="diagram">
+      <div class="plate"><img src="assets/payload_lifecycle.svg" alt="Full three-phase sequence diagram: submit through the middleware pipeline; asymmetric parallel execution across Foundry SSE and the browser worker with blob offload; and the verdict phase with human-wins-race, judge stand-down, rate-limit requeue and Elo recording"></div>
+      <figcaption><code>DOCS/diagrams/payload_lifecycle.mmd</code> → <code>DOCS/assets/payload_lifecycle.svg</code>, compiled with <code>npx @mermaid-js/mermaid-cli -b transparent</code></figcaption>
+    </figure>
+
+    <h3 id="trace">Hop-by-hop payload trace</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="num">#</th><th>Hop</th><th>Payload / wire shape</th><th>Transform applied</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Browser → API</td><td class="mono">POST /api/duels<br>{LeftModelId, RightModelId, PromptText, AutoJudgeDelaySeconds?}</td><td>Cookie attached by the browser; <code>X-Correlation-ID</code> and <code>X-Session-ID</code> stamped by <code>CorrelationHandler</code></td><td class="mono">DuelApiClient.cs:46</td></tr>
+          <tr><td class="num">2</td><td>Serilog scope</td><td class="na">—</td><td>Enriches the diagnostic context with CorrelationId, UserId, SessionId, RequestPath, RequestMethod; 4xx→Warning, 5xx→Error, static assets→Debug</td><td class="mono">Program.cs:260</td></tr>
+          <tr><td class="num">3</td><td>AuthN / AuthZ</td><td class="na">—</td><td>Cookie ticket → <code>ClaimsPrincipal</code>; fallback policy demands an authenticated user unless the endpoint opted out</td><td class="mono">BffAuthentication.cs:43</td></tr>
+          <tr><td class="num">4</td><td>Endpoint validation</td><td class="mono">CommenceDuelRequest</td><td>Empty prompt → <code>ValidationProblem</code>; delay clamped 0–3600; <code>IdentityResolver.ResolveActor</code> → <code>"anonymous"</code> when no <code>preferred_username</code></td><td class="mono">DuelsEndpoints.cs:35–58</td></tr>
+          <tr><td class="num">5</td><td>Handler → Table</td><td class="mono">Duel entity — PK <code>yyyyMM</code>, RK ULID</td><td>Rejects a self-duel (<code>Left == Right</code>); snapshots both display names so the archive survives model retirement; sets <code>VerdictDeadline = StartedAt + 24 h</code></td><td class="mono">CommenceDuelHandler.cs · Duel.cs</td></tr>
+          <tr><td class="num">6</td><td>API → Browser</td><td class="mono">202 Accepted + DuelDto, Location: /api/duels/{id}</td><td>SPA navigates to <code>/arena/{id}</code> and calls <code>JoinDuel</code> on the hub</td><td class="mono">DuelsEndpoints.cs:62</td></tr>
+          <tr><td class="num">7</td><td>Queue → orchestrator</td><td class="na">closure over duelId</td><td><code>BackgroundTaskService</code> awaits each item before dequeuing the next — a strictly sequential worker</td><td class="mono">BackgroundTaskQueue.cs</td></tr>
+          <tr><td class="num">8a</td><td>Orchestrator → Foundry</td><td class="mono">{messages[2], stream:true, stream_options.include_usage, max_tokens|max_completion_tokens, temperature?}</td><td><code>FoundryChatRequest.Build</code> drops <code>temperature</code> and switches to <code>max_completion_tokens</code> for reasoning deployments</td><td class="mono">FoundryChatRequest.cs</td></tr>
+          <tr><td class="num">8b</td><td>Orchestrator → browser</td><td class="mono">hub "StartLocalInference" {duelId, modelId, side, webLlmModelId}</td><td>Re-sent every 5 s so a client that joined the group late still receives it</td><td class="mono">DuelExecutionService.cs:250</td></tr>
+          <tr><td class="num">9</td><td>SSE chunk → hub frame</td><td class="mono">ModelStatusUpdateDto {tokenCount, elapsedMs, warmUpMs, tokenVelocity, peakTokenVelocity, isStalled, htmlTagCount, openTagDepth, styleRuleCount, repetitionScore, htmlPreview}</td><td><code>HtmlStreamCounters</code> scans the partial document; the preview is attached only every 25 tokens to bound bandwidth</td><td class="mono">SseChatStreamReader.cs · HtmlStreamCounters.cs</td></tr>
+          <tr><td class="num">10</td><td>Completion → enrichment</td><td class="mono">DuelResult</td><td><code>HtmlOutputNormalizer</code> strips code fences and stray prose; <code>HtmlOutputQualityScorer</code> computes the persisted score; <code>GreenStatsCalculator</code> derives Wh and USD for local models; remote models get <code>ApiCostUsd</code></td><td class="mono">DuelResultEnricher.cs</td></tr>
+          <tr><td class="num">11</td><td>Persist</td><td class="mono">Table row, or Blob + <code>blob://</code> pointer</td><td>Threshold is 64 KB — the Table Storage per-property limit. Upsert is <code>TableUpdateMode.Replace</code></td><td class="mono">DuelResultRepository.cs:26–38</td></tr>
+          <tr><td class="num">12</td><td>Done frame</td><td class="mono">ModelStatusUpdateDto {status: Done, htmlPreview: finalHtml ≤ 40 000 chars}</td><td>The finished document rides out with <code>Done</code> rather than waiting for <code>DuelComplete</code>, so a model that finishes first is not left showing a truncated mid-stream preview</td><td class="mono">DuelExecutionService.cs:228</td></tr>
+          <tr><td class="num">13</td><td>Duel completion</td><td class="mono">DuelDto over hub "DuelComplete"</td><td><code>CompletedAt</code> written with a 412 re-read guard so it can never clobber a verdict that landed mid-inference</td><td class="mono">DuelExecutionService.cs:110–143</td></tr>
+          <tr><td class="num">14</td><td>Verdict</td><td class="mono">RecordVerdictCommand {duelId, verdict, source, rationale?, judgeModel?, actor?}</td><td>Single ELO path. <code>EloCalculator</code> K=32 with a 0.1-point minimum shift for decisive outcomes; two <code>EloHistory</code> rows appended; <code>HybridCache</code> tag-invalidated</td><td class="mono">RecordVerdictHandler.cs</td></tr>
+          <tr><td class="num">15</td><td>Broadcast</td><td class="mono">hub "VerdictRecorded" + lobby event</td><td>Raised from inside the verdict handler, so the activity feed is complete by construction. <code>LobbyNotifier</code> swallows its own failures — the ticker must never fail a duel</td><td class="mono">LobbyNotifier.cs</td></tr>
+          <tr><td class="num">16</td><td>Export</td><td class="mono">GET /api/duels/{id}/report → text/html attachment</td><td><code>HtmlLabReportRenderer</code> produces a self-contained file; <code>Content-Disposition: attachment; filename="lab-report-{id}.html"</code></td><td class="mono">ExportLabReportHandler.cs</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 id="resilience">Failure modes and resilience</h3>
+    <div class="tablewrap">
+      <table>
+        <caption>Every status code the user can actually receive, and what the system does about it.</caption>
+        <thead><tr><th>Condition</th><th>Response</th><th>Handling</th><th>What the user sees</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>401 Unauthorized</strong><br>no session, protected endpoint</td>
+            <td class="mono">401, empty body</td>
+            <td><code>OnRedirectToLogin</code> is rewritten from the default 302 to a bare 401, so an API caller never receives an HTML login page. <code>OnRedirectToAccessDenied</code> likewise returns 403.</td>
+            <td><code>AuthorizeRouteView</code> renders <code>Login.razor</code> instead of the requested page.</td>
+          </tr>
+          <tr>
+            <td><strong>404 Not Found</strong><br>unknown duel or model</td>
+            <td class="mono">404 {error}</td>
+            <td><code>DuelApiClient.GetDuelAsync</code> uses <code>GetAsync</code> rather than <code>GetFromJsonAsync</code> specifically so a 404 becomes a null instead of an exception.</td>
+            <td>"That duel no longer exists — it may have been wiped with the local storage, or the link may be mistyped", with links to start a new duel or browse the archive.</td>
+          </tr>
+          <tr>
+            <td><strong>404 on the Foundry deployment route</strong></td>
+            <td class="na">internal</td>
+            <td>Automatic fallback to <code>/models/chat/completions</code> with the model named in the body. If <em>that</em> also fails, the failure reason names both endpoints and both response bodies (clipped to 300 chars).</td>
+            <td>A failure card on that side of the Arena, with a "Show technical details" disclosure.</td>
+          </tr>
+          <tr>
+            <td><strong>409 Conflict</strong><br>duel already judged</td>
+            <td class="mono">409 {error}</td>
+            <td><code>RecordVerdictHandler</code> throws <code>InvalidOperationException</code> on a second verdict. First write wins, always — this is the invariant that lets a human and the auto-judge race safely.</td>
+            <td>The verdict already on screen stands.</td>
+          </tr>
+          <tr>
+            <td><strong>412 Precondition Failed</strong><br>ETag race in Table Storage</td>
+            <td class="na">internal</td>
+            <td>Three distinct handlers: duel completion re-reads and reapplies only <code>CompletedAt</code>; the auto-judge's stand-down note is dropped (informational, not load-bearing); the seeder's pricing back-fill defers to the next startup.</td>
+            <td>Nothing — by design.</td>
+          </tr>
+          <tr>
+            <td><strong>422 Unprocessable</strong><br>malformed verdict</td>
+            <td class="mono">422 {error}</td>
+            <td><code>ArgumentException</code> from the handler.</td>
+            <td>Vote buttons stay active.</td>
+          </tr>
+          <tr>
+            <td><strong>429 Too Many Requests</strong><br>Foundry rate limit, duel inference</td>
+            <td class="na">internal</td>
+            <td>Up to 3 attempts. <code>Retry-After</code> is parsed (delta-seconds or HTTP-date) and clamped to 1–90 s; without a header, exponential 2<sup>n</sup> s. Logged at Warning with attempt count.</td>
+            <td>The token counter pauses, then resumes. If all attempts fail, a failure card.</td>
+          </tr>
+          <tr>
+            <td><strong>429, auto-judge</strong></td>
+            <td class="na">internal</td>
+            <td><code>JudgeRateLimitedException</code> carries the <code>Retry-After</code> (clamped ≤ 60 s so an adversarial <code>86400</code> cannot park a demo for a day) back to <code>AutoJudge</code>, which re-queues via the background queue rather than blocking — so the next duel in a demo run is not stalled. Budget: <code>AiJudge:RateLimitRetryMax</code> = 2, then it stands down.</td>
+            <td>The duel stays <code>Pending</code> and shows "judge stood down (rate-limit)"; a human can still decide it.</td>
+          </tr>
+          <tr>
+            <td><strong>500 unhandled</strong></td>
+            <td class="mono">500 application/problem+json</td>
+            <td>RFC 7807 shape with <code>correlationId</code>. <code>detail</code> and <code>stackTrace</code> are populated in Development only; Production returns "An internal server error occurred."</td>
+            <td>Generic error; the correlation id ties it to the log entry.</td>
+          </tr>
+          <tr>
+            <td><strong>503 Service Unavailable</strong><br>storage still initializing</td>
+            <td class="mono">503 problem+json</td>
+            <td>A Table Storage 404 during duel creation is translated to "Duel storage is initializing. Please retry in a few seconds."</td>
+            <td>Actionable retry message rather than a stack trace.</td>
+          </tr>
+          <tr>
+            <td><strong>Watchdog — 900 s</strong></td>
+            <td class="na">internal</td>
+            <td>A single <code>CancellationTokenSource</code> spans both sides. Generous because a cold browser model must JIT its WebGPU shaders on first run. Expiry yields <code>IsFailure</code> with "Watchdog timeout (900s)".</td>
+            <td>Failure card on the side that never finished.</td>
+          </tr>
+          <tr>
+            <td><strong>Both models fail</strong></td>
+            <td class="na">internal</td>
+            <td>The judge refuses to decide: "neither model produced output". The duel stays <code>Pending</code> with <code>JudgeStoodDownReason</code> persisted, and <code>RecordVerdictHandler.GuardAgainstNoEvidenceAsync</code> independently rejects any verdict write for it with a 422.</td>
+            <td>Two failure cards; the Arena offers <strong>Retry duel</strong>. This is now the only path on which a finished duel banks no rating at all.</td>
+          </tr>
+          <tr>
+            <td><strong>Exactly one model fails</strong></td>
+            <td class="na">internal</td>
+            <td><strong>Awards a walkover to the survivor</strong> and moves ELO, without calling the judge model at all. This reverses the earlier rule (PRD §9 item 20): a duel with one usable output is evidence about the model that produced it, and the failure is recorded in the loser's <code>DuelCount</code>. Found when two consecutive demo duels left a survivor uncredited and the duel parked awaiting a human who never arrived.</td>
+            <td>Winner banner with the rationale <em>"Walkover: opponent (left|right) failed to produce output (…)"</em>.</td>
+          </tr>
+          <tr>
+            <td><strong>Judge reply unparseable / empty</strong></td>
+            <td class="na">internal</td>
+            <td>Returns null; the duel stays <code>Pending</code>. Note the token budget is 2,000 rather than a few dozen precisely because the default judge is a reasoning model — too small a budget returns a well-formed response with empty content, which would read as "could not decide".</td>
+            <td>Duel remains judgeable by hand.</td>
+          </tr>
+          <tr>
+            <td><strong>Ollama not running</strong></td>
+            <td class="na">internal</td>
+            <td>Connection refused is logged at <em>Warning</em>, not Error — it is the expected state when no daemon is installed. The failure reason names the base URL.</td>
+            <td>"Not found in Ollama" on the model card; the pairing is not offered.</td>
+          </tr>
+          <tr>
+            <td><strong>Browser lacks WebGPU</strong></td>
+            <td class="na">client</td>
+            <td><code>WebGpuCapability</code> probes at load. Browser models stay <em>selectable</em> regardless because they download on first use, but the capability report drives the health panel.</td>
+            <td>Diagnostic state on the model card.</td>
+          </tr>
+          <tr>
+            <td><strong>CDN blocked</strong><br>weights or <code>model_lib</code></td>
+            <td class="na">client</td>
+            <td>The worker prefers <code>wwwroot/models/</code> and falls back to two <em>different</em> hosts — HuggingFace for weights, raw.githubusercontent.com for the WASM libraries. Half-populating the directory is the failure mode to watch for.</td>
+            <td>The model stalls at <code>Initializing</code>; the stall note explains it.</td>
+          </tr>
+          <tr>
+            <td><strong><code>Features:UseRealAi</code> off</strong></td>
+            <td class="na">client</td>
+            <td>Mandated by standards §7: <code>NavMenu.razor</code> renders <code>role="alert" aria-live="polite"</code> with "⚠ USING MOCK DATA — Features:UseRealAi is disabled. AI responses are simulated." Both test hosts set this to <code>false</code>.</td>
+            <td>A persistent banner above the nav.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn"><strong>The one stall with no error message.</strong> Arena is what drives browser-model inference — it owns the <code>OnStartLocalInference</code> handler, runs <code>WebLlmService</code>, and posts to <code>/local-result</code>. A change that breaks that handler leaves every WebGPU pairing sitting at <code>Initializing</code> until the 900-second watchdog fires, with nothing in the server log to explain it. Editing <code>webllm-worker.js</code> without bumping the <code>?v=N</code> cache-buster in <code>webllm-interop.js</code> produces exactly this symptom.</div>
+
+    <h3>Complete verdict state machine</h3>
+    <figure class="diagram">
+      <div class="plate"><img src="assets/duel_state.svg" alt="Full duel state machine including per-side execution states, grace window, six stand-down branches, rate-limit requeue, and the settled sub-states of Elo, history, cache invalidation and notification"></div>
+      <figcaption><code>DOCS/diagrams/duel_state.mmd</code></figcaption>
+    </figure>
+
+    <h3>Secondary workflows</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Workflow</th><th>Entry</th><th>Trace</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Sign in</strong></td><td><code>Login.razor</code> → <code>/auth/login/microsoft</code></td><td>Challenge → Entra → <code>/signin-oidc</code> → cookie issued → <code>BffAuthenticationStateProvider</code> re-reads <code>/auth/me</code></td><td>PKCE, <code>SaveTokens</code>, claims from the userinfo endpoint, <code>MapInboundClaims=false</code>. The SPA never holds a token.</td></tr>
+          <tr><td><strong>Archive browse</strong></td><td><code>/archive</code></td><td><code>GET /api/duels?limit=&amp;before=</code> — limit clamped 1–100 (absent or 0 → 20); <code>before</code> must be a bare <code>yyyyMM</code> stamp or the request is a validation problem</td><td>Cursor paging over partition keys, newest first.</td></tr>
+          <tr><td><strong>Export lab report</strong></td><td>Arena or Archive</td><td><code>GET /api/duels/{id}/report</code> → self-contained HTML attachment</td><td>Contains the raw persisted output — the runtime probe's injected reporter script exists only in the sandboxed preview and never reaches anything exported, persisted or judged.</td></tr>
+          <tr><td><strong>Leaderboard</strong></td><td><code>/leaderboard</code></td><td><code>GET /api/leaderboard?sortBy=</code> — served from <code>HybridCache</code> (30 s, tag <code>leaderboard</code>), invalidated on every verdict</td><td>Sort by Elo, output quality or average cost. Kill list gives per-opponent head-to-head records.</td></tr>
+          <tr><td><strong>Demo mode</strong></td><td><code>/demo</code></td><td><code>GET /api/duels/demo-plan?rounds=10</code> then ten ordinary <code>POST /api/duels</code> with <code>autoJudgeDelaySeconds: 0</code></td><td><strong>Not a sandbox.</strong> The duels persist, are judged and move Elo. The override cannot switch the judge on — <code>AiJudge:Enabled=false</code> still restores human-only verdicts.</td></tr>
+          <tr><td><strong>Retry a duel</strong></td><td>Arena, after a failure</td><td>Creates a fresh duel with the same pairing and prompt</td><td>For transient failures; the original failed duel stays in the archive.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Observability of a single request</h3>
+    <div class="card">
+      <p>A correlation id set by the client survives the whole trip: <code>X-Correlation-ID</code> → Serilog diagnostic context → the 500 handler's <code>correlationId</code> field. Inference calls additionally open a <code>gen_ai.chat</code> span tagged with provider, model, token usage, finish reason and truncation flag.</p>
+      <p><strong>Two gaps worth knowing when you debug a slow duel:</strong> time-to-first-token and tokens/second are stored on the result row but never emitted as metrics, so you cannot chart them; and browser-model inference emits no telemetry at all, because it happens in the user's tab. See the <a href="AI_SERVICES_REPORT.html#telemetry">AI services report</a>.</p>
+    </div>
+  </section>
+
+  <footer class="doc">
+    <p>Generated by the NET_DOCS pipeline from source at commit <code>7e07dd5</code> on branch <code>master</code>.</p>
+    <p>Companion reports: <a href="AI_SERVICES_REPORT.html">AI services</a> · <a href="ARCHITECTURE_REPORT.html">Architecture</a> · <a href="ROLES_PERMISSIONS_MATRIX.html">Roles &amp; permissions</a> · <a href="VISUAL_ARCHITECTURE_DASHBOARD.html">Visual dashboard</a></p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.tierbtn'));
+  var secs = Array.prototype.slice.call(document.querySelectorAll('section.tier'));
+  function apply(t) {
+    secs.forEach(function (s) { s.hidden = (t !== 'all' && s.dataset.tier !== t); });
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tier === t)); });
+  }
+  btns.forEach(function (b) { b.addEventListener('click', function () { apply(b.dataset.tier); }); });
+})();
+</script>
+</body>
+</html>

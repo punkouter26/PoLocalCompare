@@ -1,0 +1,31 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'15px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart TB
+    REQ["Incoming request"] --> AUTHN["UseAuthentication<br/>schemes: Cookie (always) + Fake (non-Production only)"]
+    AUTHN --> AUTHZ["UseAuthorization<br/>FallbackPolicy = RequireAuthenticatedUser"]
+
+    AUTHZ --> ANON{"Endpoint calls<br/>.AllowAnonymous()?"}
+    ANON -->|"yes"| PUB["Public surface<br/>/health · /api/diag/smoke · /diag · /auth/*<br/>POST /api/duels/{id}/local-result<br/>GET /api/models/download-status/{id}<br/>static assets + SPA fallback<br/>(dev only) /openapi · /scalar · /api/dev/*"]
+    ANON -->|"no"| GATE{"Authenticated?"}
+
+    GATE -->|"yes"| ALLOW["Handler runs.<br/>IdentityResolver stamps preferred_username onto<br/>Duel.OwnerId / Duel.VerdictBy — forensic only,<br/>never used for an authorization decision."]
+    GATE -->|"no"| FLAG{"Features:AllowAnonymousWrites<br/>AND a duel write endpoint?"}
+
+    FLAG -->|"true — Development default"| ALLOW
+    FLAG -->|"false — Production default"| DENY["401 Unauthorized<br/>(cookie events rewrite the 302 so an API caller never gets HTML)"]
+
+    subgraph ROLES["Roles"]
+        RN["Roles are issued (Guest via /auth/login/fake,<br/>X-Fake-Roles in tests) and surfaced by /auth/me,<br/>but NO endpoint or page requires one.<br/>Authorization is binary: authenticated or not."]
+    end
+
+    ALLOW -.-> RN
+
+    classDef q fill:#fde68a,stroke:#92400e,stroke-width:1.8px,color:#111827
+    classDef ok fill:#bbf7d0,stroke:#166534,stroke-width:1.6px,color:#0b1220
+    classDef no fill:#fecaca,stroke:#991b1b,stroke-width:1.6px,color:#0b1220
+    classDef n fill:#c7d2fe,stroke:#3730a3,stroke-width:1.6px,color:#0b1220
+    classDef note fill:#f1f5f9,stroke:#0f172a,stroke-width:1.6px,color:#0b1220
+    class ANON,GATE,FLAG q
+    class ALLOW,PUB ok
+    class DENY no
+    class REQ,AUTHN,AUTHZ n
+    class RN note

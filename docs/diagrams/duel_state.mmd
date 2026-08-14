@@ -1,0 +1,75 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'13px','textColor':'#0b1220'}}}%%
+stateDiagram-v2
+    direction TB
+    [*] --> Created
+
+    state "Created — Duel row written, Verdict = Pending" as Created
+    state "Executing — BackgroundTaskQueue item, 900 s watchdog" as Executing
+    state Executing {
+        direction LR
+        state "Left side" as L
+        state "Right side" as R
+        state L {
+            [*] --> L_Init: Initializing
+            L_Init --> L_Gen: Generating
+            L_Gen --> L_Done: Done (DuelResult saved)
+            L_Gen --> L_Fail: Failed (IsFailure = true)
+        }
+        state R {
+            [*] --> R_Init: Initializing
+            R_Init --> R_Gen: Generating / StartLocalInference
+            R_Gen --> R_Done: Done
+            R_Gen --> R_Fail: Failed or watchdog 900 s
+        }
+    }
+
+    state "Completed — CompletedAt set, DuelComplete pushed" as Completed
+    state "Grace window — AiJudge:DelaySeconds (0–3600)" as Grace
+    state "Judging — FoundryDuelJudge" as Judging
+    state "Walkover — synthetic JudgeDecision, no judge call" as Walkover
+
+    Created --> Executing: EnqueueAsync
+    Executing --> Completed: Task.WhenAll(left, right)
+    Completed --> Grace: AutoJudge.RunAsync
+    Completed --> HumanVerdict: POST /{id}/verdict inside the window
+
+    Grace --> StandDown_Judged: duel already judged → stand down
+    Grace --> StandDown_Expired: past VerdictDeadline → stand down
+    Grace --> StandDown_NoOutput: neither side produced output
+    Grace --> Walkover: exactly one side failed<br/>(the survivor IS the evidence — PRD item 20)
+    Grace --> Judging: both sides produced output
+
+    Judging --> RateLimited: HTTP 429 + Retry-After
+    RateLimited --> Grace: requeue, ≤ AiJudge:RateLimitRetryMax
+    RateLimited --> StandDown_Exhausted: retries exhausted
+    Judging --> StandDown_Unparseable: empty / unparseable reply, timeout,<br/>or Foundry not configured
+    Judging --> AiVerdict: {winner: A | B | Tie}
+    Walkover --> AiVerdict: survivor wins, rationale records the opponent's failure
+
+    state "Verdict recorded — VerdictSource = Human, VerdictBy = preferred_username" as HumanVerdict
+    state "Verdict recorded — VerdictSource = Ai, JudgeModel = AiJudge:Deployment" as AiVerdict
+
+    HumanVerdict --> Settled
+    AiVerdict --> Settled
+
+    state "Settled" as Settled {
+        direction LR
+        [*] --> Elo: RecordVerdictHandler (sole ELO path)
+        Elo --> Hist: EloCalculator K=32 → 2 EloHistory rows
+        Hist --> Cache: HybridCache tag-invalidate 'leaderboard'
+        Cache --> Notify: VerdictRecorded + lobby event
+    }
+
+    state "Still Pending — JudgeStoodDownReason persisted, no ELO movement" as StandDown
+    StandDown_Judged --> StandDown
+    StandDown_Expired --> StandDown
+    StandDown_NoOutput --> StandDown
+    StandDown_Exhausted --> StandDown
+    StandDown_Unparseable --> StandDown
+
+    StandDown --> HumanVerdict: a human can still decide it in the Arena
+    StandDown --> Expired24h: 24 h VerdictDeadline elapses
+    state "Expired — terminal, no ELO" as Expired24h
+
+    Settled --> [*]
+    Expired24h --> [*]

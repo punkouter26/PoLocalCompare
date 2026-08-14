@@ -1,0 +1,16 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','secondaryColor':'#e0e7ff','tertiaryColor':'#f1f5f9','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'17px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart LR
+    U["👤 Operator<br/>(Microsoft account)"] --> H["ASP.NET Core Host<br/>PoLocalCompare.Api<br/>:5001 — serves the SPA too"]
+    H --> S[("Azure Table + Blob Storage<br/>Duels · Results · Models · Elo")]
+    H --> F["Azure AI Foundry<br/>remote models + AI judge"]
+    B["🖥️ Browser WebGPU<br/>WebLLM in a Web Worker"] -. "inference runs here" .-> H
+
+    classDef person fill:#fde68a,stroke:#92400e,stroke-width:2px,color:#111827
+    classDef host fill:#c7d2fe,stroke:#3730a3,stroke-width:2px,color:#0b1220
+    classDef data fill:#bbf7d0,stroke:#166534,stroke-width:2px,color:#0b1220
+    classDef ext fill:#fecaca,stroke:#991b1b,stroke-width:2px,color:#0b1220
+    class U person
+    class H host
+    class S data
+    class F ext
+    class B ext

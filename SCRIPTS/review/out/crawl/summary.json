@@ -1,0 +1,348 @@
+{
+  "totals": {
+    "pairs": 36,
+    "errors": 13,
+    "axeSeriousCritical": 11,
+    "missingExpectation": 18
+  },
+  "byRoute": {
+    "/": {
+      "axeBad": 5,
+      "failed": 0,
+      "missing": 0,
+      "total": 6
+    },
+    "/leaderboard": {
+      "axeBad": 5,
+      "failed": 0,
+      "missing": 0,
+      "total": 5
+    },
+    "/archive": {
+      "axeBad": 0,
+      "failed": 0,
+      "missing": 0,
+      "total": 5
+    },
+    "/demo": {
+      "axeBad": 1,
+      "failed": 3,
+      "missing": 3,
+      "total": 5
+    },
+    "/arena/none": {
+      "axeBad": 0,
+      "failed": 5,
+      "missing": 5,
+      "total": 5
+    },
+    "/auth/login/fake?returnUrl=/": {
+      "axeBad": 0,
+      "failed": 0,
+      "missing": 5,
+      "total": 5
+    },
+    "/not-a-route": {
+      "axeBad": 0,
+      "failed": 5,
+      "missing": 5,
+      "total": 5
+    }
+  },
+  "byViewport": {
+    "mobile": {
+      "axeBad": 6,
+      "failed": 9,
+      "total": 21
+    },
+    "desktop": {
+      "axeBad": 5,
+      "failed": 4,
+      "total": 15
+    }
+  },
+  "byTheme": {
+    "light": {
+      "axeBad": 5,
+      "failed": 5,
+      "total": 14
+    },
+    "dark": {
+      "axeBad": 3,
+      "failed": 5,
+      "total": 14
+    },
+    "system": {
+      "axeBad": 3,
+      "failed": 3,
+      "total": 8
+    }
+  },
+  "axeIds": {
+    "color-contrast": 41
+  },
+  "failed": [
+    {
+      "label": "mobile-light-demo",
+      "route": "/demo",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-light-arena-404",
+      "route": "/arena/none",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-light-not-found",
+      "route": "/not-a-route",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-dark-demo",
+      "route": "/demo",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-dark-arena-404",
+      "route": "/arena/none",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-dark-not-found",
+      "route": "/not-a-route",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-system-demo",
+      "route": "/demo",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-system-arena-404",
+      "route": "/arena/none",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "mobile-system-not-found",
+      "route": "/not-a-route",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "desktop-light-arena-404",
+      "route": "/arena/none",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "desktop-light-not-found",
+      "route": "/not-a-route",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "desktop-dark-arena-404",
+      "route": "/arena/none",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    },
+    {
+      "label": "desktop-dark-not-found",
+      "route": "/not-a-route",
+      "error": "page.waitForFunction: Timeout 20000ms exceeded."
+    }
+  ],
+  "missingExpectation": [
+    {
+      "label": "mobile-light-demo",
+      "route": "/demo"
+    },
+    {
+      "label": "mobile-light-arena-404",
+      "route": "/arena/none"
+    },
+    {
+      "label": "mobile-light-login-already",
+      "route": "/auth/login/fake?returnUrl=/"
+    },
+    {
+      "label": "mobile-light-not-found",
+      "route": "/not-a-route"
+    },
+    {
+      "label": "mobile-dark-demo",
+      "route": "/demo"
+    },
+    {
+      "label": "mobile-dark-arena-404",
+      "route": "/arena/none"
+    },
+    {
+      "label": "mobile-dark-login-already",
+      "route": "/auth/login/fake?returnUrl=/"
+    },
+    {
+      "label": "mobile-dark-not-found",
+      "route": "/not-a-route"
+    },
+    {
+      "label": "mobile-system-demo",
+      "route": "/demo"
+    },
+    {
+      "label": "mobile-system-arena-404",
+      "route": "/arena/none"
+    },
+    {
+      "label": "mobile-system-login-already",
+      "route": "/auth/login/fake?returnUrl=/"
+    },
+    {
+      "label": "mobile-system-not-found",
+      "route": "/not-a-route"
+    },
+    {
+      "label": "desktop-light-arena-404",
+      "route": "/arena/none"
+    },
+    {
+      "label": "desktop-light-login-already",
+      "route": "/auth/login/fake?returnUrl=/"
+    },
+    {
+      "label": "desktop-light-not-found",
+      "route": "/not-a-route"
+    },
+    {
+      "label": "desktop-dark-arena-404",
+      "route": "/arena/none"
+    },
+    {
+      "label": "desktop-dark-login-already",
+      "route": "/auth/login/fake?returnUrl=/"
+    },
+    {
+      "label": "desktop-dark-not-found",
+      "route": "/not-a-route"
+    }
+  ],
+  "axeByLabel": [
+    {
+      "label": "mobile-light-home",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 4
+        }
+      ]
+    },
+    {
+      "label": "mobile-light-leaderboard",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1
+        }
+      ]
+    },
+    {
+      "label": "mobile-dark-home",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1
+        }
+      ]
+    },
+    {
+      "label": "mobile-dark-leaderboard",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1
+        }
+      ]
+    },
+    {
+      "label": "mobile-system-home",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 10
+        }
+      ]
+    },
+    {
+      "label": "mobile-system-leaderboard",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1
+        }
+      ]
+    },
+    {
+      "label": "desktop-light-home",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 10
+        }
+      ]
+    },
+    {
+      "label": "desktop-light-leaderboard",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1
+        }
+      ]
+    },
+    {
+      "label": "desktop-light-demo",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1
+        }
+      ]
+    },
+    {
+      "label": "desktop-dark-leaderboard",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1
+        }
+      ]
+    },
+    {
+      "label": "desktop-system-home",
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 10
+        }
+      ]
+    }
+  ]
+}

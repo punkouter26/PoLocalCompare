@@ -313,9 +313,15 @@
            while a vote is still possible: once a verdict exists they were rendered disabled
            forever, leaving the page's headline control permanently dead. Everything else is a
            follow-up and sits in a secondary row. *@
+        @* Sticky to the foot of the viewport, not just placed here. The evidence — two iframes,
+           the telemetry HUDs and the scorecard — is taller than any screen, so the decision
+           control was always a scroll away from wherever you were reading. Sticky keeps the
+           order (evidence first, then the vote) while making the vote reachable without
+           travelling: land on an unjudged duel from the Archive and the winner buttons are
+           already under your cursor. *@
         @if (CanStillVote)
         {
-            <div class="arena__actions">
+            <div class="arena__actions arena__actions--vote">
                 <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
                         disabled="@(_submitting || _retrying)"
                         @onclick="@(() => RecordVerdictAsync(DuelVerdict.Left))">

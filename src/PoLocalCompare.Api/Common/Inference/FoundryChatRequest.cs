@@ -39,6 +39,33 @@ public static class FoundryChatRequest
     }
 
     /// <summary>
+    /// Whether a streaming chat-completion request to this deployment may include
+    /// <c>stream_options: { include_usage = true }</c>. True for native Azure OpenAI deployments
+    /// (the GPT/Phi/Llama/Grok families we route today); false for deployments proxied through
+    /// a stricter OpenAI-compatible endpoint (e.g. Codestral 2501 via the Mistral MaaS route)
+    /// that reject the extra field with HTTP 422 — see AutoJudgeTests' codestral pin.
+    /// </summary>
+    /// <remarks>
+    /// Deny-by-default: a deployment that does not match the known-native prefix list gets
+    /// the lean body. Add a model to the list only after confirming the upstream accepts the
+    /// OpenAI streaming-extension shape.
+    /// </remarks>
+    public static bool SupportsStreamUsage(string? deploymentName)
+    {
+        if (string.IsNullOrWhiteSpace(deploymentName)) return false;
+        var n = deploymentName.ToLowerInvariant();
+        // Native Azure OpenAI deployments — accept stream_options without complaint.
+        return n.StartsWith("gpt-")
+            || n.StartsWith("o1")
+            || n.StartsWith("o3")
+            || n.StartsWith("o4")
+            || n.StartsWith("phi-")
+            || n.StartsWith("llama-")
+            || n.StartsWith("llama_")
+            || n.StartsWith("grok-");
+    }
+
+    /// <summary>
     /// Builds a request-body dictionary ready for <c>JsonSerializer.Serialize</c>.
     /// For reasoning models, <paramref name="temperature"/> is omitted and the token
     /// budget is sent as <c>max_completion_tokens</c>.
@@ -61,8 +88,12 @@ public static class FoundryChatRequest
             ["stream"] = stream,
         };
 
-        if (stream)
+        if (stream && SupportsStreamUsage(deploymentName))
         {
+            // Codestral 2501 (and any other strict OpenAI-compatible proxy) rejects this with
+            // HTTP 422 — "Extra inputs are not permitted" on stream_options.include_usage. Only
+            // native Azure OpenAI deployments accept the OpenAI streaming-extension shape; see
+            // SupportsStreamUsage for the deny-by-default list.
             body["stream_options"] = new { include_usage = true };
         }
 

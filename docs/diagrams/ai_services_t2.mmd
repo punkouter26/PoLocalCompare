@@ -1,0 +1,37 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'15px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart TB
+    START["DuelExecutionService.RunModelAsync(model)"] --> TYPE{"model.ModelType"}
+
+    TYPE -->|"Remote"| RP["keyed IRemoteInferenceProxy 'Remote'<br/>FoundryInferenceProxy"]
+    TYPE -->|"LocalService"| OP["keyed IRemoteInferenceProxy 'LocalService'<br/>OllamaInferenceProxy"]
+    TYPE -->|"Local"| LP["No server proxy —<br/>push StartLocalInference over SignalR"]
+
+    RP --> D1["POST {Endpoint}/openai/deployments/{ApiEndpointRef}<br/>/chat/completions?api-version=2024-12-01-preview"]
+    D1 -->|"200 SSE"| OK["Stream tokens → HtmlStreamCounters → hub"]
+    D1 -->|"404"| D2["Fallback: POST {Endpoint}/models/chat/completions<br/>(model field in the body)"]
+    D1 -->|"429 / 502 / 503"| RT["≤ 3 attempts · Retry-After clamped 1–90 s"]
+    RT --> D1
+    D2 -->|"200 SSE"| OK
+    D2 -->|"non-2xx"| FAIL["IsFailure = true, both endpoints named in FailureReason"]
+
+    OP --> O1["POST {Ollama:BaseUrl}/v1/chat/completions<br/>no auth, stream = true"]
+    O1 --> OK
+    O1 -->|"connection refused"| FAIL
+
+    LP --> W["webllm-worker.js loads weights<br/>(wwwroot/models → else HuggingFace CDN)"]
+    W --> LR["POST /api/duels/{id}/local-result (anonymous)"]
+    LR --> OK
+
+    OK --> COST{"model has per-token prices?"}
+    COST -->|"yes — 5 of 12 remote"| C1["ApiCostUsd = in/1e6 × inPrice + out/1e6 × outPrice"]
+    COST -->|"no — 7 of 12 remote"| C2["ApiCostUsd stays NULL — cost UI shows nothing"]
+    OK --> EN["Local / Ollama: EnergyWh = TdpWatts × hours<br/>EnergyCostUsd at GreenStats:ElectricityRateUsd"]
+
+    classDef q fill:#fde68a,stroke:#92400e,stroke-width:1.8px,color:#111827
+    classDef a fill:#c7d2fe,stroke:#3730a3,stroke-width:1.6px,color:#0b1220
+    classDef bad fill:#fecaca,stroke:#991b1b,stroke-width:1.6px,color:#0b1220
+    classDef good fill:#bbf7d0,stroke:#166534,stroke-width:1.6px,color:#0b1220
+    class TYPE,COST q
+    class START,RP,OP,LP,D1,D2,O1,W,LR,RT a
+    class FAIL,C2 bad
+    class OK,C1,EN good

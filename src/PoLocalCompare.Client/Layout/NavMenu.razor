@@ -60,7 +60,9 @@
                     }
                     @if (Ticker.AwaitingVerdictCount > 0)
                     {
-                        <a href="archive" class="navmenu__ticker-pill navmenu__ticker-pill--pending"
+                        @* Lands on the filtered list, not on everything: the pill counts unjudged
+                           duels, so that is what it should open. *@
+                        <a href="archive?verdict=Unjudged" class="navmenu__ticker-pill navmenu__ticker-pill--pending"
                            title="Duels that finished but have no verdict yet">
                             <span aria-hidden="true">⚖</span>
                             @Ticker.AwaitingVerdictCount awaiting judgment

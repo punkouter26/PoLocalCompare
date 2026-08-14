@@ -223,6 +223,21 @@
     min-width: 180px;
 }
 
+/* The vote row rides the bottom of the viewport until the page scrolls down to its real
+   position, then settles into flow. It occupies its own space either way, so nothing is
+   permanently covered — only what you are scrolling past. Opaque background and a top edge,
+   because it is drawn over the outputs for most of the page. */
+.arena__actions--vote {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    background: var(--surface-1);
+    border-top: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    margin-top: 0.5rem;
+    box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
+}
+
 /* Follow-ups, not the decision: tighter, no forced width, and visually quieter than the
    vote row above them. Six same-sized large buttons in one row gave the page no primary. */
 .arena__actions--secondary {

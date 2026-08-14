@@ -31,11 +31,13 @@ internal static partial class AutoJudgeLog
 /// </summary>
 /// <remarks>
 /// This reverses the original human-only-verdict rule (PRD §9 item 7) and is why every verdict
-/// now carries a <see cref="VerdictSource"/>. Two invariants keep it honest:
-/// a human who picks inside the window always wins the race, and a judge that cannot reach a
-/// decision leaves the duel Pending rather than guessing — ELO never moves on no evidence.
+/// now carries a <see cref="VerdictSource"/>. Three invariants keep it honest:
+/// a human who picks inside the window always wins the race; a judge that cannot reach a
+/// decision leaves the duel Pending rather than guessing — ELO never moves on no evidence
+/// (item 9, both sides failed); and a one-sided execution failure is awarded to the survivor
+/// as a walkover (item 20, one side failed — the survivor IS the evidence).
 ///
-/// A third behaviour complements those: a judge that *temporarily* cannot reach the model —
+/// A fourth behaviour complements those: a judge that *temporarily* cannot reach the model —
 /// a 429 with a <c>Retry-After</c> header, mostly — is re-queued for the requested delay
 /// rather than stood down, so a Foundry rate-limit burst does not silently turn ten-demo runs
 /// into one-judge-recorded.
@@ -144,8 +146,10 @@ public sealed class AutoJudge
             }
 
             // Make the "could not decide" reason persistent on the duel so a human arriving at
-            // the Arena from the demo queue gets the same hint the judge had. A one-sided
-            // execution failure is not model-quality evidence, so it remains Pending too.
+            // the Arena from the demo queue gets the same hint the judge had. Both sides
+            // failed → no evidence to act on; leave Pending. (One-sided failures take the
+            // walkover path inside DecideAsync, so they reach RecordAsync, not this branch —
+            // see PRD §9 item 20.)
             if (decision is null)
             {
                 standDownReason = SynthesizeStandDownReason(left, right);
@@ -233,16 +237,25 @@ public sealed class AutoJudge
             return null;
         }
 
-        // One side produced nothing. This is an execution failure, not comparative evidence:
-        // leave the duel pending instead of moving ratings on an infrastructure walkover.
+        // One side produced nothing. The survivor is direct model-quality evidence, not the
+        // absence of it — recording a walkover moves the survivor's rating and reflects the
+        // loser's failure in their DuelCount. PRD §9 item 20 reverses the "leave it Pending"
+        // decision from the prior pass once the demo's Kimi-vs-* duels surfaced the gap; the
+        // no-evidence guard in RecordVerdictHandler is unchanged because the survivor IS the
+        // evidence (one result row, one failure row).
         if (leftOk != rightOk)
         {
+            var failedSide = leftOk ? "right" : "left";
+            var survivorSide = leftOk ? DuelVerdict.Left : DuelVerdict.Right;
             var failed = leftOk ? right : left;
             var why = string.IsNullOrWhiteSpace(failed?.FailureReason)
                 ? "produced no output"
                 : failed.FailureReason!.Split('\n', 2)[0].Trim();
-            AutoJudgeLog.StoodDown(_logger, duel.DuelId, $"one model failed: {why}");
-            return null;
+            // Caller (RecordAsync) logs Recorded once the verdict is on disk; no log here to
+            // avoid double-logging a walkover as both "decided" and "stood down".
+            return new JudgeDecision(
+                survivorSide,
+                $"Walkover: opponent ({failedSide}) failed to produce output ({why}).");
         }
 
         return await _judge.JudgeAsync(

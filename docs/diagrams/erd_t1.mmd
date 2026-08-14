@@ -1,0 +1,5 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'17px','textColor':'#0b1220'}}}%%
+erDiagram
+    MODEL ||--o{ DUEL : "fights in"
+    DUEL ||--|| VERDICT : "ends with"
+    DUEL ||--o{ OUTPUT : "produces 2"

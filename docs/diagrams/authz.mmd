@@ -1,0 +1,84 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'13px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart TB
+    subgraph PRINCIPALS["Principals that can reach the host"]
+        direction LR
+        P1["Anonymous browser / scanner"]
+        P2["Microsoft account (OIDC code+PKCE)<br/>issuer must match ^login.microsoftonline.com/{guid}/v2.0$<br/>or AzureAd:AllowedTenants when populated"]
+        P3["Guest — /auth/login/fake, role 'Guest'<br/>route registered only when !IsProduction()"]
+        P4["Test client — X-Fake-User / X-Fake-Roles<br/>FakeAuthHandler THROWS if constructed in Production"]
+        P5["Browser Web Worker posting WebLLM output<br/>(carries no credential at all)"]
+        P6["Server-internal: AutoJudge, ModelSeeder, BackgroundTaskService<br/>(no HTTP, no principal, bypasses the pipeline entirely)"]
+    end
+
+    subgraph PIPE["Middleware order — Program.cs (order is load-bearing)"]
+        direction TB
+        M1["1 UseSerilogRequestLogging — enriches CorrelationId, UserId, SessionId, RequestPath"]
+        M2["2 UseExceptionHandler → RFC 7807 problem+json;<br/>detail + stackTrace only in Development"]
+        M3["3 CSP header: frame-ancestors 'self' (the sandboxed preview iframe depends on it)"]
+        M4["4 (Development only) MapOpenApi + MapScalarApiReference — both AllowAnonymous"]
+        M5["5 /_framework → Cache-Control: no-cache, must-revalidate"]
+        M6["6 UseBlazorFrameworkFiles + UseStaticFiles<br/>— serve BEFORE auth so the SPA shell and .wasm never 401"]
+        M7["7 UseRouting"]
+        M8["8 UseAuthentication — Cookie 'PoLocalCompare.Session'<br/>HttpOnly · SameSite=Strict · SecurePolicy=Always · 8 h sliding"]
+        M9["9 UseAuthorization — DefaultPolicy = RequireAuthenticatedUser<br/>FallbackPolicy = DefaultPolicy (deny by default)"]
+        M10["10 Endpoints: /auth · Razor Pages · /health · /hubs/duel · /api/* · SPA fallback"]
+    end
+
+    subgraph GROUPS["Route groups and their guard"]
+        direction TB
+        G1["MapGroup /api/duels .RequireAuthorization()<br/>├ POST /            — opened by Features:AllowAnonymousWrites<br/>├ POST /{id}/verdict — opened by Features:AllowAnonymousWrites<br/>├ POST /{id}/local-result — ALWAYS .AllowAnonymous()<br/>└ GET /, /{id}, /demo-plan — always authenticated"]
+        G2["MapGroup /api/models .RequireAuthorization()<br/>└ GET /download-status/{id} — .AllowAnonymous()"]
+        G3["MapGroup /api/leaderboard .RequireAuthorization() — no opt-outs"]
+        G4["MapGroup /api/ollama .RequireAuthorization() — no opt-outs"]
+        G5["GET /api/duels/{id}/report .RequireAuthorization()"]
+        G6["MapHub DuelHub /hubs/duel .RequireAuthorization()<br/>JoinDuel / JoinLobby subscribe only — no client can push"]
+        G7["/health · /api/diag/smoke — .AllowAnonymous()"]
+        G8["MapRazorPages().AllowAnonymous() — /diag (masks secret values)"]
+        G9["/auth/me · /auth/login · /auth/login/microsoft · /auth/logout — .AllowAnonymous()<br/>/auth/login/fake — .AllowAnonymous(), registered only when !IsProduction()"]
+        G10["MapStaticAssets · /favicon.ico · MapFallbackToFile — .AllowAnonymous()"]
+        G11["POST /api/dev/reset · POST /api/dev/remap-model-ids<br/>.AllowAnonymous(), mapped only when IsDevelopment()"]
+    end
+
+    subgraph CLIENTSIDE["Client-side gate (defence in depth, not a control)"]
+        direction LR
+        CG1["_Imports.razor: @attribute [Authorize] on every routed page"]
+        CG2["App.razor AuthorizeRouteView renders Login.razor when unauthenticated"]
+        CG3["BffAuthenticationStateProvider polls GET /auth/me — the SERVER is the authority"]
+    end
+
+    subgraph FINDINGS["Audit findings"]
+        direction TB
+        A1["✅ Deny-by-default via FallbackPolicy — a new endpoint is protected unless it opts out"]
+        A2["⚠️ POST /{id}/local-result is unauthenticated by design and unowned:<br/>anyone who knows a DuelId can write that side's result while the duel is running.<br/>Mitigations: ULID ids, first-writer-wins, no ELO effect without a verdict."]
+        A3["⚠️ Features:AllowAnonymousWrites=true in appsettings.Development.json opens<br/>POST /api/duels and POST /{id}/verdict. Read once at startup — a restart is needed to change it."]
+        A4["⚠️ /api/dev/reset wipes Duels, DuelResults, EloHistory and resets every model to 1200 ELO,<br/>anonymously. Development-only mapping is the ONLY thing protecting it."]
+        A5["ℹ️ No role or scope is ever required. Roles exist in claims and /auth/me but gate nothing."]
+        A6["ℹ️ OwnerId / VerdictBy are recorded but never checked — any signed-in user can judge any duel."]
+    end
+
+    P1 --> M1
+    P2 --> M1
+    P3 --> M1
+    P4 --> M1
+    P5 --> M1
+    P6 -.->|"no HTTP"| G1
+
+    M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9 --> M10
+    M10 --> GROUPS
+    GROUPS --> FINDINGS
+    CLIENTSIDE -.-> M8
+
+    classDef pr fill:#fde68a,stroke:#92400e,stroke-width:1.5px,color:#111827
+    classDef mw fill:#c7d2fe,stroke:#3730a3,stroke-width:1.5px,color:#0b1220
+    classDef gr fill:#bae6fd,stroke:#075985,stroke-width:1.5px,color:#0b1220
+    classDef cli fill:#ddd6fe,stroke:#5b21b6,stroke-width:1.5px,color:#0b1220
+    classDef good fill:#bbf7d0,stroke:#166534,stroke-width:1.5px,color:#0b1220
+    classDef warn fill:#fed7aa,stroke:#9a3412,stroke-width:1.5px,color:#0b1220
+    classDef info fill:#f1f5f9,stroke:#334155,stroke-width:1.5px,color:#0b1220
+    class P1,P2,P3,P4,P5,P6 pr
+    class M1,M2,M3,M4,M5,M6,M7,M8,M9,M10 mw
+    class G1,G2,G3,G4,G5,G6,G7,G8,G9,G10,G11 gr
+    class CG1,CG2,CG3 cli
+    class A1 good
+    class A2,A3,A4 warn
+    class A5,A6 info

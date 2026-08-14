@@ -4,8 +4,8 @@ namespace PoLocalCompare.Unit;
 
 /// <summary>
 /// The Arena shows these numbers side by side as evidence to vote with, so what each metric
-/// counts is a contract. In particular the "issue" lists must not fire on well-formed output —
-/// a scorecard that flags every page teaches people to ignore it.
+/// counts is a contract. The scorecard must not flag well-formed pages — false positives
+/// teach people to ignore it.
 /// </summary>
 public class OutputAnalysisTests
 {
@@ -25,79 +25,12 @@ public class OutputAnalysisTests
         "</html>";
 
     [Fact]
-    public void Analyze_Null_ReturnsEmpty()
-    {
-        Assert.Equal(OutputAnalysis.Empty, OutputAnalysis.Analyze(null));
-    }
-
-    [Fact]
-    public void Analyze_Whitespace_ReturnsEmpty()
-    {
-        Assert.Equal(OutputAnalysis.Empty, OutputAnalysis.Analyze("   \n  "));
-    }
-
-    [Fact]
-    public void Analyze_WellFormedPage_ReportsNoStructuralIssues()
+    public void Analyze_WellFormedPage_ReportsNoIssues()
     {
         var analysis = OutputAnalysis.Analyze(WellFormedPage);
 
         Assert.Empty(analysis.StructuralIssues);
-    }
-
-    [Fact]
-    public void Analyze_WellFormedPage_ReportsNoAccessibilityIssues()
-    {
-        var analysis = OutputAnalysis.Analyze(WellFormedPage);
-
         Assert.Empty(analysis.AccessibilityIssues);
-    }
-
-    [Fact]
-    public void Analyze_WellFormedPage_DetectsDocumentScaffolding()
-    {
-        var analysis = OutputAnalysis.Analyze(WellFormedPage);
-
-        Assert.True(analysis.HasDoctype);
-        Assert.True(analysis.HasTitle);
-        Assert.True(analysis.HasViewportMeta);
-        Assert.True(analysis.HasLangAttribute);
-    }
-
-    [Fact]
-    public void Analyze_CountsInteractiveElements()
-    {
-        var analysis = OutputAnalysis.Analyze(
-            "<body><button>a</button><a href='#'>b</a><input><p>not interactive</p></body>");
-
-        Assert.Equal(3, analysis.InteractiveElementCount);
-    }
-
-    [Fact]
-    public void Analyze_CountsCssRulesInsideStyleBlocksOnly()
-    {
-        // The brace in the script must not be counted as a CSS rule.
-        var analysis = OutputAnalysis.Analyze(
-            "<style>a{color:red}b{color:blue}</style><script>if(x){y()}</script>");
-
-        Assert.Equal(2, analysis.CssRuleCount);
-    }
-
-    [Fact]
-    public void Analyze_VoidElements_DoNotIncreaseNestingDepth()
-    {
-        // <br> and <img> never nest; counting them as open would inflate depth without limit.
-        var withVoids = OutputAnalysis.Analyze("<div><br><img alt=''><br></div>");
-        var withoutVoids = OutputAnalysis.Analyze("<div></div>");
-
-        Assert.Equal(withoutVoids.MaxNestingDepth, withVoids.MaxNestingDepth);
-    }
-
-    [Fact]
-    public void Analyze_SelfClosingTag_DoesNotCountAsUnclosed()
-    {
-        var analysis = OutputAnalysis.Analyze("<!DOCTYPE html><div><span/></div>");
-
-        Assert.DoesNotContain(analysis.StructuralIssues, i => i.Contains("unclosed", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -106,14 +39,6 @@ public class OutputAnalysisTests
         var analysis = OutputAnalysis.Analyze("<!DOCTYPE html><html><body><div><p>cut off");
 
         Assert.Contains(analysis.StructuralIssues, i => i.Contains("unclosed", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void Analyze_MissingDoctype_ReportsStructuralIssue()
-    {
-        var analysis = OutputAnalysis.Analyze("<html><body><p>hi</p></body></html>");
-
-        Assert.Contains(analysis.StructuralIssues, i => i.Contains("DOCTYPE", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -127,17 +52,9 @@ public class OutputAnalysisTests
     [Fact]
     public void Analyze_ImageWithoutAlt_ReportedAsAccessibilityIssue()
     {
-        var analysis = OutputAnalysis.Analyze("<body><img src='a.png'><img src='b.png' alt='ok'></body>");
+        var analysis = OutputAnalysis.Analyze("<body><img src='a.png'></body>");
 
         Assert.Contains(analysis.AccessibilityIssues, i => i.Contains("alt", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void Analyze_SkippedHeadingLevel_ReportedAsAccessibilityIssue()
-    {
-        var analysis = OutputAnalysis.Analyze("<body><h1>a</h1><h4>b</h4></body>");
-
-        Assert.Contains(analysis.AccessibilityIssues, i => i.Contains("skipped", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

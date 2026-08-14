@@ -1,3 +1,4 @@
+using PoLocalCompare.Api.Common.Domain;
 using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Api.Features.Leaderboard;
@@ -39,6 +40,7 @@ public sealed class GetLeaderboardHandler(
                 CurrentElo = Math.Round(model.CurrentElo, 1),
                 DuelCount = model.DuelCount,
                 WinCount = model.WinCount,
+                WinRate = WinRateCalculator.Calculate(model.WinCount, model.DuelCount),
                 DrawCount = model.DrawCount,
                 InputTokenPricePerMillion = model.InputTokenPricePerMillion,
                 OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
@@ -79,6 +81,7 @@ public sealed class GetLeaderboardHandler(
                 CurrentElo = entry.CurrentElo,
                 DuelCount = entry.DuelCount,
                 WinCount = entry.WinCount,
+                WinRate = entry.WinRate,
                 DrawCount = entry.DrawCount,
                 InputTokenPricePerMillion = entry.InputTokenPricePerMillion,
                 OutputTokenPricePerMillion = entry.OutputTokenPricePerMillion,

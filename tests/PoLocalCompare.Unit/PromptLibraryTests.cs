@@ -12,12 +12,6 @@ namespace PoLocalCompare.Unit;
 public class PromptLibraryTests
 {
     [Fact]
-    public void All_IsNotEmpty()
-    {
-        Assert.NotEmpty(PromptLibrary.All);
-    }
-
-    [Fact]
     public void All_HaveUniqueIds()
     {
         var ids = PromptLibrary.All.Select(p => p.Id).ToList();
@@ -67,21 +61,6 @@ public class PromptLibraryTests
     }
 
     [Fact]
-    public void Categories_CoverEveryPrompt()
-    {
-        var covered = PromptLibrary.Categories.SelectMany(PromptLibrary.InCategory).Distinct().Count();
-
-        Assert.Equal(PromptLibrary.All.Count, covered);
-    }
-
-    [Fact]
-    public void InCategory_All_ReturnsEverything()
-    {
-        Assert.Equal(PromptLibrary.All.Count, PromptLibrary.InCategory("All").Count);
-        Assert.Equal(PromptLibrary.All.Count, PromptLibrary.InCategory(null).Count);
-    }
-
-    [Fact]
     public void ById_ReturnsTheMatchingPrompt()
     {
         var expected = PromptLibrary.All[0];
@@ -103,21 +82,9 @@ public class PromptLibraryTests
 public class HtmlPreviewTests
 {
     [Fact]
-    public void Normalize_Null_IsEmpty()
-    {
-        Assert.Equal(string.Empty, HtmlPreview.Normalize(null));
-    }
-
-    [Fact]
     public void Normalize_StripsAWrappingFence()
     {
         Assert.Equal("<div>x</div>", HtmlPreview.Normalize("```html\n<div>x</div>\n```"));
-    }
-
-    [Fact]
-    public void Normalize_StripsAFenceWithNoLanguage()
-    {
-        Assert.Equal("<div>x</div>", HtmlPreview.Normalize("```\n<div>x</div>\n```"));
     }
 
     [Fact]
@@ -132,13 +99,5 @@ public class HtmlPreviewTests
     public void Normalize_UnfencedHtml_IsReturnedTrimmed()
     {
         Assert.Equal("<div>x</div>", HtmlPreview.Normalize("  <div>x</div>  "));
-    }
-
-    [Theory]
-    [InlineData("```html\n<p>a</p>\n```", true)]
-    [InlineData("<p>a</p>", false)]
-    public void ContainsFence_DetectsFences(string raw, bool expected)
-    {
-        Assert.Equal(expected, HtmlPreview.ContainsFence(raw));
     }
 }

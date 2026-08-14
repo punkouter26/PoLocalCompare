@@ -1,0 +1,115 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','secondaryColor':'#e0e7ff','tertiaryColor':'#f1f5f9','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'14px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart TB
+    U["👤 Operator / invited guest<br/>any Microsoft account"]
+
+    subgraph BROWSER["C4 L1 — Browser (single origin, no CORS)"]
+        direction TB
+        SPA["Blazor WebAssembly SPA<br/>PoLocalCompare.Client<br/>@page: / · /arena/{id} · /archive<br/>/leaderboard · /demo · /not-found"]
+        SVC["Client services<br/>DuelApiClient · SignalRDuelClient<br/>LobbyTickerService · WebLlmService<br/>BffAuthenticationStateProvider"]
+        WORKER["webllm-worker.js (Web Worker)<br/>WebGPU / WASM — MLC WebLLM<br/>7 seeded browser models"]
+        WEIGHTS[("wwwroot/models/<br/>vendored weights + _libs/*.wasm<br/>optional, ~5 GB")]
+    end
+
+    subgraph HOST["C4 L2 — ASP.NET Core 10 Host · PoLocalCompare.Api · Kestrel :5000/:5001"]
+        direction TB
+        MW["Middleware pipeline<br/>Serilog → ExceptionHandler(RFC 7807)<br/>→ CSP frame-ancestors 'self'<br/>→ /_framework no-cache<br/>→ BlazorFrameworkFiles → StaticFiles<br/>→ Routing → AuthN → AuthZ"]
+
+        subgraph SLICES["Vertical slices — Features/*"]
+            direction LR
+            F_DUEL["Duels<br/>MapGroup /api/duels"]
+            F_MODEL["Models<br/>MapGroup /api/models"]
+            F_LB["Leaderboard<br/>MapGroup /api/leaderboard"]
+            F_OLL["Ollama<br/>MapGroup /api/ollama"]
+            F_ARC["Archive<br/>GET /api/duels/{id}/report"]
+            F_DIAG["Diagnostics<br/>/health · /api/diag/smoke · /diag"]
+        end
+
+        AUTH["Auth — BFF<br/>Cookie 'PoLocalCompare.Session'<br/>HttpOnly · SameSite=Strict · Secure<br/>OIDC code+PKCE · FakeAuthHandler (non-prod)<br/>FallbackPolicy = RequireAuthenticatedUser"]
+
+        HUB["SignalR DuelHub /hubs/duel<br/>groups: duel:{id} · lobby<br/>JoinDuel / JoinLobby (subscribe only)"]
+
+        QUEUE["BackgroundTaskQueue<br/>+ BackgroundTaskService<br/>(sequential, one item at a time)"]
+
+        EXEC["DuelExecutionService<br/>Strategy: proxy per ModelType<br/>900 s watchdog · Task.WhenAll(L,R)"]
+
+        subgraph PROXIES["Common/Inference — IRemoteInferenceProxy"]
+            direction LR
+            PFOUND["FoundryInferenceProxy<br/>keyed 'Remote'<br/>SSE · 2-endpoint fallback"]
+            POLL["OllamaInferenceProxy<br/>keyed 'LocalService'<br/>SSE · /v1/chat/completions"]
+        end
+
+        JUDGE["AutoJudge → FoundryDuelJudge (IDuelJudge)<br/>grace window AiJudge:DelaySeconds<br/>A/B slot coin-flip · json_schema reply<br/>429 → requeue with Retry-After"]
+
+        VERD["RecordVerdictHandler<br/>the ONLY path that moves ELO<br/>EloCalculator K=32 · start 1200"]
+
+        CACHE["HybridCache 30 s<br/>tag: leaderboard"]
+        LOBBY["LobbyNotifier"]
+        SEED["ModelSeeder + OrphanModelIdRemapper<br/>(Development startup)"]
+        OTEL["OpenTelemetry + Serilog<br/>ActivitySource 'PoLocalCompare.Inference'<br/>RateLimitedSampler in Production"]
+    end
+
+    subgraph AZURE["C4 L2 — Azure (App Service Windows · app-polocalcompare-win)"]
+        direction TB
+        TBL[("Table Storage<br/>Duels (PK=yyyyMM, RK=DuelId)<br/>DuelResults (PK=DuelId, RK=ModelId)<br/>Models (PK='model', RK=ModelId)<br/>EloHistory (PK=ModelId, RK=invTicks_DuelId)")]
+        BLOB[("Blob Storage<br/>container duel-html-outputs<br/>{duelId}/{modelId}.html when &gt; 64 KB")]
+        FOUNDRY["Azure AI Foundry (po-aiservices-shared)<br/>/openai/deployments/{d}/chat/completions<br/>fallback /models/chat/completions<br/>api-version 2024-12-01-preview"]
+        KV["Key Vault kv-poshared<br/>prefix 'PoLocalCompare'<br/>DefaultAzureCredential"]
+        AI["Application Insights<br/>traces · metrics · Error+ logs"]
+        ENTRA["Microsoft Entra ID<br/>login.microsoftonline.com/common/v2.0"]
+    end
+
+    OLLAMA["Ollama daemon<br/>http://localhost:11434<br/>Development only — never seeded in Production"]
+    CDN["HuggingFace CDN + raw.githubusercontent.com<br/>WebLLM weights and model_lib .wasm"]
+
+    U -->|"HTTPS"| SPA
+    SPA --> SVC
+    SVC -->|"cookie auth /auth/*"| AUTH
+    AUTH -.->|"OIDC code flow"| ENTRA
+    SVC -->|"REST + X-Correlation-ID"| MW
+    SVC <-->|"WebSocket"| HUB
+    SVC -->|"JS interop"| WORKER
+    WORKER --> WEIGHTS
+    WORKER -.->|"only when wwwroot/models absent"| CDN
+    WORKER -->|"POST /api/duels/{id}/local-result (anonymous)"| F_DUEL
+
+    MW --> SLICES
+    MW --> AUTH
+    F_DUEL --> QUEUE
+    QUEUE --> EXEC
+    EXEC --> PROXIES
+    EXEC -->|"StartLocalInference"| HUB
+    EXEC -->|"ModelStatusUpdate · DuelComplete"| HUB
+    EXEC --> JUDGE
+    JUDGE --> VERD
+    F_DUEL -->|"human pick"| VERD
+    VERD --> CACHE
+    VERD --> LOBBY
+    LOBBY --> HUB
+    F_LB --> CACHE
+    PFOUND --> FOUNDRY
+    JUDGE --> FOUNDRY
+    POLL --> OLLAMA
+    F_OLL --> OLLAMA
+    F_MODEL --> TBL
+    F_ARC --> TBL
+    EXEC --> TBL
+    EXEC --> BLOB
+    VERD --> TBL
+    SEED --> TBL
+    HOST --> KV
+    OTEL --> AI
+    F_DIAG --> TBL
+
+    classDef person fill:#fde68a,stroke:#92400e,stroke-width:2px,color:#111827
+    classDef comp fill:#c7d2fe,stroke:#3730a3,stroke-width:1.5px,color:#0b1220
+    classDef client fill:#ddd6fe,stroke:#5b21b6,stroke-width:1.5px,color:#0b1220
+    classDef data fill:#bbf7d0,stroke:#166534,stroke-width:1.5px,color:#0b1220
+    classDef ext fill:#fecaca,stroke:#991b1b,stroke-width:1.5px,color:#0b1220
+    classDef obs fill:#fed7aa,stroke:#9a3412,stroke-width:1.5px,color:#0b1220
+    class U person
+    class SPA,SVC,WORKER client
+    class WEIGHTS data
+    class MW,AUTH,HUB,QUEUE,EXEC,JUDGE,VERD,CACHE,LOBBY,SEED,F_DUEL,F_MODEL,F_LB,F_OLL,F_ARC,F_DIAG,PFOUND,POLL comp
+    class TBL,BLOB data
+    class FOUNDRY,KV,ENTRA,OLLAMA,CDN ext
+    class OTEL,AI obs

@@ -16,6 +16,12 @@ obj/
 appsettings.Development.json
 appsettings.*.json
 !appsettings.json
+# The API's Development overrides ARE committed and are load-bearing: they hold no secrets
+# (empty App Insights connection string, the shared Key Vault URI, Features:AllowAnonymousWrites)
+# and both test host fixtures run as Development, so they inherit this file. The blanket rules
+# above matched it while git kept honouring it only because it was already tracked — this
+# negation makes the intent explicit so a delete-and-re-add cannot silently drop it.
+!src/PoLocalCompare.Api/appsettings.Development.json
 
 ## OS artifacts
 .DS_Store
@@ -140,3 +146,8 @@ scm_restartfile
 model-test-report.html
 model-test-status.tsv
 browser-test-status.tsv
+
+## DOCS/ is a committed deliverable, not a build output.
+## DOCS/diagrams/*.mmd are sources; DOCS/assets/*.svg are compiled from them with
+##   npx @mermaid-js/mermaid-cli -i DOCS/diagrams/<name>.mmd -o DOCS/assets/<name>.svg -b transparent
+## Both are tracked on purpose so the reports render without a build step. Nothing here is ignored.

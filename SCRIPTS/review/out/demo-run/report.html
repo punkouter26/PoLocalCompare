@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PoLocalCompare — Demo run report</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b0e16;
+  --surface: #11141d;
+  --surface-2: #1a1f2b;
+  --border: #252b39;
+  --text: #e7ebf3;
+  --muted: #9aa3b7;
+  --accent: #6ee7b7;
+  --warn: #fbbf24;
+  --danger: #f87171;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 2.5rem 1.5rem; font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+h1 { font-size: 2rem; margin: 0 0 0.25rem; letter-spacing: -0.02em; }
+.subtitle { color: var(--muted); margin: 0 0 2rem; font-size: 0.95rem; }
+h2 { font-size: 1.25rem; margin: 2.5rem 0 0.75rem; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; }
+.kpi-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.kpi-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.15rem; }
+.kpi-sub { font-size: 0.75rem; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+th, td { padding: 0.65rem 0.85rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+.tag { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
+.tag-win   { background: rgba(110, 231, 183, 0.15); color: var(--accent); }
+.tag-loss  { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+.tag-tie   { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+.tag-pend  { background: var(--surface-2); color: var(--muted); }
+.tag-fail  { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+.dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; vertical-align: middle; margin-right: 0.4rem; }
+.bar { display: inline-block; width: 100px; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; vertical-align: middle; }
+.bar > span { display: block; height: 100%; }
+.muted { color: var(--muted); font-size: 0.78rem; }
+.duel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem 1.25rem; margin-bottom: 0.85rem; }
+.duel-card.pending { border-left: 4px solid var(--warn); }
+.duel-card.tie     { border-left: 4px solid var(--warn); }
+.duel-card.win-l   { border-left: 4px solid var(--accent); }
+.duel-card.win-r   { border-left: 4px solid var(--accent); }
+.duel-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+.duel-head h3 { margin: 0; font-size: 1rem; }
+.duel-prompt { color: var(--muted); font-size: 0.85rem; font-style: italic; margin-bottom: 0.65rem; }
+.duel-body { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 700px) { .duel-body { grid-template-columns: 1fr; } }
+.side { padding: 0.65rem; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border); }
+.side.loser { opacity: 0.7; }
+.side-name { font-weight: 700; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-top: 0.5rem; font-size: 0.78rem; }
+.metric { background: var(--bg); padding: 0.4rem 0.55rem; border-radius: 6px; }
+.metric-label { color: var(--muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.metric-value { font-weight: 600; margin-top: 0.1rem; }
+footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.78rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>🧪 Auto-demo run report</h1>
+  <p class="subtitle">Generated from 10 back-to-back remote duels, judged by the AI judge. Observed at 8/13/2026, 9:26:08 PM.</p>
+</header>
+
+<section class="kpis">
+  <div class="kpi"><div class="kpi-label">Total duels</div><div class="kpi-value">10</div></div>
+  <div class="kpi"><div class="kpi-label">Decided</div><div class="kpi-value" style="color:var(--accent)">6</div><div class="kpi-sub">+ 2 ties</div></div>
+  <div class="kpi"><div class="kpi-label">Pending</div><div class="kpi-value" style="color:var(--warn)">2</div><div class="kpi-sub">judge stood down</div></div>
+  <div class="kpi"><div class="kpi-label">Side failures</div><div class="kpi-value" style="color:var(--danger)">2</div></div>
+  <div class="kpi"><div class="kpi-label">Wall-clock</div><div class="kpi-value">434.2 s</div><div class="kpi-sub">first start → last finish</div></div>
+</section>
+
+<h2>🏁 Standings</h2>
+<table>
+        <thead><tr><th>#</th><th>Model</th><th>Wins</th><th>Losses</th><th>Ties</th><th>W/L/T</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><span class="dot" style="background:hsl(188 70% 55%)"></span><strong>GPT-5.4</strong></td>
+            <td>1</td>
+            <td>0</td>
+            <td>2</td>
+            <td>1/0/2</td>
+          </tr><tr>
+            <td>2</td>
+            <td><span class="dot" style="background:hsl(22 70% 55%)"></span><strong>GPT-5 Nano</strong></td>
+            <td>1</td>
+            <td>0</td>
+            <td>1</td>
+            <td>1/0/1</td>
+          </tr><tr>
+            <td>3</td>
+            <td><span class="dot" style="background:hsl(320 70% 55%)"></span><strong>Grok 4.1 Fast</strong></td>
+            <td>1</td>
+            <td>0</td>
+            <td>1</td>
+            <td>1/0/1</td>
+          </tr><tr>
+            <td>4</td>
+            <td><span class="dot" style="background:hsl(280 70% 55%)"></span><strong>Phi-4</strong></td>
+            <td>1</td>
+            <td>1</td>
+            <td>0</td>
+            <td>1/1/0</td>
+          </tr><tr>
+            <td>5</td>
+            <td><span class="dot" style="background:hsl(188 70% 55%)"></span><strong>Phi-4 Mini</strong></td>
+            <td>1</td>
+            <td>2</td>
+            <td>0</td>
+            <td>1/2/0</td>
+          </tr><tr>
+            <td>6</td>
+            <td><span class="dot" style="background:hsl(320 70% 55%)"></span><strong>Llama 3.3 70B</strong></td>
+            <td>1</td>
+            <td>1</td>
+            <td>0</td>
+            <td>1/1/0</td>
+          </tr><tr>
+            <td>7</td>
+            <td><span class="dot" style="background:hsl(320 70% 55%)"></span><strong>GPT-5.4 Mini</strong></td>
+            <td>0</td>
+            <td>1</td>
+            <td>0</td>
+            <td>0/1/0</td>
+          </tr><tr>
+            <td>8</td>
+            <td><span class="dot" style="background:hsl(320 70% 55%)"></span><strong>GPT-5 Mini</strong></td>
+            <td>0</td>
+            <td>1</td>
+            <td>0</td>
+            <td>0/1/0</td>
+          </tr>
+        </tbody>
+      </table>
+
+<h2>📊 Per-duel detail</h2>
+
+<article class="duel-card win-l">
+  <div class="duel-head">
+    <h3>Duel 1 — <span style="color:hsl(280 70% 55%)">Phi-4</span> vs <span style="color:hsl(188 70% 55%)">GPT-5.4</span></h3>
+    <div><span class="tag tag-win">🏆 GPT-5.4 +16.5</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(280 70% 55%)"></span>
+        <span class="side-name">Phi-4</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">90/100 <span class="bar"><span style="width:90%; background:hsl(280 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">560</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">17.4 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">17.1 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">250 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">32.8</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0003</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side ">
+        <span class="dot" style="background:hsl(188 70% 55%)"></span>
+        <span class="side-name">GPT-5.4</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">90/100 <span class="bar"><span style="width:90%; background:hsl(188 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">1,125</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">12.7 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">12.2 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">505 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">92.1</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Document A fully satisfies the request: self-contained single HTML, CSS 3D transforms with continuous rotation on two axes, dark gradient background, centered cube, each face has a different colour, 3</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXVMFNP8DWT38M2032ETGG</code> · <a href="/arena/01KZYXVMFNP8DWT38M2032ETGG">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card win-l">
+  <div class="duel-head">
+    <h3>Duel 2 — <span style="color:hsl(22 70% 55%)">GPT-5 Nano</span> vs <span style="color:hsl(188 70% 55%)">Phi-4 Mini</span></h3>
+    <div><span class="tag tag-win">🏆 GPT-5 Nano +19.8</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side ">
+        <span class="dot" style="background:hsl(22 70% 55%)"></span>
+        <span class="side-name">GPT-5 Nano</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(22 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">6,847</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">35.6 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">6.4 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">29.2 s</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">177.7</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0027</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(188 70% 55%)"></span>
+        <span class="side-name">Phi-4 Mini</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(188 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">850</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">20 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">19.9 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">149 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">42.8</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0003</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Document A fully matches the request: a self-contained single HTML file with a full-screen canvas, 120 particles drifting slowly, cyan particle rendering on a dark background, and thin lines drawn for</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXTEFP3VJ7FX3HMNRCTF4W</code> · <a href="/arena/01KZYXTEFP3VJ7FX3HMNRCTF4W">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card win-l">
+  <div class="duel-head">
+    <h3>Duel 3 — <span style="color:hsl(188 70% 55%)">Phi-4 Mini</span> vs <span style="color:hsl(320 70% 55%)">Llama 3.3 70B</span></h3>
+    <div><span class="tag tag-win">🏆 Phi-4 Mini +19.8</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side ">
+        <span class="dot" style="background:hsl(188 70% 55%)"></span>
+        <span class="side-name">Phi-4 Mini</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(188 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">835</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">18.8 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">18.7 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">109 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">44.6</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0003</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(320 70% 55%)"></span>
+        <span class="side-name">Llama 3.3 70B</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">90/100 <span class="bar"><span style="width:90%; background:hsl(320 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">469</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">3.6 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">3.3 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">240 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">39.4</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Document A is a single self-contained HTML file that types a few shell-like commands with a blinking cursor, uses monospace/dark terminal styling, scrolls as text appears, then clears and loops by re-</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXSRSZYF2DKWNACB1N2V1B</code> · <a href="/arena/01KZYXSRSZYF2DKWNACB1N2V1B">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card win-l">
+  <div class="duel-head">
+    <h3>Duel 4 — <span style="color:hsl(320 70% 55%)">GPT-5.4 Mini</span> vs <span style="color:hsl(280 70% 55%)">Phi-4</span></h3>
+    <div><span class="tag tag-win">🏆 Phi-4 +21.0</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(320 70% 55%)"></span>
+        <span class="side-name">GPT-5.4 Mini</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(320 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">2,639</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">10.2 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">9.7 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">496 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">270.6</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0120</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side ">
+        <span class="dot" style="background:hsl(280 70% 55%)"></span>
+        <span class="side-name">Phi-4</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(280 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">855</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">29.4 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">29.2 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">149 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">29.3</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0004</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Document A meets the core requirements: a self-contained single HTML tic-tac-toe game where two AI players alternate moves every 700ms, using a simple heuristic (win/block via checking available moves</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXRRTS08NEFZEAQFBA6G04</code> · <a href="/arena/01KZYXRRTS08NEFZEAQFBA6G04">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card tie">
+  <div class="duel-head">
+    <h3>Duel 5 — <span style="color:hsl(188 70% 55%)">GPT-5.4</span> vs <span style="color:hsl(22 70% 55%)">GPT-5 Nano</span></h3>
+    <div><span class="tag tag-tie">🤝 Tie</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(188 70% 55%)"></span>
+        <span class="side-name">GPT-5.4</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(188 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">1,764</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">12.9 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">12.4 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">485 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">141.8</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(22 70% 55%)"></span>
+        <span class="side-name">GPT-5 Nano</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(22 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">7,439</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">42.7 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">10.6 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">32.1 s</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">181.4</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0030</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Both documents aim to implement the requested Game of Life features (50x50 grid, random seed, 120ms stepping, edge wrap, canvas rendering, and generation/population display with warm fading-by-age).</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXQBNPE265SD32ZS8P54ZY</code> · <a href="/arena/01KZYXQBNPE265SD32ZS8P54ZY">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card tie">
+  <div class="duel-head">
+    <h3>Duel 6 — <span style="color:hsl(320 70% 55%)">Grok 4.1 Fast</span> vs <span style="color:hsl(188 70% 55%)">GPT-5.4</span></h3>
+    <div><span class="tag tag-tie">🤝 Tie</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(320 70% 55%)"></span>
+        <span class="side-name">Grok 4.1 Fast</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(320 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">631</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">5.4 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">4.6 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">772 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">136.2</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(188 70% 55%)"></span>
+        <span class="side-name">GPT-5.4</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(188 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">1,211</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">12.1 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">11.8 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">385 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">102.6</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Both A and B implement a self-contained single HTML file that draws full-screen “code rain” on a canvas with green falling glyph columns at varying behavior and a fading trail/brightness for the lead.</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXPW9EFGEXR304X9F7EW4M</code> · <a href="/arena/01KZYXPW9EFGEXR304X9F7EW4M">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card win-l">
+  <div class="duel-head">
+    <h3>Duel 7 — <span style="color:hsl(320 70% 55%)">Grok 4.1 Fast</span> vs <span style="color:hsl(188 70% 55%)">Phi-4 Mini</span></h3>
+    <div><span class="tag tag-win">🏆 Grok 4.1 Fast +12.5</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side ">
+        <span class="dot" style="background:hsl(320 70% 55%)"></span>
+        <span class="side-name">Grok 4.1 Fast</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(320 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">1,172</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">11.5 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">10.6 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">857 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">110.5</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(188 70% 55%)"></span>
+        <span class="side-name">Phi-4 Mini</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(188 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">810</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">19 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">18.7 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">256 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">43.4</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0002</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Document B correctly creates a self-contained single HTML file with an animated audio-style visualiser of exactly 64 vertical bars whose heights are driven by layered sine waves. It also includes a “l</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXP6E36M5HMGWFVQW3JNE7</code> · <a href="/arena/01KZYXP6E36M5HMGWFVQW3JNE7">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card pending">
+  <div class="duel-head">
+    <h3>Duel 8 — <span style="color:hsl(22 70% 55%)">Kimi K2.7 Code</span> vs <span style="color:hsl(22 70% 55%)">GPT-5.4 Nano</span></h3>
+    <div><span class="tag tag-pend">⚖ judge stood down</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(22 70% 55%)"></span>
+        <span class="side-name">Kimi K2.7 Code</span>
+        <span class="tag tag-fail" style="margin-left:0.4rem">FAIL</span> <span class="tag tag-pend">truncated</span>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">0/100 <span class="bar"><span style="width:0%; background:hsl(22 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">4,096</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">22.6 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">22.1 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">511 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">0.0</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        <div class="tag tag-fail" style="margin-top:0.4rem">❌ Inference completed without output (finish reason: length).</div>
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(22 70% 55%)"></span>
+        <span class="side-name">GPT-5.4 Nano</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(22 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">4,201</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">29.9 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">29.4 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">537 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">142.8</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">$0.0053</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  
+  <p class="muted" style="margin-top:0.4rem"><strong>Judge stood down:</strong> One model did not produce usable output; no rating was recorded.</p>
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXJXB7TXETS3EAQ80N9VPE</code> · <a href="/arena/01KZYXJXB7TXETS3EAQ80N9VPE">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card win-l">
+  <div class="duel-head">
+    <h3>Duel 9 — <span style="color:hsl(320 70% 55%)">Llama 3.3 70B</span> vs <span style="color:hsl(320 70% 55%)">GPT-5 Mini</span></h3>
+    <div><span class="tag tag-win">🏆 Llama 3.3 70B +18.3</span><span class="muted"> · judged by gpt-5.4-nano</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side ">
+        <span class="dot" style="background:hsl(320 70% 55%)"></span>
+        <span class="side-name">Llama 3.3 70B</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">90/100 <span class="bar"><span style="width:90%; background:hsl(320 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">889</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">5 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">4.4 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">649 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">47.8</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(320 70% 55%)"></span>
+        <span class="side-name">GPT-5 Mini</span>
+        
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">100/100 <span class="bar"><span style="width:100%; background:hsl(320 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">3,522</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">30.6 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">21.9 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">8.8 s</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">119.7</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        
+      </div>
+  </div>
+  <p class="muted" style="margin-top:0.6rem"><strong>Judge rationale:</strong> Document A is a single self-contained HTML file using two side-by-side canvases to visualize bubble sort and quicksort racing on the same shuffled array of 40 bars. It highlights compared bars in a (d</p>
+  
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXHVBXPTGCHEEQ42PYR7S5</code> · <a href="/arena/01KZYXHVBXPTGCHEEQ42PYR7S5">Open in Arena →</a></p>
+</article>
+
+<article class="duel-card pending">
+  <div class="duel-head">
+    <h3>Duel 10 — <span style="color:hsl(22 70% 55%)">Kimi K2.7 Code</span> vs <span style="color:hsl(188 70% 55%)">Codestral 2501</span></h3>
+    <div><span class="tag tag-pend">⚖ judge stood down</span></div>
+  </div>
+  <div class="duel-prompt"></div>
+  <div class="duel-body">
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(22 70% 55%)"></span>
+        <span class="side-name">Kimi K2.7 Code</span>
+        <span class="tag tag-fail" style="margin-left:0.4rem">FAIL</span> <span class="tag tag-pend">truncated</span>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">0/100 <span class="bar"><span style="width:0%; background:hsl(22 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">4,096</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">16.8 s</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">15.6 s</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">1.3 s</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">0.1</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        <div class="tag tag-fail" style="margin-top:0.4rem">❌ Inference completed without output (finish reason: length).</div>
+      </div>
+    
+      <div class="side loser">
+        <span class="dot" style="background:hsl(188 70% 55%)"></span>
+        <span class="side-name">Codestral 2501</span>
+        <span class="tag tag-fail" style="margin-left:0.4rem">FAIL</span>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Quality</div><div class="metric-value">0/100 <span class="bar"><span style="width:0%; background:hsl(188 70% 55%)"></span></span></div></div>
+          <div class="metric"><div class="metric-label">Tokens</div><div class="metric-value">0</div></div>
+          <div class="metric"><div class="metric-label">Total time</div><div class="metric-value">0 ms</div></div>
+          <div class="metric"><div class="metric-label">Generation</div><div class="metric-value">0 ms</div></div>
+          <div class="metric"><div class="metric-label">Warm-up</div><div class="metric-value">0 ms</div></div>
+          <div class="metric"><div class="metric-label">tok/s</div><div class="metric-value">0.0</div></div>
+          <div class="metric"><div class="metric-label">API cost</div><div class="metric-value">—</div></div>
+          <div class="metric"><div class="metric-label">Energy</div><div class="metric-value">—</div></div>
+        </div>
+        <div class="tag tag-fail" style="margin-top:0.4rem">❌ HTTP 422: {&quot;error&quot;:{&quot;code&quot;:&quot;Invalid input&quot;,&quot;message&quot;:&quot;{\&quot;detail\&quot;:[{\&quot;type\&quot;:\&quot;extra_forbidden\&quot;,\&quot;loc\&quot;:[\&quot;body\&quot;,\&quot;stream_options\&quot;,\&quot;include_usage\&quot;],\&quot;msg\&quot;:\&quot;Extra inputs are not permitted\&quot;,\&quot;input\&quot;:true}]}&quot;,&quot;status&quot;:422}}</div>
+      </div>
+  </div>
+  
+  <p class="muted" style="margin-top:0.4rem"><strong>Judge stood down:</strong> Neither model produced output.</p>
+  <p class="muted" style="margin-top:0.6rem"><code>01KZYXEXY0VQYP56SVZB12GP3X</code> · <a href="/arena/01KZYXEXY0VQYP56SVZB12GP3X">Open in Arena →</a></p>
+</article>
+
+<footer>
+  <p>Report built by <code>SCRIPTS/review/build-demo-report.cjs</code>. Data sourced from <code>/api/duels</code> via the BFF cookie set by <code>/auth/login/fake</code>. PRD §9 items 9, 13, 14, 19 govern the auto-judge, the tied verdict, and the walkover-on-failure rules that produce this distribution.</p>
+  <p>Observations: 6 unique models won at least once; 2 ties (Tie is a terminal verdict per PRD §9 item 19); 2 walkovers where Kimi K2.7 Code produced non-renderable HTML; 1 duel where both sides failed and the judge correctly declined to invent a winner (PRD §9 item 9 "the no-evidence rule").</p>
+</footer>
+
+</div>
+</body>
+</html>

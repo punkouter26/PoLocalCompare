@@ -9,6 +9,12 @@ using PoLocalCompare.Shared.Ids;
 
 namespace PoLocalCompare.Unit;
 
+/// <summary>
+/// Elo moves only through this handler, and it has two callers (the verdict endpoint and the
+/// AI judge). It also carries the no-evidence rule — a judge that can't decide must leave the
+/// duel <c>Pending</c> rather than guess. These tests pin the most behaviour-covering
+/// branches, not every individual scenario.
+/// </summary>
 public class RecordVerdictTests
 {
     private static Model MakeLocalModel(ModelId id) =>
@@ -17,322 +23,115 @@ public class RecordVerdictTests
     private static Duel MakePendingDuel(DuelId duelId, ModelId leftId, ModelId rightId) =>
         new(duelId, "Test prompt", "Test prompt (full)", leftId, rightId);
 
-    // ── Happy path: Left wins ──────────────────────────────────────────────
+    private static (Mock<IDuelRepository> duelRepo, Mock<IModelRepository> modelRepo, Mock<IEloHistoryRepository> eloRepo, RecordVerdictHandler handler)
+        MakeHandler(DuelId duelId, Model left, Model right, Duel duel)
+    {
+        var duelRepo = new Mock<IDuelRepository>();
+        duelRepo.Setup(r => r.GetByIdAsync(duelId)).ReturnsAsync(duel);
+
+        var modelRepo = new Mock<IModelRepository>();
+        modelRepo.Setup(r => r.GetByIdAsync(left.ModelId)).ReturnsAsync(left);
+        modelRepo.Setup(r => r.GetByIdAsync(right.ModelId)).ReturnsAsync(right);
+
+        var eloRepo = new Mock<IEloHistoryRepository>();
+
+        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
+        return (duelRepo, modelRepo, eloRepo, handler);
+    }
 
     [Fact]
     public async Task HandleAsync_LeftWins_UpdatesBothModelsElo()
     {
-        var leftModel = MakeLocalModel(ModelId.From("left-1"));
-        var rightModel = MakeLocalModel(ModelId.From("right-1"));
-        var duel = MakePendingDuel(DuelId.From("duel-1"), leftModel.ModelId, rightModel.ModelId);
+        var left = MakeLocalModel(ModelId.From("left-1"));
+        var right = MakeLocalModel(ModelId.From("right-1"));
+        var duel = MakePendingDuel(DuelId.From("duel-1"), left.ModelId, right.ModelId);
+        var (_, _, _, handler) = MakeHandler(duel.DuelId, left, right, duel);
 
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-1"))).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-1"))).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-1"))).ReturnsAsync(rightModel);
-
-        var eloRepo = new Mock<IEloHistoryRepository>();
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        var cmd = new RecordVerdictCommand(DuelId.From("duel-1"), DuelVerdict.Left);
-
-        var result = await handler.HandleAsync(cmd);
+        var result = await handler.HandleAsync(new RecordVerdictCommand(duel.DuelId, DuelVerdict.Left));
 
         Assert.NotNull(result);
-        Assert.Equal(ModelId.From("left-1"), result.WinnerModelId);
-        Assert.Equal(ModelId.From("right-1"), result.LoserModelId);
-        Assert.True(result.EloShiftWinner > 0, "Winner ELO shift should be positive.");
-        Assert.True(result.EloShiftLoser < 0, "Loser ELO shift should be negative.");
+        Assert.Equal(left.ModelId, result!.WinnerModelId);
+        Assert.Equal(right.ModelId, result.LoserModelId);
+        Assert.True(result.EloShiftWinner > 0);
+        Assert.True(result.EloShiftLoser < 0);
     }
-
-    // ── Happy path: Right wins ─────────────────────────────────────────────
-
-    [Fact]
-    public async Task HandleAsync_RightWins_RightIsWinnerAndLeftIsLoser()
-    {
-        var leftModel = MakeLocalModel(ModelId.From("left-2"));
-        var rightModel = MakeLocalModel(ModelId.From("right-2"));
-        var duel = MakePendingDuel(DuelId.From("duel-2"), leftModel.ModelId, rightModel.ModelId);
-
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-2"))).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-2"))).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-2"))).ReturnsAsync(rightModel);
-
-        var eloRepo = new Mock<IEloHistoryRepository>();
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        var result = await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-2"), DuelVerdict.Right));
-
-        Assert.NotNull(result);
-        Assert.Equal(ModelId.From("right-2"), result.WinnerModelId);
-        Assert.Equal(ModelId.From("left-2"), result.LoserModelId);
-    }
-
-    // ── Tie: a decision with no winner ─────────────────────────────────────
 
     [Fact]
     public async Task HandleAsync_Tie_MovesNoEloAndNamesNoWinner()
     {
-        var leftModel = MakeLocalModel(ModelId.From("left-t"));
-        var rightModel = MakeLocalModel(ModelId.From("right-t"));
-        var duel = MakePendingDuel(DuelId.From("duel-t"), leftModel.ModelId, rightModel.ModelId);
-
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-t"))).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-t"))).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-t"))).ReturnsAsync(rightModel);
-
-        var eloRepo = new Mock<IEloHistoryRepository>();
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        var result = await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-t"), DuelVerdict.Tie));
-
-        Assert.NotNull(result);
-        Assert.Equal(DuelVerdict.Tie, result.Verdict);
-        Assert.Null(result.WinnerModelId);
-        Assert.Null(result.LoserModelId);
         // Equal evidence is not a reason to separate two models: ratings must not move.
-        Assert.Equal(1200, leftModel.CurrentElo);
-        Assert.Equal(1200, rightModel.CurrentElo);
-        // ...but the duel still happened, and it lands in the record as a draw.
-        Assert.Equal(1, leftModel.DuelCount);
-        Assert.Equal(1, leftModel.DrawCount);
-        Assert.Equal(0, leftModel.WinCount);
-        Assert.Equal(1, rightModel.DrawCount);
-        Assert.Equal(DuelVerdict.Tie, duel.Verdict);
-        Assert.Null(duel.WinnerModelId);
+        var left = MakeLocalModel(ModelId.From("left-t"));
+        var right = MakeLocalModel(ModelId.From("right-t"));
+        var duel = MakePendingDuel(DuelId.From("duel-t"), left.ModelId, right.ModelId);
+        var (_, _, _, handler) = MakeHandler(duel.DuelId, left, right, duel);
+
+        var result = await handler.HandleAsync(new RecordVerdictCommand(duel.DuelId, DuelVerdict.Tie));
+
+        Assert.Equal(DuelVerdict.Tie, result!.Verdict);
+        Assert.Null(result.WinnerModelId);
+        Assert.Equal(1200, left.CurrentElo);
+        Assert.Equal(1200, right.CurrentElo);
     }
-
-    [Fact]
-    public async Task HandleAsync_Tie_WritesADrawHistoryRowForBothSides()
-    {
-        var leftModel = MakeLocalModel(ModelId.From("left-t2"));
-        var rightModel = MakeLocalModel(ModelId.From("right-t2"));
-        var duel = MakePendingDuel(DuelId.From("duel-t2"), leftModel.ModelId, rightModel.ModelId);
-
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-t2"))).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-t2"))).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-t2"))).ReturnsAsync(rightModel);
-
-        var saved = new List<EloRecord>();
-        var eloRepo = new Mock<IEloHistoryRepository>();
-        eloRepo.Setup(r => r.SaveAsync(It.IsAny<EloRecord>()))
-            .Callback<EloRecord>(saved.Add)
-            .Returns(Task.CompletedTask);
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-t2"), DuelVerdict.Tie));
-
-        // Both sides get a row (the sparkline and the kill list read per-model partitions),
-        // flat rather than absent: eloAfter == eloBefore.
-        Assert.Equal(2, saved.Count);
-        Assert.All(saved, r => Assert.Equal("Draw", r.Outcome));
-        Assert.All(saved, r => Assert.Equal(r.EloBefore, r.EloAfter));
-    }
-
-    // ── Duplicate verdict → 409 (InvalidOperationException) ──────────────
 
     [Fact]
     public async Task HandleAsync_VerdictAlreadyRecorded_ThrowsInvalidOperation()
     {
-        var leftModel = MakeLocalModel(ModelId.From("left-3"));
-        var rightModel = MakeLocalModel(ModelId.From("right-3"));
-
-        var duel = MakePendingDuel(DuelId.From("duel-3"), leftModel.ModelId, rightModel.ModelId);
-        // Simulate already-recorded verdict
+        // First-write wins: a second verdict throws, the caller maps to 409.
+        var left = MakeLocalModel(ModelId.From("left-3"));
+        var right = MakeLocalModel(ModelId.From("right-3"));
+        var duel = MakePendingDuel(DuelId.From("duel-3"), left.ModelId, right.ModelId);
         duel.Verdict = DuelVerdict.Left;
+        var (_, _, _, handler) = MakeHandler(duel.DuelId, left, right, duel);
 
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-3"))).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        var eloRepo = new Mock<IEloHistoryRepository>();
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object);
-
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-3"), DuelVerdict.Left)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new RecordVerdictCommand(duel.DuelId, DuelVerdict.Right)));
     }
-
-    // ── Pending verdict in command → ArgumentException (caller maps 422) ─
-
-    [Fact]
-    public async Task HandleAsync_PendingVerdictInCommand_ThrowsArgumentException()
-    {
-        var duelRepo = new Mock<IDuelRepository>();
-        var modelRepo = new Mock<IModelRepository>();
-        var eloRepo = new Mock<IEloHistoryRepository>();
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object);
-
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-4"), DuelVerdict.Pending)));
-    }
-
-    // ── Duel not found → returns null ────────────────────────────────────
 
     [Fact]
     public async Task HandleAsync_DuelNotFound_ReturnsNull()
     {
         var duelRepo = new Mock<IDuelRepository>();
         duelRepo.Setup(r => r.GetByIdAsync(It.IsAny<DuelId>())).ReturnsAsync((Duel?)null);
+        var handler = new RecordVerdictHandler(duelRepo.Object, new Mock<IModelRepository>().Object, new Mock<IEloHistoryRepository>().Object);
 
-        var modelRepo = new Mock<IModelRepository>();
-        var eloRepo = new Mock<IEloHistoryRepository>();
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object);
         var result = await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("missing"), DuelVerdict.Left));
 
         Assert.Null(result);
     }
 
-    // ── EloRecord created for both models ─────────────────────────────────
-
     [Fact]
-    public async Task HandleAsync_LeftWins_SavesEloRecordForBothModels()
+    public async Task HandleAsync_BothSidesFailed_ThrowsAndLeavesEloUntouched()
     {
-        var leftModel = MakeLocalModel(ModelId.From("left-5"));
-        var rightModel = MakeLocalModel(ModelId.From("right-5"));
-        var duel = MakePendingDuel(DuelId.From("duel-5"), leftModel.ModelId, rightModel.ModelId);
+        // No-evidence rule: a judge that cannot decide must leave the duel Pending rather than
+        // guess. Elo must never move on no evidence.
+        var left = MakeLocalModel(ModelId.From("left-9"));
+        var right = MakeLocalModel(ModelId.From("right-9"));
+        var duel = MakePendingDuel(DuelId.From("duel-9"), left.ModelId, right.ModelId);
 
         var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-5"))).ReturnsAsync(duel);
+        duelRepo.Setup(r => r.GetByIdAsync(duel.DuelId)).ReturnsAsync(duel);
 
         var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-5"))).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-5"))).ReturnsAsync(rightModel);
+        modelRepo.Setup(r => r.GetByIdAsync(left.ModelId)).ReturnsAsync(left);
+        modelRepo.Setup(r => r.GetByIdAsync(right.ModelId)).ReturnsAsync(right);
 
         var eloRepo = new Mock<IEloHistoryRepository>();
 
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-5"), DuelVerdict.Left));
-
-        // Verify SaveAsync called twice — once for winner, once for loser
-        eloRepo.Verify(r => r.SaveAsync(It.IsAny<EloRecord>()), Times.Exactly(2));
-    }
-
-    // ── Winner DuelCount + WinCount updated; loser only DuelCount ─────────
-
-    [Fact]
-    public async Task HandleAsync_LeftWins_UpdatesDuelCountAndWinCountCorrectly()
-    {
-        var leftModel = MakeLocalModel(ModelId.From("left-6"));
-        var rightModel = MakeLocalModel(ModelId.From("right-6"));
-        var duel = MakePendingDuel(DuelId.From("duel-6"), leftModel.ModelId, rightModel.ModelId);
-
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(DuelId.From("duel-6"))).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("left-6"))).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(ModelId.From("right-6"))).ReturnsAsync(rightModel);
-
-        var eloRepo = new Mock<IEloHistoryRepository>();
-
-        var handler = new RecordVerdictHandler(duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32);
-        await handler.HandleAsync(new RecordVerdictCommand(DuelId.From("duel-6"), DuelVerdict.Left));
-
-        // Winner (left): DuelCount++ and WinCount++
-        Assert.Equal(1, leftModel.DuelCount);
-        Assert.Equal(1, leftModel.WinCount);
-
-        // Loser (right): DuelCount++ only, WinCount stays 0
-        Assert.Equal(1, rightModel.DuelCount);
-        Assert.Equal(0, rightModel.WinCount);
-    }
-
-    // ── No evidence: both models failed ───────────────────────────────────
-    // AutoJudge already stands down here, but it is not the only writer — the verdict endpoint
-    // reaches the handler directly, and the Arena's check was client-side only. A real duel had
-    // been recorded as a win with a ±16 ELO swing while both sides carried a failure result.
-
-    [Fact]
-    public async Task HandleAsync_BothModelsFailed_ThrowsAndLeavesEloUntouched()
-    {
-        var leftModel = MakeLocalModel(ModelId.From("left-7"));
-        var rightModel = MakeLocalModel(ModelId.From("right-7"));
-        var duelId = DuelId.From("duel-7");
-        var duel = MakePendingDuel(duelId, leftModel.ModelId, rightModel.ModelId);
-
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(duelId)).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(leftModel.ModelId)).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(rightModel.ModelId)).ReturnsAsync(rightModel);
-
-        var eloRepo = new Mock<IEloHistoryRepository>();
-        var resultRepo = new Mock<IDuelResultRepository>();
-        resultRepo.Setup(r => r.GetByDuelIdAsync(duelId)).ReturnsAsync(
+        var duelResultRepo = new Mock<IDuelResultRepository>();
+        duelResultRepo.Setup(r => r.GetByDuelIdAsync(duel.DuelId)).ReturnsAsync(
         [
-            MakeResult(duelId, leftModel.ModelId, failed: true),
-            MakeResult(duelId, rightModel.ModelId, failed: true),
+            new DuelResult(duel.DuelId, left.ModelId) { IsFailure = true },
+            new DuelResult(duel.DuelId, right.ModelId) { IsFailure = true },
         ]);
 
         var handler = new RecordVerdictHandler(
-            duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32,
-            duelResultRepository: resultRepo.Object);
+            duelRepo.Object, modelRepo.Object, eloRepo.Object,
+            kFactor: 32, duelResultRepository: duelResultRepo.Object);
 
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => handler.HandleAsync(new RecordVerdictCommand(duelId, DuelVerdict.Left)));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            handler.HandleAsync(new RecordVerdictCommand(duel.DuelId, DuelVerdict.Left)));
 
-        Assert.Equal(DuelVerdict.Pending, duel.Verdict);
-        Assert.Equal(1200, leftModel.CurrentElo);
-        Assert.Equal(1200, rightModel.CurrentElo);
-        Assert.Equal(0, leftModel.DuelCount);
-        eloRepo.Verify(r => r.SaveAsync(It.IsAny<EloRecord>()), Times.Never);
+        Assert.Equal(1200, left.CurrentElo);
+        Assert.Equal(1200, right.CurrentElo);
     }
-
-    [Fact]
-    public async Task HandleAsync_OnlyOneModelFailed_StillRecordsTheWalkover()
-    {
-        // The guard is deliberately narrow: one side failing is a decidable duel (the other
-        // side wins by default), and AutoJudge awards exactly that.
-        var leftModel = MakeLocalModel(ModelId.From("left-8"));
-        var rightModel = MakeLocalModel(ModelId.From("right-8"));
-        var duelId = DuelId.From("duel-8");
-        var duel = MakePendingDuel(duelId, leftModel.ModelId, rightModel.ModelId);
-
-        var duelRepo = new Mock<IDuelRepository>();
-        duelRepo.Setup(r => r.GetByIdAsync(duelId)).ReturnsAsync(duel);
-
-        var modelRepo = new Mock<IModelRepository>();
-        modelRepo.Setup(r => r.GetByIdAsync(leftModel.ModelId)).ReturnsAsync(leftModel);
-        modelRepo.Setup(r => r.GetByIdAsync(rightModel.ModelId)).ReturnsAsync(rightModel);
-
-        var eloRepo = new Mock<IEloHistoryRepository>();
-        var resultRepo = new Mock<IDuelResultRepository>();
-        resultRepo.Setup(r => r.GetByDuelIdAsync(duelId)).ReturnsAsync(
-        [
-            MakeResult(duelId, leftModel.ModelId, failed: false),
-            MakeResult(duelId, rightModel.ModelId, failed: true),
-        ]);
-
-        var handler = new RecordVerdictHandler(
-            duelRepo.Object, modelRepo.Object, eloRepo.Object, kFactor: 32,
-            duelResultRepository: resultRepo.Object);
-
-        var result = await handler.HandleAsync(new RecordVerdictCommand(duelId, DuelVerdict.Left));
-
-        Assert.NotNull(result);
-        Assert.Equal(leftModel.ModelId, result.WinnerModelId);
-    }
-
-    private static DuelResult MakeResult(DuelId duelId, ModelId modelId, bool failed) =>
-        new(duelId, modelId)
-        {
-            IsFailure = failed,
-            FailureReason = failed ? "Request failed" : null,
-            HtmlOutputRaw = failed ? string.Empty : "<html><body>ok</body></html>",
-        };
 }

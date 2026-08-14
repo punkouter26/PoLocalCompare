@@ -260,13 +260,19 @@
     border: 1px solid var(--glass-border);
 }
 
+/* `clip`, not `hidden`. Both stop a stray wide child from producing a horizontal scrollbar,
+   but `hidden` makes the element a scroll container — and since html's overflow propagates to
+   the viewport, body kept its own, computing overflow-y to `auto`. That gave body a scrollport
+   that never scrolls (the viewport does), so every `position: sticky` descendant silently
+   froze at its static position. `clip` clips without creating a scroll container, which is
+   exactly what it was added for; article.app-content already uses it for the same reason. */
 html, body {
     font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
     background-color: var(--surface-base);
     color: var(--text);
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 body {

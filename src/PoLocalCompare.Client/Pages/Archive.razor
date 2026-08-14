@@ -33,7 +33,7 @@
     else
     {
         <div class="archive__filters">
-            @foreach (var label in new[] { "All", "Won", "Tie", "Unjudged" })
+            @foreach (var label in Filters)
             {
                 <button class="archive__filter-chip @(_verdictFilter == label ? "archive__filter-chip--active" : "")"
                         @onclick="() => SetVerdictFilter(label)">
@@ -74,9 +74,13 @@
                 </div>
 
                 <div class="archive__detail-actions">
-                    <button type="button" class="po-btn archive__btn"
-                            @onclick="@(() => Nav.NavigateTo($"/arena/{_selectedDuel.DuelId}"))">
-                        👁 View Output
+                    @* One button, not two. "View Output" and "Judge This Duel" navigated to the
+                       identical /arena/{id} — the Arena is where you both look and decide, so the
+                       label is all that ever differed. *@
+                    <button type="button"
+                            class="po-btn archive__btn @(_selectedDuel.Verdict == DuelVerdict.Pending ? "po-btn--primary" : "")"
+                            @onclick="GoToArena">
+                        @(_selectedDuel.Verdict == DuelVerdict.Pending ? "⚖ Judge this duel" : "👁 View output")
                     </button>
                     <button type="button" class="po-btn archive__btn" @onclick="GoToReChallenge">
                         ⚧ Re-Challenge
@@ -88,12 +92,6 @@
                        download="@($"lab-report-{_selectedDuel.DuelId}.html")">
                         ⬇ Lab report
                     </a>
-                    @if (_selectedDuel.Verdict == DuelVerdict.Pending)
-                    {
-                        <button type="button" class="po-btn po-btn--primary archive__btn" @onclick="GoToArena">
-                            ⚔ Judge This Duel
-                        </button>
-                    }
                 </div>
             </div>
         }
@@ -155,8 +153,18 @@
                                 }
                                 else
                                 {
-                                    <span class="archive__verdict archive__verdict--pending"
-                                          title="Nobody has judged this duel yet.">Unjudged</span>
+                                    @* The unjudged state is the one verdict you can act on, so it
+                                       is the action rather than a label. Reaching the Arena used to
+                                       cost three clicks — row, then "Judge This Duel" in the detail
+                                       panel, then the winner — for a decision that is worth two.
+                                       stopPropagation so it jumps the panel instead of opening it
+                                       on the way past. *@
+                                    <a class="po-btn po-btn--sm po-btn--primary archive__judge-btn"
+                                       href="@($"/arena/{d.DuelId}")"
+                                       title="Open both outputs and pick a winner"
+                                       @onclick:stopPropagation="true">
+                                        ⚖ Judge
+                                    </a>
                                 }
                             </td>
                         </tr>
@@ -180,6 +188,19 @@
 </div>
 
 @code {
+    /// <summary>
+    /// The one list of filter labels: the chips render from it and <see cref="VerdictQuery"/> is
+    /// validated against it, so a deep link can never select a filter the chips don't offer.
+    /// </summary>
+    private static readonly string[] Filters = ["All", "Won", "Tie", "Unjudged"];
+
+    /// <summary>
+    /// Deep-links a filter chip. The header's "N awaiting judgment" pill uses it to land on the
+    /// unjudged duels directly — it previously dropped you on "All", where the duels it was
+    /// counting were scattered through twenty rows of decided ones.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "verdict")] public string? VerdictQuery { get; set; }
+
     private List<DuelSummaryDto> _duels = [];
     private DuelSummaryDto? _selectedDuel;
     private bool _loading = true;
@@ -234,6 +255,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Before LoadAsync, which applies the filter as part of loading.
+        if (Filters.FirstOrDefault(f => string.Equals(f, VerdictQuery, StringComparison.OrdinalIgnoreCase)) is { } match)
+            _verdictFilter = match;
+
         await LoadAsync();
     }
 

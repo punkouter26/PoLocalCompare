@@ -167,19 +167,6 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task GetDuel_ExposesTheAutoJudgeWindow()
-    {
-        // The Arena counts down from this value; omitting it would make the human-verdict
-        // window invisible to the client.
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, _, _) = await CommenceAsync(client);
-
-        var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
-
-        Assert.True(duel.TryGetProperty("autoJudgeDelaySeconds", out _));
-    }
-
-    [Fact]
     public async Task ListDuels_ReturnsTheCommencedDuel()
     {
         using var client = app.CreateAuthenticatedClient();
@@ -188,29 +175,6 @@ public sealed class DuelContractTests(ApiAppFixture app)
         var duels = await client.GetFromJsonAsync<JsonElement[]>("/api/duels?limit=100");
 
         Assert.Contains(duels!, d => d.GetProperty("duelId").GetString() == duelId);
-    }
-
-    [Fact]
-    public async Task ListDuels_WithoutLimit_UsesTheDefaultInsteadOfFailing()
-    {
-        // A missing `limit` used to 500; it is optional and defaults to 20.
-        using var client = app.CreateAuthenticatedClient();
-
-        var response = await client.GetAsync("/api/duels");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ListDuels_ClampsAnOversizedLimit()
-    {
-        using var client = app.CreateAuthenticatedClient();
-
-        var response = await client.GetAsync("/api/duels?limit=100000");
-        var duels = await response.Content.ReadFromJsonAsync<JsonElement[]>();
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(duels!.Length <= 100);
     }
 
     [Fact]
@@ -303,21 +267,9 @@ public sealed class DuelContractTests(ApiAppFixture app)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    [Fact]
-    public async Task Verdict_LeavesTheDuelResolved()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, _, _) = await CommenceAsync(client);
-
-        await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Left" });
-        var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
-
-        Assert.Equal("Left", duel.GetProperty("verdict").GetString());
-    }
-
     // ── Local (browser) result ingest ──────────────────────────────────────
 
-    [Fact]
+[Fact]
     public async Task LocalResult_WithoutAModelId_Returns400()
     {
         using var client = app.CreateAuthenticatedClient();

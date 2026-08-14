@@ -1,0 +1,113 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','secondaryColor':'#e0e7ff','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'14px','actorBkg':'#c7d2fe','actorBorder':'#3730a3','actorTextColor':'#0b1220','signalColor':'#0f172a','signalTextColor':'#0b1220','labelBoxBkg':'#fde68a','labelBoxBorderColor':'#92400e','labelTextColor':'#111827','noteBkgColor':'#fef3c7','noteTextColor':'#111827','noteBorderColor':'#92400e','sequenceNumberColor':'#ffffff'}}}%%
+sequenceDiagram
+    autonumber
+    actor U as Operator
+    participant SPA as Blazor WASM SPA<br/>Home.razor / Arena.razor
+    participant MW as Middleware pipeline
+    participant EP as DuelsEndpoints<br/>MapGroup /api/duels
+    participant CMD as CommenceDuelHandler
+    participant Q as BackgroundTaskQueue
+    participant EXEC as DuelExecutionService
+    participant FP as FoundryInferenceProxy
+    participant WW as webllm-worker.js<br/>(WebGPU)
+    participant HUB as DuelHub<br/>/hubs/duel
+    participant TS as Table Storage
+    participant BS as Blob Storage
+    participant AJ as AutoJudge
+    participant FJ as FoundryDuelJudge
+    participant RV as RecordVerdictHandler
+
+    rect rgb(238, 242, 255)
+    Note over U,MW: 1 — Submit
+    U->>SPA: choose left + right model, pick prompt
+    SPA->>MW: POST /api/duels {LeftModelId, RightModelId, PromptText, AutoJudgeDelaySeconds?}<br/>Cookie: PoLocalCompare.Session · X-Correlation-ID
+    MW->>MW: Serilog request log → ExceptionHandler → CSP → Routing → AuthN → AuthZ
+    alt no valid cookie and Features:AllowAnonymousWrites = false
+        MW-->>SPA: 401 (OnRedirectToLogin rewritten — never a 302 to HTML)
+        SPA->>U: render Login.razor
+    end
+    MW->>EP: route matched (FallbackPolicy satisfied)
+    EP->>EP: validate PromptText, clamp AutoJudgeDelaySeconds to 0..3600
+    EP->>CMD: CommenceDuelCommand(+ actor from preferred_username)
+    CMD->>TS: insert Duel — PK yyyyMM, RK ULID, Verdict = Pending
+    EP->>Q: DuelExecutionService.EnqueueAsync(duelId)
+    EP-->>SPA: 202 Accepted + DuelDto
+    SPA->>SPA: NavigateTo /arena/{duelId}
+    SPA->>HUB: JoinDuel(duelId) → group duel:{id}
+    end
+
+    rect rgb(236, 253, 245)
+    Note over Q,BS: 2 — Asymmetric execution (900 s watchdog, Task.WhenAll)
+    Q->>EXEC: dequeue, new DI scope
+    EXEC->>TS: load Duel + both Models
+    EXEC->>HUB: lobby DuelStarted
+    par Server-side path (Remote / Ollama)
+        EXEC->>HUB: ModelStatusUpdate(Initializing → Generating)
+        EXEC->>FP: RunInferenceAsync(model, promptFull, onTokenUpdate, ct)
+        FP->>FP: POST /openai/deployments/{d}/chat/completions?api-version=2024-12-01-preview<br/>stream_options.include_usage only when SupportsStreamUsage(deployment)
+        alt HTTP 404 on deployment route
+            FP->>FP: retry POST /models/chat/completions (model field in body)
+        else HTTP 429 / 503 / 502
+            FP->>FP: up to 3 attempts, Retry-After honoured (clamped 1–90 s)
+        end
+        loop every SSE chunk
+            FP-->>EXEC: token, elapsedMs, HtmlStreamStats (preview every 25 tokens)
+            EXEC->>HUB: ModelStatusUpdate(tokens, velocity, warmUp, stalled)
+        end
+        FP->>FP: ApiCostUsd = prompt/1e6 × inPrice + output/1e6 × outPrice
+    and Client-side path (Local / WebLLM)
+        EXEC->>HUB: StartLocalInference {duelId, modelId, side, webLlmModelId}
+        HUB-->>SPA: OnStartLocalInference (Arena.razor)
+        SPA->>WW: postMessage — load weights, generate
+        WW-->>SPA: streamed tokens
+        SPA->>EP: POST /api/duels/{id}/local-result (AllowAnonymous)
+        EP->>TS: HtmlOutputNormalizer + DuelResultEnricher → save DuelResult
+        loop every 500 ms until row appears
+            EXEC->>TS: poll DuelResults(duelId, modelId)
+        end
+        Note right of EXEC: StartLocalInference is re-sent every 5 s<br/>for late-joining clients
+    end
+    EXEC->>HUB: ModelStatusUpdate(Done, finalHtml ≤ 40 000 chars)
+    EXEC->>TS: DuelResultEnricher (density, quality, GreenStats) → save
+    alt output over 64 KB
+        EXEC->>BS: upload duel-html-outputs/{duelId}/{modelId}.html
+        EXEC->>TS: store "blob://…" pointer instead of the body
+    end
+    EXEC->>TS: Duel.CompletedAt (412 → re-read + reapply, never clobber a verdict)
+    EXEC->>HUB: DuelComplete
+    end
+
+    rect rgb(255, 251, 235)
+    Note over U,RV: 3 — Verdict (human first, then auto-judge)
+    EXEC->>AJ: RunAsync(duelId, delayOverride)
+    AJ->>AJ: await AiJudge:DelaySeconds (clamped 0–3600)
+    alt Human picked inside the window
+        U->>EP: POST /api/duels/{id}/verdict {Verdict}
+        EP->>RV: RecordVerdictCommand(VerdictSource.Human, actor)
+        AJ->>TS: re-read duel — Verdict != Pending → stand down
+    else Still Pending after the window
+        AJ->>TS: load both DuelResults
+        alt both sides failed
+            AJ->>TS: persist JudgeStoodDownReason — stays Pending, no ELO
+        else exactly one side failed
+            AJ->>RV: walkover — survivor wins, no judge call (PRD item 20)
+        else both produced output
+            AJ->>FJ: JudgeAsync(promptFull, left, right)
+            FJ->>FJ: coin-flip A/B slots, delimiter-fenced untrusted docs,<br/>response_format json_schema {winner: A|B|Tie, reason}
+            alt HTTP 429
+                FJ-->>AJ: JudgeRateLimitedException(Retry-After)
+                AJ->>Q: requeue (max AiJudge:RateLimitRetryMax attempts)
+            else unparseable / timeout / not configured
+                FJ-->>AJ: null → duel stays Pending
+            else decided
+                FJ-->>AJ: JudgeDecision(Left | Right | Tie, reason)
+                AJ->>RV: RecordVerdictCommand(VerdictSource.Ai, rationale, deployment)
+            end
+        end
+    end
+    RV->>TS: first write wins — second throws InvalidOperationException → 409
+    RV->>TS: EloCalculator K=32 → update both Models + append EloHistory
+    RV->>RV: HybridCache tag-invalidate "leaderboard"
+    RV->>HUB: VerdictRecorded + lobby event
+    HUB-->>SPA: render winner, Elo deltas, judge rationale
+    end

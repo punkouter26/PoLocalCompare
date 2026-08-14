@@ -1,0 +1,191 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'13px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart TB
+    subgraph CLIENT["C4 L3 — PoLocalCompare.Client (Blazor WASM)"]
+        direction TB
+        subgraph CPAGES["Pages (@page routes)"]
+            direction LR
+            HOME["Home.razor — /"]
+            ARENA["Arena.razor — /arena/{DuelIdText}"]
+            ARCH["Archive.razor — /archive"]
+            LEAD["Leaderboard.razor — /leaderboard"]
+            DEMO["Demo.razor — /demo"]
+            LOGIN["Login.razor · NotFound.razor"]
+        end
+        subgraph CCOMP["Components"]
+            direction LR
+            TR["TokenRace"]
+            SV["SandboxedViewport<br/>sandbox=allow-scripts"]
+            OS["OutputScorecard"]
+            SC["SourceCompare"]
+            TH["TelemetryHud"]
+            PP["PromptPicker"]
+            MC["ModelCard · LabModelCard<br/>ModelHealthPanel · EloSparkline"]
+        end
+        subgraph CSVC["Services"]
+            direction LR
+            DAC["DuelApiClient"]
+            SRC["SignalRDuelClient"]
+            LTS["LobbyTickerService"]
+            WLS["WebLlmService"]
+            BAS["BffAuthenticationStateProvider"]
+            ISS["InferenceSessionStore · PromptHistoryService<br/>ThemeService · AudioService · WebGpuCapability<br/>CorrelationHandler"]
+        end
+        PRES["Presentation (view-models, no logic worth testing)<br/>ModelDiagState · ModelTypeGroup · SourceViewMode<br/>RuntimeProbeReport · FailureReasonText"]
+    end
+
+    subgraph SHARED["C4 L3 — PoLocalCompare.Shared (the only client-side code Unit tests can reach)"]
+        direction LR
+        SANA["Analysis<br/>OutputAnalysis · LineDiff · HtmlPreview"]
+        SPRO["Prompts<br/>PromptLibrary — 18 templates, 11 self-running"]
+        SDEM["Demo<br/>DemoPlanner — 10 rounds, seeded"]
+        SDTO["DTOs (15) · Enums (4)<br/>DuelStatus · DuelVerdict · ModelType · VerdictSource"]
+        SIDS["Ids — DuelId · ModelId (ULID, TryParse-bound)"]
+    end
+
+    subgraph APISLICE["C4 L3 — PoLocalCompare.Api / Features (vertical slices)"]
+        direction TB
+        subgraph SDUEL["Duels"]
+            direction LR
+            DE["DuelsEndpoints<br/>MapGroup /api/duels"]
+            CDH["CommenceDuelHandler"]
+            GDH["GetDuelHandler · ListDuelsHandler"]
+            DPH["DemoPlanHandler"]
+            DES["DuelExecutionService"]
+            DHUB["DuelHub"]
+            AJ["AutoJudge"]
+            FDJ["FoundryDuelJudge : IDuelJudge"]
+            RVH["RecordVerdictHandler"]
+            DRE["DuelResultEnricher"]
+            LN["LobbyNotifier"]
+            DREP["DuelRepository · DuelResultRepository"]
+        end
+        subgraph SMODEL["Models"]
+            direction LR
+            ME["ModelsEndpoints"]
+            LMH["ListModelsHandler · RegisterModelHandler"]
+            GMA["GetModelAvailabilityHandler"]
+            DMH["DownloadModelHandler"]
+            MS["ModelSeeder — 21 seeds"]
+            OMR["OrphanModelIdRemapper"]
+            MV["ModelVisibility"]
+            MREP["ModelRepository"]
+        end
+        subgraph SLEAD["Leaderboard"]
+            direction LR
+            LE["LeaderboardEndpoints"]
+            GLH["GetLeaderboardHandler"]
+            GKH["GetKillListHandler"]
+            EC["EloCalculator"]
+            EHR["EloHistoryRepository"]
+        end
+        subgraph SOTHER["Ollama · Archive · Diagnostics"]
+            direction LR
+            OE["OllamaEndpoints + 3 handlers"]
+            AE["ArchiveEndpoints → ExportLabReportHandler<br/>→ HtmlLabReportRenderer"]
+            HE["HealthEndpoints · HealthChecks · Diag.cshtml"]
+        end
+    end
+
+    subgraph COMMON["C4 L3 — PoLocalCompare.Api / Common (cross-slice only)"]
+        direction LR
+        INF["Inference<br/>IRemoteInferenceProxy · FoundryInferenceProxy<br/>OllamaInferenceProxy · SseChatStreamReader<br/>FoundryChatRequest · HtmlStreamCounters<br/>InferenceTelemetry"]
+        DOM["Domain<br/>HtmlOutputNormalizer<br/>HtmlOutputQualityScorer<br/>GreenStatsCalculator · WinRateCalculator"]
+        PERS["Persistence<br/>StorageConcurrency · TableETag<br/>AzuriteSetup"]
+        BG["Background<br/>BackgroundTaskQueue<br/>BackgroundTaskService"]
+        CACHE["Caching — CacheTags"]
+        TEL["Telemetry — RateLimitedSampler"]
+        KV["KeyVault — PrefixKeyVaultSecretManager"]
+    end
+
+    AUTHC["Auth — BffAuthentication · IdentityResolver · FakeAuthHandler"]
+    STORE[("Azure Table Storage — 4 tables<br/>Azure Blob Storage — duel-html-outputs")]
+    FOUND["Azure AI Foundry"]
+    OLLD["Ollama daemon (dev)"]
+
+    HOME --> PP
+    HOME --> MC
+    HOME --> DAC
+    ARENA --> TR
+    ARENA --> SV
+    ARENA --> OS
+    ARENA --> SC
+    ARENA --> TH
+    ARENA --> SRC
+    ARENA --> WLS
+    ARCH --> DAC
+    LEAD --> MC
+    LEAD --> DAC
+    DEMO --> DAC
+    LOGIN --> BAS
+    CCOMP --> PRES
+    PP --> SPRO
+    OS --> SANA
+    SC --> SANA
+    SV --> SANA
+    DEMO --> SDEM
+    CSVC --> SDTO
+    LTS --> DHUB
+    SRC --> DHUB
+    DAC --> DE
+    DAC --> ME
+    DAC --> LE
+    WLS --> ME
+
+    DE --> CDH
+    DE --> GDH
+    DE --> DPH
+    DE --> RVH
+    DE --> DES
+    DPH --> SDEM
+    DES --> BG
+    DES --> INF
+    DES --> DHUB
+    DES --> DRE
+    DES --> AJ
+    DRE --> DOM
+    AJ --> FDJ
+    AJ --> RVH
+    FDJ --> INF
+    RVH --> EC
+    RVH --> EHR
+    RVH --> CACHE
+    RVH --> LN
+    LN --> DHUB
+    DE --> DREP
+    ME --> LMH
+    ME --> GMA
+    ME --> DMH
+    ME --> MV
+    MS --> MREP
+    OMR --> MREP
+    GMA --> INF
+    LE --> GLH
+    LE --> GKH
+    GLH --> CACHE
+    OE --> INF
+    AE --> DREP
+    HE --> PERS
+    DREP --> PERS
+    MREP --> PERS
+    EHR --> PERS
+    PERS --> STORE
+    DREP --> STORE
+    INF --> FOUND
+    INF --> OLLD
+    DE --> AUTHC
+    ME --> AUTHC
+    LE --> AUTHC
+    AUTHC --> KV
+
+    classDef cl fill:#ddd6fe,stroke:#5b21b6,stroke-width:1.4px,color:#0b1220
+    classDef sh fill:#fed7aa,stroke:#9a3412,stroke-width:1.4px,color:#0b1220
+    classDef ap fill:#c7d2fe,stroke:#3730a3,stroke-width:1.4px,color:#0b1220
+    classDef cm fill:#bae6fd,stroke:#075985,stroke-width:1.4px,color:#0b1220
+    classDef da fill:#bbf7d0,stroke:#166534,stroke-width:1.4px,color:#0b1220
+    classDef ex fill:#fecaca,stroke:#991b1b,stroke-width:1.4px,color:#0b1220
+    class HOME,ARENA,ARCH,LEAD,DEMO,LOGIN,TR,SV,OS,SC,TH,PP,MC,DAC,SRC,LTS,WLS,BAS,ISS,PRES cl
+    class SANA,SPRO,SDEM,SDTO,SIDS sh
+    class DE,CDH,GDH,DPH,DES,DHUB,AJ,FDJ,RVH,DRE,LN,DREP,ME,LMH,GMA,DMH,MS,OMR,MV,MREP,LE,GLH,GKH,EC,EHR,OE,AE,HE,AUTHC ap
+    class INF,DOM,PERS,BG,CACHE,TEL,KV cm
+    class STORE da
+    class FOUND,OLLD ex

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roles &amp; Permissions Matrix — PoLocalCompare</title>
+<link rel="stylesheet" href="assets/report.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <h1>Roles &amp; Permissions Matrix</h1>
+    <p class="sub">Every routable surface in the host, crossed against every principal that can reach it, in every environment — derived from <code>.RequireAuthorization()</code> / <code>.AllowAnonymous()</code> metadata and environment guards in source, not from policy documents.</p>
+    <div class="meta">
+      <span>Generated 2026-08-13</span>
+      <span>Model: deny-by-default (<code>FallbackPolicy</code>)</span>
+      <span>34 endpoints audited</span>
+      <span>Interactive · collapses unused columns</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="tierbar" aria-label="Detail level">
+    <strong>Detail level</strong>
+    <button class="tierbtn" data-tier="1" aria-pressed="false">① Very basic · 30 s</button>
+    <button class="tierbtn" data-tier="2" aria-pressed="false">② Basic · overview</button>
+    <button class="tierbtn" data-tier="3" aria-pressed="false">③ Complete · full grid</button>
+    <button class="tierbtn" data-tier="all" aria-pressed="true">Show all</button>
+  </nav>
+
+  <!-- ═══════════════════ TIER 1 ═══════════════════ -->
+  <section class="tier" data-tier="1">
+    <div class="tier-head"><h2>Tier 1 — Very basic</h2><span class="badge t1">read in 30 seconds</span></div>
+
+    <div class="grid four">
+      <div class="stat good"><span class="k">Deny</span><span class="l">Default posture</span><span class="n">New endpoints are protected unless they opt out</span></div>
+      <div class="stat"><span class="k">2</span><span class="l">Roles that exist</span><span class="n">Guest and whatever a test sends — <strong>neither gates anything</strong></span></div>
+      <div class="stat warn"><span class="k">13</span><span class="l">Anonymous endpoints</span><span class="n">4 of them only in Development</span></div>
+      <div class="stat bad"><span class="k">3</span><span class="l">Findings to act on</span><span class="n">1 in Production, 2 in Development</span></div>
+    </div>
+
+    <div class="card">
+      <h3>Authorization in three sentences</h3>
+      <p>There is exactly one rule: <strong>you are signed in, or you are not</strong>. Every API route requires a session unless it explicitly says otherwise, and nothing anywhere checks a role, a scope or an owner.</p>
+      <p>Signing in accepts any Microsoft account. In Development you can also click "Continue as Guest", and tests authenticate with a header — both paths are removed in Production, and the header handler throws if it is ever constructed there.</p>
+      <p>The one endpoint that stays open everywhere is the callback the browser's WebGPU worker uses to hand back its finished output, because that worker has no credential to send.</p>
+    </div>
+
+    <figure class="diagram">
+      <div class="plate"><img src="assets/authz_t1.svg" alt="Any request: signed in means allowed; otherwise allowed only if the endpoint is marked AllowAnonymous, else 401"></div>
+      <figcaption>Tier 1 decision — <code>DOCS/diagrams/authz_t1.mmd</code></figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════════════ TIER 2 ═══════════════════ -->
+  <section class="tier" data-tier="2">
+    <div class="tier-head"><h2>Tier 2 — Basic overview</h2><span class="badge t2">principals, environments, headline gaps</span></div>
+
+    <h3>Principals</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Principal</th><th>How it authenticates</th><th>Claims it carries</th><th>Exists in</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Anonymous</strong></td><td>nothing</td><td>none</td><td>Dev · Test · Prod</td></tr>
+          <tr><td><strong>Microsoft user</strong></td><td>OIDC code flow + PKCE against <code>login.microsoftonline.com/common/v2.0</code>; session stored in the <code>PoLocalCompare.Session</code> cookie</td><td class="mono">preferred_username, profile, email</td><td>Dev · Prod (Test: not exercised)</td></tr>
+          <tr><td><strong>Guest</strong></td><td><code>GET /auth/login/fake</code> mints a cookie for <code>GUEST########</code></td><td class="mono">name, preferred_username, role=Guest</td><td>Dev only — route is mapped inside <code>if (!IsProduction())</code></td></tr>
+          <tr><td><strong>Test client</strong></td><td><code>X-Fake-User</code> (+ optional <code>X-Fake-Roles</code>) via <code>FakeAuthHandler</code></td><td class="mono">name, preferred_username, roles as sent</td><td>Dev · Test — the handler's constructor <strong>throws</strong> in Production</td></tr>
+          <tr><td><strong>Browser worker</strong></td><td>none — it is a Web Worker posting a result</td><td>none</td><td>Dev · Test · Prod</td></tr>
+          <tr><td><strong>Server-internal</strong></td><td>n/a — <code>AutoJudge</code>, <code>ModelSeeder</code>, <code>BackgroundTaskService</code> never traverse HTTP</td><td>none</td><td>all — bypasses the pipeline entirely</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Environments</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Environment</th><th>Fake scheme</th><th><code>/auth/login/fake</code></th><th><code>Features:AllowAnonymousWrites</code></th><th>Dev-only endpoints</th><th>Ollama models visible</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Development</strong></td><td class="yes">registered</td><td class="yes">mapped</td><td class="cell-cond"><strong>true</strong> — from <code>appsettings.Development.json</code></td><td class="yes">mapped</td><td class="yes">yes</td></tr>
+          <tr><td><strong>Test</strong><br><span class="na">Integration + E2E-API hosts</span></td><td class="yes">registered</td><td class="yes">mapped</td><td class="cell-cond"><strong>true</strong> — inherited; the fixtures never override it</td><td class="yes">mapped</td><td class="yes">yes</td></tr>
+          <tr><td><strong>Production</strong></td><td class="no">not registered</td><td class="no">not mapped</td><td class="no"><strong>false</strong> — default</td><td class="no">not mapped</td><td class="no">filtered out</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="na">Test hosts call <code>builder.UseEnvironment("Development")</code>, so "Test" is Development with overrides (<code>Features:UseRealAi=false</code>, <code>AiJudge:Enabled=false</code>, <code>Testing:SkipSeeding=true</code>, Testcontainers Azurite connection strings, empty <code>KeyVault:Uri</code>). Authorization behaviour is identical to Development.</p>
+
+    <h3>Headline findings</h3>
+    <div class="note good"><strong>✅ The posture itself is correct.</strong> <code>options.FallbackPolicy = options.DefaultPolicy</code> makes every endpoint require an authenticated user by construction. Auditing therefore reduces to auditing the opt-outs — there is no way to add an unprotected endpoint by forgetting something.</div>
+    <div class="note warn"><strong>⚠️ One unauthenticated write reaches Production.</strong> <code>POST /api/duels/{duelId}/local-result</code> is <code>.AllowAnonymous()</code> unconditionally. Anyone who knows a duel id can submit that side's HTML output while the duel is still running.</div>
+    <div class="note warn"><strong>⚠️ Two Development-only endpoints are destructive and unauthenticated.</strong> <code>POST /api/dev/reset</code> wipes Duels, DuelResults and EloHistory and resets every model to 1200 ELO. The <code>IsDevelopment()</code> mapping guard is the only thing protecting it — and a developer's localhost writes to whatever storage account is configured.</div>
+    <div class="note"><strong>ℹ️ Roles are decoration.</strong> A <code>Guest</code> role is issued and <code>X-Fake-Roles</code> is honoured; <code>/auth/me</code> returns them. No <code>RequireRole</code>, no named policy, no <code>[Authorize(Roles=…)]</code> exists anywhere. Likewise <code>Duel.OwnerId</code> and <code>Duel.VerdictBy</code> are recorded but never compared — any signed-in user can judge any duel.</div>
+
+    <figure class="diagram">
+      <div class="plate"><img src="assets/authz_t2.svg" alt="Request flows through authentication then authorization; AllowAnonymous endpoints reach the public surface, everything else needs a session, with the AllowAnonymousWrites flag as the conditional branch"></div>
+      <figcaption>Tier 2 authorization flow — <code>DOCS/diagrams/authz_t2.mmd</code></figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════════════ TIER 3 ═══════════════════ -->
+  <section class="tier" data-tier="3">
+    <div class="tier-head"><h2>Tier 3 — Complete access-control grid</h2><span class="badge t3">Principal × Environment, code-derived</span></div>
+
+    <div class="card">
+      <h3>Interactive matrix</h3>
+      <div class="controls" role="group" aria-label="Matrix filters">
+        <span><strong>Environments:</strong></span>
+        <label><input type="checkbox" class="envtog" value="dev" checked> Development</label>
+        <label><input type="checkbox" class="envtog" value="test" checked> Test</label>
+        <label><input type="checkbox" class="envtog" value="prod" checked> Production</label>
+        <span aria-hidden="true">·</span>
+        <label><input type="checkbox" id="collapse"> Collapse unused columns <span class="na">(hide any column where nothing is reachable)</span></label>
+        <label><input type="checkbox" id="onlyanon"> Only show anonymous-reachable rows</label>
+      </div>
+      <div class="legend">
+        <span><i class="swatch" style="background:#dcfce7"></i> <strong>✔</strong> allowed</span>
+        <span><i class="swatch" style="background:#fee2e2"></i> <strong>✘</strong> denied — 401</span>
+        <span><i class="swatch" style="background:#ffedd5"></i> <strong>⚑</strong> conditional on a config flag</span>
+        <span><i class="swatch" style="background:#f1f5f9"></i> <strong>–</strong> route not mapped, or principal cannot exist here</span>
+      </div>
+
+      <div class="tablewrap">
+        <table class="matrix" id="grid">
+          <caption>Guard column shows the metadata actually attached to the endpoint. "Anon" = anonymous, "MS" = Microsoft-account cookie, "Guest" = fake-login cookie, "Test" = <code>X-Fake-User</code> header.</caption>
+          <thead>
+            <tr>
+              <th rowspan="2">Endpoint</th><th rowspan="2">Guard in code</th>
+              <th colspan="4" data-env="dev">Development</th>
+              <th colspan="4" data-env="test">Test</th>
+              <th colspan="4" data-env="prod">Production</th>
+            </tr>
+            <tr>
+              <th data-env="dev" data-col="dev-anon">Anon</th><th data-env="dev" data-col="dev-guest">Guest</th><th data-env="dev" data-col="dev-ms">MS</th><th data-env="dev" data-col="dev-test">Test</th>
+              <th data-env="test" data-col="test-anon">Anon</th><th data-env="test" data-col="test-guest">Guest</th><th data-env="test" data-col="test-ms">MS</th><th data-env="test" data-col="test-test">Test</th>
+              <th data-env="prod" data-col="prod-anon">Anon</th><th data-env="prod" data-col="prod-guest">Guest</th><th data-env="prod" data-col="prod-ms">MS</th><th data-env="prod" data-col="prod-test">Test</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- PUBLIC / ANONYMOUS -->
+            <tr data-anon="1"><td>GET /health</td><td>.AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /api/diag/smoke</td><td>.AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /diag (Razor page)</td><td>MapRazorPages().AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /auth/me</td><td>.AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /auth/login</td><td>.AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /auth/login/microsoft</td><td>.AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /auth/login/fake</td><td>.AllowAnonymous() inside <code>if (!IsProduction())</code></td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-na">– not mapped</td><td class="cell-na">–</td><td class="cell-na">– not mapped</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>POST /auth/logout</td><td>.AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td><strong>POST /api/duels/{id}/local-result</strong></td><td>.AllowAnonymous() — unconditional</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /api/models/download-status/{id}</td><td>.AllowAnonymous()</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>Static assets · /favicon.ico · SPA fallback</td><td>.AllowAnonymous() + served before UseAuthentication</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>GET /openapi · /scalar</td><td>.AllowAnonymous() inside <code>if (IsDevelopment())</code></td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-na">– not mapped</td><td class="cell-na">–</td><td class="cell-na">– not mapped</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td><strong>POST /api/dev/reset</strong> <span class="badge bad">destructive</span></td><td>.AllowAnonymous() inside <code>if (IsDevelopment())</code></td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-na">– not mapped</td><td class="cell-na">–</td><td class="cell-na">– not mapped</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>POST /api/dev/remap-model-ids</td><td>.AllowAnonymous() inside <code>if (IsDevelopment())</code></td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-na">– not mapped</td><td class="cell-na">–</td><td class="cell-na">– not mapped</td><td class="cell-na">–</td></tr>
+
+            <!-- FLAG-CONDITIONAL WRITES -->
+            <tr data-anon="1"><td>POST /api/duels</td><td>group .RequireAuthorization(); .AllowAnonymous() when <code>Features:AllowAnonymousWrites</code></td>
+              <td class="cell-cond">⚑ open</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-cond">⚑ open</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr data-anon="1"><td>POST /api/duels/{id}/verdict</td><td>group .RequireAuthorization(); .AllowAnonymous() when <code>Features:AllowAnonymousWrites</code></td>
+              <td class="cell-cond">⚑ open</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-cond">⚑ open</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+
+            <!-- AUTHENTICATED -->
+            <tr><td>GET /api/duels</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/duels/{id}</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/duels/demo-plan</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/duels/{id}/report</td><td>.RequireAuthorization() on the route</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/models</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/models/availability</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>POST /api/models <span class="badge warn">catalog write</span></td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>DELETE /api/models/{id} <span class="badge warn">catalog write</span></td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>POST /api/models/{id}/download</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/leaderboard</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/leaderboard/{id}/killlist</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/ollama/gpu-status</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>GET /api/ollama/available-models</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>POST /api/ollama/benchmark</td><td>group .RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+            <tr><td>WS /hubs/duel — JoinDuel · JoinLobby</td><td>MapHub&lt;DuelHub&gt;().RequireAuthorization()</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td><td class="cell-allow">✔</td>
+              <td class="cell-deny">✘</td><td class="cell-na">–</td><td class="cell-allow">✔</td><td class="cell-na">–</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="na" id="gridnote">Production columns for Guest and Test are structurally empty: <code>/auth/login/fake</code> is not mapped and <code>FakeAuthHandler</code> is not registered there, so neither principal can come into existence. Tick "Collapse unused columns" to drop them.</p>
+    </div>
+
+    <h3 id="audit">Security audit — endpoints missing authorization checks</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>#</th><th>Endpoint</th><th>Environments</th><th>Exposure</th><th>Existing mitigation</th><th>Severity</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td class="mono">POST /api/duels/{duelId}/local-result</td>
+            <td><strong>All, including Production</strong></td>
+            <td>Writes a <code>DuelResult</code> row for an arbitrary <code>(duelId, modelId)</code> pair with attacker-chosen HTML, token count and timings. If it lands before the real browser worker's post, the polling loop in <code>WaitForLocalModelResultAsync</code> returns the forged row and the duel proceeds on it — which the auto-judge may then rate.</td>
+            <td>Duel ids are ULIDs (unguessable in practice); the row is only consumed while a duel is actively running; output is normalized; nothing moves ELO without a verdict; the endpoint takes no <code>OwnerId</code>, so it cannot escalate identity.</td>
+            <td><span class="badge warn">Medium</span></td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td class="mono">POST /api/dev/reset</td>
+            <td>Development · Test</td>
+            <td>Deletes every entity in <code>Duels</code>, <code>DuelResults</code> and <code>EloHistory</code>, then rewrites every model to 1200 ELO / zero counts. No body, no auth, no confirmation.</td>
+            <td>Mapped only inside <code>if (app.Environment.IsDevelopment())</code>.</td>
+            <td><span class="badge bad">High (dev)</span></td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td class="mono">POST /api/duels</td>
+            <td>Development · Test</td>
+            <td>Anonymous callers can start real duels — which spend real Azure AI Foundry tokens and write real rows.</td>
+            <td><code>Features:AllowAnonymousWrites</code> defaults to <code>false</code>; only <code>appsettings.Development.json</code> turns it on. Read once at startup.</td>
+            <td><span class="badge warn">Medium (dev)</span></td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td class="mono">POST /api/duels/{id}/verdict</td>
+            <td>Development · Test</td>
+            <td>Anonymous callers can decide duels and move ELO.</td>
+            <td>Same flag; first write wins and a second throws 409, so a verdict cannot be overwritten.</td>
+            <td><span class="badge warn">Medium (dev)</span></td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td class="mono">GET /diag</td>
+            <td>All</td>
+            <td>Anonymous configuration inspection.</td>
+            <td>Secret values are masked by the page; it is also unlinked from all navigation by policy.</td>
+            <td><span class="badge info">Low</span></td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td class="mono">GET /api/models/download-status/{id}</td>
+            <td>All</td>
+            <td>Anonymous filesystem-presence probe under <code>wwwroot/models/</code>. The route value is joined into a path.</td>
+            <td>Returns only a boolean and a server path string; <code>Directory.Exists</code> + a fixed filename lookup, no file content is served. Path traversal would reveal at most whether a directory containing <code>mlc-chat-config.json</code> exists.</td>
+            <td><span class="badge info">Low</span></td>
+          </tr>
+          <tr>
+            <td class="num">7</td>
+            <td>Ownership checks — <em>absent everywhere</em></td>
+            <td>All</td>
+            <td><code>Duel.OwnerId</code> and <code>Duel.VerdictBy</code> are stamped from <code>preferred_username</code> but never compared. Any authenticated user can read, judge, export or retry any other user's duel.</td>
+            <td>Documented as forensic-only by design; the app's stated audience is one operator plus invited guests.</td>
+            <td><span class="badge info">By design</span></td>
+          </tr>
+          <tr>
+            <td class="num">8</td>
+            <td>Role checks — <em>absent everywhere</em></td>
+            <td>All</td>
+            <td>No <code>RequireRole</code>, no named policy, no <code>[Authorize(Roles=…)]</code>. A <code>Guest</code> has identical rights to the owner, including catalog writes and model deletion.</td>
+            <td>None. Authorization is binary by design.</td>
+            <td><span class="badge warn">Design gap</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Defence-in-depth notes</h3>
+    <div class="grid two">
+      <div class="card">
+        <h4>What is genuinely well guarded</h4>
+        <ul>
+          <li><code>FallbackPolicy</code> means a new endpoint is protected by omission, not by remembering.</li>
+          <li><code>FakeAuthHandler</code> throws in its constructor if the environment is Production — misconfiguration fails loudly at startup rather than opening a door.</li>
+          <li>Cookie is <code>HttpOnly</code> + <code>SameSite=Strict</code> + <code>SecurePolicy=Always</code>, 8-hour sliding. The WASM client never holds a token.</li>
+          <li><code>OnRedirectToLogin</code> is rewritten to a bare 401, so an API caller never receives an HTML login page.</li>
+          <li><code>returnUrl</code> is sanitised to local relative paths only — <code>//evil.com</code> is rejected, closing the open-redirect.</li>
+          <li>Hub methods only subscribe; every server→client push goes through <code>IHubContext</code>, so no authenticated client can inject into another duel's feed.</li>
+          <li>Issuer validation is shape-checked against <code>^https://login.microsoftonline.com/{guid}/v2.0$</code>, or an explicit tenant allow-list when <code>AzureAd:AllowedTenants</code> is populated.</li>
+          <li>Judge inputs are delimiter-fenced with a per-call random hex marker and the system prompt names them untrusted data — a prompt-injection countermeasure in the one place model output re-enters a model.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Client-side gating is not a control</h4>
+        <p><code>_Imports.razor</code> applies <code>@attribute [Authorize]</code> to every routed page and <code>App.razor</code> renders <code>Login.razor</code> for the unauthenticated. This is a UX affordance only — it runs in the user's browser. <code>BffAuthenticationStateProvider</code> reads <code>GET /auth/me</code>, and the server remains the sole authority.</p>
+        <p>The client also hides the guest button outside non-Production, mirroring the server's <code>!IsProduction()</code> gate on <code>/auth/login/fake</code>. Both gates exist; only the server one matters.</p>
+      </div>
+    </div>
+
+    <figure class="diagram">
+      <div class="plate"><img src="assets/authz.svg" alt="Full authorization map: six principals, the ten-stage middleware pipeline, eleven route-group guards, client-side gating, and six audit findings"></div>
+      <figcaption>Complete authorization map — <code>DOCS/diagrams/authz.mmd</code></figcaption>
+    </figure>
+  </section>
+
+  <footer class="doc">
+    <p>Generated by the NET_DOCS pipeline from source at commit <code>7e07dd5</code> on branch <code>master</code>. Every cell above is derived from endpoint metadata in <code>Program.cs</code>, <code>BffAuthentication.cs</code> and the six <code>*Endpoints.cs</code> files — no cell is inferred from prose documentation.</p>
+    <p>Companion reports: <a href="AI_SERVICES_REPORT.html">AI services</a> · <a href="ARCHITECTURE_REPORT.html">Architecture</a> · <a href="USER_WORKFLOW.html">User workflow</a> · <a href="VISUAL_ARCHITECTURE_DASHBOARD.html">Visual dashboard</a></p>
+  </footer>
+</div>
+
+<script>
+// ── Density-tier switcher ───────────────────────────────────
+(function () {
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.tierbtn'));
+  var secs = Array.prototype.slice.call(document.querySelectorAll('section.tier'));
+  function apply(t) {
+    secs.forEach(function (s) { s.hidden = (t !== 'all' && s.dataset.tier !== t); });
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tier === t)); });
+  }
+  btns.forEach(function (b) { b.addEventListener('click', function () { apply(b.dataset.tier); }); });
+})();
+
+// ── Interactive matrix ──────────────────────────────────────
+(function () {
+  var grid = document.getElementById('grid');
+  if (!grid) return;
+
+  // Column index 0 = endpoint, 1 = guard. Data columns start at 2, in the order
+  // dev-anon, dev-guest, dev-ms, dev-test, test-*, prod-*.
+  var COLS = ['dev-anon','dev-guest','dev-ms','dev-test',
+              'test-anon','test-guest','test-ms','test-test',
+              'prod-anon','prod-guest','prod-ms','prod-test'];
+  var OFFSET = 2;
+  var bodyRows = Array.prototype.slice.call(grid.tBodies[0].rows);
+  var envHeads = Array.prototype.slice.call(grid.querySelectorAll('thead th[data-env]'));
+
+  function colIsUnused(i) {
+    // A column is "unused" when no visible row can reach it: every cell is – or ✘.
+    return bodyRows.every(function (r) {
+      var c = r.cells[OFFSET + i];
+      return !c || c.classList.contains('cell-na') || c.classList.contains('cell-deny');
+    });
+  }
+
+  function render() {
+    var envs = Array.prototype.slice.call(document.querySelectorAll('.envtog'))
+      .filter(function (c) { return c.checked; })
+      .map(function (c) { return c.value; });
+    var collapse = document.getElementById('collapse').checked;
+    var onlyAnon = document.getElementById('onlyanon').checked;
+
+    var hidden = COLS.map(function (id, i) {
+      var env = id.split('-')[0];
+      if (envs.indexOf(env) === -1) return true;
+      if (collapse && colIsUnused(i)) return true;
+      return false;
+    });
+
+    // Data cells + the second header row
+    bodyRows.forEach(function (r) {
+      r.hidden = onlyAnon && r.dataset.anon !== '1';
+      COLS.forEach(function (id, i) {
+        var c = r.cells[OFFSET + i];
+        if (c) c.hidden = hidden[i];
+      });
+    });
+    grid.querySelectorAll('thead tr:nth-child(2) th[data-col]').forEach(function (th) {
+      var i = COLS.indexOf(th.dataset.col);
+      th.hidden = hidden[i];
+    });
+
+    // Env group headers: hide entirely, or shrink colspan to the visible count
+    ['dev', 'test', 'prod'].forEach(function (env) {
+      var th = envHeads.filter(function (h) { return h.dataset.env === env && h.hasAttribute('colspan'); })[0];
+      if (!th) return;
+      var visible = COLS.filter(function (id, i) { return id.split('-')[0] === env && !hidden[i]; }).length;
+      th.hidden = visible === 0;
+      if (visible > 0) th.setAttribute('colspan', String(visible));
+    });
+  }
+
+  Array.prototype.slice.call(document.querySelectorAll('.envtog, #collapse, #onlyanon'))
+    .forEach(function (c) { c.addEventListener('change', render); });
+  render();
+})();
+</script>
+</body>
+</html>

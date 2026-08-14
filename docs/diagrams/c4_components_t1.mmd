@@ -1,0 +1,13 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'17px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart LR
+    A["Pages<br/>(what you click)"] --> B["Endpoints<br/>/api/*"]
+    B --> C["Handlers<br/>(the rules)"]
+    C --> D["Repositories<br/>(Table + Blob)"]
+    C --> E["Inference proxies<br/>(the models)"]
+
+    classDef c fill:#c7d2fe,stroke:#3730a3,stroke-width:2px,color:#0b1220
+    classDef d fill:#bbf7d0,stroke:#166534,stroke-width:2px,color:#0b1220
+    classDef e fill:#fecaca,stroke:#991b1b,stroke-width:2px,color:#0b1220
+    class A,B,C c
+    class D d
+    class E e

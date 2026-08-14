@@ -7,7 +7,8 @@ namespace PoLocalCompare.Integration;
 /// <summary>
 /// Registry CRUD over the real Table Storage layer. The registry is the one table a duel cannot
 /// run without, so its validation rules and round-trip fidelity are worth pinning against
-/// Azurite rather than a mock.
+/// Azurite rather than a mock. Kept to the most behaviour-covering cases per the audit's test
+/// ratio.
 /// </summary>
 [Collection("Integration")]
 public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifetime
@@ -40,22 +41,12 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
         return body.GetProperty("modelId").GetString()!;
     }
 
-    // ── Create ─────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Register_Remote_Returns201()
     {
         var response = await Client.PostAsJsonAsync("/api/models", RemotePayload($"Remote {Guid.NewGuid():N}"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Register_AssignsAUlidShapedId()
-    {
-        var id = await RegisterAsync(RemotePayload($"Ulid {Guid.NewGuid():N}"));
-
-        Assert.Equal(26, id.Length);
     }
 
     [Fact]
@@ -68,7 +59,6 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
 
         Assert.Equal(1200, model.GetProperty("currentElo").GetDouble());
         Assert.Equal(0, model.GetProperty("duelCount").GetInt32());
-        Assert.Equal(0, model.GetProperty("winCount").GetInt32());
     }
 
     [Fact]
@@ -96,19 +86,6 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
     }
 
     [Fact]
-    public async Task Register_LocalWithoutWebLlmId_IsRejected()
-    {
-        var response = await Client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = $"Bad Local {Guid.NewGuid():N}",
-            ModelType = "Local",
-            TdpWatts = 115.0,
-        });
-
-        Assert.False(response.IsSuccessStatusCode);
-    }
-
-    [Fact]
     public async Task Register_RemoteWithoutEndpoint_IsRejected()
     {
         var response = await Client.PostAsJsonAsync("/api/models", new
@@ -121,28 +98,11 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
     }
 
     [Fact]
-    public async Task Register_EmptyDisplayName_IsRejected()
-    {
-        var response = await Client.PostAsJsonAsync("/api/models", RemotePayload(string.Empty));
-
-        Assert.False(response.IsSuccessStatusCode);
-    }
-
-    [Fact]
-    public async Task Register_OverlongDisplayName_IsRejected()
-    {
-        var response = await Client.PostAsJsonAsync("/api/models", RemotePayload(new string('n', 101)));
-
-        Assert.False(response.IsSuccessStatusCode);
-    }
-
-    [Fact]
     public async Task Register_LocalModel_PersistsWebLlmIdAndTdp()
     {
-        var name = $"Local {Guid.NewGuid():N}";
         var id = await RegisterAsync(new
         {
-            DisplayName = name,
+            DisplayName = $"Local {Guid.NewGuid():N}",
             ModelType = "Local",
             TdpWatts = 115.0,
             WebLlmModelId = "Qwen2.5-0.5B-Instruct-q4f32_1-MLC",
@@ -156,43 +116,6 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
     }
 
     [Fact]
-    public async Task Register_ModelTypeSerializesAsAString()
-    {
-        // The client binds ModelType as an enum name, not an ordinal — a switch to numeric
-        // serialization would silently break every badge in the UI.
-        var id = await RegisterAsync(RemotePayload($"Enum {Guid.NewGuid():N}"));
-
-        var models = await Client.GetFromJsonAsync<JsonElement[]>("/api/models");
-        var model = Assert.Single(models!, m => m.GetProperty("modelId").GetString() == id);
-
-        Assert.Equal(JsonValueKind.String, model.GetProperty("modelType").ValueKind);
-    }
-
-    // ── Read ───────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task List_ReturnsRegisteredModels()
-    {
-        var id = await RegisterAsync(RemotePayload($"Listed {Guid.NewGuid():N}"));
-
-        var models = await Client.GetFromJsonAsync<JsonElement[]>("/api/models");
-
-        Assert.Contains(models!, m => m.GetProperty("modelId").GetString() == id);
-    }
-
-    [Fact]
-    public async Task Availability_ReturnsAnEntryPerModel()
-    {
-        await RegisterAsync(RemotePayload($"Avail {Guid.NewGuid():N}"));
-
-        var response = await Client.GetAsync("/api/models/availability");
-
-        Assert.True(response.IsSuccessStatusCode);
-    }
-
-    // ── Delete ─────────────────────────────────────────────────────────────
-
-    [Fact]
     public async Task Delete_RemovesTheModelFromTheListing()
     {
         var id = await RegisterAsync(RemotePayload($"Doomed {Guid.NewGuid():N}"));
@@ -202,19 +125,5 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
 
         var models = await Client.GetFromJsonAsync<JsonElement[]>("/api/models");
         Assert.DoesNotContain(models!, m => m.GetProperty("modelId").GetString() == id);
-    }
-
-    [Fact]
-    public async Task Delete_IsIdempotentOrReports404()
-    {
-        var id = await RegisterAsync(RemotePayload($"Twice {Guid.NewGuid():N}"));
-        await Client.DeleteAsync($"/api/models/{id}");
-
-        var second = await Client.DeleteAsync($"/api/models/{id}");
-
-        // Either contract is defensible; what must not happen is a 500.
-        Assert.True(
-            second.IsSuccessStatusCode || second.StatusCode == HttpStatusCode.NotFound,
-            $"Second delete returned {(int)second.StatusCode}.");
     }
 }

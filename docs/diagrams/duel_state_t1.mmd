@@ -1,0 +1,6 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'17px','textColor':'#0b1220'}}}%%
+stateDiagram-v2
+    [*] --> Pending: duel created
+    Pending --> Decided: someone picks a winner
+    Pending --> Pending: nobody could decide
+    Decided --> [*]: Elo moves

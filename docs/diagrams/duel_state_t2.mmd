@@ -1,0 +1,21 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'15px','textColor':'#0b1220'}}}%%
+stateDiagram-v2
+    [*] --> Pending: POST /api/duels
+    Pending --> Left: human pick, or judge says A
+    Pending --> Right: human pick, or judge says B
+    Pending --> Tie: judge says Tie
+    Pending --> Expired: 24 h deadline passes
+    Pending --> Left: walkover — right side failed
+    Pending --> Right: walkover — left side failed
+    Pending --> Pending: judge stood down<br/>(rate-limited, unparseable,<br/>BOTH models failed)
+
+    Left --> [*]: Elo ±K, EloHistory x2
+    Right --> [*]: Elo ±K, EloHistory x2
+    Tie --> [*]: DrawCount++, Elo unchanged
+    Expired --> [*]: no Elo movement
+
+    note right of Pending
+        A second verdict write throws
+        InvalidOperationException → HTTP 409.
+        First write wins, always.
+    end note

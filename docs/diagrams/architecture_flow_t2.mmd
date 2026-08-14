@@ -1,0 +1,53 @@
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#0b1220','primaryBorderColor':'#0f172a','lineColor':'#1e293b','secondaryColor':'#e0e7ff','tertiaryColor':'#f1f5f9','fontFamily':'Segoe UI, Roboto, Helvetica, sans-serif','fontSize':'15px','clusterBkg':'#f8fafc','clusterBorder':'#475569','edgeLabelBackground':'#ffffff','textColor':'#0b1220'}}}%%
+flowchart TB
+    U["👤 Operator / invited guest"]
+
+    subgraph BROWSER["Browser (single origin — https://localhost:5001)"]
+        SPA["Blazor WASM SPA<br/>PoLocalCompare.Client"]
+        WORKER["webllm-worker.js<br/>WebGPU inference"]
+    end
+
+    subgraph HOST["ASP.NET Core 10 Host — PoLocalCompare.Api (one process)"]
+        AUTH["BFF auth<br/>cookie session + OIDC"]
+        API["Minimal API slices<br/>/api/duels · /api/models<br/>/api/leaderboard · /api/ollama"]
+        HUB["SignalR DuelHub<br/>/hubs/duel"]
+        EXEC["DuelExecutionService<br/>+ BackgroundTaskQueue"]
+        JUDGE["AutoJudge<br/>+ FoundryDuelJudge"]
+    end
+
+    subgraph AZURE["Azure"]
+        TBL[("Table Storage<br/>Duels · DuelResults<br/>Models · EloHistory")]
+        BLOB[("Blob Storage<br/>duel-html-outputs<br/>outputs &gt; 64 KB")]
+        FOUNDRY["Azure AI Foundry<br/>12 chat deployments"]
+        KV["Key Vault<br/>kv-poshared"]
+    end
+
+    OLLAMA["Ollama daemon<br/>localhost:11434<br/>(Development only)"]
+
+    U --> SPA
+    SPA -->|"HttpOnly cookie"| AUTH
+    SPA -->|"REST"| API
+    SPA <-->|"WebSocket"| HUB
+    SPA --> WORKER
+    WORKER -->|"POST /local-result"| API
+    API --> EXEC
+    EXEC --> HUB
+    EXEC --> JUDGE
+    EXEC --> FOUNDRY
+    EXEC --> OLLAMA
+    JUDGE --> FOUNDRY
+    API --> TBL
+    EXEC --> TBL
+    EXEC --> BLOB
+    HOST --> KV
+
+    classDef person fill:#fde68a,stroke:#92400e,stroke-width:2px,color:#111827
+    classDef comp fill:#c7d2fe,stroke:#3730a3,stroke-width:1.6px,color:#0b1220
+    classDef client fill:#ddd6fe,stroke:#5b21b6,stroke-width:1.6px,color:#0b1220
+    classDef data fill:#bbf7d0,stroke:#166534,stroke-width:1.6px,color:#0b1220
+    classDef ext fill:#fecaca,stroke:#991b1b,stroke-width:1.6px,color:#0b1220
+    class U person
+    class SPA,WORKER client
+    class AUTH,API,HUB,EXEC,JUDGE comp
+    class TBL,BLOB data
+    class FOUNDRY,KV,OLLAMA ext

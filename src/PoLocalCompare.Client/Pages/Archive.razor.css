@@ -92,10 +92,10 @@
     border: 1px solid var(--accent-blue);
 }
 
-.archive__verdict--pending {
-    background: var(--surface-2);
-    color: var(--text-muted);
-    border: 1px solid var(--border-strong);
+/* Layout only — the button's look is .po-btn's. Sized to sit inside a table cell without
+   stretching the row, and it never wraps mid-label. */
+.archive__judge-btn {
+    white-space: nowrap;
 }
 
 .archive__model {
