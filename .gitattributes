@@ -1,3 +1,4 @@
 # Workflow `run:` blocks execute under bash on Linux runners; CRLF breaks them.
 .github/workflows/*.yml text eol=lf
 .github/workflows/*.yaml text eol=lf
+src/PoLocalCompare.Client/wwwroot/js/web-llm.js filter=lfs diff=lfs merge=lfs -text
