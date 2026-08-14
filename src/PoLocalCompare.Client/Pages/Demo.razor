@@ -91,31 +91,18 @@
                     LeftHistory="_current.LeftHistory"
                     RightHistory="_current.RightHistory" />
 
-                @if (_current.LeftPreview is not null || _current.RightPreview is not null)
-                {
-                    @* No per-side wrapper: .demo__previews is the grid and each viewport is a
-                       cell, so the wrappers styled nothing and only added a level. *@
-                    <div class="demo__previews">
-                        @if (_current.LeftPreview is not null)
-                        {
-                            <SandboxedViewport HtmlContent="@_current.LeftPreview"
-                                               ModelName="@_current.Round.LeftModelName" IsLoser="false" />
-                        }
-                        else
-                        {
-                            <div class="demo__preview-waiting">@_current.Round.LeftModelName — waiting…</div>
-                        }
-                        @if (_current.RightPreview is not null)
-                        {
-                            <SandboxedViewport HtmlContent="@_current.RightPreview"
-                                               ModelName="@_current.Round.RightModelName" IsLoser="false" />
-                        }
-                        else
-                        {
-                            <div class="demo__preview-waiting">@_current.Round.RightModelName — waiting…</div>
-                        }
-                    </div>
-                }
+                @* Both cells are always present. The point of the grid is the asymmetry: the side
+                   that crosses the line first shows its finished result here — the server sends
+                   the completed output with its Done status, not at duel end — while the other is
+                   still generating beside it. A conditional grid would also shunt the running side
+                   across the page the moment the first preview landed.
+
+                   No per-side wrapper: .demo__previews is the grid and each viewport is a cell,
+                   so the wrappers styled nothing and only added a level. *@
+                <div class="demo__previews">
+                    @RenderPreview(_current.Round.LeftModelName, _current.LeftPreview, _current.LeftStatus)
+                    @RenderPreview(_current.Round.RightModelName, _current.RightPreview, _current.RightStatus)
+                </div>
             </section>
         }
 
@@ -203,6 +190,25 @@
 </div>
 
 @code {
+    /// <summary>
+    /// One cell of the live preview grid. Falls back to a placeholder that names *why* there is
+    /// nothing to render — "waiting" and "failed" are very different states to be looking at, and
+    /// SandboxedViewport's own empty state ("produced no renderable output") would libel a model
+    /// that is simply mid-stream.
+    /// </summary>
+    private static RenderFragment RenderPreview(string name, string? preview, DuelStatus status) =>
+        preview is not null
+            ? @<SandboxedViewport HtmlContent="@preview" ModelName="@name" IsLoser="false" />
+            : @<div class="demo__preview-waiting">@name — @PendingLabel(status)</div>;
+
+    private static string PendingLabel(DuelStatus status) => status switch
+    {
+        DuelStatus.Failed => "failed",
+        DuelStatus.Done => "finished with no output",
+        DuelStatus.Generating => "generating…",
+        _ => "waiting…",
+    };
+
     private const int DefaultRounds = 10;
 
     /// <summary>

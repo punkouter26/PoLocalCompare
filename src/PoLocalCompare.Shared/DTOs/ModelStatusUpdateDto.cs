@@ -36,6 +36,11 @@ public sealed class ModelStatusUpdateDto
     public bool? CacheHit { get; init; }
     /// <summary>Optional sub-phase detail, e.g. WebLLM loading progress text.</summary>
     public string? Detail { get; init; }
-    /// <summary>Partial HTML generated so far; included every ~25 tokens for live preview.</summary>
+    /// <summary>
+    /// HTML generated so far, for the live preview: a partial document every ~25 tokens while
+    /// <see cref="DuelStatus.Generating"/>, then the complete output on the
+    /// <see cref="DuelStatus.Done"/> frame — so a side that finishes first can be read while the
+    /// other is still going, without waiting for the duel-wide completion message.
+    /// </summary>
     public string? HtmlPreview { get; init; }
 }

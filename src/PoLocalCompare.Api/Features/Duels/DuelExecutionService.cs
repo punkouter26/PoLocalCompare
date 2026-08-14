@@ -220,8 +220,13 @@ public sealed class DuelExecutionService
         }
         else
         {
+            // The finished output rides out with the Done status rather than waiting for
+            // DuelComplete: that message only fires once *both* sides are in, so until then a
+            // model that crossed the line would still be showing its last mid-stream preview —
+            // truncated ~25 tokens short of the ending, or blank if it never emitted one.
             await SendStatusAsync(duelId, model.ModelId, side,
-                DuelStatus.Done, result.TotalDurationMs, result.TokenCount);
+                DuelStatus.Done, result.TotalDurationMs, result.TokenCount,
+                finalHtml: Truncate(result.HtmlOutputRaw));
         }
 
         // Character density + quality + GreenStats enrichment (shared Domain policy).
@@ -290,6 +295,17 @@ public sealed class DuelExecutionService
         return result;
     }
 
+    /// <summary>
+    /// Ceiling on the completed document pushed over the hub. Generous next to the 5 KB
+    /// mid-stream preview — this one is the finished render a person looks at — but still
+    /// bounded, because a runaway model can emit far more than any preview needs to show.
+    /// The persisted result is never truncated; only this hub frame is.
+    /// </summary>
+    private const int FinalHtmlMaxChars = 40_000;
+
+    private static string? Truncate(string? html) =>
+        html is { Length: > FinalHtmlMaxChars } ? html[..FinalHtmlMaxChars] : html;
+
     private Task SendStatusAsync(
         DuelId duelId,
         ModelId modelId,
@@ -300,7 +316,8 @@ public sealed class DuelExecutionService
         long? warmUpMs = null,
         double? peakVelocity = null,
         bool isStalled = false,
-        HtmlStreamStats? htmlStats = null) =>
+        HtmlStreamStats? htmlStats = null,
+        string? finalHtml = null) =>
         _hubContext.Clients
             .Group($"duel:{duelId}")
             .SendAsync("ModelStatusUpdate", new ModelStatusUpdateDto
@@ -321,6 +338,8 @@ public sealed class DuelExecutionService
                 OpenTagDepth = htmlStats?.OpenDepth,
                 StyleRuleCount = htmlStats?.StyleRules,
                 RepetitionScore = htmlStats?.RepetitionScore,
-                HtmlPreview = htmlStats?.HtmlPreview,
+                // The Done frame carries the whole output and no counters; the streaming frames
+                // carry counters and a partial. Neither ever sets both.
+                HtmlPreview = finalHtml ?? htmlStats?.HtmlPreview,
             });
 }

@@ -21,7 +21,7 @@ internal static class SseChatStreamReader
     /// <summary>Live preview is emitted at most this often, in milliseconds.</summary>
     private const long CallbackThrottleMs = 500;
 
-    /// <summary>A preview accompanies the callback only every Nth token.</summary>
+    /// <summary>A preview accompanies the callback only once this many tokens have accrued since the last one.</summary>
     private const int PreviewEveryNTokens = 25;
 
     /// <summary>Longest partial document sent to the client mid-stream.</summary>
@@ -50,6 +50,7 @@ internal static class SseChatStreamReader
         long? firstTokenMs = null; // time-to-first-token (actual warm-up per PRD)
         var counters = new HtmlStreamCounters();
         long lastCallbackAt = -CallbackThrottleMs; // trigger first callback immediately
+        int lastPreviewTokenCount = -PreviewEveryNTokens; // ...and a preview with it
         string? finishReason = null;
         int? providerCompletionTokens = null;
 
@@ -83,11 +84,20 @@ internal static class SseChatStreamReader
                 if (elapsed - lastCallbackAt >= CallbackThrottleMs)
                 {
                     lastCallbackAt = elapsed;
-                    // ToString(0, n) copies only the prefix; ToString()[..n] materialised the
-                    // whole accumulated document first, twice a second, just to slice it.
-                    string? preview = tokenCount % PreviewEveryNTokens == 0
-                        ? sb.ToString(0, Math.Min(PreviewMaxChars, sb.Length))
-                        : null;
+
+                    // Gap since the last preview, not `tokenCount % 25 == 0`: the callback is
+                    // throttled to 2/s, so a fast model lands on an exact multiple of 25 only by
+                    // coincidence — at ~120 tok/s a whole duel could stream without ever emitting
+                    // one, leaving the live preview permanently blank.
+                    string? preview = null;
+                    if (tokenCount - lastPreviewTokenCount >= PreviewEveryNTokens)
+                    {
+                        lastPreviewTokenCount = tokenCount;
+                        // ToString(0, n) copies only the prefix; ToString()[..n] materialised the
+                        // whole accumulated document first, twice a second, just to slice it.
+                        preview = sb.ToString(0, Math.Min(PreviewMaxChars, sb.Length));
+                    }
+
                     await onTokenUpdate(tokenCount, elapsed, counters.ToStats(preview));
                 }
             }
