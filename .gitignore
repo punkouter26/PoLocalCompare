@@ -147,7 +147,5 @@ model-test-report.html
 model-test-status.tsv
 browser-test-status.tsv
 
-## DOCS/ is a committed deliverable, not a build output.
-## DOCS/diagrams/*.mmd are sources; DOCS/assets/*.svg are compiled from them with
-##   npx @mermaid-js/mermaid-cli -i DOCS/diagrams/<name>.mmd -o DOCS/assets/<name>.svg -b transparent
-## Both are tracked on purpose so the reports render without a build step. Nothing here is ignored.
+## docs/ holds PRD_Master.md only — the generated HTML reports and Mermaid
+## sources were removed in the 2026-08-13 prune. Nothing here is ignored.

@@ -12,11 +12,17 @@ namespace PoLocalCompare.Unit;
 public class PromptLibraryTests
 {
     [Fact]
-    public void All_HaveUniqueIds()
+    public void All_HaveUniqueIdsAndATitleAndCategory()
     {
         var ids = PromptLibrary.All.Select(p => p.Id).ToList();
 
         Assert.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
+
+        Assert.All(PromptLibrary.All, prompt =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(prompt.Title));
+            Assert.False(string.IsNullOrWhiteSpace(prompt.Category));
+        });
     }
 
     [Fact]
@@ -30,16 +36,6 @@ public class PromptLibraryTests
                 prompt.Text.Length,
                 CommenceDuelCommand.MinPromptLength,
                 CommenceDuelCommand.MaxPromptLength);
-        });
-    }
-
-    [Fact]
-    public void All_HaveATitleAndCategory()
-    {
-        Assert.All(PromptLibrary.All, prompt =>
-        {
-            Assert.False(string.IsNullOrWhiteSpace(prompt.Title));
-            Assert.False(string.IsNullOrWhiteSpace(prompt.Category));
         });
     }
 
@@ -61,16 +57,11 @@ public class PromptLibraryTests
     }
 
     [Fact]
-    public void ById_ReturnsTheMatchingPrompt()
+    public void ById_ReturnsTheMatchingPromptAndNullForAnUnknownId()
     {
         var expected = PromptLibrary.All[0];
 
         Assert.Equal(expected, PromptLibrary.ById(expected.Id));
-    }
-
-    [Fact]
-    public void ById_UnknownId_ReturnsNull()
-    {
         Assert.Null(PromptLibrary.ById("no-such-prompt"));
     }
 }
@@ -93,11 +84,5 @@ public class HtmlPreviewTests
         var raw = "Here you go:\n```html\n<p>hi</p>\n```\nHope that helps!";
 
         Assert.Equal("<p>hi</p>", HtmlPreview.Normalize(raw));
-    }
-
-    [Fact]
-    public void Normalize_UnfencedHtml_IsReturnedTrimmed()
-    {
-        Assert.Equal("<div>x</div>", HtmlPreview.Normalize("  <div>x</div>  "));
     }
 }

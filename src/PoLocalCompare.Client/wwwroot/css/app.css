@@ -591,19 +591,6 @@ code {
     text-align: center;
 }
 
-/* ── Mock data banner ─────────────────────────────────────────────────────── */
-
-.mock-data-banner {
-    background-color: var(--accent-red);
-    color: #fff;
-    font-weight: bold;
-    letter-spacing: 0.1em;
-    padding: 0.4rem 1rem;
-    text-align: center;
-    text-transform: uppercase;
-    width: 100%;
-}
-
 /* ── Accessibility — WCAG 2.2 Level AA ────────────────────────────────────── */
 
 :root {
@@ -644,7 +631,7 @@ input[type="reset"], input[type="checkbox"], input[type="radio"], summary {
     min-inline-size: var(--target-min);
 }
 
-p a, li a, td a, .prose a {
+p a, li a, td a {
     min-block-size: auto;
     min-inline-size: auto;
 }

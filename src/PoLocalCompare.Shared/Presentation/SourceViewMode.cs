@@ -1,4 +1,4 @@
-namespace PoLocalCompare.Client.Presentation;
+namespace PoLocalCompare.Shared.Presentation;
 
 /// <summary>How the Arena is presenting the two outputs.</summary>
 public enum SourceViewMode

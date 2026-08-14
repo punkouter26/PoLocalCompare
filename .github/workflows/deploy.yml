@@ -66,7 +66,12 @@ jobs:
     needs: test
     timeout-minutes: 30
     steps:
+      # lfs: the vendored web-llm.js bundle is an LFS object and gets published into wwwroot.
+      # Without this the runner checks out the ~130-byte pointer file instead and every browser
+      # model fails at import time in the deployed app.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}

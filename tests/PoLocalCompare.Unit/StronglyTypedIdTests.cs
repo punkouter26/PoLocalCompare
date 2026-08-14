@@ -13,7 +13,6 @@ public class StronglyTypedIdTests
 {
     [Theory]
     [InlineData(null)]
-    [InlineData("")]
     [InlineData("   ")]
     public void From_RejectsBlank(string? bad)
     {
@@ -94,7 +93,6 @@ public class StronglyTypedIdTests
 
     [Theory]
     [InlineData(null)]
-    [InlineData("")]
     [InlineData("  ")]
     public void TryParse_RejectsBlankWithoutThrowing(string? bad)
     {

@@ -15,11 +15,20 @@ public class DemoPlannerTests
         Enumerable.Range(0, count).Select(i => ModelId.From($"model-{i:D2}")).ToList();
 
     [Fact]
-    public void Plan_ProducesTheRequestedNumberOfRounds()
+    public void Plan_FillsTheRequestedNumberOfRounds_IndexedFromZeroInOrder()
     {
         var plan = DemoPlanner.Plan(Pool(4), rounds: 10, seed: 1);
 
         Assert.Equal(10, plan.Count);
+        Assert.Equal(Enumerable.Range(0, 10), plan.Select(r => r.Index));
+
+        // And the schedule still fills when more rounds are asked for than there are prompts,
+        // rather than stopping at the end of the library.
+        var overflowRounds = PromptLibrary.SelfRunning.Count * 2 + 3;
+        var overflowPlan = DemoPlanner.Plan(Pool(4), overflowRounds, seed: 9);
+
+        Assert.Equal(overflowRounds, overflowPlan.Count);
+        Assert.Equal(Enumerable.Range(0, overflowRounds), overflowPlan.Select(r => r.Index));
     }
 
     [Fact]
@@ -33,33 +42,17 @@ public class DemoPlannerTests
     }
 
     [Fact]
-    public void Plan_IndexesRoundsFromZeroInOrder()
-    {
-        var plan = DemoPlanner.Plan(Pool(3), rounds: 6, seed: 2);
-
-        Assert.Equal(Enumerable.Range(0, 6), plan.Select(r => r.Index));
-    }
-
-    [Fact]
-    public void Plan_WithTheSameSeed_IsReproducible()
+    public void Plan_IsReproducibleForASeedAndVariesAcrossSeeds()
     {
         var first = DemoPlanner.Plan(Pool(5), rounds: 10, seed: 42);
         var second = DemoPlanner.Plan(Pool(5), rounds: 10, seed: 42);
+        var different = DemoPlanner.Plan(Pool(5), rounds: 10, seed: 43);
 
-        Assert.Equal(
-            first.Select(r => (r.Prompt.Id, r.LeftModelId, r.RightModelId)),
-            second.Select(r => (r.Prompt.Id, r.LeftModelId, r.RightModelId)));
-    }
+        static IEnumerable<(string, ModelId, ModelId)> Shape(IEnumerable<DemoRound> plan) =>
+            plan.Select(r => (r.Prompt.Id, r.LeftModelId, r.RightModelId));
 
-    [Fact]
-    public void Plan_WithDifferentSeeds_Differs()
-    {
-        var first = DemoPlanner.Plan(Pool(5), rounds: 10, seed: 1);
-        var second = DemoPlanner.Plan(Pool(5), rounds: 10, seed: 2);
-
-        Assert.NotEqual(
-            first.Select(r => (r.Prompt.Id, r.LeftModelId, r.RightModelId)),
-            second.Select(r => (r.Prompt.Id, r.LeftModelId, r.RightModelId)));
+        Assert.Equal(Shape(first), Shape(second));
+        Assert.NotEqual(Shape(first), Shape(different));
     }
 
     [Fact]
@@ -98,27 +91,12 @@ public class DemoPlannerTests
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    public void Plan_WithTooFewModels_ReturnsNothing(int modelCount)
+    [InlineData(0, 10)]   // no models to pair
+    [InlineData(1, 10)]   // one model cannot duel itself
+    [InlineData(4, 0)]    // nothing asked for
+    public void Plan_WithNothingToSchedule_ReturnsNothing(int modelCount, int rounds)
     {
-        Assert.Empty(DemoPlanner.Plan(Pool(modelCount), rounds: 10, seed: 1));
-    }
-
-    [Fact]
-    public void Plan_WithNonPositiveRounds_ReturnsNothing()
-    {
-        Assert.Empty(DemoPlanner.Plan(Pool(4), rounds: 0, seed: 1));
-    }
-
-    [Fact]
-    public void Plan_RequestingMoreRoundsThanPrompts_StillFillsTheSchedule()
-    {
-        var rounds = PromptLibrary.SelfRunning.Count * 2 + 3;
-
-        var plan = DemoPlanner.Plan(Pool(4), rounds, seed: 9);
-
-        Assert.Equal(rounds, plan.Count);
+        Assert.Empty(DemoPlanner.Plan(Pool(modelCount), rounds, seed: 1));
     }
 
     [Fact]

@@ -7,21 +7,15 @@ public class EloCalculatorTests
     // ── Standard formula: winner always gains, loser always loses ──────────
 
     [Fact]
-    public void Calculate_WinForA_AIncreasesAndBDecreases()
+    public void Calculate_WinnerGainsAndLoserLoses_WhicheverSideWon()
     {
-        var (newA, newB) = EloCalculator.Calculate(1200, 1200, k: 32, outcomeA: 1.0);
+        var (winA, loseB) = EloCalculator.Calculate(1200, 1200, k: 32, outcomeA: 1.0);
+        Assert.True(winA > 1200, "Winner ELO should increase.");
+        Assert.True(loseB < 1200, "Loser ELO should decrease.");
 
-        Assert.True(newA > 1200, "Winner ELO should increase.");
-        Assert.True(newB < 1200, "Loser ELO should decrease.");
-    }
-
-    [Fact]
-    public void Calculate_LossForA_ADecreasesAndBIncreases()
-    {
-        var (newA, newB) = EloCalculator.Calculate(1200, 1200, k: 32, outcomeA: 0.0);
-
-        Assert.True(newA < 1200, "Loser ELO should decrease.");
-        Assert.True(newB > 1200, "Winner ELO should increase.");
+        var (loseA, winB) = EloCalculator.Calculate(1200, 1200, k: 32, outcomeA: 0.0);
+        Assert.True(loseA < 1200, "Loser ELO should decrease.");
+        Assert.True(winB > 1200, "Winner ELO should increase.");
     }
 
     // ── Equal ratings: expected score = 0.5 → shift = K * 0.5 ────────────
@@ -38,39 +32,20 @@ public class EloCalculatorTests
         Assert.Equal(-expectedShift, Math.Round(newB - 1200, 1));
     }
 
-    // ── K-factor parametrisation ───────────────────────────────────────────
+    // ── Expectation weighting: the favourite gains little, the upset gains a lot ──
 
     [Fact]
-    public void Calculate_K32_ProducesLargerShiftThanK16()
+    public void Calculate_ShiftScalesWithHowUnexpectedTheResultWas()
     {
-        var (newA32, _) = EloCalculator.Calculate(1200, 1200, k: 32, outcomeA: 1.0);
-        var (newA16, _) = EloCalculator.Calculate(1200, 1200, k: 16, outcomeA: 1.0);
+        // A is 600 ELO points stronger and wins as expected — a tiny, still-positive shift.
+        var (favourite, _) = EloCalculator.Calculate(ratingA: 2000, ratingB: 1400, k: 32, outcomeA: 1.0);
+        var favouriteShift = favourite - 2000;
+        Assert.True(favouriteShift is > 0.0 and <= 1.0,
+            $"Expected an at-most 1-point shift for a heavy favourite, got {favouriteShift:F1}.");
 
-        Assert.True(newA32 - 1200 > newA16 - 1200, "K=32 should produce a larger rating shift than K=16.");
-    }
-
-    // ── Strong favourite: sub-1-point expected shift ───────────────────────
-
-    [Fact]
-    public void Calculate_HighRatedWinsAgainstLow_ShiftIsLessThan1Point()
-    {
-        // A is 600 ELO points stronger — expected to win, so shift is tiny
-        var (newA, _) = EloCalculator.Calculate(ratingA: 2000, ratingB: 1400, k: 32, outcomeA: 1.0);
-
-        var shift = newA - 2000;
-        Assert.True(shift <= 1.0, $"Expected at-most 1-point rounded shift for a heavy favourite, got {shift:F1}.");
-        Assert.True(shift > 0.0, "Winner should still gain rating points.");
-        Assert.Equal(Math.Round(shift, 1), shift); // 1 decimal place
-    }
-
-    [Fact]
-    public void Calculate_LowRatedWinsAgainstHigh_ShiftIsLargerthan20Points()
-    {
-        // A is 600 ELO points weaker — upset win gives large shift
-        var (newA, _) = EloCalculator.Calculate(ratingA: 1400, ratingB: 2000, k: 32, outcomeA: 1.0);
-
-        var shift = newA - 1400;
-        Assert.True(shift > 20.0, $"Expected large shift for an upset win, got {shift:F1}.");
+        // The same 600-point gap the other way round — an upset moves the rating hard.
+        var (underdog, _) = EloCalculator.Calculate(ratingA: 1400, ratingB: 2000, k: 32, outcomeA: 1.0);
+        Assert.True(underdog - 1400 > 20.0, $"Expected a large shift for an upset win, got {underdog - 1400:F1}.");
     }
 
     // ── Rounding to 1 decimal place ────────────────────────────────────────

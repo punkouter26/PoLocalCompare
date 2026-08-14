@@ -41,14 +41,9 @@ dotnet user-secrets set "AzureAiFoundry:ApiKey" "<key>" --project src/PoLocalCom
 |---|---|
 | [docs/PRD_Master.md](docs/PRD_Master.md) | Source of truth — slice boundaries, endpoint map, Table Storage schema, decision log (§9) |
 | [AGENT.MD](AGENT.MD) | Living architectural contract — tech stack, structure, config keys, deployment, testing |
-| [docs/ARCHITECTURE_REPORT.html](docs/ARCHITECTURE_REPORT.html) | C4 L1–L3 audit, `@page` → `MapGroup` slice boundaries, middleware ordering |
-| [docs/AI_SERVICES_REPORT.html](docs/AI_SERVICES_REPORT.html) | Providers, model/deployment matrix, parameters, fallback policy, projected cost, telemetry gaps |
-| [docs/ROLES_PERMISSIONS_MATRIX.html](docs/ROLES_PERMISSIONS_MATRIX.html) | Principal × environment access grid and the security audit behind it |
-| [docs/USER_WORKFLOW.html](docs/USER_WORKFLOW.html) | End-to-end request trace and every failure mode |
-| [docs/VISUAL_ARCHITECTURE_DASHBOARD.html](docs/VISUAL_ARCHITECTURE_DASHBOARD.html) | One-page visual map: components, sequences, ERD, narrative |
+| [CLAUDE.md](CLAUDE.md) | Working notes for agents — the traps and invariants that span several files |
 
-Each report carries three density tiers (30-second summary → overview → full implementation detail). Diagram sources are `docs/diagrams/*.mmd`; regenerate the rendered SVGs with:
-
-```powershell
-npx @mermaid-js/mermaid-cli -i docs/diagrams/<name>.mmd -o docs/assets/<name>.svg -b transparent
-```
+The generated HTML reports and their Mermaid sources were removed in the 2026-08-13 prune: they were
+point-in-time snapshots that drifted from the code (one still documented a script that no longer
+worked), and everything they asserted is either in PRD_Master.md or derivable from the source. Recover
+them from git history if a snapshot is ever needed again.

@@ -11,6 +11,19 @@ public sealed class HomeUiTests : UiTestBase
 {
     [Theory]
     [MemberData(nameof(Viewports))]
+    public async Task Unauthenticated_Root_ShowsLogin(int width, int height)
+    {
+        var page = await NewPageAsync(width, height);
+        await page.GotoAsync("/");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
+
+        // The auth gate renders the Login view before any page content.
+        await Assertions.Expect(page.GetByText("Sign in with Microsoft")).ToBeVisibleAsync(
+            new() { Timeout = 15_000 });
+    }
+
+    [Theory]
+    [MemberData(nameof(Viewports))]
     public async Task Login_ThenHome_ShowsHeadingAndDisabledCompare(int width, int height)
     {
         var page = await SignedInPageAsync(width, height, "/");
@@ -24,26 +37,12 @@ public sealed class HomeUiTests : UiTestBase
         await Assertions.Expect(page.Locator(".home__title")).ToContainTextAsync(
             "Compare two models", new() { Timeout = timeout });
 
-        // The Compare CTA is always visible — it is deliberately the one part of the flow that
-        // is not behind a disclosure — and stays disabled until two models and a prompt exist.
-        // (The old selector looked for .home__btn--primary, a class removed when the per-surface
-        // button classes were folded into .po-btn, so this assertion had stopped running.)
-        var compare = page.Locator(".home__panel--cta .po-btn");
+        // The Compare CTA is always visible and stays disabled until two models and a prompt
+        // exist. (The old selector looked for .home__btn--primary, a class removed when the
+        // per-surface button classes were folded into .po-btn, so it had stopped running.)
+        var compare = page.Locator(".home__compare .po-btn");
         await Assertions.Expect(compare).ToBeVisibleAsync();
         await Assertions.Expect(compare).ToBeDisabledAsync();
-    }
-
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task Unauthenticated_Root_ShowsLogin(int width, int height)
-    {
-        var page = await NewPageAsync(width, height);
-        await page.GotoAsync("/");
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
-
-        // The auth gate renders the Login view before any page content.
-        await Assertions.Expect(page.GetByText("Sign in with Microsoft")).ToBeVisibleAsync(
-            new() { Timeout = 15_000 });
     }
 
     [Theory]
@@ -58,9 +57,10 @@ public sealed class HomeUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task ModelCards_AreKeyboardFocusable(int width, int height)
+    public async Task ModelCards_AreKeyboardOperableAndExposeTheirState(int width, int height)
     {
         // SC 2.1.1: the card is a custom toggle button, so it must be reachable by keyboard.
+        // SC 4.1.2 Name, Role, Value: aria-pressed has to track the visual selection.
         var page = await SignedInPageAsync(width, height);
 
         var card = page.Locator(".model-card").First;
@@ -68,20 +68,9 @@ public sealed class HomeUiTests : UiTestBase
 
         await Assertions.Expect(card).ToHaveAttributeAsync("role", "button");
         await Assertions.Expect(card).ToHaveAttributeAsync("tabindex", "0");
-    }
 
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task ModelCards_ExposeTheirSelectedState(int width, int height)
-    {
-        // SC 4.1.2 Name, Role, Value — aria-pressed has to track the visual selection.
-        var page = await SignedInPageAsync(width, height);
-
-        var card = page.Locator(".model-card").First;
-        await Assertions.Expect(card).ToBeVisibleAsync(new() { Timeout = 20_000 });
-
-        // Lowercase "false": the value is now rendered from a string property. Binding the
-        // bool directly made Blazor omit the attribute entirely when unselected.
+        // Lowercase "false": the value is rendered from a string property. Binding the bool
+        // directly made Blazor omit the attribute entirely when unselected.
         await Assertions.Expect(card).ToHaveAttributeAsync("aria-pressed", "false");
     }
 }

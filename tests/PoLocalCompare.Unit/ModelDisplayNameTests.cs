@@ -35,27 +35,19 @@ public class ModelDisplayNameTests
     }
 
     [Fact]
-    public void IsUnresolved_TrueWhenTheNameIsJustTheId()
+    public void IsUnresolved_TrueWhenTheNameIsTheIdOrBlank()
     {
+        // The id itself, the id with different casing and surrounding space, and a blank name
+        // all mean the same thing to a caller: nothing was resolved.
         Assert.True(ModelDisplayName.IsUnresolved(Id.Value, Id.Value));
-    }
-
-    [Fact]
-    public void IsUnresolved_IgnoresCaseAndSurroundingSpace()
-    {
         Assert.True(ModelDisplayName.IsUnresolved($"  {Id.Value.ToLowerInvariant()} ", Id.Value));
+        Assert.True(ModelDisplayName.IsUnresolved("   ", Id.Value));
     }
 
     [Fact]
     public void IsUnresolved_FalseForARealName()
     {
         Assert.False(ModelDisplayName.IsUnresolved("Phi-4", Id.Value));
-    }
-
-    [Fact]
-    public void IsUnresolved_TrueForBlank()
-    {
-        Assert.True(ModelDisplayName.IsUnresolved("   ", Id.Value));
     }
 
     [Fact]
@@ -66,14 +58,9 @@ public class ModelDisplayNameTests
     }
 
     [Fact]
-    public void ResolveForDisplay_PassesARealNameThrough()
+    public void ResolveForDisplay_PassesARealNameThroughTrimmed()
     {
         Assert.Equal("Phi-4", ModelDisplayName.ResolveForDisplay("Phi-4", null, Id));
-    }
-
-    [Fact]
-    public void ResolveForDisplay_TrimsTheNameItReturns()
-    {
         Assert.Equal("Phi-4", ModelDisplayName.ResolveForDisplay("  Phi-4  ", null, Id));
     }
 }

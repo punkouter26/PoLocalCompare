@@ -1,4 +1,4 @@
-namespace PoLocalCompare.Api.Common.Domain;
+namespace PoLocalCompare.Api.Features.Leaderboard;
 
 /// <summary>
 /// Pure arithmetic for the leaderboard's win-rate column.
@@ -6,7 +6,7 @@ namespace PoLocalCompare.Api.Common.Domain;
 /// <remarks>
 /// Win rate is <c>WinCount / DuelCount</c> — judged draws are not wins, so a model that drew
 /// every duel shows 0% even though its W/L/T reads 0/0/N. A model that never competed shows
-/// 0 (not NaN) so the column renders cleanly. Lives in <c>Common/Domain</c> because the
+/// 0 (not NaN) so the column renders cleanly. It exists as a named helper because the
 /// <see cref="GetLeaderboardHandler"/> projection was silently dropping the field (the
 /// <c>LeaderboardEntryDto.WinRate</c> property stayed at its C# default of 0) and that bug
 /// recurred every time the handler was edited — a named, unit-tested helper pins the

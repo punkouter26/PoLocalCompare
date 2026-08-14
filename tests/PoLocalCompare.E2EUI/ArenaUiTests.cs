@@ -9,8 +9,8 @@ namespace PoLocalCompare.E2EUI;
 /// runs OnInitializedAsync first, so the initial fetch went to /api/duels/ with an empty id,
 /// matched the list route, and failed deserializing an array into one DuelDto.
 ///
-/// These assert the page mounts and shows duel content, which is what that bug broke. See
-/// <see cref="UiTestBase"/> for prerequisites; this suite is not run in CI.
+/// This asserts the page mounts, shows duel content, and exposes the Lab Report anchor, which is
+/// what that bug broke. See <see cref="UiTestBase"/> for prerequisites; not run in CI.
 /// </summary>
 [Trait("Category", "UI")]
 public sealed class ArenaUiTests : UiTestBase
@@ -34,7 +34,7 @@ public sealed class ArenaUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task Arena_LoadsTheRequestedDuel_WithoutAnUnhandledError(int width, int height)
+    public async Task Arena_LoadsTheRequestedDuel_AndOffersTheLabReport(int width, int height)
     {
         var page = await SignedInPageAsync(width, height, "/archive");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
@@ -59,27 +59,11 @@ public sealed class ArenaUiTests : UiTestBase
         // The prompt only renders once the duel itself deserialized, so it is the real signal
         // that the right id reached the API.
         await Assertions.Expect(page.Locator(".arena__prompt-label")).ToBeVisibleAsync(new() { Timeout = timeout });
-    }
-
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task Arena_OffersTheLabReportDownload(int width, int height)
-    {
-        var page = await SignedInPageAsync(width, height, "/archive");
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
-
-        var duelId = await FirstDuelIdAsync(page);
-        // Stated rather than silently skipped: a green run that asserted nothing would be
-        // worse than a red one that says what is missing.
-        Assert.True(duelId is not null, "No duels recorded — run a duel or /demo before this suite.");
-
-        await page.GotoAsync($"/arena/{duelId}");
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
         // The export slice had no UI at all until it was wired up here; the anchor is the
         // only thing making that endpoint reachable.
         var report = page.Locator($"a[href='/api/duels/{duelId}/report']");
-        await Assertions.Expect(report).ToHaveAttributeAsync("download", $"lab-report-{duelId}.html",
-            new() { Timeout = width < 768 ? 30_000 : 10_000 });
+        await Assertions.Expect(report).ToHaveAttributeAsync(
+            "download", $"lab-report-{duelId}.html", new() { Timeout = timeout });
     }
 }

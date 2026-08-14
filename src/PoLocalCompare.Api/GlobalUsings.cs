@@ -2,7 +2,6 @@ global using PoLocalCompare.Shared.Ids;
 global using PoLocalCompare.Shared.Models;
 global using PoLocalCompare.Api.Common.Background;
 global using PoLocalCompare.Api.Common.Caching;
-global using PoLocalCompare.Api.Common.Domain;
 global using PoLocalCompare.Api.Common.Inference;
 global using PoLocalCompare.Api.Common.KeyVault;
 global using PoLocalCompare.Api.Common.Persistence;

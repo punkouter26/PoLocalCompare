@@ -50,7 +50,10 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       lib_base: ${{ steps.plan.outputs.lib_base }}
     steps:
+      # lfs: the model list is parsed out of web-llm.js, which is an LFS object.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Resolve model list from ModelSeeder.cs + web-llm.js
         id: plan

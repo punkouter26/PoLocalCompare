@@ -88,6 +88,19 @@
 @code {
     [Parameter] public DuelResultDto? Result { get; set; }
 
+    // The HUD shows post-run numbers, so it has nothing to say while tokens are streaming —
+    // but it sits inside the Arena's render tree and was being rebuilt on every frame anyway.
+    private DuelResultDto? _lastResult;
+    private bool _renderDirty = true;
+
+    protected override bool ShouldRender() => _renderDirty;
+
+    protected override void OnParametersSet()
+    {
+        _renderDirty = !ReferenceEquals(Result, _lastResult);
+        _lastResult = Result;
+    }
+
     private static string FormatMs(long ms)
     {
         if (ms >= 60_000)

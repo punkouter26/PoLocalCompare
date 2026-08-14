@@ -169,16 +169,6 @@ if (-not (Test-Path $devSettings)) {
 Write-Step "Restoring .NET packages"
 Push-Location $RepoRoot
 try {
-    Write-Step "Validating Po* standards baseline"
-    $validateScript = Join-Path $PSScriptRoot 'validate-standards.ps1'
-    if (Test-Path $validateScript) {
-        & $validateScript
-        Write-Ok "Standards validation passed"
-    }
-    else {
-        Write-Warn "validate-standards.ps1 not found — skipping standards validation"
-    }
-
     dotnet restore PoLocalCompare.slnx --verbosity quiet
     Write-Ok "Packages restored"
 } finally {

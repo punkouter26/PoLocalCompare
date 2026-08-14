@@ -93,7 +93,12 @@ PoLocalCompare.slnx
 │   │   │                                 comparison logic; lives here so PoLocalCompare.Unit
 │   │   │                                 can test it without referencing the WASM project
 │   │   ├── Prompts/                    ← PromptLibrary (curated starter + demo prompts)
-│   │   └── Demo/                       ← DemoPlanner (pure, seeded demo scheduling)
+│   │   ├── Demo/                       ← DemoPlanner (pure, seeded demo scheduling)
+│   │   └── Presentation/               ← view-models, enums and helpers the .razor files lean
+│   │                                     on (ModelDiagState, ModelTypeGroup, SourceViewMode,
+│   │                                     RuntimeProbeReport, FailureReasonText,
+│   │                                     RenderCoalescer). Moved out of Client/ so the Unit
+│   │                                     tier can reach them at all.
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
 │       ├── Pages/                      ← Home, Arena, Leaderboard, Archive,
 │       │                                 Demo, Login, NotFound
@@ -111,8 +116,8 @@ PoLocalCompare.slnx
 │   ├── PoLocalCompare.Integration/     ← Testcontainers Azurite behind WebApplicationFactory
 │   ├── PoLocalCompare.E2EAPI/          ← Black-box HTTP journeys over Testcontainers + fake auth
 │   └── PoLocalCompare.E2EUI/           ← Playwright, headed Chrome, mobile + desktop viewports
-├── docs/                               ← PRD_Master.md + Mermaid diagrams (.mmd, *_simplified.mmd, .svg)
-├── SCRIPTS/                            ← setup.ps1, download-models.py, cleanup-models.py
+├── docs/                               ← PRD_Master.md (the source of truth; nothing else)
+├── SCRIPTS/                            ← setup.ps1, download-models.py, the artifact-ferry trio
 ├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep / main.json)
 ├── Directory.Build.props               ← Global: TreatWarningsAsErrors, Nullable, LangVersion=latest
 ├── Directory.Packages.props            ← Central Package Management

@@ -4,35 +4,18 @@ namespace PoLocalCompare.E2EUI;
 
 /// <summary>
 /// Header contract, routing, and the accessibility affordances that only exist at runtime
-/// (focus order, the skip link, target sizes).
+/// (focus order, the skip link, geometry).
+///
+/// Trimmed to the AGENT.MD §8 ratio in the 2026-08-13 prune: assertions that used to sit in
+/// their own method are folded into the journey that already navigates there, so coverage is
+/// kept while the case count drops. 5 viewport-paired methods + 1 viewport-independent = 11 cases.
 /// </summary>
 [Trait("Category", "UI")]
 public sealed class NavigationUiTests : UiTestBase
 {
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task Header_ShowsBrandingOnTheLeftAndSessionOnTheRight(int width, int height)
-    {
-        // Standards §4 layout contract: Left (branding) | Centre (actions) | Right (session).
-        // On a narrow viewport the bar collapses into a vertical drawer, so the contract
-        // becomes ordering rather than horizontal position — assert the axis that applies.
-        var page = await SignedInPageAsync(width, height);
-        await OpenNavIfCollapsedAsync(page);
-
-        var brand = await page.Locator(".navmenu__brand").BoundingBoxAsync();
-        var auth = await page.Locator(".navmenu__auth").BoundingBoxAsync();
-
-        Assert.NotNull(brand);
-        Assert.NotNull(auth);
-        if (width < 768)
-            Assert.True(brand!.Y < auth!.Y, "In the drawer, branding should sit above the session controls.");
-        else
-            Assert.True(brand!.X < auth!.X, "Branding should sit left of the session controls.");
-    }
-
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task Header_ItemsDoNotOverlapOrLeaveTheViewport(int width, int height)
+    public async Task Header_LaysOutWithoutOverlappingOrLeavingTheViewport(int width, int height)
     {
         // The header's items are nowrap. Any that is allowed to shrink is squeezed narrower
         // than its own label, the label spills out of the box, and the next item paints on top
@@ -41,6 +24,21 @@ public sealed class NavigationUiTests : UiTestBase
         // Note the live ticker only takes part when duels are actually running.
         var page = await SignedInPageAsync(width, height);
         await OpenNavIfCollapsedAsync(page);
+
+        // Standards §4 layout contract: Left (branding) | Centre (actions) | Right (session).
+        // On a narrow viewport the bar collapses into a vertical drawer, so the contract
+        // becomes ordering rather than horizontal position — assert the axis that applies.
+        var brand = await page.Locator(".navmenu__brand").BoundingBoxAsync();
+        var auth = await page.Locator(".navmenu__auth").BoundingBoxAsync();
+        Assert.NotNull(brand);
+        Assert.NotNull(auth);
+        if (width < 768)
+            Assert.True(brand!.Y < auth!.Y, "In the drawer, branding should sit above the session controls.");
+        else
+            Assert.True(brand!.X < auth!.X, "Branding should sit left of the session controls.");
+
+        // The signed-in identity is part of that right-hand cluster.
+        await Assertions.Expect(page.Locator(".navmenu__user-badge")).ToBeVisibleAsync();
 
         var problems = await page.EvaluateAsync<string[]>(
             """
@@ -71,17 +69,7 @@ public sealed class NavigationUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task Header_ShowsTheSignedInIdentity(int width, int height)
-    {
-        var page = await SignedInPageAsync(width, height);
-        await OpenNavIfCollapsedAsync(page);
-
-        await Assertions.Expect(page.Locator(".navmenu__user-badge")).ToBeVisibleAsync();
-    }
-
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task SkipLink_IsTheFirstTabStop(int width, int height)
+    public async Task SkipLink_IsTheFirstTabStopAndMovesFocusToMain(int width, int height)
     {
         // SC 2.4.1 Bypass Blocks — the link is visually hidden until focused.
         var page = await SignedInPageAsync(width, height);
@@ -95,16 +83,7 @@ public sealed class NavigationUiTests : UiTestBase
         var focusedClass = await page.EvaluateAsync<string>(
             "() => document.activeElement?.className ?? ''");
         Assert.Contains("skip-link", focusedClass);
-    }
 
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task SkipLink_MovesFocusToMainContent(int width, int height)
-    {
-        var page = await SignedInPageAsync(width, height);
-
-        await page.EvaluateAsync("() => document.activeElement?.blur()");
-        await page.Keyboard.PressAsync("Tab");
         await page.Keyboard.PressAsync("Enter");
 
         var focusedId = await page.EvaluateAsync<string>("() => document.activeElement?.id ?? ''");
@@ -113,47 +92,35 @@ public sealed class NavigationUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task Leaderboard_IsReachableAndRendersItsHeading(int width, int height)
+    public async Task CoreRoutes_RenderTheirHeadingAndDoNotScrollHorizontally(int width, int height)
     {
-        var page = await SignedInPageAsync(width, height, "/leaderboard");
+        // Route reachability and the horizontal-overflow check were three separate methods.
+        // They want the same navigation, so they share one: each route must mount its own
+        // titled element (not merely return 200) and must not shear its right edge. Mobile
+        // portrait is the primary target and the classic place overflow shows up.
+        var routes = new (string Path, string TitleSelector)[]
+        {
+            ("/", ".home__title"),
+            ("/leaderboard", ".leaderboard__title"),
+            ("/archive", ".archive__title"),
+        };
 
-        await Assertions.Expect(page.Locator(".leaderboard__title")).ToBeVisibleAsync(
-            new() { Timeout = 15_000 });
-    }
+        var page = await NewPageAsync(width, height);
+        await page.GotoAsync(SeedAuthUrl("/"));
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task Archive_IsReachableAndRendersItsHeading(int width, int height)
-    {
-        var page = await SignedInPageAsync(width, height, "/archive");
+        foreach (var (path, titleSelector) in routes)
+        {
+            await page.GotoAsync(path);
+            await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
-        await Assertions.Expect(page.Locator(".archive__title")).ToBeVisibleAsync(
-            new() { Timeout = 15_000 });
-    }
+            await Assertions.Expect(page.Locator(titleSelector)).ToBeVisibleAsync(
+                new() { Timeout = 20_000 });
 
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task UnknownRoute_RendersTheNotFoundPage(int width, int height)
-    {
-        var page = await SignedInPageAsync(width, height, "/no-such-page");
-
-        // Assert on the page's own element: body text also contains the skip link and nav, so
-        // a substring match there passes for the wrong reasons and is slow to settle.
-        await Assertions.Expect(page.Locator(".not-found__title")).ToBeVisibleAsync(
-            new() { Timeout = 20_000 });
-    }
-
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task Page_DoesNotScrollHorizontally(int width, int height)
-    {
-        // Mobile portrait is the primary target; a sheared right edge is the classic failure.
-        var page = await SignedInPageAsync(width, height);
-
-        var overflows = await page.EvaluateAsync<bool>(
-            "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1");
-
-        Assert.False(overflows, "The page overflows horizontally.");
+            var overflows = await page.EvaluateAsync<bool>(
+                "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1");
+            Assert.False(overflows, $"{path} overflows horizontally at {width}×{height}.");
+        }
     }
 
     [Theory]
@@ -175,26 +142,35 @@ public sealed class NavigationUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task DiagPage_RendersWithoutTheWasmClient(int width, int height)
+    public async Task DiagPage_RendersServerSideButIsNotLinkedFromTheApp(int width, int height)
     {
-        // /diag is server-rendered on purpose: it is the page you open when the client is
-        // the thing that is broken, and index.html's boot fallback links to it.
+        // Two halves of one contract. /diag is server-rendered on purpose — it is the page you
+        // open when the client is the thing that is broken, and index.html's boot fallback links
+        // to it — but standards also say /health and /diag carry no UI link.
         var page = await NewPageAsync(width, height);
         await page.GotoAsync("/diag");
         await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
 
         await Assertions.Expect(page.Locator("h1")).ToContainTextAsync("Diagnostics");
-    }
 
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task DiagPage_IsNotLinkedFromTheApp(int width, int height)
-    {
-        // Standards: /health and /diag exist but must have no UI links.
-        var page = await SignedInPageAsync(width, height);
+        await page.GotoAsync(SeedAuthUrl("/"));
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
         var diagLinks = await page.Locator("nav a[href='/diag'], nav a[href='/health']").CountAsync();
-
         Assert.Equal(0, diagLinks);
+    }
+
+    [Fact]
+    public async Task UnknownRoute_RendersTheNotFoundPage()
+    {
+        // Viewport-independent: this is Router.NotFoundPage resolving at all, which is also the
+        // only reflective component instantiation left in the app and the reason PublishTrimmed
+        // stays off. One viewport proves it; running it twice proves nothing extra.
+        var page = await SignedInPageAsync(1440, 900, "/no-such-page");
+
+        // Assert on the page's own element: body text also contains the skip link and nav, so
+        // a substring match there passes for the wrong reasons and is slow to settle.
+        await Assertions.Expect(page.Locator(".not-found__title")).ToBeVisibleAsync(
+            new() { Timeout = 20_000 });
     }
 }

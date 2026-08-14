@@ -99,109 +99,35 @@
     font-size: 0.85rem;
 }
 
-/* ── Panel (each step section) ──────────────────────────────────────────
-   The panel header is the step: number, title, and — when the panel is shut — the answer
-   the step was given, so a collapsed step still shows what it holds. The separate stepper
-   strip that used to sit above these panels is gone; it duplicated every label and only
-   scrolled. */
-.home__panel {
+/* ── Section ────────────────────────────────────────────────────────────
+   Was a disclosure accordion: three numbered panels, one open at a time, with the header
+   doubling as the stepper. The page is "two models, a prompt, a button" — small enough to
+   show at once — so the panels are plain sections now. That removed the step-advance rules,
+   the chevrons, the numbered markers and the sticky readiness bar that only existed because
+   the Compare button could be scrolled out of view behind a collapsed panel. */
+.home__section {
     margin-bottom: 1.5rem;
+    padding: 1.25rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-1);
 }
 
-/* Padding lives on the header and the body, not the panel: a collapsed panel is then just
-   its header, with no stray gap under it. */
-.home__panel-body {
-    padding: 0 1.25rem 1.5rem;
+.home__section-head {
+    margin-bottom: 1rem;
 }
 
-.home__panel--open {
-    border-color: var(--border-strong);
-}
-
-.home__panel-headline {
-    margin: 0;
-    font-size: inherit;
-    font-weight: inherit;
-}
-
-/* The whole header is the disclosure control (APG accordion: heading wraps the button). */
-.home__panel-head {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    width: 100%;
-    font: inherit;
-    text-align: left;
-    padding: 1rem 1.25rem;
-    border: 0;
-    border-radius: var(--radius-lg);
-    background: transparent;
-    color: var(--text);
-    cursor: pointer;
-}
-
-.home__panel-head:hover {
-    background: var(--surface-accent);
-}
-
-.home__panel-head:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
-
-.home__panel-num {
-    flex: 0 0 auto;
-    width: 1.6rem;
-    height: 1.6rem;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.78rem;
-    font-weight: 700;
-    background: var(--surface-accent);
-    color: var(--text-muted);
-    transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.home__panel-num--done {
-    background: rgba(45, 220, 132, 0.22);
-    color: var(--accent-green);
-}
-
-.home__panel-heads {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 0;
-    flex: 1 1 auto;
-}
-
-.home__panel-chevron {
-    flex: 0 0 auto;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-}
-
-.home__panel-title {
+.home__section-title {
     font-size: 1.15rem;
     font-weight: 600;
     margin: 0;
     color: var(--text);
 }
 
-/* Truncates rather than wraps: a collapsed header carries a prompt excerpt, and a long one
-   must not grow the header into a paragraph. */
-.home__panel-hint {
-    margin: 0;
+.home__section-hint {
+    margin: 0.15rem 0 0;
     font-size: 0.85rem;
     color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 /* ── Unavailable models (held back behind a toggle) ─────────────────────── */
@@ -427,13 +353,14 @@
 }
 
 /* ── Compare CTA ────────────────────────────────────────────────────── */
-.home__panel--cta {
+.home__compare {
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(45, 220, 132, 0.25);
+    border-radius: var(--radius-lg);
     background: linear-gradient(135deg, rgba(45, 220, 132, 0.04), rgba(18, 184, 207, 0.04));
-    border-color: rgba(45, 220, 132, 0.25);
 }
 
-/* One row: step marker, the readiness copy, then the button pinned right. No disclosure —
-   the action the page exists for is always visible. */
+/* One row: the readiness copy, then the button pinned right. */
 .home__compare-row {
     display: flex;
     flex-wrap: wrap;
@@ -579,40 +506,10 @@
     color: var(--text-muted);
 }
 
-/* ── Sticky ready bar (Finding #7) ──────────────────────────────────────
-   A passive reminder, not a second primary control: when both slots are filled, the bar tells
-   a scrolled user that the comparison is set up. The actual Compare button lives in step 3. */
-.home__sticky-cta {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    padding: 0.55rem 1.25rem;
-    background: var(--glass-bg);
-    backdrop-filter: blur(8px);
-    border-top: 1px solid var(--border);
-    z-index: 100;
-    animation: slideUp 0.3s ease-out;
-}
+/* The sticky ready bar that used to sit here is gone with the accordion. It existed to tell a
+   scrolled user that the comparison was set up, which was only necessary because the Compare
+   button could be collapsed out of view. It is always visible now. */
 
-.home__sticky-text {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-@media (max-width: 520px) {
-    .home__sticky-text {
-        font-size: 0.78rem;
-    }
-}
 /* Loading placeholders in the model grid. Only the stagger is dynamic — the markup passes
    it as --stagger; everything else lives here rather than in an inline style. */
 .home__skeleton {

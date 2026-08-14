@@ -17,6 +17,11 @@
         @* aria-pressed carries the active sort to assistive tech; the colour alone would not. *@
         <button type="button" class="po-btn leaderboard__sort-btn @(IsEloSort ? "po-btn--primary" : "")"
                 aria-pressed="@Pressed(IsEloSort)" @onclick="@(() => SetSortAsync("Elo"))">ELO</button>
+        <button type="button" class="po-btn leaderboard__sort-btn @(IsValueSort ? "po-btn--primary" : "")"
+                aria-pressed="@Pressed(IsValueSort)"
+                disabled="@(!_entries.Any(e => e.Value.HasValue))"
+                title="Sort by ELO earned per dollar of API spend (higher = more bang per buck)"
+                @onclick="@(() => SetSortAsync("Value"))">💎 Value</button>
         <button type="button" class="po-btn leaderboard__sort-btn @(IsQualitySort ? "po-btn--primary" : "")"
                 aria-pressed="@Pressed(IsQualitySort)"
                 disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
@@ -66,12 +71,7 @@
                         <th scope="col">Rank</th>
                         <th scope="col">Model Name</th>
                         <th scope="col">ELO</th>
-                        @* No Duels column: it was the sum of the W/L cell beside it (14/2 → 16),
-                           so the table stated the same number twice. *@
-                        <th scope="col" title="Wins/losses, then ties when there are any, and the win rate. Together they are the model's judged duel count.">W/L/T (Win %)</th>
-                        <th scope="col" title="0-100 score from automated renderability + structure checks on each model's HTML output. Higher = more polished, self-contained HTML.">&#x1F9EA; Output Quality</th>
-                        <th scope="col" title="Average API cost (USD) per duel across every priced result. Free local/Ollama models show &mdash;.">💰 Avg $/duel</th>
-                        <th scope="col" title="ELO rating trend over the last 20 duels">ELO Trend</th>
+                        <th scope="col" title="ELO earned per dollar of API spend (CurrentElo / AvgApiCostPerDuel, divisor floored at $0.0001). Higher = more bang per buck. Local/Ollama and unpriced remotes show &mdash;.">💎 Value</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -121,54 +121,16 @@
                             </td>
                             <td>@((int)Math.Round(entry.CurrentElo))</td>
                             <td>
-                                @{
-                                    // Draws are their own column of the record, not losses. Subtracting
-                                    // them out is what keeps a model that tied twice from reading 0/2.
-                                    var losses = Math.Max(entry.DuelCount - entry.WinCount - entry.DrawCount, 0);
-                                    var winPct = entry.DuelCount > 0 ? (entry.WinCount * 100.0 / entry.DuelCount) : 0;
-                                    var pctStr = entry.DuelCount > 0 ? $" ({winPct:F0}%)" : "";
-                                    var drawStr = entry.DrawCount > 0 ? $"/{entry.DrawCount}" : "";
-                                }
-                                <span title="@($"{entry.WinCount} won, {losses} lost{(entry.DrawCount > 0 ? $", {entry.DrawCount} tied" : "")} of {entry.DuelCount} judged duels")">
-                                    @($"{entry.WinCount}/{losses}{drawStr}{pctStr}")
-                                </span>
-                            </td>
-                            <td>
-                                @if (entry.OutputQualityAvg.HasValue)
+                                @* Value = ELO earned per dollar of API spend, with the divisor
+                                   floored at $0.0001 server-side. Reads as a big number, hence the
+                                   tabular-nums treatment; suppress for rows that have no cost. *@
+                                @if (entry.Value.HasValue)
                                 {
-                                    <span title="@($"Last quality score: {entry.OutputQualityAvg.Value:F1} / 100")">@entry.OutputQualityAvg.Value.ToString("F1")</span>
+                                    <span class="leaderboard__value" title="@($"ELO {entry.CurrentElo} / {entry.AvgApiCostPerDuel:F4} USD per duel")">@entry.Value.Value.ToString("N0")</span>
                                 }
                                 else
                                 {
-                                    <span class="leaderboard__no-data" title="No scored outputs yet - run a duel to generate one">&#8212;</span>
-                                }
-                            </td>
-                            <td>
-                                @if (entry.AvgApiCostPerDuel.HasValue)
-                                {
-                                    <span class="leaderboard__cost" title="Average across @entry.DuelCount priced duel(s)">$@entry.AvgApiCostPerDuel.Value.ToString("F4")</span>
-                                }
-                                else if (IsLocalLike(entry.ModelType))
-                                {
-                                    <span class="leaderboard__no-data" title="Local/Ollama models aren't billed per token. Energy cost is reported per-duel in the Arena.">free</span>
-                                }
-                                else
-                                {
-                                    <span class="leaderboard__no-data" title="No priced duels yet — once this model runs a duel that has a Foundry rate, the average will appear here.">&#8212;</span>
-                                }
-                            </td>
-                            <td>
-                                @if (entry.EloSparkline is not null && entry.EloSparkline.Length > 1)
-                                {
-                                    <EloSparkline Values="entry.EloSparkline" />
-                                }
-                                else if (entry.EloSparkline is not null && entry.EloSparkline.Length == 1)
-                                {
-                                    <span class="leaderboard__no-data leaderboard__no-data--note" title="Only 1 duel recorded so far">1 duel</span>
-                                }
-                                else
-                                {
-                                    <span class="leaderboard__no-data leaderboard__no-data--note" title="No duel history yet">No duels yet</span>
+                                    <span class="leaderboard__no-data" title="No priced duels yet — Value needs at least one priced result.">&#8212;</span>
                                 }
                             </td>
                         </tr>
@@ -268,9 +230,8 @@
     private string _sortBy = "Elo";
     private bool IsQualitySort => string.Equals(_sortBy, "Quality", StringComparison.OrdinalIgnoreCase);
     private bool IsCostSort => string.Equals(_sortBy, "Cost", StringComparison.OrdinalIgnoreCase);
-    private bool IsEloSort => !IsQualitySort && !IsCostSort;
-
-    private static bool IsLocalLike(ModelType t) => t is ModelType.Local or ModelType.LocalService;
+    private bool IsValueSort => string.Equals(_sortBy, "Value", StringComparison.OrdinalIgnoreCase);
+    private bool IsEloSort => !IsQualitySort && !IsCostSort && !IsValueSort;
 
     /// <summary>
     /// Compare page prefilled with this pairing. Same querystring the Archive's Re-Challenge
@@ -285,11 +246,12 @@
     private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
 
     /// <summary>Headline label mirrors the active sort — "Top ELO" / "Cheapest" /
-    /// "Highest quality" — so a sorted-by-cost view doesn't claim the leader is the top.</summary>
+    /// "Highest quality" / "Best Value" — so a sorted-by-cost view doesn't claim the leader is the top.</summary>
     private string TopLabel => _sortBy switch
     {
         "Quality"    => "Highest quality",
         "Cost"       => "Cheapest",
+        "Value"      => "Best Value",
         _            => "Top ELO",
     };
 
@@ -313,6 +275,8 @@
         if (sortBy == "Quality" && !_entries.Any(e => e.OutputQualityAvg.HasValue))
             return; // button is disabled; guard in case of race condition
         if (sortBy == "Cost" && !_entries.Any(e => e.AvgApiCostPerDuel.HasValue))
+            return; // button is disabled; guard in case of race condition
+        if (sortBy == "Value" && !_entries.Any(e => e.Value.HasValue))
             return; // button is disabled; guard in case of race condition
         _sortBy = sortBy;
         await LoadLeaderboardAsync();

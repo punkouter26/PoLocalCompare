@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace PoLocalCompare.Api.Common.Domain;
+namespace PoLocalCompare.Api.Features.Duels;
 
 /// <remarks>
 /// Patterns are source-generated: <c>Score</c> runs per enriched result and again for every

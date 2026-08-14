@@ -285,7 +285,10 @@
         flex: 1 1 100%;
     }
 
-    .lab__btn-row .lab__btn {
+    /* .po-btn, not .lab__btn: the per-surface button classes were folded into .po-btn and
+       this rule silently stopped matching, so the row's buttons never went full-width on
+       mobile. The layout-only row class is still ours. */
+    .lab__btn-row .po-btn {
         flex: 1 1 180px;
     }
 

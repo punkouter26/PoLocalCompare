@@ -492,6 +492,8 @@
     {
         await DisconnectAsync();
 
+        _streamRender ??= new RenderCoalescer(() => InvokeAsync(StateHasChanged));
+
         _signalR = new SignalRDuelClient();
         _signalR.OnModelStatusUpdate += update => OnStatusUpdate(state, update);
         _signalR.OnVerdictRecorded += response => _verdictSignal?.TrySetResult(response);
@@ -507,6 +509,10 @@
         _signalR = null;
         await client.DisposeAsync();
     }
+
+    // Token-batch updates outrun the frame rate; without this each one re-rendered the whole
+    // queue, the standings and both preview iframes to move a counter.
+    private RenderCoalescer? _streamRender;
 
     private void OnStatusUpdate(RoundState state, ModelStatusUpdateDto update)
     {
@@ -531,7 +537,8 @@
             PushVelocity(state.RightHistory, update.TokenVelocity);
         }
 
-        InvokeAsync(StateHasChanged);
+        // Coalesced: this fires once per token batch for both sides of the running duel.
+        _streamRender?.Request();
     }
 
     private static void PushVelocity(List<double> history, double? velocity)
@@ -577,6 +584,7 @@
         _runCts?.Cancel();
         _runCts?.Dispose();
         _verdictSignal?.TrySetCanceled();
+        _streamRender?.Dispose();
         await DisconnectAsync();
     }
 }

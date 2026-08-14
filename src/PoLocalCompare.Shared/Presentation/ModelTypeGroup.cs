@@ -1,6 +1,6 @@
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Client.Presentation;
+namespace PoLocalCompare.Shared.Presentation;
 
 /// <summary>
 /// Single source of truth for how models are grouped by type across the app, so the

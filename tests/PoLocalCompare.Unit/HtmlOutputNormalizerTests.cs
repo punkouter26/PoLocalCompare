@@ -1,4 +1,4 @@
-using PoLocalCompare.Api.Common.Domain;
+using PoLocalCompare.Api.Features.Duels;
 
 namespace PoLocalCompare.Unit;
 

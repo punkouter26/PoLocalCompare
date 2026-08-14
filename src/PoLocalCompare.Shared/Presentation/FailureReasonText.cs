@@ -1,4 +1,4 @@
-namespace PoLocalCompare.Client.Presentation;
+namespace PoLocalCompare.Shared.Presentation;
 
 /// <summary>
 /// Presentation rules for the <c>FailureReason</c> carried on a duel result.

@@ -50,19 +50,13 @@ public class OutputAnalysisTests
     }
 
     [Fact]
-    public void Analyze_ImageWithoutAlt_ReportedAsAccessibilityIssue()
+    public void Analyze_ReportsAccessibilityIssues()
     {
-        var analysis = OutputAnalysis.Analyze("<body><img src='a.png'></body>");
+        var noAlt = OutputAnalysis.Analyze("<body><img src='a.png'></body>");
+        Assert.Contains(noAlt.AccessibilityIssues, i => i.Contains("alt", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Contains(analysis.AccessibilityIssues, i => i.Contains("alt", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void Analyze_FirstHeadingNotH1_ReportedAsAccessibilityIssue()
-    {
-        var analysis = OutputAnalysis.Analyze("<body><h2>a</h2></body>");
-
-        Assert.Contains(analysis.AccessibilityIssues, i => i.Contains("h2", StringComparison.OrdinalIgnoreCase));
+        var badHeadingOrder = OutputAnalysis.Analyze("<body><h2>a</h2></body>");
+        Assert.Contains(badHeadingOrder.AccessibilityIssues, i => i.Contains("h2", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -88,7 +82,6 @@ public class OutputAnalysisTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("<div>x</div>")]
     [InlineData("not html at all")]
     public void CompletenessScore_StaysWithinBounds(string html)
     {

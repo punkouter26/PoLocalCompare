@@ -211,11 +211,10 @@ try
     builder.Services.AddApplicationServices();
 
     // ─── Background task queue for reliable duel execution ──────────────────
-    builder.Services.AddSingleton<BackgroundTaskQueue>();
-    builder.Services.AddSingleton<IBackgroundTaskQueue>(sp => sp.GetRequiredService<BackgroundTaskQueue>());
-    builder.Services.AddHostedService(sp => new BackgroundTaskService(
-        sp.GetRequiredService<IBackgroundTaskQueue>(),
-        sp.GetRequiredService<ILogger<BackgroundTaskService>>()));
+    // Nothing resolves the concrete BackgroundTaskQueue, so the interface registration and the
+    // hand-written hosted-service factory that used to sit here are both plain DI now.
+    builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+    builder.Services.AddHostedService<BackgroundTaskService>();
 
     // ─── Build ───────────────────────────────────────────────────────────────
     var app = builder.Build();

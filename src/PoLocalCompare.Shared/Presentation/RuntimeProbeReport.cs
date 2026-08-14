@@ -1,4 +1,4 @@
-namespace PoLocalCompare.Client.Presentation;
+namespace PoLocalCompare.Shared.Presentation;
 
 /// <summary>
 /// What a model's output actually did once it ran, as reported by the probe injected into the

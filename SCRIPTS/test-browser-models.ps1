@@ -4,7 +4,7 @@ Smoke-tests every browser (WebLLM/WebGPU) model against a running app.
 
 .DESCRIPTION
 Local models execute in the client, not on the server, so the API alone cannot test them --
-test-models-rotating-cube.ps1 can only mark them NOT_TESTED_BROWSER_REQUIRED. This starts a
+a server-side probe can only mark them NOT_TESTED_BROWSER_REQUIRED. This starts a
 real Chrome, attaches Playwright to it over CDP, and runs one duel per browser model.
 
 Why a real Chrome instead of Playwright's own: a Playwright-launched browser (bundled Chromium

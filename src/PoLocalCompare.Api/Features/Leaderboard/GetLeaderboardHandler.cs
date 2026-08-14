@@ -1,4 +1,3 @@
-using PoLocalCompare.Api.Common.Domain;
 using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Api.Features.Leaderboard;
@@ -32,6 +31,17 @@ public sealed class GetLeaderboardHandler(
                 ? pricedResults.Average(r => r.ApiCostUsd!.Value)
                 : null;
 
+            // Value = ELO earned per dollar of API spend, with the divisor floored so a
+            // "$0.0001 per duel" model doesn't yield a 15-million Value that swamps every
+            // useful comparison. The floor matches the precision we render at (4 d.p., i.e.
+            // 0.0001) — anything cheaper is effectively free in this UI. Null when there is
+            // no average cost at all (Local/Ollama / unpriced remote, same convention as the
+            // AvgApiCostPerDuel column it sits next to).
+            const double minCostFloor = 0.0001;
+            double? value = avgCost.HasValue
+                ? Math.Round(Math.Round(model.CurrentElo, 1) / Math.Max(avgCost.Value, minCostFloor), 2)
+                : null;
+
             return new LeaderboardEntryDto
             {
                 ModelId = model.ModelId,
@@ -45,6 +55,7 @@ public sealed class GetLeaderboardHandler(
                 InputTokenPricePerMillion = model.InputTokenPricePerMillion,
                 OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
                 AvgApiCostPerDuel = avgCost,
+                Value = value,
                 OutputQualityAvg = modelResults.Count > 0
                     ? modelResults.Average(r => r.OutputQualityScore)
                     : null,
@@ -52,6 +63,9 @@ public sealed class GetLeaderboardHandler(
             };
         })).ToList();
 
+        // Sort: any "Value" branch must respect the same nullable convention as the Cost branch
+        // (priced rows first, then null-rows tail — not floating to whichever ELO they happen
+        // to carry, which is meaningless against a score unit the missing row can't compute).
         var sorted = string.Equals(sortBy, "Quality", StringComparison.OrdinalIgnoreCase)
             ? rows
                 .OrderByDescending(x => x.OutputQualityAvg.HasValue)
@@ -63,6 +77,13 @@ public sealed class GetLeaderboardHandler(
             ? rows
                 .OrderByDescending(x => x.AvgApiCostPerDuel.HasValue)
                 .ThenBy(x => x.AvgApiCostPerDuel ?? double.MaxValue) // cheapest first when sorting
+                .ThenByDescending(x => x.CurrentElo)
+                .ThenBy(x => x.DisplayName)
+                .ToList()
+            : string.Equals(sortBy, "Value", StringComparison.OrdinalIgnoreCase)
+            ? rows
+                .OrderByDescending(x => x.Value.HasValue)
+                .ThenByDescending(x => x.Value ?? double.MinValue) // highest ELO/$ first
                 .ThenByDescending(x => x.CurrentElo)
                 .ThenBy(x => x.DisplayName)
                 .ToList()
@@ -86,6 +107,7 @@ public sealed class GetLeaderboardHandler(
                 InputTokenPricePerMillion = entry.InputTokenPricePerMillion,
                 OutputTokenPricePerMillion = entry.OutputTokenPricePerMillion,
                 AvgApiCostPerDuel = entry.AvgApiCostPerDuel,
+                Value = entry.Value,
                 OutputQualityAvg = entry.OutputQualityAvg,
                 EloSparkline = entry.EloSparkline,
             })

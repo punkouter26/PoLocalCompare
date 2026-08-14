@@ -66,34 +66,6 @@ integrity.
 
 ---
 
-### `cleanup-models.py`
-
-**Purpose:** Deduplicates the Models table in Azurite (Azure Storage emulator).
-
-**Usage:**
-```bash
-python SCRIPTS/cleanup-models.py
-```
-
-**What it does:**
-- Connects to the local Azurite development storage
-- Groups model entries by `WebLlmModelId`
-- Keeps the oldest entry (by insertion order/ULID) for each model
-- Deletes all duplicate entries
-- Reports the number of duplicates removed and remaining models
-
-**Requirements:**
-- Azurite running with a `Models` table
-- `azure-data-tables` Python package
-- Connection string set to `UseDevelopmentStorage=true`
-
-**When to use:**
-- After testing model ingestion workflows
-- To clean up development data and maintain a clean state
-- Before running integration tests
-
----
-
 ### `plan-webllm-artifacts.py`, `fetch-artifacts.ps1`, `receive-artifacts.ps1`
 
 **Purpose:** Get browser (WebLLM) models onto a machine whose network blocks huggingface.co.
@@ -147,7 +119,7 @@ with Windows 10 1803+. `fetch-artifacts.ps1` additionally needs Python + `huggin
 
 Install required Python packages:
 ```bash
-pip install huggingface_hub azure-data-tables
+pip install huggingface_hub
 ```
 
 Run all scripts from the repository root:

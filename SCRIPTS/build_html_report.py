@@ -21,7 +21,7 @@ OUT_PATH = ROOT / "model-test-report.html"
 # Results are read from the TSVs the test scripts emit, never transcribed by hand. The previous
 # version carried a hardcoded TESTED list of tokens/ms/duel-ids, which went stale the moment
 # either script was re-run and quietly reported outcomes that no longer matched the duels.
-SERVER_TSV = ROOT / "model-test-status.tsv"    # SCRIPTS/test-models-rotating-cube.ps1
+SERVER_TSV = ROOT / "model-test-status.tsv"    # server-side probe results, if present
 BROWSER_TSV = ROOT / "browser-test-status.tsv"  # SCRIPTS/test-browser-models.ps1
 
 # Statuses that are a genuine verdict on the model, as opposed to a harness or environment

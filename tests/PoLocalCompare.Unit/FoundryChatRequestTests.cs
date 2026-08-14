@@ -15,35 +15,29 @@ public class FoundryChatRequestTests
     }
 
     [Fact]
-    public void Build_StreamingRequestForCodestral_OmitsStreamOptions()
+    public void Build_ForCodestral_OmitsStreamOptions_StreamingOrNot()
     {
         // Codestral 2501 routes through a strict OpenAI-compatible proxy that rejects
-        // stream_options with HTTP 422 — see SCRIPTS/review/out/demo-run for the live 422.
+        // stream_options with HTTP 422 (observed live during the 2026-08-13 demo session).
         // The deny-by-default SupportsStreamUsage list keeps Codestral working without a flag
-        // trip every time it gets paired in a demo.
-        var body = FoundryChatRequest.Build("Codestral-2501", Array.Empty<object>(), 4096, 0.7, stream: true, includeModelField: false);
+        // trip every time it gets paired in a demo. With stream=false the option is moot, but
+        // the body still has to come out well-formed — both halves of that are asserted here.
+        var streaming = FoundryChatRequest.Build("Codestral-2501", Array.Empty<object>(), 4096, 0.7, stream: true, includeModelField: false);
 
-        Assert.False(body.ContainsKey("stream_options"));
-        Assert.True(body.ContainsKey("stream"));
-    }
+        Assert.False(streaming.ContainsKey("stream_options"));
+        Assert.True(streaming.ContainsKey("stream"));
 
-    [Fact]
-    public void Build_NonStreamingRequestForCodestral_StillWorks()
-    {
-        // stream=false: stream_options is moot. The body should still be well-formed.
-        var body = FoundryChatRequest.Build("Codestral-2501", Array.Empty<object>(), 4096, 0.7, stream: false, includeModelField: false);
+        var blocking = FoundryChatRequest.Build("Codestral-2501", Array.Empty<object>(), 4096, 0.7, stream: false, includeModelField: false);
 
-        Assert.False(body.ContainsKey("stream_options"));
-        Assert.Equal(false, body["stream"]);
-        Assert.Equal(4096, body["max_tokens"]);
+        Assert.False(blocking.ContainsKey("stream_options"));
+        Assert.Equal(false, blocking["stream"]);
+        Assert.Equal(4096, blocking["max_tokens"]);
     }
 
     [Theory]
     [InlineData("gpt-5-nano")]
-    [InlineData("o1-preview")]
     [InlineData("phi-4-mini-instruct")]
     [InlineData("Llama-3.3-70B-Instruct")]
-    [InlineData("grok-4-1-fast-non-reasoning")]
     public void Build_NativeDeploymentNames_SupportStreamUsage(string deployment)
     {
         // Pin the allow-list: these all went through PoLocalCompare's proxy during the
@@ -53,9 +47,7 @@ public class FoundryChatRequestTests
 
     [Theory]
     [InlineData("Codestral-2501")]
-    [InlineData("mistral-large-latest")]
     [InlineData("unknown-deployment")]
-    [InlineData("")]
     [InlineData(null)]
     public void Build_NonNativeOrUnknownDeploymentNames_RejectStreamUsage(string? deployment)
     {

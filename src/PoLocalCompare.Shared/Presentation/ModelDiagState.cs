@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using PoLocalCompare.Shared.DTOs;
 
-namespace PoLocalCompare.Client.Presentation;
+namespace PoLocalCompare.Shared.Presentation;
 
 public enum DiagStatus { Idle, Checking, Loading, Generating, Complete, Error, Cancelled }
 

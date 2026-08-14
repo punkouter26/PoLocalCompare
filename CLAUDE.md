@@ -28,10 +28,9 @@ python SCRIPTS/download-models.py                               # vendor browser
 Ports **5000/5001 are fixed** — never change them without explicit instruction. The API hosts the
 Blazor WASM client, so there is one process, not two.
 
-There is no linter or formatter step — `TreatWarningsAsErrors` is the whole gate.
-`SCRIPTS/validate-standards.ps1` **does not work**: it still expects the pre-VSA `src/Client/...`
-layout and a root `architecture.md` that no longer exists, so it fails on a healthy tree. Nothing
-runs it — don't treat its output as signal, and don't "fix" the repo to satisfy it.
+There is no linter or formatter step — `TreatWarningsAsErrors` is the whole gate. (`validate-standards.ps1`
+used to sit here and was deleted in the 2026-08-13 prune: it still expected the pre-VSA `src/Client/...`
+layout and failed on a healthy tree. Don't reintroduce it.)
 
 ### Tests
 
@@ -43,7 +42,7 @@ dotnet test tests/PoLocalCompare.Unit          # pure logic, no Docker
 dotnet test tests/PoLocalCompare.Integration   # Testcontainers Azurite
 dotnet test tests/PoLocalCompare.E2EAPI        # API journeys
 dotnet test tests/PoLocalCompare.E2EUI         # Playwright (app must be running)
-dotnet test tests/PoLocalCompare.Unit --filter FullyQualifiedName~EloCalculatorTests.Calculate_WinForA_AIncreasesAndBDecreases
+dotnet test tests/PoLocalCompare.Unit --filter FullyQualifiedName~EloCalculatorTests
 ```
 
 UI tests run **headed Chrome by default** across a mobile and a desktop viewport; set `HEADLESS=1`
@@ -112,6 +111,14 @@ local downloader *and* the `Fetch WebLLM artifacts` workflow, and exits non-zero
 run it after any catalog edit. Retired seed IDs are commented out, never reused (007/008 are burnt).
 Ollama (`ModelType.LocalService`) models seed in **Development only**, so Production has no dead entries.
 
+**`web-llm.js` is a Git LFS object.** The vendored bundle is 6.5 MB — larger than all the source
+in the repo combined — so it is tracked through LFS rather than as an ordinary blob. A clone made
+without `git lfs install` gets a ~130-byte pointer file instead, and the symptom is every browser
+model failing at `import` time in `webllm-worker.js` while everything else works normally. The
+`build` job in [deploy.yml](.github/workflows/deploy.yml) and the `Fetch WebLLM artifacts`
+workflow both check out with `lfs: true` — the latter because `plan-webllm-artifacts.py` parses
+`web-llm.js` for the model list, so a pointer file breaks the catalog check too.
+
 **Browser weights are optional but bimodal.** With `wwwroot/models/` absent, WebLLM pulls weights from
 the CDN *and* `model_lib` `.wasm` files from raw.githubusercontent.com — two separate hosts, either of
 which a filtered network can block. `download-models.py` vendors both (weights per model dir, libs into
@@ -129,6 +136,12 @@ serves the old worker and your change appears to do nothing. The same trap appli
 runs. That is why the diff engine, the HTML analyzer, the prompt library and the demo planner sit in
 `Shared/Analysis`, `Shared/Prompts` and `Shared/Demo` rather than beside the components that use
 them. Razor components stay thin wrappers over those statics.
+
+**Home is a flat form, not a wizard.** It was a three-panel disclosure accordion with a numbered
+stepper, step-advance rules and a sticky readiness bar that existed only because the Compare button
+could be collapsed out of view. The page is "two models, a prompt, a button" and now shows all of
+it at once (`home__section` / `home__compare`). Don't reintroduce `home__panel*` — the E2E-UI
+selectors point at the flat markup.
 
 **The Arena is the whole duel — streaming and judging.** `/processing` no longer exists; `POST
 /api/duels` navigates straight to `/arena/{id}`, which connects to `DuelHub`, shows the live
@@ -173,10 +186,13 @@ A class that is built by interpolation — `lab-card__vram-badge--@State.VramTie
 scan, so check for those before deleting a rule.
 
 **Client code that isn't a component doesn't live in `Components/`.**
-`src/PoLocalCompare.Client/Presentation/` holds the view-models, enums and static helpers that
+`src/PoLocalCompare.Shared/Presentation/` holds the view-models, enums and static helpers that
 `.razor` files lean on (`ModelDiagState`, `ModelTypeGroup`, `SourceViewMode`, `RuntimeProbeReport`,
-`FailureReasonText`). It is reachable only by E2E-UI, so genuinely testable logic still belongs in
-`PoLocalCompare.Shared` — see the note above.
+`FailureReasonText`, `RenderCoalescer`). It used to be `Client/Presentation/`, which put it in the
+one assembly no tier but E2E-UI can reach — the same trap as the note above, so it moved wholesale.
+`src/PoLocalCompare.Client/Services/` keeps what genuinely needs the browser: JS interop, the
+SignalR client, and `LocalInferenceDriver` (which runs a WebGPU model in the tab and POSTs the
+result back — extracted out of `Arena.razor`, which was the only thing that knew how).
 
 **The Arena's scorecard must never feed ELO.** `OutputAnalysis.CompletenessScore` is presentational
 and deliberately separate from the persisted `OutputQualityScore` — tightening a heuristic there must
@@ -191,7 +207,17 @@ on: `AiJudge:Enabled=false` still restores human-only verdicts.
 
 **Vertical slices.** Server code lives in `src/PoLocalCompare.Api/Features/<Feature>/` — endpoint,
 handlers, entities, and repository flat in one folder. `Common/` is only for genuinely cross-slice
-code. There is no Domain/Application/Infrastructure split; it was collapsed in 2026-07-06 (PRD §9).
+code — `Common/Domain/` was dissolved in the 2026-08-13 prune because all four of its calculators
+had exactly one consuming slice (`GreenStatsCalculator`, `HtmlOutputNormalizer` and
+`HtmlOutputQualityScorer` to `Features/Duels`, `WinRateCalculator` to `Features/Leaderboard`). There is no Domain/Application/Infrastructure split; it was collapsed in 2026-07-06 (PRD §9).
+
+**Streaming re-renders are coalesced, and the frames opt out.** Token-batch updates arrive far
+faster than a frame. `Arena` and `Demo` funnel their per-batch handlers through
+`RenderCoalescer.Request()` (~16 ms trailing edge) instead of calling `StateHasChanged` directly,
+and `SandboxedViewport` implements `ShouldRender` gated on an ordinal compare of its raw HTML —
+without that, every render re-emitted `srcdoc` and the browser tore down and reloaded the preview
+mid-generation. Terminal events (`DuelComplete`, verdicts) still paint immediately; don't route
+those through the coalescer.
 
 **Persistence details that bite.** Table Storage writes are idempotent and ETag-safe: creates swallow
 409, updates are If-Match conditional, and duel writers re-read and reapply on 412. `HybridCache`

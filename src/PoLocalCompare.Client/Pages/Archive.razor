@@ -48,78 +48,34 @@
                 <button class="archive__filter-reset" @onclick="ResetFilters">Show all duels</button>
             </div>
         }
-        @* The detail panel sits above the table, not below it. Below a 20-row grid it opened
-           roughly 1,100px off-screen, so selecting the top row scrolled you to the bottom of
-           the page and away from the list you were reading. Here it opens in place, the list
-           stays visible underneath, and no scroll is needed at all. *@
-        @if (_selectedDuel is not null)
-        {
-            <div class="archive__detail" id="archive-detail">
-                <div class="archive__detail-head">
-                    <h2 class="archive__detail-title">Duel Details</h2>
-                    <button type="button" class="po-btn po-btn--sm po-btn--ghost"
-                            aria-label="Close duel details"
-                            @onclick="@(() => _selectedDuel = null)">✕</button>
-                </div>
-
-                <div class="archive__detail-meta">
-                    <p><strong>Prompt:</strong> @_selectedDuel.PromptSummary</p>
-                    <p><strong>Left:</strong> @FormatModelName(_selectedDuel.LeftModelName, _selectedDuel.LeftModelId) &nbsp;&nbsp; <strong>Right:</strong> @FormatModelName(_selectedDuel.RightModelName, _selectedDuel.RightModelId)</p>
-                    <p><strong>Started:</strong> @_selectedDuel.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
-                    @if (_selectedDuel.CompletedAt.HasValue)
-                    {
-                        <p><strong>Completed:</strong> @_selectedDuel.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
-                    }
-                    <p><strong>Outcome:</strong> @OutcomeText(_selectedDuel)</p>
-                </div>
-
-                <div class="archive__detail-actions">
-                    @* One button, not two. "View Output" and "Judge This Duel" navigated to the
-                       identical /arena/{id} — the Arena is where you both look and decide, so the
-                       label is all that ever differed. *@
-                    <button type="button"
-                            class="po-btn archive__btn @(_selectedDuel.Verdict == DuelVerdict.Pending ? "po-btn--primary" : "")"
-                            @onclick="GoToArena">
-                        @(_selectedDuel.Verdict == DuelVerdict.Pending ? "⚖ Judge this duel" : "👁 View output")
-                    </button>
-                    <button type="button" class="po-btn archive__btn" @onclick="GoToReChallenge">
-                        ⚧ Re-Challenge
-                    </button>
-                    @* Same endpoint the Arena links to; the BFF cookie rides along on a
-                       same-origin GET, so no interop is needed to download it. *@
-                    <a class="po-btn archive__btn"
-                       href="@($"/api/duels/{_selectedDuel.DuelId}/report")"
-                       download="@($"lab-report-{_selectedDuel.DuelId}.html")">
-                        ⬇ Lab report
-                    </a>
-                </div>
-            </div>
-        }
-
-        @* Rows are keyboard-operable (WCAG 2.2 SC 2.1.1): tabbable, and Enter/Space
-           selects, because clicking a row is the only way to open the detail panel. *@
+        @* Clicking a row navigates straight to /arena/{id} so both model outputs are
+           visible side-by-side (no intermediate "Duel Details" panel). Re-Challenge and
+           Lab report sit inline as per-row icon buttons so the two side features the
+           panel used to host don't quietly disappear. *@
         <div class="po-table-wrap">
-            <table class="po-table po-table--selectable">
-                <caption class="archive__grid-caption">Recorded duels — select a row for details</caption>
+            <table class="po-table po-table--selectable archive__rows">
+                <caption class="archive__grid-caption">Recorded duels — click a row to compare the two outputs side-by-side</caption>
                 <thead>
                     <tr>
                         <th scope="col">Date</th>
                         <th scope="col">Prompt</th>
                         <th scope="col">Left Model</th>
                         <th scope="col">Right Model</th>
-                        @* No chevron column: the caption already says a row opens its details,
-                           and the selected row is marked by aria-selected and its own styling. *@
                         <th scope="col">Verdict</th>
+                        <th scope="col" class="archive__row-actions-col"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
+                    @* `role="link"` + `tabindex="0"` + `aria-label` keeps the row an operable
+                       control (WCAG 2.2 SC 2.1.1) without pretending to be a selectable row,
+                       which it no longer is — Enter and Space both navigate to the Arena. *@
                     @foreach (var d in _filteredDuels)
                     {
-                        <tr class="@GetRowClass(d)"
-                            tabindex="0"
-                            aria-selected="@((d.DuelId == _selectedDuel?.DuelId).ToString().ToLowerInvariant())"
-                            @onclick="() => OnRowSelect(d)"
-                            @onkeydown="e => OnRowKeyDown(e, d)">
+                        var href = $"/arena/{d.DuelId}";
+                        <tr role="link" tabindex="0" aria-label="@($"Open {d.LeftModelName} vs {d.RightModelName} side-by-side")"
+                            @onclick="@(() => Nav.NavigateTo(href))"
+                            @onclick:stopPropagation="false"
+                            @onkeydown="e => OnRowKeyDown(e, href)">
                             <td>@d.StartedAt.ToString("yyyy-MM-dd HH:mm") <span class="archive__tz">UTC</span></td>
                             <td>@d.PromptSummary</td>
                             <td>
@@ -155,17 +111,38 @@
                                 {
                                     @* The unjudged state is the one verdict you can act on, so it
                                        is the action rather than a label. Reaching the Arena used to
-                                       cost three clicks — row, then "Judge This Duel" in the detail
-                                       panel, then the winner — for a decision that is worth two.
-                                       stopPropagation so it jumps the panel instead of opening it
-                                       on the way past. *@
+                                       cost three clicks — row click was followed by a "Judge This
+                                       Duel" panel button and then the winner. Now it is two: open
+                                       the row, pick. stopPropagation stays so the link does not
+                                       bubble into the row's own click handler. *@
                                     <a class="po-btn po-btn--sm po-btn--primary archive__judge-btn"
-                                       href="@($"/arena/{d.DuelId}")"
+                                       href="@href"
                                        title="Open both outputs and pick a winner"
                                        @onclick:stopPropagation="true">
                                         ⚖ Judge
                                     </a>
                                 }
+                            </td>
+                            <td class="archive__row-actions">
+                                @* Re-Challenge: same prompt, same two models, fresh duel. Lives
+                                   only on Archive today — the Arena cannot re-pair because the
+                                   verdict page is keyed on this duel's id. *@
+                                <button type="button"
+                                        class="archive__row-btn"
+                                        aria-label="@($"Re-Challenge {d.LeftModelName} vs {d.RightModelName} with the same prompt")"
+                                        title="Re-Challenge with the same prompt"
+                                        @onclick="@(() => GoToReChallenge(d))"
+                                        @onclick:stopPropagation="true">⚧</button>
+                                @* Lab report: same endpoint the Arena links to; the BFF cookie
+                                   rides along on a same-origin GET, so no interop is needed to
+                                   download it. The download attribute hands the browser a
+                                   sane filename. *@
+                                <a class="archive__row-btn archive__row-btn--link"
+                                   href="@($"/api/duels/{d.DuelId}/report")"
+                                   aria-label="Download lab report (HTML)"
+                                   title="Download lab report (HTML)"
+                                   download="@($"lab-report-{d.DuelId}.html")"
+                                   @onclick:stopPropagation="true">⬇</a>
                             </td>
                         </tr>
                     }
@@ -202,7 +179,6 @@
     [SupplyParameterFromQuery(Name = "verdict")] public string? VerdictQuery { get; set; }
 
     private List<DuelSummaryDto> _duels = [];
-    private DuelSummaryDto? _selectedDuel;
     private bool _loading = true;
     private string? _error;
     private bool _hasMore;
@@ -307,29 +283,13 @@
         }
     }
 
-    // No scroll-into-view any more: the panel renders directly above the table, so it is
-    // already on screen when it opens. Selecting the same row again closes it.
-    private void OnRowSelect(DuelSummaryDto duel) =>
-        _selectedDuel = _selectedDuel?.DuelId == duel.DuelId ? null : duel;
-
-    /// <summary>Keyboard equivalent of clicking a row (SC 2.1.1).</summary>
-    private void OnRowKeyDown(KeyboardEventArgs e, DuelSummaryDto duel)
+    /// <summary>Keyboard equivalent of clicking a row (SC 2.1.1). Triggers the same
+    /// navigation as a pointer click, so Enter or Space opens /arena/{id}.</summary>
+    private void OnRowKeyDown(KeyboardEventArgs e, string href)
     {
         if (e.Key is "Enter" or " ")
-            OnRowSelect(duel);
+            Nav.NavigateTo(href);
     }
-
-    /// <summary>
-    /// One line naming what actually happened. A tie and an unjudged duel both have no winner
-    /// but are not the same event, and the old "Winner: —" said nothing about which one it was.
-    /// </summary>
-    private static string OutcomeText(DuelSummaryDto d) => d.Verdict switch
-    {
-        DuelVerdict.Tie => "Tie — the judge found both outputs equivalent, so no rating moved.",
-        DuelVerdict.Pending => "Not judged yet.",
-        DuelVerdict.Expired => "Expired before anyone judged it.",
-        _ => GetWinnerName(d),
-    };
 
     private static string GetWinnerName(DuelSummaryDto d)
     {
@@ -353,17 +313,14 @@
         return modelId.Length <= 10 ? $"id: {modelId}" : $"id: {modelId[..4]}…{modelId[^4..]}";
     }
 
-    private string GetRowClass(DuelSummaryDto d) =>
-        d.DuelId == _selectedDuel?.DuelId ? "archive__row--selected" : string.Empty;
-
-    private void GoToArena() => Nav.NavigateTo($"/arena/{_selectedDuel!.DuelId}");
-
-    private void GoToReChallenge()
+    private void GoToReChallenge(DuelSummaryDto d)
     {
-        if (_selectedDuel is null) return;
-        var prompt = Uri.EscapeDataString(_selectedDuel.PromptSummary);
-        var leftId = Uri.EscapeDataString(_selectedDuel.LeftModelId);
-        var rightId = Uri.EscapeDataString(_selectedDuel.RightModelId);
+        // Re-Challenge re-runs the same pairing with the same prompt. The Compare page expects
+        // the prompt on the query string, so this stays text-only - the user can still swap
+        // models on the landing page before launching.
+        var prompt = Uri.EscapeDataString(d.PromptSummary);
+        var leftId = Uri.EscapeDataString(d.LeftModelId);
+        var rightId = Uri.EscapeDataString(d.RightModelId);
         Nav.NavigateTo($"/?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
     }
 }

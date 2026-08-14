@@ -28,5 +28,12 @@ public sealed class LeaderboardEntryDto
     /// "ran and was free" (only possible for unpriced local/Ollama models).
     /// </summary>
     public double? AvgApiCostPerDuel { get; init; }
+    /// <summary>
+    /// ELO earned per dollar of API spend — <c>CurrentElo / AvgApiCostPerDuel</c>, with the
+    /// divisor floored at $0.0001 so the column stays readable for near-free models instead of
+    /// exploding into the millions. Null when <see cref="AvgApiCostPerDuel"/> is null (local,
+    /// Ollama, or any model that has not yet run a priced duel). Higher = more bang per buck.
+    /// </summary>
+    public double? Value { get; init; }
     public double[]? EloSparkline { get; init; }
 }

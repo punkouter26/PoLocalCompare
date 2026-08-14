@@ -3,7 +3,7 @@
  *
  * Local models never execute on the server — DuelExecutionService signals the client over
  * SignalR and waits for it to POST the result back — so they cannot be tested by hitting the
- * API alone. That is why SCRIPTS/test-models-rotating-cube.ps1 can only mark them
+ * API alone. That is why a server-side probe can only mark them
  * NOT_TESTED_BROWSER_REQUIRED. This script is the missing half: it opens a page per model,
  * lets WebLLM run, and records what came back.
  *

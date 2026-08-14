@@ -77,11 +77,40 @@
     private string? _registeredProbeId;
     private RuntimeProbeReport _report = new();
 
+    // Everything this component renders is derived from its parameters, so an unchanged
+    // parameter set can only produce an identical frame. The sentinel makes the first pass
+    // always process (a genuinely empty HtmlContent must still be analysed once).
+    private string? _lastRaw;
+    private (string Name, bool Loser, bool Winner, bool Probe) _lastChrome;
+    private bool _renderDirty = true;
+
+    /// <summary>
+    /// Suppresses re-renders the parent triggers for reasons that do not concern this frame.
+    /// The Arena re-renders on a timer while streaming; without this, every one of those
+    /// re-emitted <c>srcdoc</c> on both iframes, which makes the browser tear down and reload
+    /// the document mid-generation.
+    /// </summary>
+    protected override bool ShouldRender() => _renderDirty;
+
     protected override void OnParametersSet()
     {
+        var raw = HtmlContent ?? string.Empty;
+        var chrome = (ModelName, IsLoser, ShowWinner, ProbeRuntime);
+
+        // Cheap ordinal gate before the four regex passes below: while a duel streams, most
+        // parent renders carry a document identical to the one already on screen.
+        if (_lastRaw is not null && string.Equals(raw, _lastRaw, StringComparison.Ordinal) && chrome == _lastChrome)
+        {
+            _renderDirty = false;
+            return;
+        }
+
+        _lastRaw = raw;
+        _lastChrome = chrome;
+        _renderDirty = true;
+
         _diagnosticItems.Clear();
 
-        var raw = HtmlContent ?? string.Empty;
         var containsFence = HtmlPreview.ContainsFence(raw);
         var normalized = HtmlPreview.Normalize(raw);
 

@@ -525,9 +525,10 @@
     }
 
     // ── Live duel state ───────────────────────────────────────────────────────
-    // Everything from here to RunLocalInferenceAsync used to be the /processing page. It lives
-    // here because a duel is one thing: it streams, then it is judged, and swapping pages
-    // between those two moments cost a full remount of both preview iframes.
+    // The streaming half of this page used to be the /processing page. It lives here because a
+    // duel is one thing: it streams, then it is judged, and swapping pages between those two
+    // moments cost a full remount of both preview iframes. Running a browser model is no longer
+    // part of it — that moved to LocalInferenceDriver, leaving only the view state behind.
     private string? _leftStreamingHtml;
     private string? _rightStreamingHtml;
     private bool _duelStillRunning;
@@ -571,9 +572,15 @@
         if (history.Count > VelocityHistoryLength) history.RemoveAt(0);
     }
 
-    // Guards against double-starting the same browser model when a reconnect replays the signal.
-    private readonly HashSet<ModelId> _runningLocalModels = [];
+    // Owns running a WebGPU model in this tab and posting its result back. Per-Arena, because
+    // its replay guard is per-duel bookkeeping.
+    private LocalInferenceDriver _localInference = null!;
     private PeriodicTimer? _stallTimer;
+
+    // Token-batch updates arrive far faster than a frame, and each one used to re-render the
+    // whole page — both sandboxed iframes and the scorecard included — to move a counter. The
+    // two streaming handlers ask this for a render instead; terminal events still paint at once.
+    private RenderCoalescer? _streamRender;
 
     private IDisposable? _locationChangingReg;
 
@@ -606,6 +613,9 @@
                 {
                     _duelStillRunning = true;
                     NoteBrowserModels(_duel);
+
+                    _streamRender = new RenderCoalescer(() => InvokeAsync(StateHasChanged));
+                    _localInference = new LocalInferenceDriver(WebLlm, ApiClient);
 
                     _signalR = new SignalRDuelClient();
                     _signalR.OnModelStatusUpdate += OnStatusUpdate;
@@ -1084,7 +1094,8 @@
             _rightLastTokenAt = DateTimeOffset.UtcNow;
         }
 
-        InvokeAsync(StateHasChanged);
+        // Coalesced, not immediate: this fires once per token batch on both sides at once.
+        _streamRender?.Request();
     }
 
     /// <summary>Records which sides run in the browser so the stall hint can explain the silence.</summary>
@@ -1146,7 +1157,8 @@
             if (update.HtmlPreview is not null) _rightStreamingHtml = update.HtmlPreview;
         }
 
-        InvokeAsync(StateHasChanged);
+        // Same reasoning as the hub handler: the WebLLM worker reports per token batch.
+        _streamRender?.Request();
     }
 
     /// <summary>Tokens per second excluding warm-up, so a slow model load does not read as slow generation.</summary>
@@ -1189,66 +1201,15 @@
     private void OnStartLocalInference(StartLocalInferencePayload payload)
     {
         if (payload.DuelId != _duelId) return;
-        if (!_runningLocalModels.Add(payload.ModelId)) return;
+        // A hub reconnect replays this signal; the driver owns the de-duplication.
+        if (!_localInference.TryClaim(payload.ModelId)) return;
 
         if (payload.ModelId == _leftLocalModelId) _leftIsBrowserModel = true;
         else _rightIsBrowserModel = true;
 
-        // Fire-and-forget; every failure path is handled inside and reported to the server.
-        _ = Task.Run(() => RunLocalInferenceAsync(payload));
-    }
-
-    private async Task RunLocalInferenceAsync(StartLocalInferencePayload payload)
-    {
-        var htmlOutput = string.Empty;
-        var tokenCount = 0;
-        long totalMs = 0;
-        long warmUpMs = 0;
-        var isFailure = false;
-        string? failureReason = null;
-
-        try
-        {
-            // WebLlmService needs the prompt, which only the duel record has.
-            var duel = await ApiClient.GetDuelAsync(payload.DuelId);
-            var prompt = duel?.PromptFull ?? string.Empty;
-
-            await foreach (var update in WebLlm.StartInferenceAsync(
-                payload.ModelId, payload.WebLlmModelId ?? payload.ModelId, prompt, payload.DuelId))
-            {
-                if (update.Status is "Done" or "Failed")
-                {
-                    isFailure = update.Status == "Failed";
-                    failureReason = update.ErrorReason;
-                    break;
-                }
-            }
-
-            if (!isFailure)
-            {
-                var result = await WebLlm.GetResultAsync(payload.ModelId);
-                if (result is not null)
-                {
-                    htmlOutput = result.HtmlOutput;
-                    tokenCount = result.TokenCount;
-                    totalMs = result.TotalMs;
-                    warmUpMs = result.WarmUpMs;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            isFailure = true;
-            failureReason = ex.Message;
-        }
-        finally
-        {
-            _runningLocalModels.Remove(payload.ModelId);
-        }
-
-        // Posted even on failure: the server needs the result to settle the duel either way.
-        await ApiClient.PostLocalResultAsync(
-            payload.DuelId, payload.ModelId, htmlOutput, tokenCount, totalMs, warmUpMs, isFailure, failureReason);
+        // Fire-and-forget; every failure path is handled inside the driver and reported to
+        // the server, so there is no outcome here worth awaiting.
+        _ = Task.Run(() => _localInference.RunAsync(payload));
     }
 
     private void OnDuelComplete(DuelDto completedDuel)
@@ -1266,6 +1227,10 @@
                 _rightStreamingHtml = null;
                 StartAutoJudgeCountdown();
             }
+            // Terminal: paint now rather than waiting out a coalescing interval, and drop any
+            // pending streaming render so it cannot repaint stale mid-stream state afterwards.
+            _streamRender?.Dispose();
+            _streamRender = null;
             StateHasChanged();
         }));
     }
@@ -1278,6 +1243,7 @@
         _eloAnimationCts?.Cancel();
         _eloAnimationCts?.Dispose();
         _stallTimer?.Dispose();
+        _streamRender?.Dispose();
         WebLlm.OnStatusUpdate -= OnLocalStatusUpdate;
         if (_signalR is not null)
         {

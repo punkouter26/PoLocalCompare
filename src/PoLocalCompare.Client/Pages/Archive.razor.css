@@ -12,10 +12,6 @@
 
 .archive__status,
 .archive__error,
-.archive__empty {
-    color: var(--text-muted);
-}
-
 .archive__empty-card {
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -48,7 +44,8 @@
 }
 
 /* Row hover/cursor now come from .po-table--selectable in app.css; only the
-   selected-row treatment is Archive-specific. */
+   inline actions column needs Archive-specific sizing because the buttons
+   are icon-only glyphs that must not stretch the row. */
 .archive__grid-caption {
     caption-side: top;
     text-align: left;
@@ -57,12 +54,48 @@
     color: var(--text-muted);
 }
 
-.archive__row--selected td {
-    background: color-mix(in srgb, var(--accent-green) 9%, transparent);
+.archive__row-actions-col { width: 1%; }
+
+.archive__row-actions {
+    white-space: nowrap;
+    text-align: right;
+    padding: 0.25rem 0.5rem;
 }
 
-.archive__row--selected td:first-child {
-    box-shadow: inset 3px 0 0 var(--accent-green);
+.archive__row-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    text-decoration: none;
+    margin-left: 0.25rem;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.archive__row-btn:hover,
+.archive__row-btn:focus-visible {
+    background: var(--surface-1);
+    border-color: var(--accent-green);
+}
+
+.archive__row-btn--link {
+    /* Keep the link button visually consistent with its <button> sibling. */
+    text-decoration: none;
+}
+
+/* Rows are now keyboard-operable: a visible focus ring on the row signals where
+   the user is, without colouring the whole row on every selection. */
+.archive__rows tbody tr:focus-visible {
+    outline: 2px solid var(--accent-green);
+    outline-offset: -2px;
 }
 
 @keyframes archive-rise {
@@ -105,42 +138,6 @@
 .archive__model--unresolved {
     color: var(--text-muted);
     font-style: italic;
-}
-
-.archive__detail {
-    margin-top: 32px;
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 24px;
-}
-
-.archive__detail-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md, 1rem);
-    margin-bottom: 16px;
-}
-
-.archive__detail-title {
-    color: var(--accent-green);
-    margin: 0;
-}
-
-.archive__detail-meta p {
-    margin: 4px 0;
-    color: var(--text);
-}
-
-.archive__detail-actions {
-    display: flex;
-    gap: 12px;
-    margin: 16px 0;
-}
-
-.archive__btn {
-    flex-shrink: 0;
 }
 
 .archive__tz {
