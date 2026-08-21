@@ -170,47 +170,82 @@ public sealed class DuelExecutionService
 
         DuelResult result;
 
-        if (model.ModelType == ModelType.Local)
+        // Defensive catch: every exit must produce a saved DuelResult row. Without this, an
+        // exception thrown inside RunInferenceAsync (or WaitForLocalModelResultAsync) after the
+        // proxy had already assigned `result.IsFailure = true` but before it returned would
+        // surface from the task — `Task.WhenAll` aggregates and the outer catch is fine — but if
+        // it left without writing the row, the duel would strand as "in progress, not judged"
+        // forever (PRD §9: ELO cannot move on no evidence, and one-sided failures take the
+        // walkover path inside AutoJudge, both of which require both result rows to exist).
+        try
         {
-            // Local model: client-side inference via SignalR; server waits for client to report results
-            result = await WaitForLocalModelResultAsync(duelId, model, side, cancellationToken);
+            if (model.ModelType == ModelType.Local)
+            {
+                // Local model: client-side inference via SignalR; server waits for client to report results
+                result = await WaitForLocalModelResultAsync(duelId, model, side, cancellationToken);
+            }
+            else
+            {
+                // Remote model: server-side inference via Foundry proxy
+                await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Generating, 0, 0);
+
+                long? warmUpMs = null;
+                double peakVelocity = 0;
+                DateTimeOffset lastTokenAt = DateTimeOffset.UtcNow;
+
+                result = await inferenceProxy.RunInferenceAsync(
+                    model,
+                    duelId,
+                    promptFull,
+                    async (tokenCount, elapsedMs, htmlStats) =>
+                    {
+                        // First token arrival = warm-up latency known
+                        if (warmUpMs is null && tokenCount >= 1)
+                            warmUpMs = elapsedMs;
+
+                        lastTokenAt = DateTimeOffset.UtcNow;
+
+                        // Peak velocity (generation-phase only, excluding warm-up)
+                        var genMs = warmUpMs.HasValue ? elapsedMs - warmUpMs.Value : elapsedMs;
+                        var currentVelocity = genMs > 0 ? Math.Round(tokenCount / (genMs / 1000.0), 1) : 0;
+                        if (currentVelocity > peakVelocity) peakVelocity = currentVelocity;
+
+                        var isStalled = (DateTimeOffset.UtcNow - lastTokenAt).TotalSeconds > 2;
+
+                        await SendStatusAsync(duelId, model.ModelId, side,
+                            DuelStatus.Generating, elapsedMs, tokenCount,
+                            warmUpMs: warmUpMs,
+                            peakVelocity: peakVelocity,
+                            isStalled: isStalled,
+                            htmlStats: htmlStats);
+                    },
+                    cancellationToken);
+            }
         }
-        else
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Remote model: server-side inference via Foundry proxy
-            await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Generating, 0, 0);
-
-            long? warmUpMs = null;
-            double peakVelocity = 0;
-            DateTimeOffset lastTokenAt = DateTimeOffset.UtcNow;
-
-            result = await inferenceProxy.RunInferenceAsync(
-                model,
-                duelId,
-                promptFull,
-                async (tokenCount, elapsedMs, htmlStats) =>
-                {
-                    // First token arrival = warm-up latency known
-                    if (warmUpMs is null && tokenCount >= 1)
-                        warmUpMs = elapsedMs;
-
-                    lastTokenAt = DateTimeOffset.UtcNow;
-
-                    // Peak velocity (generation-phase only, excluding warm-up)
-                    var genMs = warmUpMs.HasValue ? elapsedMs - warmUpMs.Value : elapsedMs;
-                    var currentVelocity = genMs > 0 ? Math.Round(tokenCount / (genMs / 1000.0), 1) : 0;
-                    if (currentVelocity > peakVelocity) peakVelocity = currentVelocity;
-
-                    var isStalled = (DateTimeOffset.UtcNow - lastTokenAt).TotalSeconds > 2;
-
-                    await SendStatusAsync(duelId, model.ModelId, side,
-                        DuelStatus.Generating, elapsedMs, tokenCount,
-                        warmUpMs: warmUpMs,
-                        peakVelocity: peakVelocity,
-                        isStalled: isStalled,
-                        htmlStats: htmlStats);
-                },
-                cancellationToken);
+            // Watchdog tripped or host shutdown — synthesise a failure row so the duel can
+            // still transition to Complete and the auto-judge can run (probably standing down
+            // because one side has no usable output, which is the documented behaviour).
+            result = new DuelResult(duelId, model.ModelId)
+            {
+                IsFailure = true,
+                FailureReason = "Inference cancelled by watchdog (900s).",
+                TotalDurationMs = 900_000,
+            };
+        }
+        catch (Exception ex)
+        {
+            // Any other unexpected exception from inside inference must not strand the duel.
+            // The catch in ExecuteAsync only sees exceptions surfaced through Task.WhenAll,
+            // which is fine for completion; here we ensure every exit writes a row.
+            result = new DuelResult(duelId, model.ModelId)
+            {
+                IsFailure = true,
+                FailureReason = $"Inference crashed: {ex.GetType().Name}: {ex.Message}",
+                TotalDurationMs = 0,
+            };
+            _logger.LogWarning(ex, "Inference crashed for {Side} ({ModelId}); recording failure row.", side, model.ModelId);
         }
 
         if (result.IsFailure)

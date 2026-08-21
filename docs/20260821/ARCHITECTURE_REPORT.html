@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PoLocalCompare · Architecture Report (2026-08-21)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', htmlLabels: true },
+        sequence: { mirrorActors: false, showSequenceNumbers: true },
+      });
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #11161d;
+      --muted: #5b6573;
+      --line: #e6e8ec;
+      --accent: #2563eb;
+      --accent-2: #0f766e;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --ok: #15803d;
+      --surface: #f6f8fb;
+      --surface-2: #eef2f8;
+      --code-bg: #0f172a;
+      --code-fg: #e2e8f0;
+      --tier1: #fff7ed;
+      --tier2: #f0f9ff;
+      --tier3: #f7fee7;
+      --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 16px rgba(15, 23, 42, .04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1220; --fg: #e6edf7; --muted: #93a0b4; --line: #1f2a3c;
+        --accent: #60a5fa; --accent-2: #2dd4bf; --warn: #fbbf24; --danger: #f87171; --ok: #4ade80;
+        --surface: #111a2c; --surface-2: #152238;
+        --code-bg: #020617; --code-fg: #cbd5e1;
+        --tier1: #2a1a06; --tier2: #06253b; --tier3: #14260b;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 32px 28px 96px;
+    }
+    header.crown { border-bottom: 2px solid var(--line); padding-bottom: 16px; margin-bottom: 28px; }
+    header.crown .eyebrow {
+      display: inline-block; background: var(--surface-2); color: var(--accent);
+      padding: 4px 10px; font-size: 12px; letter-spacing: .08em;
+      border-radius: 4px; text-transform: uppercase; font-weight: 600;
+    }
+    header.crown h1 { font-size: 30px; margin: 10px 0 6px; line-height: 1.2; }
+    header.crown .sub { color: var(--muted); font-size: 14px; }
+    h2 { font-size: 22px; margin-top: 38px; padding-top: 16px; border-top: 1px solid var(--line); }
+    h3 { font-size: 17px; margin-top: 24px; }
+    h4 { font-size: 15px; margin-top: 18px; color: var(--muted); }
+    p, ul, ol { margin: 8px 0 14px; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 4px 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .lede { font-size: 16px; color: var(--muted); }
+    .tier {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 16px 0 24px;
+      box-shadow: var(--shadow);
+    }
+    .tier h3 { margin-top: 0; }
+    .tier.t1 { background: var(--tier1); }
+    .tier.t2 { background: var(--tier2); }
+    .tier.t3 { background: var(--tier3); }
+    .tier .stamp {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      margin-right: 8px; color: white; background: var(--accent);
+    }
+    .tier.t1 .stamp { background: var(--warn); }
+    .tier.t2 .stamp { background: var(--accent); }
+    .tier.t3 .stamp { background: var(--accent-2); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0 24px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--surface); font-weight: 600; position: sticky; top: 0; }
+    tbody tr:hover { background: var(--surface); }
+    td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    td code { font-size: 12.5px; }
+    pre {
+      background: var(--code-bg); color: var(--code-fg);
+      padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", "Fira Code", monospace;
+      font-size: 13px; line-height: 1.55;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+    .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill {
+      display: inline-block; background: var(--surface-2); color: var(--accent);
+      padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    }
+    .pill.warn { color: var(--warn); } .pill.ok { color: var(--ok); } .pill.muted { color: var(--muted); }
+    .mermaid {
+      background: var(--surface); padding: 20px 16px; border-radius: 10px;
+      margin: 18px 0; border: 1px solid var(--line); text-align: center; font-size: 14px;
+    }
+    .grid { display: grid; gap: 16px; }
+    .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+    .card h4 { margin: 0 0 8px; color: var(--fg); }
+    .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13.5px; }
+    .kv .k { color: var(--muted); }
+    .kv .v { font-family: ui-monospace, monospace; }
+    .meta { color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }
+    .footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+    @media (max-width: 720px) {
+      body { padding: 18px 14px 80px; }
+      header.crown h1 { font-size: 22px; }
+      table { font-size: 12.5px; } th, td { padding: 8px 6px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="crown">
+  <span class="eyebrow">Architecture Report · PoLocalCompare</span>
+  <h1>Single-host topology, three inference paths, asymmetric execution</h1>
+  <div class="sub">
+    Sources: <code>Program.cs</code>, <code>GlobalUsings.cs</code>, <code>Features/*/Endpoints.cs</code>,
+    <code>App.razor</code>, <code>Common/Background/*</code>. Generated 2026-08-21.
+    C4 Container (level 2) + Component (level 3) views in order: Executive → Architectural → Implementation.
+  </div>
+</header>
+
+<!-- ─── TIER 1 ──────────────────────────────────────────────────────────────── -->
+<section id="tier1" class="tier t1">
+  <h3><span class="stamp">TIER 1</span>Executive summary (30 s)</h3>
+  <p>
+    One host, two assemblies (Client = Blazor WASM, Api = minimal APIs). The Blazor client is
+    <strong>served from</strong> the API at <code>https://localhost:5001</code> &mdash; single origin, no CORS.
+    Inference runs through three paths (<strong>Remote</strong>, <strong>LocalService</strong>,
+    <strong>Local/WebLLM</strong>) but state, persistence, and the global activity ticker always converge in
+    Azure Table Storage and SignalR. Authentication is BFF (encrypted HttpOnly cookie); the WASM tab
+    never sees a token. State is stored as five strongly-typed records (<code>Duel</code>,
+    <code>DuelResult</code>, <code>Model</code>, <code>EloRecord</code>, <code>LeaderboardEntryDto</code>).
+  </p>
+  <div class="pills">
+    <span class="pill">1 host · no CORS</span>
+    <span class="pill">3 inference paths</span>
+    <span class="pill">6 server slices</span>
+    <span class="pill">BFF auth</span>
+    <span class="pill">4 Table Storage tables</span>
+    <span class="pill">4 test projects</span>
+  </div>
+</section>
+
+<!-- ─── TIER 2 ──────────────────────────────────────────────────────────────── -->
+<h2>Architectural view</h2>
+
+<section id="tier2" class="tier t2">
+  <h3><span class="stamp">TIER 2</span>C4 Container &amp; Component maps</h3>
+
+  <h4>System boundaries &mdash; single host, two assemblies</h4>
+  <div class="mermaid">
+flowchart LR
+  classDef user  fill:#fef9c3,stroke:#a16207,color:#3f2d04;
+  classDef host  fill:#eef2ff,stroke:#4338ca,color:#1e1b4b;
+  classDef ext   fill:#f1f5f9,stroke:#475569,color:#0f172a;
+  classDef store fill:#ecfdf5,stroke:#047857,color:#052e16;
+
+  User([Browser tab · signed-in human]):::user
+  Host["Azure App Service F1 / dotnet run<br/>PoLocalCompare.Api + WASM client assets"]:::host
+  TS[("Azure Table Storage<br/>Duels · DuelResults · Models · EloHistory")]:::store
+  Blob[("Azure Blob Storage<br/>Local WebLLM weights · _libs")]:::store
+  KV[(Key Vault · secrets)]:::store
+  AiF[Azure AI Foundry]:::ext
+  Olla[Ollama daemon · localhost:11434]:::ext
+
+  User --> Host
+  Host --> AiF
+  Host --> Olla
+  Host --> TS
+  Host --> Blob
+  Host --> KV
+  </div>
+
+  <h4>Server component map &mdash; Vertical Slice Architecture</h4>
+  <div class="mermaid">
+flowchart TB
+  classDef slice fill:#f0f9ff,stroke:#0369a1,color:#082f49;
+  classDef cross fill:#fdf4ff,stroke:#7e22ce,color:#3b0764;
+  classDef ext   fill:#fff7ed,stroke:#c2410c,color:#431407;
+
+  subgraph Api[PoLocalCompare.Api — single host]
+    direction TB
+    Duels[Features/Duels]:::slice
+    Models[Features/Models]:::slice
+    Leaderboard[Features/Leaderboard]:::slice
+    Archive[Features/Archive]:::slice
+    Ollama[Features/Ollama]:::slice
+    Diag[Features/Diagnostics]:::slice
+    Bg[Common/Background · IBackgroundTaskQueue]:::cross
+    Inf[Common/Inference · IRemoteInferenceProxy × 2]:::cross
+    Kv[Common/KeyVault · secrets bootstrap]:::cross
+    Cache[Common/Caching · HybridCache tag plan]:::cross
+    Tel[Common/Telemetry · InferenceTelemetry]:::cross
+    Persist[Common/Persistence · Azure.Data.Tables]:::cross
+    Auth[Auth · BFF + FakeAuthHandler]:::cross
+  end
+
+  Foundry[Azure AI Foundry]:::ext
+  OllamaD[Ollama]:::ext
+
+  Duels --> Bg
+  Duels --> Inf
+  Duels --> Persist
+  Inf --> Foundry
+  Inf --> OllamaD
+  Models --> Persist
+  Leaderboard --> Cache
+  Leaderboard --> Persist
+  Diag --> Persist
+  Archive --> Duels
+  Kv --> Auth
+  Cache --> Duels
+  </div>
+
+  <h4>Client component map &mdash; thin Razor over Shared logic</h4>
+  <div class="mermaid">
+flowchart TB
+  classDef page fill:#ecfeff,stroke:#0e7490,color:#083344;
+  classDef svc  fill:#f0fdf4,stroke:#15803d,color:#052e16;
+  classDef shr  fill:#fff7ed,stroke:#c2410c,color:#431407;
+
+  subgraph Client[PoLocalCompare.Client — Blazor WASM]
+    direction TB
+    Pages[Pages/*.razor]:::page
+    Comp[Components/*.razor]:::page
+    Lay[Layout/MainLayout + NavMenu]:::page
+    Svc1[Services/SignalR client]:::svc
+    Svc2[Services/WebLlmService]:::svc
+    Svc3[Services/LocalInferenceDriver]:::svc
+    Svc4[Services/JS interop]:::svc
+  end
+
+  subgraph Shared[PoLocalCompare.Shared — DTOs, enums, pure helpers]
+    direction TB
+    Diff[Analysis/LineDiff + OutputAnalysis]:::shr
+    Prom[Prompts/PromptLibrary]:::shr
+    Demo[Demo/DemoPlanner]:::shr
+    Pres[Presentation/* view-models]:::shr
+    DTO[DTOs/* contracts]:::shr
+    Enum[Enums/*]:::shr
+    Ids[Ids/*]:::shr
+  end
+
+  Pages --> Svc1
+  Pages --> Svc2
+  Pages --> Diff
+  Pages --> Prom
+  Pages --> DTO
+  Comp --> Diff
+  </div>
+
+  <h4>HTTP route surface (deny-by-default)</h4>
+  <table>
+    <thead><tr><th>Group</th><th>Path</th><th>Verb</th><th>Auth</th><th>Owner</th></tr></thead>
+    <tbody>
+      <tr><td>Auth</td><td><code>/auth/me</code></td><td>GET</td><td>anonymous</td><td><code>Auth/BffAuthentication.cs</code></td></tr>
+      <tr><td>Auth</td><td><code>/auth/login/microsoft</code></td><td>GET</td><td>anonymous</td><td><code>BffAuthentication.MapAuthEndpoints</code></td></tr>
+      <tr><td>Auth</td><td><code>/auth/login/fake</code></td><td>GET</td><td>anonymous · non-Production</td><td>idem</td></tr>
+      <tr><td>Auth</td><td><code>/auth/logout</code></td><td>POST</td><td>anonymous</td><td>idem</td></tr>
+      <tr><td>Models</td><td><code>/api/models</code></td><td>GET</td><td>cookie or fake</td><td><code>ModelsEndpoints</code></td></tr>
+      <tr><td>Models</td><td><code>/api/models/availability</code></td><td>GET</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Models</td><td><code>/api/models</code></td><td>POST</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Models</td><td><code>/api/models/{id}</code></td><td>DELETE</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Models</td><td><code>/api/models/download-status/{webLlmId}</code></td><td>GET</td><td><em>anonymous</em></td><td>idem</td></tr>
+      <tr><td>Models</td><td><code>/api/models/{webLlmId}/download</code></td><td>POST</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Duels</td><td><code>/api/duels</code></td><td>POST</td><td>cookie or fake · opt <code>AllowAnonymousWrites</code></td><td><code>DuelsEndpoints</code></td></tr>
+      <tr><td>Duels</td><td><code>/api/duels</code></td><td>GET</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Duels</td><td><code>/api/duels/{duelId}</code></td><td>GET</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Duels</td><td><code>/api/duels/{duelId}/local-result</code></td><td>POST</td><td><em>anonymous</em></td><td>idem — WebLLM worker posts here</td></tr>
+      <tr><td>Duels</td><td><code>/api/duels/{duelId}/verdict</code></td><td>POST</td><td>cookie or fake · opt anonymous</td><td>idem</td></tr>
+      <tr><td>Duels</td><td><code>/api/duels/demo-plan?rounds=&amp;seed=</code></td><td>GET</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Leaderboard</td><td><code>/api/leaderboard?sortBy=</code></td><td>GET</td><td>cookie or fake</td><td><code>LeaderboardEndpoints</code></td></tr>
+      <tr><td>Leaderboard</td><td><code>/api/leaderboard/{modelId}/killlist</code></td><td>GET</td><td>cookie or fake</td><td>idem</td></tr>
+      <tr><td>Archive</td><td><code>/api/duels/{duelId}/report</code></td><td>GET</td><td>cookie or fake</td><td><code>ArchiveEndpoints</code></td></tr>
+      <tr><td>Ollama</td><td><code>/api/ollama/gpu-status</code> · <code>/available-models</code> · <code>POST /benchmark</code></td><td>GET/POST</td><td>cookie or fake</td><td><code>OllamaEndpoints</code></td></tr>
+      <tr><td>Diag</td><td><code>/health</code></td><td>GET</td><td>anonymous</td><td><code>HealthEndpoints</code></td></tr>
+      <tr><td>Diag</td><td><code>/api/diag/smoke</code> · <code>/api/diag/warnings</code></td><td>GET</td><td>anonymous</td><td>idem</td></tr>
+      <tr><td>Hub</td><td><code>/hubs/duel</code></td><td>WS</td><td>cookie or fake</td><td><code>DuelHub</code> + <code>LobbyNotifier</code></td></tr>
+      <tr><td>Dev</td><td><code>/api/dev/reset</code> · <code>/api/dev/remap-model-ids</code></td><td>POST</td><td>anonymous · non-Production</td><td><code>Program.cs</code></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Blazor routes (<code>@page</code>)</h4>
+  <table>
+    <thead><tr><th>Route</th><th>File</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>/</code></td>          <td><code>Pages/Home.razor</code></td>      <td>Two-column workbench: picker (left) + sticky console (right). Models + prompt + Compare.</td></tr>
+      <tr><td><code>/arena/{Id}</code></td><td><code>Pages/Arena.razor</code></td>      <td>Live duel stream &amp; verdict UI; drives browser-model inference via <code>OnStartLocalInference</code>.</td></tr>
+      <tr><td><code>/leaderboard</code></td><td><code>Pages/Leaderboard.razor</code></td><td>Sort by Elo · Quality · Cost · Value; per-model W/L/T + sparkline.</td></tr>
+      <tr><td><code>/archive</code></td>    <td><code>Pages/Archive.razor</code></td>    <td>Reverse-chronological duel list with Re-Challenge.</td></tr>
+      <tr><td><code>/demo</code></td>       <td><code>Pages/Demo.razor</code></td>       <td>Ten-remote duel unattended run. Demos persist &amp; move ELO.</td></tr>
+      <tr><td><code>/login</code></td>      <td><code>Pages/Login.razor</code></td>      <td>Microsoft + (dev) fake sign-in.</td></tr>
+      <tr><td><em>404</em></td>             <td><code>Pages/NotFound.razor</code></td>   <td>Only reflective component — keeps <code>PublishTrimmed</code> off.</td></tr>
+      <tr><td><code>/health</code></td>     <td><code>Features/Diagnostics</code></td>  <td>JSON health probe (anonymous, no UI link)</td></tr>
+      <tr><td><code>/diag</code></td>       <td>Razor page (mapped in <code>Program.cs</code>)</td><td>Same probe rendered for humans; masks secrets.</td></tr>
+      <tr><td><code>/scalar</code> · <code>/openapi</code></td><td>dev-only</td><td>Scalar UI for the OpenAPI 3.1 document.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Request lifecycle &mdash; the long road of a duel</h4>
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User (browser)
+  participant W as Blazor WASM (Client)
+  participant H as DuelHub (SignalR)
+  participant A as PoLocalCompare.Api
+  participant Q as IBackgroundTaskQueue
+  participant P as IRemoteInferenceProxy
+  participant F as Foundry / Ollama
+  participant B as WebLLM worker
+  participant T as Table Storage
+  participant J as AutoJudge
+
+  U->>W: pick 2 models + prompt
+  W->>A: POST /api/duels  (BFF cookie)
+  A->>T: insert Duel(Pending, YYYYMM partition)
+  A-->>W: 202 Accepted + Location: /api/duels/{id}
+  A->>Q: enqueue(delayOverride)
+  W->>H: connect /hubs/duel
+  W->>H: JoinDuel(duelId)
+  loop background work item
+    A->>P: choose proxy by ModelType
+    P->>F: chat/completions?stream=true  (Remote)
+    F-->>P: SSE tokens
+    P-->>H: ModelStatusUpdate (per side)
+    P->>T: upsert DuelResult(tokens, latency, cost)
+    A->>W: StartLocalInference (if browser model)
+    W->>B: Worker postMessage
+    B-->>W: completed HTML + telemetry
+    W->>A: POST /api/duels/{id}/local-result
+    A->>T: save DuelResult
+  end
+  alt human picked inside window
+    U->>A: POST /api/duels/{id}/verdict (Left|Right|Tie)
+    A->>T: RecordVerdict (VerdictSource=Human) + EloCalculator
+  else no human & within window
+    J->>F: judge chat completion (json_schema)
+    F-->>J: { winner: A|B|Tie, reason }
+    J->>A: RecordVerdict (VerdictSource=Ai)
+    A->>T: same path
+  end
+  A-->>H: VerdictRecorded + LobbyEvent
+  </div>
+</section>
+
+<!-- ─── TIER 3 ──────────────────────────────────────────────────────────────── -->
+<h2>Implementation reference</h2>
+
+<section id="tier3" class="tier t3">
+  <h3><span class="stamp">TIER 3</span>Concrete C# records, route bindings, telemetry</h3>
+
+  <h4>Strongly-typed entities (the persistence contract)</h4>
+  <pre><code>// src/PoLocalCompare.Shared/Models
+public sealed record Model(
+    ModelId  ModelId, string DisplayName, ModelType ModelType,
+    double?  TdpWatts,
+    string?  WebLlmModelId,           // WebLLM/WebGPU weights id
+    string?  ApiEndpointRef,          // Foundry deployment OR Ollama tag
+    decimal? InputTokenPricePerMillion,
+    decimal? OutputTokenPricePerMillion,
+    double   CurrentElo = 1200,
+    int      DuelCount  = 0, int WinCount = 0, int DrawCount = 0);
+
+public sealed record Duel(
+    DuelId      DuelId, string YmPartition, ModelId LeftModelId, ModelId RightModelId,
+    string      PromptText, DuelStatus Status, DuelVerdict Verdict,
+    VerdictSource VerdictSource,        // Human | Ai (NULL pre-§9 item 9 reads as Human)
+    string?     LeftModelName, string? RightModelName,         // snapshot for retired-id resilience
+    string?     JudgeModel, string?    JudgeRationale,
+    DateTimeOffset CreatedAt, DateTimeOffset? JudgedAt);
+
+public sealed record DuelResult(
+    DuelId DuelId, ModelId ModelId, bool IsSideLeft,
+    string? HtmlOutputRaw, int HtmlOutputSizeBytes,
+    int     TokenCount, long TotalDurationMs, long WarmUpDurationMs,
+    double  TokenVelocity, bool IsFailure, string? FailureReason,
+    double? OutputQualityScore, double? EnergyWh, double? EnergyCostUsd, decimal? ApiCostUsd);
+
+public sealed record EloRecord(
+    DuelId DuelId, ModelId ModelId, double EloBefore, double EloAfter,
+    double? OpponentEloAfter, Outcome Outcome, DateTimeOffset At);
+
+public sealed record LeaderboardEntryDto(
+    ModelId ModelId, string DisplayName, ModelType ModelType,
+    double CurrentElo, int DuelCount, int WinCount, int DrawCount,
+    double WinRate, decimal? In$/M, decimal? Out$/M,
+    double? AvgApiCostPerDuel, double? Value,
+    double? OutputQualityAvg, double[]? EloSparkline);
+
+// Enums
+public enum ModelType      { Local, Remote, LocalService }
+public enum DuelStatus     { Initializing, Generating, Done, Failed }
+public enum DuelVerdict    { Pending, Left, Right, Expired, Tie }
+public enum VerdictSource  { Human, Ai }</code></pre>
+
+  <h4>Table Storage schema</h4>
+  <table>
+    <thead><tr><th>Table</th><th>Partition</th><th>Row key</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>Duels</code></td>      <td><code>YYYYMM</code> from ULID timestamp</td><td><code>DuelId</code> (ULID)</td>      <td>Aggregate root + verdict (incl. <code>VerdictSource</code>, <code>JudgeRationale</code>, name snapshots)</td></tr>
+      <tr><td><code>DuelResults</code></td><td><code>DuelId</code></td>                  <td><code>ModelId</code></td>             <td>Per-model telemetry (2 rows/duel)</td></tr>
+      <tr><td><code>Models</code></td>     <td><code>"model"</code></td>                <td><code>ModelId</code></td>             <td>Registry + denormalized ELO/W-L/Draw stats</td></tr>
+      <tr><td><code>EloHistory</code></td> <td><code>ModelId</code></td>                <td><code>{invertedTicks:D19}_{DuelId}</code></td><td>Immutable rating ledger (descending time), sparklines</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Middleware &amp; cross-cutting wiring</h4>
+  <pre><code>// Program.cs — the real order matters:
+//   1. Key Vault (before Serilog/OTel config)
+//   2. Serilog (Console always + Dev file sinks + AI Error+ sink)
+//   3. OpenTelemetry (Trace + Meter PoLocalCompare.Inference, AI exporter if key set)
+//   4. BFF authentication (cookie, OIDC, FakeAuthHandler non-prod)
+//   5. SignalR
+//   6. OpenAPI 3.1 (pinned) + dev-only Scalar
+//   7. HybridCache with tag plan CacheTags.Leaderboard
+//   8. Resilient HttpClient "OllamaStatus" (retry + 5 s)
+//   9. AddInfrastructure / AddApplicationServices
+//  10. IBackgroundTaskQueue + hosted BackgroundTaskService
+//  11. app.UseSerilogRequestLogging (level by status; X-Correlation-ID enrichment)
+//  12. app.UseExceptionHandler → RFC 7807 problem+json (correlation id echoed)
+//  13. CSP header: frame-ancestors 'self'
+//  14. /_framework no-cache
+//  15. UseBlazorFrameworkFiles · UseStaticFiles · MapStaticAssets · FallbackToFile("index.html")
+//  16. MapAuthEndpoints · MapRazorPages · MapHealthEndpoints
+//  17. MapHub&lt;DuelHub&gt;("/hubs/duel").RequireAuthorization()
+//  18. Map&lt;Slice&gt;Endpoints (Models, Duels, Archive, Leaderboard, Ollama, Diag)
+//  19. Dev-only: POST /api/dev/reset · /api/dev/remap-model-ids · /scalar · /openapi</code></pre>
+
+  <h4>Where each workspace tier can reach</h4>
+  <table>
+    <thead><tr><th>Tier</th><th>References</th><th>Docker?</th><th>Run via</th></tr></thead>
+    <tbody>
+      <tr><td><code>PoLocalCompare.Unit</code></td>      <td>Api only</td>                  <td>no</td>  <td><code>dotnet test tests/PoLocalCompare.Unit</code></td></tr>
+      <tr><td><code>PoLocalCompare.Integration</code></td><td>Api + Shared</td>             <td>yes (Testcontainers → Azurite)</td><td><code>dotnet test tests/PoLocalCompare.Integration</code></td></tr>
+      <tr><td><code>PoLocalCompare.E2EAPI</code></td>    <td>Api + Shared (ProjectReference dropped)</td><td>yes</td><td><code>dotnet test tests/PoLocalCompare.E2EAPI</code></td></tr>
+      <tr><td><code>PoLocalCompare.E2EUI</code></td>     <td>no server reference — drives HTTP</td><td>no</td><td>real headed Chrome, app must be running, <code>HEADLESS=1</code> suppresses windows</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Test ratio contract (AGENT.MD §8)</h4>
+  <p class="meta">Test <em>cases</em>, not test classes. A <code>[Theory]</code> counts once per <code>InlineData</code>; each UI method counts twice (mobile + desktop viewports).</p>
+  <pre><code>Unit         ≈ 100
+Integration  ≈  50   (half of unit)
+E2E-API      ≈  25   (quarter)
+E2E-UI       ≈  25   (quarter)</code></pre>
+
+  <h4>Things you must NOT lose when editing this architecture</h4>
+  <ul>
+    <li><strong>Single write path for ELO.</strong> <code>RecordVerdictHandler</code> throws on a second verdict and refuses a verdict with both sides failing (<code>GuardAgainstNoEvidenceAsync</code>). Bypass this and the leaderboard silently blends two signals.</li>
+    <li><strong>Browser-side logic lives in <code>PoLocalCompare.Shared</code>.</strong> Only the API is reachable from unit tests; pure helpers in <code>Client/</code> are invisible to all CI tiers.</li>
+    <li><strong>WebLLM worker needs a cache-buster.</strong> <code>new Worker('/js/webllm-worker.js?v=N')</code> — bump N or changes appear to do nothing. Same trap on <code>theme.js</code>, <code>util.js</code>, <code>diag-interop.js</code>, <code>compare.js</code>.</li>
+    <li><strong>Cache invalidation is explicit.</strong> <code>HybridCache</code> tag <code>CacheTags.Leaderboard</code> is invalidated by <code>RecordVerdictHandler</code> after every verdict write.</li>
+    <li><strong>One host, no CORS.</strong> Adding a CORS policy accidentally crosses session cookies in unintended ways. The Blazor client is served from <code>wwwroot/</code> by this API; cross-origin isn't a thing.</li>
+    <li><strong>Typed HttpClients use retry-only pipelines.</strong> Foundry/Ollama proxies get <em>retry</em> only — a per-attempt timeout would abort long SSE streams.</li>
+  </ul>
+</section>
+
+<div class="footer">
+  Sources: <code>src/PoLocalCompare.Api/Program.cs</code>,
+  <code>src/PoLocalCompare.Api/GlobalUsings.cs</code>,
+  <code>Features/*/*Endpoints.cs</code>,
+  <code>Common/Background/BackgroundTaskService.cs</code>,
+  <code>Client/Pages/*.razor</code>,
+  <code>Shared/Models/*.cs</code>, <code>Shared/Enums/*.cs</code>.
+  Generated 2026-08-21.
+</div>
+
+</body>
+</html>

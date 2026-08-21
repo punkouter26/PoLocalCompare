@@ -1,0 +1,9 @@
+{
+  "version": "0.2.14",
+  "category": "Testing",
+  "compatibility": "Requires a .NET test project or solution.",
+  "packages": [
+    "coverlet.collector",
+    "coverlet.msbuild"
+  ]
+}

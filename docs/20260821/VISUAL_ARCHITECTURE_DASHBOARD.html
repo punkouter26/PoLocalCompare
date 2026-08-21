@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PoLocalCompare · Visual Architecture Dashboard (2026-08-21)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', htmlLabels: true },
+        sequence: { mirrorActors: false, showSequenceNumbers: true, wrap: true },
+      });
+    });
+  </script>
+  <style>
+    :root {
+      --bg:#ffffff; --fg:#11161d; --muted:#5b6573; --line:#e6e8ec;
+      --accent:#2563eb; --accent-2:#0f766e; --warn:#b45309; --danger:#b91c1c; --ok:#15803d;
+      --surface:#f6f8fb; --surface-2:#eef2f8; --code-bg:#0f172a; --code-fg:#e2e8f0;
+      --tier1:#fff7ed; --tier2:#f0f9ff; --tier3:#f7fee7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1220; --fg:#e6edf7; --muted:#93a0b4; --line:#1f2a3c;
+        --accent:#60a5fa; --accent-2:#2dd4bf; --warn:#fbbf24; --danger:#f87171; --ok:#4ade80;
+        --surface:#111a2c; --surface-2:#152238; --code-bg:#020617; --code-fg:#cbd5e1;
+        --tier1:#2a1a06; --tier2:#06253b; --tier3:#14260b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 15px; line-height: 1.6;
+      max-width: 1320px; margin: 0 auto; padding: 32px 28px 96px;
+      background: var(--bg); color: var(--fg);
+    }
+    header.crown { border-bottom: 2px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
+    header.crown .eyebrow {
+      display:inline-block; background: var(--surface-2); color: var(--accent);
+      padding: 4px 10px; font-size: 12px; letter-spacing: .08em;
+      border-radius: 4px; text-transform: uppercase; font-weight: 600;
+    }
+    header.crown h1 { font-size: 30px; margin: 10px 0 6px; line-height: 1.2; }
+    header.crown .sub { color: var(--muted); font-size: 14px; max-width: 800px; }
+    h2 { font-size: 24px; margin-top: 38px; padding-top: 16px; border-top: 1px solid var(--line); }
+    h3 { font-size: 17px; margin-top: 22px; }
+    h4 { font-size: 14px; color: var(--muted); margin-top: 16px; text-transform: uppercase; letter-spacing: .05em; }
+    p, ul, ol { margin: 8px 0 14px; } ul, ol { padding-left: 22px; } li { margin: 4px 0; }
+    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+    code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+    .tier { border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin: 16px 0 24px; }
+    .tier h3 { margin-top: 0; }
+    .tier.t1 { background: var(--tier1); }
+    .tier.t2 { background: var(--tier2); }
+    .tier.t3 { background: var(--tier3); }
+    .tier .stamp { display:inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .08em; margin-right: 8px; color: white; background: var(--accent); }
+    .tier.t1 .stamp { background: var(--warn); }
+    .tier.t2 .stamp { background: var(--accent); }
+    .tier.t3 .stamp { background: var(--accent-2); }
+    pre {
+      background: var(--code-bg); color: var(--code-fg);
+      padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; line-height: 1.55;
+    }
+    .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill {
+      display: inline-block; background: var(--surface-2); color: var(--accent);
+      padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    }
+    .pill.warn{ color: var(--warn); } .pill.ok{ color: var(--ok); } .pill.muted{ color: var(--muted); }
+    .mermaid {
+      background: var(--surface); padding: 20px 16px; border-radius: 10px;
+      margin: 18px 0; border: 1px solid var(--line); text-align: center; font-size: 14px;
+      overflow-x: auto;
+    }
+    .footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+
+    /* Dashboard cards */
+    .grid { display: grid; gap: 16px; }
+    .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 10px; padding: 16px 18px;
+    }
+    .card .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+      background: var(--accent); color: white;
+    }
+    .card .tag.t1 { background: var(--warn); }
+    .card .tag.t2 { background: var(--accent); }
+    .card .tag.t3 { background: var(--accent-2); }
+    .card h4 { margin: 8px 0 4px; text-transform: none; letter-spacing: 0; color: var(--fg); font-size: 15px; }
+    .card p { font-size: 14px; color: var(--fg); margin: 6px 0; }
+    .card ul { font-size: 13.5px; padding-left: 18px; }
+    .card code { font-size: 12.5px; }
+    .narrative {
+      display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; align-items: stretch;
+      margin: 18px 0;
+    }
+    .narrative .text {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 10px; padding: 14px 16px;
+    }
+    .narrative .text h4 {
+      margin: 0 0 6px; color: var(--fg); text-transform: none; letter-spacing: 0; font-size: 16px;
+    }
+    .narrative .visual { display: flex; }
+    .narrative .visual .mermaid {
+      flex: 1; margin: 0; align-self: stretch;
+    }
+    @media (max-width: 880px) {
+      .narrative { grid-template-columns: 1fr; }
+      body { padding: 18px 14px 80px; } header.crown h1 { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="crown">
+  <span class="eyebrow">Visual Architecture Dashboard · PoLocalCompare</span>
+  <h1>One dashboard. Every diagram. Every entity. Every pipeline.</h1>
+  <div class="sub">
+    A single-page dashboard combining C4 L2/L3 component view, three end-to-end sequence diagrams,
+    an ERD of the domain entities, and plain-English narrative cards per pipeline.
+    Source files referenced by link under each panel.
+    Generated 2026-08-21 from current <code>master</code>.
+  </div>
+</header>
+
+<!-- ─── TIER 1 ─────────────────────────────────────────────────────────────── -->
+<section id="tier1" class="tier t1">
+  <h3><span class="stamp">TIER 1</span>Executive summary (30 s)</h3>
+  <p>
+    PoLocalCompare is a single .NET host that hosts a Blazor WASM client and exposes minimal-API endpoints under <code>/api/*</code>
+    plus a SignalR hub at <code>/hubs/duel</code>. The dashboard below arranges <strong>the whole system</strong> in three layers:
+    components (how the code is sliced), pipelines (how requests travel), and entities (what is persisted). Narrative cards
+    on the right explain each piece in plain English.
+  </p>
+  <div class="pills">
+    <span class="pill">C4 L2/L3</span>
+    <span class="pill">3 sequence diagrams</span>
+    <span class="pill">1 ERD</span>
+    <span class="pill">Plain-English narrative</span>
+    <span class="pill">Single-host topology</span>
+    <span class="pill muted">No external CORS</span>
+  </div>
+</section>
+
+<!-- ─── TIER 2 ─────────────────────────────────────────────────────────────── -->
+<h2>C4 · Component map (level 2/3)</h2>
+
+<section id="tier2a" class="tier t2">
+  <h3><span class="stamp">TIER 2</span>How the slices fit together</h3>
+  <div class="mermaid">
+flowchart LR
+  classDef slice fill:#e0f2fe,stroke:#0284c7,color:#082f49;
+  classDef common fill:#fae8ff,stroke:#a21caf,color:#3b0764;
+  classDef client fill:#ecfdf5,stroke:#15803d,color:#052e16;
+  classDef shared fill:#fff7ed,stroke:#c2410c,color:#431407;
+  classDef store fill:#f1f5f9,stroke:#475569,color:#0f172a;
+  classDef ext fill:#fee2e2,stroke:#b91c1c,color:#3b0a0a;
+
+  subgraph Api[PoLocalCompare.Api]
+    direction TB
+    Duels["Features/Duels<br/>+ AutoJudge + DuelHub + LobbyNotifier"]:::slice
+    Models["Features/Models<br/>+ ModelSeeder + OrphanModelIdRemapper"]:::slice
+    Leaderboard["Features/Leaderboard<br/>+ EloCalculator + WinRateCalculator"]:::slice
+    Archive["Features/Archive<br/>+ ExportLabReportHandler"]:::slice
+    Ollama["Features/Ollama<br/>dev-only"]:::slice
+    Diag["Features/Diagnostics"]:::slice
+    Auth["Auth<br/>BffAuthentication<br/>+ FakeAuthHandler"]:::slice
+    BG["Common/Background<br/>IBackgroundTaskQueue + host"]:::common
+    Inf["Common/Inference<br/>FoundryChatRequest + 2 proxies"]:::common
+    Cache["Common/Caching<br/>HybridCache tag plan"]:::common
+    KV["Common/KeyVault"]:::common
+    Persist["Common/Persistence"]:::common
+    Tel["Common/Telemetry<br/>InferenceTelemetry"]:::common
+  end
+
+  subgraph Client[PoLocalCompare.Client — Blazor WASM]
+    direction TB
+    Pages["Pages/*.razor"]:::client
+    Comps["Components/*.razor"]:::client
+    Svc["Services/<br/>SignalR + WebLlm + JS interop + LocalInferenceDriver"]:::client
+  end
+
+  subgraph Shared[PoLocalCompare.Shared — pure, no DI]
+    direction TB
+    Logic["Analysis + Demo + Prompts + Presentation"]:::shared
+    DTOs["DTOs + Enums + Ids"]:::shared
+  end
+
+  subgraph Stores
+    direction TB
+    Tbl[("Table Storage<br/>Models · Duels · DuelResults · EloHistory")]:::store
+    Blob[("Blob Storage<br/>wwwroot/models/")]:::store
+  end
+
+  subgraph External
+    direction TB
+    Foundry[("Azure AI Foundry")]:::ext
+    OllamaD[("Ollama")]:::ext
+  end
+
+  Duels --> BG
+  Duels --> Inf
+  Duels --> Cache
+  Duels --> Persist
+  Models --> Persist
+  Models --> Auth
+  Leaderboard --> Cache
+  Leaderboard --> Persist
+  Archive --> Duels
+  Inf --> Foundry
+  Inf --> OllamaD
+  Pages --> Svc
+  Pages --> Logic
+  Pages --> DTOs
+  Comps --> Logic
+  Duels --> Tbl
+  Models --> Tbl
+  Leaderboard --> Tbl
+  Archiye-.-> Shared
+  Persist --> Tbl
+  Svc --> Blob
+  </div>
+  <p class="meta">Architecture is VSA &mdash; each <code>Features/&lt;Slice&gt;</code> folder is a flat vertical slice with its endpoints, handlers, entities and repository. <code>Common/</code> holds the genuinely cross-slice code (background queue, inference proxies, telemetry, cache tag plan, Key Vault bootstrap, persistence abstractions). <code>Shared/</code> carries only DTOs, enums, IDs and pure logic &mdash; no DI, no I/O.</p>
+</section>
+
+<!-- ─── TIER 2 PIPELINES ──────────────────────────────────────────────────── -->
+<h2>Pipelines · three end-to-end flows</h2>
+
+<section id="tier2b" class="tier t2">
+  <h3><span class="stamp">TIER 2</span>The three paths a verdict can take</h3>
+
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant H as Home.razor
+  participant API as PoLocalCompare.Api
+  participant DES as DuelExecutionService
+  participant FIP as FoundryInferenceProxy
+  participant FS as Azure AI Foundry
+  participant HUB as DuelHub
+  participant AR as Arena.razor
+  participant RV as RecordVerdictHandler
+  participant E as EloCalculator
+  participant T as Table Storage
+
+  U->>H: pick 2 models + prompt + Compare
+  H->>API: POST /api/duels
+  API->>DES: enqueue(duelId)
+  DES->>FIP: IRemoteInferenceProxy("Remote")
+  FIP->>FS: chat/completions?stream=true
+  loop SSE tokens
+    FS-->>FIP: delta
+    FIP->>HUB: ModelStatusUpdate
+  end
+  FIP->>T: DuelResult(rows)
+  AR->>HUB: JoinDuel(duelId)
+  HUB-->>AR: final result + DuelComplete
+  U->>API: POST /api/duels/{id}/verdict
+  API->>RV: RecordVerdictCommand (Source=Human)
+  RV->>E: K=32 deltas
+  RV->>T: Duel.Verdict + EloHistory × 2
+  RV-->>AR: VerdictResponseDto
+  RV->>HUB: VerdictRecorded + LobbyEvent
+  </div>
+
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant H as Home.razor
+  participant API as PoLocalCompare.Api
+  participant DES as DuelExecutionService
+  participant HUB as DuelHub
+  participant AR as Arena.razor
+  participant LID as LocalInferenceDriver
+  participant W as webllm-worker.js
+  participant T as Table Storage
+
+  U->>H: pick 2 browser models + Compare
+  H->>API: POST /api/duels (Left=Local, Right=Local)
+  API->>DES: enqueue
+  DES->>HUB: StartLocalInference(left)
+  HUB-->>AR: OnStartLocalInference
+  AR->>LID: runWebLlm(left)
+  LID->>W: load+generate
+  W-->>LID: HTML + telemetry
+  LID->>API: POST /api/duels/{id}/local-result
+  API->>T: DuelResult(left side)
+  DES->>HUB: StartLocalInference(right)
+  HUB-->>AR: OnStartLocalInference
+  AR->>LID: runWebLlm(right)
+  LID->>W: load+generate
+  W-->>LID: HTML + telemetry
+  LID->>API: POST /api/duels/{id}/local-result
+  API->>T: DuelResult(right side)
+  U->>API: POST /api/duels/{id}/verdict (Human)
+  </div>
+
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant D as Demo.razor
+  participant API as PoLocalCompare.Api
+  participant DP as DemoPlanner (Shared)
+  participant CDH as CommenceDuelHandler
+  participant DES as DuelExecutionService
+  participant AJ as AutoJudge
+  participant J as FoundryDuelJudge
+  participant T as Table Storage
+
+  U->>D: /demo · click Start
+  D->>API: GET /api/duels/demo-plan?rounds=10
+  API->>DP: schedule (seeded)
+  DP-->>D: DemoPlanDto
+  loop 10 rounds
+    D->>API: POST /api/duels { autoJudgeDelaySeconds:0 }
+    API->>CDH: CommenceDuel
+    CDH->>T: insert Duel
+    API->>DES: enqueue
+    DES->>T: DuelResult × 2 (Remote SSE)
+    DES->>AJ: RunAsync(0)
+    AJ->>T: re-read Duel → Pending still?
+    AJ->>J: JudgeAsync
+    J-->>AJ: { winner, reason }
+    AJ->>API: RecordVerdict(winner, source=Ai)
+  end
+  </div>
+</section>
+
+<!-- ─── TIER 2 ERD ────────────────────────────────────────────────────────── -->
+<h2>Domain entities &amp; state transitions</h2>
+
+<section id="tier2c" class="tier t2">
+  <h3><span class="stamp">TIER 2</span>The five records and the four tables</h3>
+  <div class="mermaid">
+erDiagram
+  MODEL ||--o{ DUEL : "left/right id"
+  MODEL ||--o{ DUELRESULT : "writes"
+  MODEL ||--o{ ELOHISTORY : "earns"
+  DUEL ||--|| DUELRESULT : "2 rows per duel"
+  DUEL ||--o{ DUELRESULT : "left + right"
+
+  MODEL {
+    ModelId ModelId PK
+    string  DisplayName
+    ModelType ModelType
+    string  WebLlmModelId
+    string  ApiEndpointRef
+    decimal InputTokenPricePerMillion
+    decimal OutputTokenPricePerMillion
+    double  CurrentElo
+    int     DuelCount
+    int     WinCount
+    int     DrawCount
+  }
+  DUEL {
+    DuelId DuelId PK
+    string YmPartition PK
+    ModelId  LeftModelId FK
+    ModelId  RightModelId FK
+    string   LeftModelName
+    string   RightModelName
+    string   PromptText
+    DuelStatus   Status
+    DuelVerdict  Verdict
+    VerdictSource VerdictSource
+    string   JudgeModel
+    string   JudgeRationale
+  }
+  DUELRESULT {
+    DuelId  DuelId FK
+    ModelId ModelId FK
+    bool    IsSideLeft
+    string  HtmlOutputRaw
+    int     TokenCount
+    long    TotalDurationMs
+    double  TokenVelocity
+    bool    IsFailure
+    string  FailureReason
+    double  OutputQualityScore
+    double  EnergyWh
+    decimal ApiCostUsd
+  }
+  ELOHISTORY {
+    ModelId ModelId FK
+    string  ReverseTicks_DuelId PK
+    double  EloBefore
+    double  EloAfter
+    double  OpponentEloAfter
+    string  Outcome
+  }
+  </div>
+
+  <h4>Duel state machine</h4>
+  <div class="mermaid">
+stateDiagram-v2
+  [*] --> Initializing: POST /api/duels (write)
+  Initializing --> Generating: DuelExecutionService.RunAsync
+  Generating --> Done: both DuelResult rows stored
+  Generating --> Failed: watchdog 900 s elapsed
+  Done --> Pending: terminal state, awaiting judgment
+  Failed --> Pending: terminal state, awaiting judgment
+  Pending --> Left: Human verdict
+  Pending --> Right: Human verdict
+  Pending --> Tie: Human or AI verdict
+  Pending --> Left: AI verdict
+  Pending --> Right: AI verdict
+  Left --> [*]
+  Right --> [*]
+  Tie --> [*]
+  Pending --> [*]: both sides failed · Duel never judged
+  </div>
+</section>
+
+<!-- ─── TIER 3 NARRATIVE ─────────────────────────────────────────────────── -->
+<h2>Narrative cards &mdash; plain English for each slice</h2>
+
+<section id="tier3" class="tier t3">
+  <h3><span class="stamp">TIER 3</span>Each card pairs a real-world summary with the slice that owns it</h3>
+
+  <div class="grid cols-3">
+    <div class="card">
+      <span class="tag t1">slice</span>
+      <h4>Duels</h4>
+      <p>The engine room. Owns a duel's full lifecycle &mdash; from the <code>POST /api/duels</code> write to the <code>RecordVerdict</code> ELO update. Wires up <code>DuelExecutionService</code> (background queue), <code>DuelHub</code> (SignalR live events), <code>LobbyNotifier</code> (global ticker), <code>AutoJudge</code> and <code>FoundryDuelJudge</code>.</p>
+      <ul>
+        <li><code>Features/Duels/DuelsEndpoints.cs</code> &mdash; Minimal API surface.</li>
+        <li><code>Features/Duels/Duel.cs</code> &mdash; aggregate root (incl. snapshot names).</li>
+        <li><code>Features/Duels/RecordVerdictHandler.cs</code> &mdash; the single ELO gate.</li>
+        <li><code>Features/Duels/EloCalculator.cs</code> &mdash; K=32 expected-score formula.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t1">slice</span>
+      <h4>Models</h4>
+      <p>Catalog of everything that can compete. Read-only at runtime &mdash; the seeder writes the default list once and is idempotent; <code>OrphanModelIdRemapper</code> rewrites duel history to the current catalog on startup so retired IDs don't leave dead rows.</p>
+      <ul>
+        <li><code>Features/Models/Model.cs</code> &mdash; record (incl. <code>CurrentElo</code> denormalized).</li>
+        <li><code>Features/Models/ModelSeeder.cs</code> &mdash; 21 seeded models (7 browser · 2 Ollama · 12 remote), pricing from the list rates.</li>
+        <li><code>Features/Models/ModelVisibility.cs</code> &mdash; hides Ollama in Production.</li>
+        <li><code>Features/Models/OrphanModelIdRemapper.cs</code> &mdash; insert-then-delete remap.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t1">slice</span>
+      <h4>Leaderboard</h4>
+      <p>The fair ranking. Reads <code>Models</code> + <code>EloHistory</code> (sparkline) and either <code>DuelResult</code> (avg cost) and projects <code>LeaderboardEntryDto</code> (with a real <code>WinRate</code>). Fronted by <code>HybridCache</code> &mdash; tag-invalidated on every verdict write.</p>
+      <ul>
+        <li><code>Features/Leaderboard/GetLeaderboardHandler.cs</code> &mdash; sort by Elo / Quality / Cost / Value.</li>
+        <li><code>Features/Leaderboard/GetKillListHandler.cs</code> &mdash; per-opponent aggregates.</li>
+        <li><code>Features/Leaderboard/WinRateCalculator.cs</code> &mdash; divide-by-zero guard.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t1">slice</span>
+      <h4>Archive</h4>
+      <p>Lab-report export. <code>ExportLabReportHandler</code> reads the duel, calls <code>HtmlLabReportRenderer</code>, and serves the result as a self-contained HTML file with a <code>Content-Disposition: attachment</code> header.</p>
+      <ul>
+        <li><code>Features/Archive/ArchiveEndpoints.cs</code> &mdash; single route under <code>/api/duels/{id}/report</code>.</li>
+        <li><code>Features/Archive/HtmlLabReportRenderer.cs</code> &mdash; pure HTML builder.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t1">slice</span>
+      <h4>Ollama</h4>
+      <p>Local daemon interop (Development only). Three tiny handlers: <code>GET /gpu-status</code>, <code>GET /available-models</code>, <code>POST /benchmark</code>. The whole slice is hidden by <code>ModelVisibility.Filter</code> outside Development, so the Production catalog has no dead entries.</p>
+      <ul>
+        <li><code>Features/Ollama/OllamaEndpoints.cs</code> &mdash; 3 routes.</li>
+        <li><code>Features/Ollama/OllamaContracts.cs</code> &mdash; request/response DTOs.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t1">slice</span>
+      <h4>Diagnostics</h4>
+      <p>Liveness &amp; smoke. <code>/health</code> is the JSON probe (compose of registered <code>IHealthCheck</code>s); <code>/api/diag/smoke</code> is the same picture for the diag tab; <code>/diag</code> is the Razor view that renders it without leaking secrets.</p>
+      <ul>
+        <li><code>Features/Diagnostics/HealthEndpoints.cs</code> &mdash; route map.</li>
+        <li><code>Features/Diagnostics/HealthChecks.cs</code> &mdash; health check implementations.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t2">cross-cut</span>
+      <h4>Auth · BFF</h4>
+      <p>The WASM client never sees a token. The server owns the OIDC code flow, stores an encrypted HttpOnly cookie, and routes login through <code>/auth/login/microsoft</code> (PKCE, well-formed-Entra-issuer validation) and <code>/auth/login/fake</code> in Development. <code>FakeAuthHandler</code> throws when constructed in Production as defense in depth.</p>
+      <ul>
+        <li><code>Auth/BffAuthentication.cs</code> &mdash; registration + <code>MapAuthEndpoints</code>.</li>
+        <li>Single policy: <code>RequireAuthenticatedUser</code> over <code>Cookie OR Fake</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t2">cross-cut</span>
+      <h4>Common/Background</h4>
+      <p>Reliable work for duels. <code>IBackgroundTaskQueue</code> is a singleton; <code>BackgroundTaskService</code> is a hosted consumer. Nothing else resolves the concrete queue &mdash; the rest of the app just enqueues.</p>
+      <ul>
+        <li><code>Common/Background/IBackgroundTaskQueue.cs</code></li>
+        <li><code>Common/Background/BackgroundTaskQueue.cs</code></li>
+        <li><code>Common/Background/BackgroundTaskService.cs</code></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t2">cross-cut</span>
+      <h4>Common/Inference</h4>
+      <p>Strategy &mdash; one proxy per remote model type. <code>FoundryChatRequest</code> knows two body shapes (reasoning vs classic chat) and which deployments accept the <code>stream_options</code> extension. SSE is read by <code>SseChatStreamReader.cs</code>; tokens are counted by <code>HtmlStreamCounters.cs</code>.</p>
+      <ul>
+        <li><code>Common/Inference/FoundryInferenceProxy.cs</code></li>
+        <li><code>Common/Inference/OllamaInferenceProxy.cs</code></li>
+        <li><code>Common/Inference/IRemoteInferenceProxy.cs</code></li>
+        <li><code>Common/Inference/InferenceTelemetry.cs</code> &mdash; OTEL source name.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t2">cross-cut</span>
+      <h4>Common/Caching</h4>
+      <p>One tag, one plan: <code>CacheTags.Leaderboard</code> is invalidated by <code>RecordVerdictHandler</code> after every verdict write. Fronted reads: <code>leaderboard:{sortBy}</code>.</p>
+      <ul><li><code>Common/Caching/CacheTags.cs</code></li></ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t2">cross-cut</span>
+      <h4>Common/KeyVault · Persistence · Telemetry</h4>
+      <p>The plumbing. Key Vault prefix is <code>PoLocalCompare--</code>; persistence is <code>Azure.Data.Tables</code> with 409-swallowing creates and ETag-conditional updates; telemetry is <code>InferenceTelemetry</code> as both Activity source and Meter for OTEL.</p>
+      <ul><li><code>Common/KeyVault/*</code></li><li><code>Common/Persistence/*</code></li><li><code>Common/Telemetry/InferenceTelemetry.cs</code></li></ul>
+    </div>
+
+    <div class="card">
+      <span class="tag">client</span>
+      <h4>PoLocalCompare.Client</h4>
+      <p>Blazor WASM, served by the API at <code>/</code>. Thin Razor over <code>Shared/</code> helpers. <code>Services/</code> holds what genuinely needs the browser: <code>LocalInferenceDriver</code>, the SignalR client, JS interop. <code>Pages/</code>: Home, Arena, Leaderboard, Archive, Demo, Login, NotFound.</p>
+      <ul><li><code>src/PoLocalCompare.Client/Pages/Arena.razor</code> &mdash; full duel + browser-side inference driver</li><li><code>src/PoLocalCompare.Client/Pages/Home.razor</code> &mdash; two-column picker</li></ul>
+    </div>
+
+    <div class="card">
+      <span class="tag t3">shared</span>
+      <h4>PoLocalCompare.Shared</h4>
+      <p>DTOs, enums, strongly-typed IDs and the pure helpers that all three other projects need: <code>Analysis/LineDiff.cs</code>, <code>Analysis/OutputAnalysis.cs</code>, <code>Prompts/PromptLibrary.cs</code>, <code>Demo/DemoPlanner.cs</code>, <code>Presentation/</code> view-models + enums.</p>
+      <ul><li>The diff engine, the scorecard heuristic, the prompt library and the demo planner all live here so the unit tests can reach them.</li></ul>
+    </div>
+  </div>
+
+  <h3>Step-by-step narratives</h3>
+
+  <div class="narrative">
+    <div class="text">
+      <h4>1 · A user starts a duel</h4>
+      <p>A person signs in (cookie set), picks two models on <strong>Home.razor</strong>, types a prompt, and clicks Compare. The WASM client serializes the three fields and calls <code>POST /api/duels</code>. The server writes a Duel row with status <code>Pending</code> and snapshot display names, then enqueues a background work item and returns 202 with a Location header. Within ~30 ms the user is on <strong>Arena.razor</strong>.</p>
+    </div>
+    <div class="visual">
+      <div class="mermaid">
+flowchart LR
+  U[User]:::user --> H[Home.razor]:::w
+  H -- "POST /api/duels" --> E[DuelsEndpoints]:::api
+  E --> CDH[CommenceDuelHandler]:::api
+  CDH --> Repo[(Table Storage · Duels)]:::store
+  E -- "202 Accepted + Location" --> H
+  E --> BTQ[IBackgroundTaskQueue]:::bg
+  classDef user fill:#fef9c3,stroke:#a16207,color:#3f2d04
+  classDef w fill:#e0f2fe,stroke:#0369a1,color:#082f49
+  classDef api fill:#fae8ff,stroke:#a21caf,color:#3b0764
+  classDef bg fill:#ecfdf5,stroke:#15803d,color:#052e16
+  classDef store fill:#f1f5f9,stroke:#475569,color:#0f172a
+      </div>
+    </div>
+  </div>
+
+  <div class="narrative">
+    <div class="text">
+      <h4>2 · Inference runs (three paths)</h4>
+      <p>The background item fans out. For each side, the execution service resolves the right <strong>IRemoteInferenceProxy</strong> by <code>ModelType</code>:
+        <strong>Remote</strong> opens an SSE chat completion to Azure AI Foundry;
+        <strong>LocalService</strong> (Dev) talks to Ollama on <code>localhost:11434</code>;
+        <strong>Local</strong> (browser) emits <code>StartLocalInference</code> over SignalR and waits for the WASM web-worker to POST its result back.
+        Every token batch updates a <code>DuelResult</code> row and pushes a <code>ModelStatusUpdate</code> over the hub.
+      </p>
+    </div>
+    <div class="visual">
+      <div class="mermaid">
+flowchart TB
+  DES[DuelExecutionService]:::api
+  DES -- "ModelType=Remote" --> FIP[FoundryInferenceProxy]:::api
+  FIP -- "SSE chat" --> AF[Azure AI Foundry]:::ext
+  DES -- "ModelType=LocalService (Dev)" --> OIP[OllamaInferenceProxy]:::api
+  OIP -- "HTTP" --> OL[Ollama]:::ext
+  DES -- "ModelType=Local" --> HUB[DuelHub · SignalR]:::hub
+  HUB -- "StartLocalInference" --> AR[Arena.razor]:::w
+  AR -- "POST /api/duels/{id}/local-result" --> DRE[DuelResultRepository]:::api
+  FIP -- "tokens" --> HUB
+  OIP -- "tokens" --> HUB
+  DRE -- "save" --> TR[(Table Storage · DuelResults)]:::store
+  classDef api fill:#fae8ff,stroke:#a21caf,color:#3b0764
+  classDef w fill:#e0f2fe,stroke:#0369a1,color:#082f49
+  classDef ext fill:#fee2e2,stroke:#b91c1c,color:#3b0a0a
+  classDef hub fill:#ecfeff,stroke:#0e7490,color:#083344
+  classDef store fill:#f1f5f9,stroke:#475569,color:#0f172a
+      </div>
+    </div>
+  </div>
+
+  <div class="narrative">
+    <div class="text">
+      <h4>3 · Verdict collection &amp; ELO write</h4>
+      <p>Either the user clicks a button (human verdict) or <strong>AutoJudge</strong> steps in after <code>AiJudge:DelaySeconds</code>. Either way, <strong>RecordVerdictHandler</strong> is the only path that writes the verdict. It enforces three rules: no second verdict (409), no verdict when both sides failed, and a precise <code>VerdictSource</code> so an LLM judge can be filtered out of an LLM-vs-human re-ranking afterwards. Then EloCalculator (K=32) computes deltas, two EloHistory rows are appended, and the <code>leaderboard</code> HybridCache tag is invalidated.</p>
+    </div>
+    <div class="visual">
+      <div class="mermaid">
+flowchart TB
+  A[Arena click · or AutoJudge]:::w --> RV[RecordVerdictHandler]:::api
+  RV --> Guard{Guard:<br/>both failed?}:::api
+  Guard -- yes --> Deny[409 Conflict · no ELO]:::api
+  Guard -- no --> Elo[EloCalculator.K=32 deltas]:::api
+  Elo --> DW[(Duel row · Verdict + JudgeModel + JudgeRationale)]:::store
+  Elo --> EH[(EloHistory × 2)]:::store
+  RV --> Invalidate[Invalidate CacheTags.Leaderboard]:::api
+  RV --> LH[LobbyNotifier · LobbyEvent]:::api
+  classDef w fill:#e0f2fe,stroke:#0369a1,color:#082f49
+  classDef api fill:#fae8ff,stroke:#a21caf,color:#3b0764
+  classDef store fill:#f1f5f9,stroke:#475569,color:#0f172a
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="footer">
+  Sources: <code>Program.cs</code>, every <code>Features/*/*.cs</code>, <code>Common/Background</code>,
+  <code>Common/Inference</code>, <code>Auth/BffAuthentication.cs</code>,
+  <code>Pages/*.razor</code>, <code>Shared/Models</code>, <code>Shared/Enums</code>.
+  Generated 2026-08-21.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "polocalcompare-mermaid-validate",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Render-validates every inline <div class=\"mermaid\"> block in docs/<YYYYMMDD>/*.html against the SAME Mermaid version the reports pin on the CDN.",
+  "type": "module",
+  "scripts": {
+    "validate": "node validate-mermaid.mjs"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "10.9.1"
+  },
+  "overrides": {
+    "@mermaid-js/mermaid-cli": {
+      "mermaid": "10.9.1"
+    }
+  },
+  "allowScripts": {
+    "puppeteer@19.11.1": true
+  }
+}

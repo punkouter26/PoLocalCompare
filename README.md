@@ -42,8 +42,40 @@ dotnet user-secrets set "AzureAiFoundry:ApiKey" "<key>" --project src/PoLocalCom
 | [docs/PRD_Master.md](docs/PRD_Master.md) | Source of truth — slice boundaries, endpoint map, Table Storage schema, decision log (§9) |
 | [AGENT.MD](AGENT.MD) | Living architectural contract — tech stack, structure, config keys, deployment, testing |
 | [CLAUDE.md](CLAUDE.md) | Working notes for agents — the traps and invariants that span several files |
+| [docs/20260821/](docs/20260821/) | Generated reports — 5 standalone HTML dashboards plus one interactive artifact page, all with inline Mermaid, dated 2026-08-21 |
 
-The generated HTML reports and their Mermaid sources were removed in the 2026-08-13 prune: they were
-point-in-time snapshots that drifted from the code (one still documented a script that no longer
-worked), and everything they asserted is either in PRD_Master.md or derivable from the source. Recover
-them from git history if a snapshot is ever needed again.
+### Generated reports (`docs/20260821/`)
+
+Snapshots of the system as it stands on `master`. Each report carries three progressive tiers
+(Executive 30 s → Architectural → Implementation) and uses inline Mermaid for all diagrams. Open
+the HTML files directly — no build step, no external assets except the Mermaid CDN script tag.
+
+| Report | Purpose |
+|---|---|
+| [AI_SERVICES_REPORT.html](docs/20260821/AI_SERVICES_REPORT.html) | The 21 seeded models (7 browser, 2 Ollama, 12 remote), the three inference paths (Remote, LocalService, Local/WebLLM), the auto-judge, and the per-token pricing wired to the seed list rates. |
+| [ARCHITECTURE_REPORT.html](docs/20260821/ARCHITECTURE_REPORT.html) | C4 container + component view of the single-host topology, every Minimal API route, every Blazor `@page`, and the request lifecycle sequence diagram. |
+| [ROLES_PERMISSIONS_MATRIX.html](docs/20260821/ROLES_PERMISSIONS_MATRIX.html) | Interactive Principal × Environment × Endpoint grid. Searchable, column-togglable. Flags every `AllowAnonymous()` endpoint and calls out the absence of role-based authorization. |
+| [USER_WORKFLOW.html](docs/20260821/USER_WORKFLOW.html) | Four end-to-end traces (sign-in, standard duel, browser-model duel, unattended demo) with sequence diagrams and step-by-step file references. |
+| [VISUAL_ARCHITECTURE_DASHBOARD.html](docs/20260821/VISUAL_ARCHITECTURE_DASHBOARD.html) | A one-page dashboard that fuses C4 components, three pipelines, the ERD, the duel state machine, and plain-English narrative cards per slice. |
+| [INTERACTIVE_DASHBOARD.html](docs/20260821/INTERACTIVE_DASHBOARD.html) | The same ground in one interactive page, with a **reading-depth control** — Orientation / Systems / Implementation — that reveals or hides each chapter's deeper strata. Published as an artifact: **[Half Cloud, Half Tab](https://claude.ai/code/artifact/43d2e3da-8976-4225-bdef-7bdacd94b0c7)**. |
+
+The first five reports are regenerated on demand from current `master`. Each is a single
+self-contained HTML file — copy them into a wiki, share them as PR attachments, or open them
+locally. `INTERACTIVE_DASHBOARD.html` is the artifact source: it carries no `<html>`/`<head>`
+wrapper of its own (the artifact host supplies one) and its two CSV exports need the artifact
+`downloads` capability, so the published link above is the way to read it.
+
+### Diagram validation
+
+Every inline Mermaid block in `docs/<YYYYMMDD>/*.html` is render-validated against the **same
+Mermaid version the pages pin** (10.9.1) — a diagram that fails to parse renders as a red error box
+in the browser and nothing else warns:
+
+```powershell
+npm --prefix SCRIPTS/mermaid-validate install          # once — pulls mermaid-cli + Chromium
+npm --prefix SCRIPTS/mermaid-validate run validate     # newest docs/<YYYYMMDD>/
+npm --prefix SCRIPTS/mermaid-validate run validate -- docs/20260821
+```
+
+The exit code is the number of blocks that failed, plus any CDN pin that has drifted away from the
+version the validator installs. It is not wired into CI — run it after editing a report.

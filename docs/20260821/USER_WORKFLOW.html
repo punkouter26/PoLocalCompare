@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PoLocalCompare · User Workflow Traces (2026-08-21)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', htmlLabels: true },
+        sequence: { mirrorActors: false, showSequenceNumbers: true, wrap: true },
+      });
+    });
+  </script>
+  <style>
+    :root {
+      --bg:#ffffff; --fg:#11161d; --muted:#5b6573; --line:#e6e8ec;
+      --accent:#2563eb; --accent-2:#0f766e; --warn:#b45309; --danger:#b91c1c; --ok:#15803d;
+      --surface:#f6f8fb; --surface-2:#eef2f8; --code-bg:#0f172a; --code-fg:#e2e8f0;
+      --tier1:#fff7ed; --tier2:#f0f9ff; --tier3:#f7fee7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1220; --fg:#e6edf7; --muted:#93a0b4; --line:#1f2a3c;
+        --accent:#60a5fa; --accent-2:#2dd4bf; --warn:#fbbf24; --danger:#f87171; --ok:#4ade80;
+        --surface:#111a2c; --surface-2:#152238; --code-bg:#020617; --code-fg:#cbd5e1;
+        --tier1:#2a1a06; --tier2:#06253b; --tier3:#14260b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 15px; line-height: 1.6;
+      max-width: 1240px; margin: 0 auto; padding: 32px 28px 96px; background: var(--bg); color: var(--fg);
+    }
+    header.crown { border-bottom: 2px solid var(--line); padding-bottom: 16px; margin-bottom: 28px; }
+    header.crown .eyebrow {
+      display:inline-block; background: var(--surface-2); color: var(--accent);
+      padding: 4px 10px; font-size: 12px; letter-spacing: .08em;
+      border-radius: 4px; text-transform: uppercase; font-weight: 600;
+    }
+    header.crown h1 { font-size: 28px; margin: 10px 0 6px; line-height: 1.2; }
+    header.crown .sub { color: var(--muted); font-size: 14px; }
+    h2 { font-size: 22px; margin-top: 38px; padding-top: 16px; border-top: 1px solid var(--line); }
+    h3 { font-size: 17px; margin-top: 24px; }
+    h4 { font-size: 15px; margin-top: 18px; color: var(--muted); }
+    p, ul, ol { margin: 8px 0 14px; } ul, ol { padding-left: 22px; } li { margin: 4px 0; }
+    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+    code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+    .tier { border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin: 16px 0 24px; }
+    .tier h3 { margin-top: 0; }
+    .tier.t1 { background: var(--tier1); }
+    .tier.t2 { background: var(--tier2); }
+    .tier.t3 { background: var(--tier3); }
+    .tier .stamp { display:inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .08em; margin-right: 8px; color: white; background: var(--accent); }
+    .tier.t1 .stamp { background: var(--warn); }
+    .tier.t2 .stamp { background: var(--accent); }
+    .tier.t3 .stamp { background: var(--accent-2); }
+    pre {
+      background: var(--code-bg); color: var(--code-fg);
+      padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; line-height: 1.55;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0 24px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: var(--surface); font-weight: 600; position: sticky; top: 0; }
+    tbody tr:hover { background: var(--surface); }
+    .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill {
+      display: inline-block; background: var(--surface-2); color: var(--accent);
+      padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    }
+    .pill.warn { color: var(--warn); } .pill.ok { color: var(--ok); } .pill.muted { color: var(--muted); }
+    .mermaid { background: var(--surface); padding: 20px 16px; border-radius: 10px; margin: 18px 0; border: 1px solid var(--line); text-align: center; font-size: 14px; overflow-x: auto; }
+    .footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+    ol.steps { counter-reset: step; list-style: none; padding: 0; }
+    ol.steps > li {
+      counter-increment: step;
+      position: relative; padding: 10px 14px 10px 56px;
+      border-left: 3px solid var(--line); margin: 8px 0 0 14px;
+    }
+    ol.steps > li::before {
+      content: counter(step);
+      position: absolute; left: -16px; top: 6px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--accent); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px;
+    }
+    @media (max-width: 720px) {
+      body { padding: 18px 14px 80px; } header.crown h1 { font-size: 22px; }
+      .mermaid { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="crown">
+  <span class="eyebrow">User Workflow · PoLocalCompare</span>
+  <h1>Trace every step a person (or a demo) actually walks</h1>
+  <div class="sub">
+    Three end-to-end traces plus one unattended trip — each followed
+    <code>User Action → Razor component → Minimal API endpoint → Handler → External service → Table Storage</code>,
+    with the file that owns each link. Generated 2026-08-21.
+  </div>
+</header>
+
+<!-- ─── TIER 1 — EXECUTIVE ───────────────────────────────────────────────────── -->
+<section id="tier1" class="tier t1">
+  <h3><span class="stamp">TIER 1</span>Executive summary (30 s)</h3>
+  <p>
+    Four traces are documented end-to-end:
+  </p>
+  <ol class="steps">
+    <li><strong>Sign-in (BFF)</strong> — Microsoft or guest, sets a single encrypted cookie, returns 401-JSON if unauthenticated.</li>
+    <li><strong>Standard duel (Remote vs Remote)</strong> — Pick → Compare → 202 → Arena subscribes SignalR → tokens stream → verdict → ELO moves.</li>
+    <li><strong>Browser-model duel (WebLLM)</strong> — Same UI up to the Arena; inference runs in the tab, finished HTML POSTed back.</li>
+    <li><strong>Unattended demo (10 duels)</strong> — <code>DemoPlanner</code> resolves the schedule, each duel enters the ordinary <code>POST /api/duels</code>, judge auto-decides.</li>
+  </ol>
+  <p>
+    Every write path that moves ELO goes through <code>RecordVerdictHandler</code>. Every persisted result goes through
+    <code>DuelResultRepository</code>. Two contracts hold the design together: a human decision always wins the race
+    against the auto-judge; ELO never moves on no evidence.
+  </p>
+</section>
+
+<!-- ─── TIER 2 — ARCHITECTURAL ───────────────────────────────────────────────── -->
+<h2>Architectural view</h2>
+
+<section id="tier2" class="tier t2">
+  <h3><span class="stamp">TIER 2</span>The end-to-end paths</h3>
+
+  <h4>Trace A · Sign-in (BFF)</h4>
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Usr  as User browser
+  participant Nav  as NavMenu.razor
+  participant Lgn  as Login.razor
+  participant Api  as PoLocalCompare.Api
+  participant Msft as Microsoft Entra
+  participant Fke  as Fake login dev
+  participant Cky  as Cookie jar
+  participant App  as Arena or Home
+
+  Usr->>Nav: click Sign in
+  Nav->>Lgn: navigate to /login
+  Lgn->>Api: GET /auth/login returns 302 target
+  alt Microsoft configured
+    Api->>Msft: OIDC code challenge with PKCE
+    Msft-->>Usr: consent screen
+    Usr->>Msft: approve and email
+    Msft-->>Api: GET /signin-oidc with code
+    Api->>Msft: token exchange
+    Msft-->>Api: id_token plus access_token
+    Api->>Cky: set PoLocalCompare.Session secure cookie
+  else Development fallback
+    Api-->>Usr: redirect to /auth/login/fake
+    Api->>Cky: set dev guest cookie
+  end
+  Api->>App: cookies sent and pages load
+  App->>Api: GET /auth/me
+  Api-->>App: AuthStateDto with name and roles
+  </div>
+
+  <h4>Trace B · Standard duel (Remote vs Remote)</h4>
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Usr  as User
+  participant Home as Home.razor
+  participant Api  as PoLocalCompare.Api
+  participant CDH  as CommenceDuelHandler
+  participant DES  as DuelExecutionService
+  participant Bgq  as BackgroundTaskService
+  participant FIP  as FoundryInferenceProxy
+  participant FSrv as Azure AI Foundry
+  participant Hub  as DuelHub
+  participant Aren as Arena.razor
+  participant RVH  as RecordVerdictHandler
+  participant Elo  as EloCalculator
+  participant Tbl  as Table Storage
+
+  Usr->>Home: pick two models plus prompt and Compare
+  Home->>Api:  POST /api/duels
+  Api->>CDH:  CommenceDuelCommand
+  CDH->>Tbl: insert Duel Pending on YYYYMM partition
+  CDH->>DES: enqueue duel work item
+  Api-->>Home: 202 Accepted with Location header
+  DES->>Bgq: queue duel work item
+  Bgq->>DES: run item and dispatch Remote twice
+  DES->>FIP: resolve IRemoteInferenceProxy Remote
+  FIP->>FSrv: chat completions stream true
+  loop SSE tokens
+    FSrv-->>FIP: delta and finish reason
+    FIP->>Hub: ModelStatusUpdate token plus tps
+  end
+  FIP->>Tbl: upsert DuelResult tokens latency cost
+  Home->>Aren: navigate to arena id
+  Aren->>Hub: JoinDuel duelId
+  Hub-->>Aren: final result streamed
+  Usr->>Aren: click Left Right or Tie
+  Aren->>Api: POST /api/duels id verdict
+  Api->>RVH: RecordVerdictCommand source equals Human
+  RVH->>RVH: once-only plus no evidence guard
+  RVH->>Elo: compute Elo deltas K equals 32
+  RVH->>Tbl: write Duel.Verdict and two EloHistory rows
+  RVH-->>Aren: VerdictResponseDto
+  RVH->>Hub: VerdictRecorded plus LobbyEvent
+  </div>
+
+  <h4>Trace C · Browser-model duel (WebLLM)</h4>
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Usr  as User
+  participant Home as Home.razor
+  participant Api  as PoLocalCompare.Api
+  participant DES  as DuelExecutionService
+  participant Hub  as DuelHub
+  participant Aren as Arena.razor
+  participant LID  as LocalInferenceDriver
+  participant Wkr  as webllm worker
+  participant LR   as DuelResultRepository
+  participant Tbl  as Table Storage
+
+  Usr->>Home: pick two browser models and Compare
+  Home->>Api:  POST /api/duels with Local and Local
+  Api->>DES:  enqueue
+  DES->>Hub:  Status Initializing
+  Hub-->>Aren: view shows Initializing
+  DES->>Hub:  StartLocalInference left side
+  Hub-->>Aren: OnStartLocalInference payload
+  Aren->>LID: runWebLlm left
+  LID->>Wkr:  postMessage load plus generate
+  Wkr-->>LID: HTML plus telemetry
+  LID->>Api:  POST /api/duels id local-result
+  Api->>LR:   save DuelResult for left
+  DES->>Hub:  StartLocalInference right side
+  Hub-->>Aren: OnStartLocalInference payload
+  Aren->>LID: runWebLlm right
+  LID->>Wkr:  postMessage load plus generate
+  Wkr-->>LID: HTML plus telemetry
+  LID->>Api:  POST /api/duels id local-result
+  Api->>LR:   save DuelResult for right
+  Aren->>Aren: both sides complete show verdict UI
+  Usr->>Aren: pick winner
+  Aren->>Api: POST /api/duels id verdict source Human
+  </div>
+
+  <h4>Trace D · Unattended demo (10 Remote duels)</h4>
+  <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Usr  as User
+  participant Demo as Demo.razor
+  participant Api  as PoLocalCompare.Api
+  participant DP   as DemoPlanHandler
+  participant CDH  as CommenceDuelHandler
+  participant DES  as DuelExecutionService
+  participant AJ   as AutoJudge
+  participant Jdg  as FoundryDuelJudge
+  participant Tbl  as Table Storage
+
+  Usr->>Demo: enter /demo and click Start
+  Demo->>Api: GET /api/duels/demo-plan rounds 10
+  Api->>DP:   resolve round robin remote pairs and prompts
+  DP-->>Demo: DemoPlanDto (displayed before Start)
+  loop ten rounds sequential
+    Demo->>Api: POST /api/duels autoJudgeDelaySeconds 0
+    Api->>CDH:  CommenceDuel
+    CDH->>Tbl:  insert Duel
+    CDH->>DES:  enqueue
+    DES-->>Tbl: stream Remote twice into DuelResult rows
+    DES->>AJ:   RunAsync zero seconds
+    AJ->>Tbl:   re-read Duel still Pending
+    AJ->>Jdg:   JudgeAsync json schema position bias coin flip
+    Jdg-->>AJ:  winner A B or Tie with reason
+    alt one side failed
+      AJ->>Api: RecordVerdict walkover source Ai
+    else both ok
+      AJ->>Api: RecordVerdict winner source Ai
+    else both failed
+      AJ->>Tbl: stand down Duel remains Pending
+    end
+  end
+  AJ->>Tbl: update Duel.Verdict and EloHistory
+  Tbl-->>Demo: leaderboard and archive reflect new Elo
+  </div>
+</section>
+
+<!-- ─── TIER 3 — IMPLEMENTATION ──────────────────────────────────────────────── -->
+<h2>Implementation reference</h2>
+
+<section id="tier3" class="tier t3">
+  <h3><span class="stamp">TIER 3</span>Step-by-step with concrete file references</h3>
+
+  <h4>Trace A · Sign-in (BFF) &mdash; expanded</h4>
+  <ol class="steps">
+    <li><strong>Click "Sign in"</strong> in <code>NavMenu.razor</code> (calls <code>NavigationManager.NavigateTo("/login")</code>).</li>
+    <li><strong>Login.razor</strong> renders two buttons: one targets <code>/auth/login/microsoft</code>, one (Development only) targets <code>/auth/login/fake</code>.</li>
+    <li><strong><code>Auth/BffAuthentication.cs → MapAuthEndpoints</code></strong> maps the routes. <code>/auth/me</code> is <em>always</em> anonymous so the SPA can read auth state without 401s.</li>
+    <li><strong>OIDC code flow</strong> for Microsoft: <code>AddOpenIdConnect</code> uses PKCE, authority <code>https://login.microsoftonline.com/common/v2.0</code>, callback <code>/signin-oidc</code>. Allowed tenants default to "any well-formed Entra issuer" unless <code>AzureAd:AllowedTenants</code> is populated.</li>
+    <li><strong>Cookie session</strong> &mdash; <code>PoLocalCompare.Session</code> is <code>HttpOnly</code>, <code>SameSite=Strict</code>, <code>Secure</code>, sliding 8 h. The cookie event handler returns 401 JSON (never 302) for API calls so the WASM client can render the Login page properly.</li>
+    <li><strong>Dev fake</strong> &mdash; <code>/auth/login/fake</code> only exists outside Production; <code>FakeAuthHandler</code> throws when constructed in Production.</li>
+  </ol>
+
+  <h4>Trace B · Standard duel &mdash; expanded</h4>
+  <ol class="steps">
+    <li><code>Home.razor</code> (.po-btn Compare click) → <code>PoLocalCompare.Client.Services.HttpClient.PostAsJsonAsync("/api/duels", request)</code>.</li>
+    <li><code>DuelsEndpoints.MapDuelsEndpoints</code> wires the group; the <code>POST /</code> handler calls <code>CommenceDuelHandler.HandleAsync</code> which writes the duel row (with <code>Verdict=Pending</code>, snapshot names).</li>
+    <li><code>DuelExecutionService.EnqueueAsync</code> queues a background work item (long-lived), keyed on <code>DuelId</code>; the handler returns <code>202 Accepted</code> + Location header.</li>
+    <li><code>BackgroundTaskService</code> dequeues and invokes <code>DuelExecutionService.RunAsync</code>; it resolves an <code>IRemoteInferenceProxy</code> via <code>GetRequiredKeyedService&lt;&gt;</code> based on <code>ModelType</code>.</li>
+    <li><strong>Remote path</strong>: <code>FoundryInferenceProxy.StreamAsync</code> opens an SSE connection (<code>chat/completions?stream=true</code>); each token batch raises <code>ModelStatusUpdate(duelId, side, …)</code> over <code>DuelHub</code>. <code>SandboxedViewport.ShouldRender</code> + <code>RenderCoalescer.Request()</code> keep the WASM tab responsive (~16 ms trailing edge).</li>
+    <li><strong>Local path</strong>: instead of a server call, <code>DuelExecutionService</code> emits <code>StartLocalInference(left|right)</code> over <code>DuelHub</code>. <code>Arena.razor → LocalInferenceDriver</code> invokes the WebLLM worker. The finished HTML is <code>POST /api/duels/{id}/local-result</code> (always anonymous) → <code>DuelResultRepository.SaveAsync</code>.</li>
+    <li><strong>Result enrichment</strong> &mdash; <code>DuelResultEnricher.Enrich</code> stamps <code>OutputQualityScore</code>, <code>EnergyWh</code>, <code>EnergyCostUsd</code>, <code>ApiCostUsd</code> from the model &amp; result.</li>
+    <li><strong>Verdict collection</strong> &mdash; <code>Arena.razor</code> shows vote buttons while a vote can still land. On click → <code>POST /api/duels/{id}/verdict</code> → <code>RecordVerdictHandler.HandleWithRetryAsync</code> (one 412 retry on ETag contention).</li>
+    <li><strong>The gate</strong> &mdash; <code>RecordVerdictHandler</code>: once-only per duel; refuses a verdict when both results are failures (<code>GuardAgainstNoEvidenceAsync</code>); stamps <code>VerdictSource</code>; runs <code>EloCalculator.Update</code> (K=32, expected-score formula) and writes two <code>EloHistory</code> rows (one per side). After every write it invalidates <code>CacheTags.Leaderboard</code>.</li>
+    <li><strong>Notifiers</strong> &mdash; <code>LobbyNotifier</code> publishes <code>LobbyEvent(verdict)</code> on the lobby group. <code>DuelHub.Clients.Group(duelId).VerdictRecorded(...)</code> paints the arena panel.</li>
+  </ol>
+
+  <h4>Trace C · Browser-model duel &mdash; expanded</h4>
+  <ol class="steps">
+    <li>Arena receives <code>OnStartLocalInference(side, modelId)</code>; <code>LocalInferenceDriver</code> runs the WebLLM web-worker (cache-busted as <code>webllm-worker.js?v=N</code>).</li>
+    <li>The worker loads weights (locally vendored under <code>wwwroot/models/</code>, else CDN), generates HTML, and posts back the result + token count + timings.</li>
+    <li><code>Arena.razor</code> posts <code>LocalResultRequest</code> to <code>POST /api/duels/{id}/local-result</code>. The handler normalises via <code>HtmlOutputNormalizer.Normalize</code>, enriches, and saves.</li>
+    <li>When both sides complete, <code>Arena.razor</code> swaps from streaming UI to vote UI (otherwise a pending <code>AutoJudge.RunAsync</code> is the only way forward).</li>
+  </ol>
+  <p><strong>Failure shape:</strong> a worker-side abort sets <code>IsFailure=true, FailureReason=...</code>; the <code>DuelResult</code> row is stored as a failure. <code>AutoJudge</code> treats a one-sided failure as a walkover, both-sided as Pending &mdash; see Trace D step 4.</p>
+
+  <h4>Trace D · Unattended demo &mdash; expanded</h4>
+  <ol class="steps">
+    <li><code>Demo.razor</code> mounts and calls <code>GET /api/duels/demo-plan?rounds=10</code>.</li>
+    <li><code>DemoPlanHandler</code> delegates to <code>Shared/Demo/DemoPlanner</code> &mdash; a pure seeded planner that returns the schedule; pairings flip left/right per round to neutralise judge position bias.</li>
+    <li>On Start, the page loops with <code>POST /api/duels</code> setting <code>autoJudgeDelaySeconds: 0</code> (clamped 0–3600). Demos are <em>real</em> duels: they persist, get judged, and they move ELO.</li>
+    <li><code>DuelExecutionService</code> finishes inference; <code>AutoJudge.RunAsync(0)</code> schedules itself. After the streamed output, the judge queries <code>Duel</code>: if non-<code>Pending</code>, it stands down; if both results are failures, it stands down; if one side failed, it records a walkover verdict via <code>RecordVerdictHandler</code> with <code>VerdictSource=Ai</code>; else it calls <code>FoundryDuelJudge.JudgeAsync</code>.</li>
+    <li><code>FoundryDuelJudge</code> calls Foundry chat completion with a <code>json_schema</code> response (<code>{winner: A|B|Tie, reason}</code>). It assigns the two outputs to slots A/B by coin flip, retries on 429 with <code>Retry-After</code> up to <code>RateLimitRetryMax</code> times.</li>
+  </ol>
+
+  <h4>The invariants</h4>
+  <table>
+    <thead><tr><th>Invariant</th><th>Where enforced</th><th>What breaks if violated</th></tr></thead>
+    <tbody>
+      <tr><td>Human decision always wins the race</td><td><code>AutoJudge.RunAsync</code> re-reads <code>Duel</code> after the delay; <code>RecordVerdictHandler</code> throws on a second verdict</td><td>ELO moves twice; leaderboard corrupted</td></tr>
+      <tr><td>ELO never moves on no evidence</td><td><code>RecordVerdictHandler.GuardAgainstNoEvidenceAsync</code> rejects when both sides are failures; <code>FoundryDuelJudge</code> returns null on parse fail / unreachable</td><td>Walkover awarded to a non-existent output; ELO meaningless</td></tr>
+      <tr><td>One judge per duel</td><td><code>RecordVerdictHandler</code> once-only check (409 Conflict on second call)</td><td>Race between AI and human recorded twice</td></tr>
+      <tr><td>The leaderboard is fresh</td><td><code>HybridCache</code> tag <code>CacheTags.Leaderboard</code> invalidated on every verdict write</td><td>Stale wins shown after rating change</td></tr>
+      <tr><td>Workspace-server ELO write authority</td><td>Only <code>RecordVerdictHandler</code> writes to <code>Duel.Verdict</code> or <code>EloHistory</code></td><td>Local-side optimistic UI is overridden by server response; verdict can lag</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="footer">
+  Sources: <code>src/PoLocalCompare.Api/Features/Duels/{DuelsEndpoints,DuelExecutionService,AutoJudge,FoundryDuelJudge,RecordVerdictHandler}.cs</code>,
+  <code>src/PoLocalCompare.Client/Pages/{Home,Arena,Demo,Login}.razor</code>,
+  <code>src/PoLocalCompare.Client/Services/{SignalRClient,LocalInferenceDriver,WebLlmService}.cs</code>,
+  <code>src/PoLocalCompare.Shared/Demo/DemoPlanner.cs</code>.
+  Generated 2026-08-21.
+</div>
+
+</body>
+</html>
