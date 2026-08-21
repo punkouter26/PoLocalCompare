@@ -14,248 +14,270 @@
 <PageTitle>Compare — PoLocalCompare</PageTitle>
 
 <div class="home">
-    @* ── Header ──────────────────────────────────────────────────────── *@
-    <header class="home__header">
-        <div class="home__header-row">
-            <h1 class="home__title">Compare two models</h1>
-            @if (_health is not null)
+    @* ── Workbench ───────────────────────────────────────────────────────
+       Was one 880px column running header → models → prompt → Compare → recent, so the button
+       the page exists for sat below every card in the catalog. The picker now scrolls on the
+       left while the prompt and Compare stay pinned in a sticky console on the right, which is
+       the whole point of the layout. Below 1080px it collapses to a single column in the
+       original reading order — picker first, then prompt and Compare. *@
+    <div class="home__layout">
+        @* ── Header ──────────────────────────────────────────────────────
+           A grid item in the left column's first row, not a band above the grid. The console
+           spans both rows, so it starts level with the title instead of below it — which is
+           what keeps Compare inside the first viewport before any scrolling. The mockup put
+           the h1 in the console; that would have placed the page's only h1 after the entire
+           model catalog in DOM order, which is the reading order a screen reader gets. *@
+        <header class="home__header">
+            <div class="home__header-row">
+                <h1 class="home__title">Compare two models</h1>
+                @if (_health is not null)
+                {
+                    <span class="home__health @HealthClass()" title="@HealthTooltip()">@HealthLabel()</span>
+                }
+            </div>
+            <p class="home__subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
+            @if (_health is not null && !_healthHasRemotes)
             {
-                <span class="home__health @HealthClass()" title="@HealthTooltip()">@HealthLabel()</span>
+                <p class="home__health-warning">
+                    ⚠ Remote (Azure OpenAI) deployments are unavailable. Use a Browser or Ollama model to run duels.
+                </p>
             }
-        </div>
-        <p class="home__subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
-        <a href="/demo" class="home__demo-link">
-            <span aria-hidden="true">▶</span> Run the auto demo — 10 duels, judged automatically
-        </a>
-        @if (_health is not null && !_healthHasRemotes)
-        {
-            <p class="home__health-warning">
-                ⚠ Remote (Azure OpenAI) deployments are unavailable. Use a Browser or Ollama model to run duels.
-            </p>
-        }
-    </header>
+        </header>
 
-    @* ── Model health (collapsible; replaces the standalone Local Model Lab) ── *@
-    @if (!_loading && _models.Count > 0)
-    {
-        <div class="home__health-panel">
-            <ModelHealthPanel Models="_models" />
-        </div>
-    }
 
-    @* ── Pick two models ─────────────────────────────────────────────────
-       This was a three-panel disclosure accordion with a numbered stepper. The whole page is
-       "two models, a prompt, a button", which is small enough to show at once — the accordion
-       hid the prompt box behind a click, made the Compare button a scroll target, and needed a
-       sticky status bar to tell you about state that was only offscreen because it was
-       collapsed. Flattening it removed all three along with the step-advance rules. *@
-    <section class="home__section" aria-labelledby="home-models-heading">
-        <div class="home__section-head">
-            <h2 id="home-models-heading" class="home__section-title">Choose two models</h2>
-            <p class="home__section-hint">Click a card to assign it. Click a selected card to remove it.</p>
-        </div>
+        @* ── Left: pick two models ───────────────────────────────────── *@
+        <section class="home__picker" aria-labelledby="home-models-heading">
+            <div class="home__section-head">
+                <h2 id="home-models-heading" class="home__section-title">Choose two models</h2>
+                <p class="home__section-hint">Click a card to assign it. Click a selected card to remove it.</p>
+            </div>
 
-        <div class="home__slots">
-            <div class="home__slot @(_leftModel is not null ? "home__slot--set" : "")">
-                <span class="home__slot-tag home__slot-tag--left">Left</span>
-                <span class="home__slot-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
-            </div>
-            <span class="home__slot-vs" aria-hidden="true">vs</span>
-            <div class="home__slot @(_rightModel is not null ? "home__slot--set" : "")">
-                <span class="home__slot-tag home__slot-tag--right">Right</span>
-                <span class="home__slot-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
-            </div>
-        </div>
-
-        @* Replace-popover: both slots full and the user clicks a third model. *@
-        @if (_replacePopoverModel is not null && _leftModel is not null && _rightModel is not null)
-        {
-            <div class="home__popover" role="dialog" aria-label="Choose which slot to replace">
-                <p class="home__popover-text">Replace which slot with <strong>@_replacePopoverModel.DisplayName</strong>?</p>
-                <div class="home__popover-actions">
-                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="CancelReplace">Cancel</button>
-                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("left"))">
-                        ← Replace Left (@_leftModel.DisplayName)
-                    </button>
-                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("right"))">
-                        Replace Right (@_rightModel.DisplayName) →
-                    </button>
-                </div>
-            </div>
-        }
-
-        @if (_loading)
-        {
-            <div class="home__grid">
-                @for (var i = 0; i < 6; i++)
-                {
-                    <div class="skeleton home__skeleton" style="--stagger: @(i * 70)ms"></div>
-                }
-            </div>
-        }
-        else if (_loadError is not null)
-        {
-            <p class="home__error">@_loadError</p>
-            <button class="po-btn po-btn--secondary" @onclick="LoadAsync">Retry</button>
-        }
-        else if (_models.Count == 0)
-        {
-            <p class="home__hint">No models are available right now.</p>
-        }
-        else
-        {
-            <div class="home__filters" role="group" aria-label="Filter models by type">
-                @foreach (var f in _filters)
-                {
-                    <button class="po-btn po-btn--sm @(_modelFilter == f.Key ? "po-btn--success" : "po-btn--secondary")"
-                            @onclick="@(() => _modelFilter = f.Key)">
-                        @f.Label (@ModelCountFor(f.Key))
-                    </button>
-                }
-            </div>
-            @* Grouped by type (Remote / Browser / Ollama) to mirror the Model Health panel.
-               Models that cannot run on this device are held back behind the toggle below
-               rather than rendered greyed-out inline: they were roughly half the list on a
-               machine without WebGPU, and an unpickable card is scrolling, not choice. *@
-            @foreach (var _group in SelectableModels.GroupBy(m => m.ModelType).OrderBy(g => ModelTypeGroup.Order(g.Key)))
+            @if (!_loading && _models.Count > 0)
             {
-                <div class="home__group-header" @key="_group.Key">
-                    <span class="home__group-name">@ModelTypeGroup.Label(_group.Key)</span>
-                    <span class="home__group-count">@_group.Count() model@(_group.Count() == 1 ? "" : "s")</span>
+                <div class="home__health-panel">
+                    <ModelHealthPanel Models="_models" />
                 </div>
+            }
+
+            @* Replace-popover: both slots full and the user clicks a third model. *@
+            @if (_replacePopoverModel is not null && _leftModel is not null && _rightModel is not null)
+            {
+                <div class="home__popover" role="dialog" aria-label="Choose which slot to replace">
+                    <p class="home__popover-text">Replace which slot with <strong>@_replacePopoverModel.DisplayName</strong>?</p>
+                    <div class="home__popover-actions">
+                        <button class="po-btn po-btn--sm po-btn--secondary" @onclick="CancelReplace">Cancel</button>
+                        <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("left"))">
+                            ← Replace Left (@_leftModel.DisplayName)
+                        </button>
+                        <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("right"))">
+                            Replace Right (@_rightModel.DisplayName) →
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (_loading)
+            {
                 <div class="home__grid">
-                    @foreach (var model in _group)
+                    @for (var i = 0; i < 6; i++)
                     {
-                        var isLeft = model.ModelId == _leftModel?.ModelId;
-                        var isRight = model.ModelId == _rightModel?.ModelId;
-                        @* @key so filtering/selection reuses the existing card instead of
-                           rebuilding the whole grid's element tree on every click. *@
-                        <ModelCard @key="model.ModelId"
-                                   Model="model"
-                                   IsSelected="@(isLeft || isRight)"
-                                   Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
-                                   OnSelected="AssignModel" />
+                        <div class="skeleton home__skeleton" style="--stagger: @(i * 70)ms"></div>
                     }
                 </div>
             }
-            @if (!SelectableModels.Any())
+            else if (_loadError is not null)
             {
-                <p class="home__hint">No models of this type can run here right now.</p>
+                <p class="home__error">@_loadError</p>
+                <button class="po-btn po-btn--secondary" @onclick="LoadAsync">Retry</button>
             }
-
-            @if (UnavailableModels.Any())
+            else if (_models.Count == 0)
             {
-                <button type="button" class="po-btn po-btn--sm po-btn--ghost home__unavailable-toggle"
-                        aria-expanded="@(_showUnavailable ? "true" : "false")"
-                        @onclick="@(() => _showUnavailable = !_showUnavailable)">
-                    @(_showUnavailable ? "▾" : "▸") @UnavailableModels.Count() model@(UnavailableModels.Count() == 1 ? "" : "s") can't run here
-                </button>
-                @if (_showUnavailable)
+                <p class="home__hint">No models are available right now.</p>
+            }
+            else
+            {
+                <div class="home__filters" role="group" aria-label="Filter models by type">
+                    @foreach (var f in _filters)
+                    {
+                        <button class="po-btn po-btn--sm @(_modelFilter == f.Key ? "po-btn--success" : "po-btn--secondary")"
+                                @onclick="@(() => _modelFilter = f.Key)">
+                            @f.Label (@ModelCountFor(f.Key))
+                        </button>
+                    }
+                </div>
+                @* Grouped by type (Remote / Browser / Ollama) to mirror the Model Health panel.
+                   Models that cannot run on this device are held back behind the toggle below
+                   rather than rendered greyed-out inline: they were roughly half the list on a
+                   machine without WebGPU, and an unpickable card is scrolling, not choice. *@
+                @foreach (var _group in SelectableModels.GroupBy(m => m.ModelType).OrderBy(g => ModelTypeGroup.Order(g.Key)))
                 {
-                    <p class="home__hint home__unavailable-why">@UnavailableReason</p>
+                    <div class="home__group-header" @key="_group.Key">
+                        <span class="home__group-name">@ModelTypeGroup.Label(_group.Key)</span>
+                        <span class="home__group-count">@_group.Count() model@(_group.Count() == 1 ? "" : "s")</span>
+                    </div>
                     <div class="home__grid">
-                        @foreach (var model in UnavailableModels)
+                        @foreach (var model in _group)
                         {
-                            <div class="home__card-disabled" @key="model.ModelId">
-                                @* IsDisabled drives tabindex/aria-disabled — the wrapper's
-                                   pointer-events:none blocks the mouse but not the keyboard. *@
-                                <ModelCard Model="model" IsDisabled="true" />
-                                <span class="home__card-badge">@(IsBrowserWithoutGpu(model) ? "Needs WebGPU" : "Unavailable")</span>
-                            </div>
+                            var isLeft = model.ModelId == _leftModel?.ModelId;
+                            var isRight = model.ModelId == _rightModel?.ModelId;
+                            @* @key so filtering/selection reuses the existing card instead of
+                               rebuilding the whole grid's element tree on every click. *@
+                            <ModelCard @key="model.ModelId"
+                                       Model="model"
+                                       IsSelected="@(isLeft || isRight)"
+                                       Slot="@(isLeft ? "Left" : isRight ? "Right" : null)"
+                                       OnSelected="AssignModel" />
                         }
                     </div>
                 }
-            }
-        }
-    </section>
-
-    @* ── Write prompt ────────────────────────────────────────────────── *@
-    <section class="home__section" aria-labelledby="home-prompt-heading">
-        <div class="home__section-head">
-            <h2 id="home-prompt-heading" class="home__section-title">Write your prompt</h2>
-            <p class="home__section-hint">Both models will receive the same prompt.</p>
-        </div>
-
-        <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
-                  placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
-                  rows="5"
-                  maxlength="4000"
-                  @bind="_prompt"
-                  @bind:event="oninput"></textarea>
-        <div class="home__textarea-meta">
-            <span class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
-                @_prompt.Length / 4000
-            </span>
-            @if (_promptLongWarning)
-            {
-                <span class="home__textarea-hint">Long prompts may be truncated or cost more.</span>
-            }
-        </div>
-
-        <PromptPicker CurrentPrompt="@_prompt"
-                      Recent="_recentPrompts"
-                      OnPromptSelected="ApplyPromptAsync"
-                      OnForgetRecent="ForgetRecentAsync"
-                      OnClearRecent="ClearRecentAsync" />
-    </section>
-
-    @* ── Compare ─────────────────────────────────────────────────────── *@
-    <section class="home__compare" aria-labelledby="home-compare-heading">
-        <div class="home__compare-row">
-            <div class="home__compare-copy">
-                <h2 id="home-compare-heading" class="home__section-title">Compare</h2>
-                <p class="home__section-hint">@CompareHint</p>
-            </div>
-            <button class="po-btn po-btn--success po-btn--lg"
-                    disabled="@(!CanCompare)"
-                    @onclick="StartDuelAsync">
-                Compare →
-            </button>
-        </div>
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <span class="home__error">@_error</span>
-        }
-    </section>
-
-    @* ── Recent duels (or onboarding example when empty) ──────────────── *@
-    @if (VisibleRecentDuels.Any())
-    {
-        <section class="home__recent">
-            <div class="home__recent-head">
-                <h2 class="home__recent-title">Recent duels</h2>
-                <a href="/archive" class="home__recent-link">View all →</a>
-            </div>
-            <ul class="home__recent-list">
-                @foreach (var d in VisibleRecentDuels)
+                @if (!SelectableModels.Any())
                 {
-                    var href = d.Verdict == DuelVerdict.Pending ? $"/arena/{d.DuelId}" : "/archive";
-                    <li @key="d.DuelId">
-                        <a class="home__recent-item @(d.Verdict == DuelVerdict.Pending ? "home__recent-item--pending" : "")" href="@href">
-                            <span class="home__recent-prompt">@d.PromptSummary</span>
-                            <span class="home__recent-meta">
-                                @CleanName(d.LeftModelName, d.LeftModelId) <em>vs</em> @CleanName(d.RightModelName, d.RightModelId) ·
-                                @if (d.Verdict == DuelVerdict.Left) { <span class="home__recent-winner">🏆 @CleanName(d.LeftModelName, d.LeftModelId)</span> }
-                                else if (d.Verdict == DuelVerdict.Right) { <span class="home__recent-winner">🏆 @CleanName(d.RightModelName, d.RightModelId)</span> }
-                                else if (d.Verdict == DuelVerdict.Tie) { <span class="home__recent-tie">🤝 Tie</span> }
-                                else { <span class="home__recent-pending">⚖ Judge</span> }
-                            </span>
-                        </a>
-                    </li>
+                    <p class="home__hint">No models of this type can run here right now.</p>
                 }
-            </ul>
+
+                @if (UnavailableModels.Any())
+                {
+                    <button type="button" class="po-btn po-btn--sm po-btn--ghost home__unavailable-toggle"
+                            aria-expanded="@(_showUnavailable ? "true" : "false")"
+                            @onclick="@(() => _showUnavailable = !_showUnavailable)">
+                        @(_showUnavailable ? "▾" : "▸") @UnavailableModels.Count() model@(UnavailableModels.Count() == 1 ? "" : "s") can't run here
+                    </button>
+                    @if (_showUnavailable)
+                    {
+                        <p class="home__hint home__unavailable-why">@UnavailableReason</p>
+                        <div class="home__grid">
+                            @foreach (var model in UnavailableModels)
+                            {
+                                <div class="home__card-disabled" @key="model.ModelId">
+                                    @* IsDisabled drives tabindex/aria-disabled — the wrapper's
+                                       pointer-events:none blocks the mouse but not the keyboard. *@
+                                    <ModelCard Model="model" IsDisabled="true" />
+                                    <span class="home__card-badge">@(IsBrowserWithoutGpu(model) ? "Needs WebGPU" : "Unavailable")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            }
+
+            @* ── Recent duels (or onboarding example when empty) ──────────
+               Foot of the picker column, not the console: the console is the working surface and
+               has to keep Compare on screen, so history belongs on the side that scrolls. *@
+            @if (VisibleRecentDuels.Any())
+            {
+                <div class="home__recent">
+                    <div class="home__recent-head">
+                        <h2 class="home__recent-title">Recent duels</h2>
+                        <a href="/archive" class="home__recent-link">View all →</a>
+                    </div>
+                    <ul class="home__recent-list">
+                        @foreach (var d in VisibleRecentDuels)
+                        {
+                            var href = d.Verdict == DuelVerdict.Pending ? $"/arena/{d.DuelId}" : "/archive";
+                            <li @key="d.DuelId">
+                                <a class="home__recent-item @(d.Verdict == DuelVerdict.Pending ? "home__recent-item--pending" : "")" href="@href">
+                                    <span class="home__recent-prompt">@d.PromptSummary</span>
+                                    <span class="home__recent-meta">
+                                        @CleanName(d.LeftModelName, d.LeftModelId) <em>vs</em> @CleanName(d.RightModelName, d.RightModelId) ·
+                                        @if (d.Verdict == DuelVerdict.Left) { <span class="home__recent-winner">🏆 @CleanName(d.LeftModelName, d.LeftModelId)</span> }
+                                        else if (d.Verdict == DuelVerdict.Right) { <span class="home__recent-winner">🏆 @CleanName(d.RightModelName, d.RightModelId)</span> }
+                                        else if (d.Verdict == DuelVerdict.Tie) { <span class="home__recent-tie">🤝 Tie</span> }
+                                        else { <span class="home__recent-pending">⚖ Judge</span> }
+                                    </span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+            else
+            {
+                <div class="home__onboard">
+                    <h2 class="home__onboard-title">Try a starter duel</h2>
+                    <p class="home__onboard-hint">New here? Click below to load a working prompt and two lightweight models.</p>
+                    <button class="po-btn po-btn--secondary" @onclick="LoadStarterDuel">
+                        ⚡ Load starter duel
+                    </button>
+                </div>
+            }
         </section>
-    }
-    else
-    {
-        <section class="home__onboard">
-            <h2 class="home__onboard-title">Try a starter duel</h2>
-            <p class="home__onboard-hint">New here? Click below to load a working prompt and two lightweight models.</p>
-            <button class="po-btn po-btn--secondary" @onclick="LoadStarterDuel">
-                ⚡ Load starter duel
-            </button>
-        </section>
-    }
+
+        @* ── Right: the console (slots, prompt, Compare) ─────────────────
+           A plain div rather than an <aside>: it carries the primary action, so it is not
+           complementary content. Sticky, with only the top half scrolling, so Compare and the
+           demo link never leave the viewport however long the catalog gets. *@
+        <div class="home__console">
+            <div class="home__console-scroll">
+                <div class="home__slots">
+                    <div class="home__slot @(_leftModel is not null ? "home__slot--set" : "")">
+                        <span class="home__slot-tag home__slot-tag--left">Left</span>
+                        <span class="home__slot-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
+                    </div>
+                    <span class="home__slot-vs" aria-hidden="true">vs</span>
+                    <div class="home__slot @(_rightModel is not null ? "home__slot--set" : "")">
+                        <span class="home__slot-tag home__slot-tag--right">Right</span>
+                        <span class="home__slot-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
+                    </div>
+                </div>
+
+                <section class="home__prompt" aria-labelledby="home-prompt-heading">
+                    <div class="home__section-head">
+                        <h2 id="home-prompt-heading" class="home__section-title">Write your prompt</h2>
+                        <p class="home__section-hint">Both models will receive the same prompt.</p>
+                    </div>
+
+                    <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
+                              placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
+                              rows="5"
+                              maxlength="4000"
+                              @bind="_prompt"
+                              @bind:event="oninput"></textarea>
+                    <div class="home__textarea-meta">
+                        <span class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
+                            @_prompt.Length / 4000
+                        </span>
+                        @if (_promptLongWarning)
+                        {
+                            <span class="home__textarea-hint">Long prompts may be truncated or cost more.</span>
+                        }
+                    </div>
+
+                    <PromptPicker CurrentPrompt="@_prompt"
+                                  Recent="_recentPrompts"
+                                  OnPromptSelected="ApplyPromptAsync"
+                                  OnForgetRecent="ForgetRecentAsync"
+                                  OnClearRecent="ClearRecentAsync" />
+                </section>
+            </div>
+
+            <div class="home__console-foot">
+                <section class="home__compare" aria-labelledby="home-compare-heading">
+                    <div class="home__compare-row">
+                        <div class="home__compare-copy">
+                            <h2 id="home-compare-heading" class="home__section-title">Compare</h2>
+                            <p class="home__section-hint">@CompareHint</p>
+                        </div>
+                        <button class="po-btn po-btn--success po-btn--lg"
+                                disabled="@(!CanCompare)"
+                                @onclick="StartDuelAsync">
+                            Compare →
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_error))
+                    {
+                        <span class="home__error">@_error</span>
+                    }
+                </section>
+
+                @* Entry point to the unattended demo. Deliberately a quiet secondary link: it starts
+                   ten real duels that persist and move ELO, so it should not sit next to Compare as
+                   an equal option. *@
+                <a href="/demo" class="home__demo-link">
+                    <span aria-hidden="true">▶</span> Run the auto demo — 10 duels, judged automatically
+                </a>
+            </div>
+        </div>
+    </div>
 </div>
 
 @code {

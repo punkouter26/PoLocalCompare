@@ -1,13 +1,121 @@
+/* ── Page shell ─────────────────────────────────────────────────────────
+   Wider than the old 880px single column, because the page is now two columns: the
+   catalog needs three cards per row for the split to earn its keep. */
 .home {
-    max-width: 880px;
+    max-width: 1360px;
     margin: 0 auto;
-    padding: 2rem 1.25rem 6rem;
+    padding: 1.25rem 0.25rem 3rem;
     color: var(--text);
+}
+
+/* ── Workbench layout ───────────────────────────────────────────────────
+   Picker left, console right. `align-items: start` is load-bearing — a grid item stretches
+   to the row height by default, and a stretched item cannot stick. */
+.home__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 26rem;
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 1.25rem;
+    align-items: start;
+}
+
+/* The title occupies only the left column's first row. The console spans both rows, so its
+   sticky box starts level with the title rather than below it — without that the foot, and
+   therefore Compare, opened below the fold and only came into view after a scroll. */
+.home__header {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.home__picker {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.home__console {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+}
+
+.home__picker {
+    min-width: 0;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-1);
+}
+
+/* The nav bar is sticky with a 3.5rem min-height, so the console has to clear it. The 6.5rem
+   subtracted from the height is the console top offset (nav 3.5rem + the article and page
+   padding above it) plus a little breathing room, so the foot lands just inside the fold on
+   first paint as well as once it sticks. The fixed height is what lets the foot stay put
+   while only the middle scrolls. */
+.home__console {
+    position: sticky;
+    top: 4.5rem;
+    height: calc(100vh - 6.5rem);
+    /* border-box, because there is no global reset: without it the 1.25rem padding and the
+       border are added to the height and the foot hangs 42px below the fold. */
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-1);
+}
+
+.home__console-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    /* Keeps the scrollbar off the textarea's focus ring. */
+    padding-right: 0.35rem;
+}
+
+.home__console-foot {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+/* Single column below 1080px, in the original reading order: pick models, then write the
+   prompt and press Compare. The console stops sticking and stops scrolling internally —
+   a nested scroll area inside a scrolling page is a trap on touch. */
+@media (max-width: 1080px) {
+    .home__layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+        row-gap: 1.25rem;
+    }
+
+    .home__header,
+    .home__picker,
+    .home__console {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .home__console {
+        position: static;
+        height: auto;
+    }
+
+    .home__console-scroll {
+        overflow-y: visible;
+        padding-right: 0;
+    }
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
 .home__header {
-    margin-bottom: 2rem;
+    margin-bottom: 1.25rem;
     text-align: left;
 }
 
@@ -33,9 +141,9 @@
 .home__demo-link {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--space-sm);
     min-height: var(--target-min);
-    margin-top: var(--space-sm);
     padding: 0.25rem 0.85rem;
     font-size: 0.8rem;
     font-weight: 600;
@@ -99,20 +207,7 @@
     font-size: 0.85rem;
 }
 
-/* ── Section ────────────────────────────────────────────────────────────
-   Was a disclosure accordion: three numbered panels, one open at a time, with the header
-   doubling as the stepper. The page is "two models, a prompt, a button" — small enough to
-   show at once — so the panels are plain sections now. That removed the step-advance rules,
-   the chevrons, the numbered markers and the sticky readiness bar that only existed because
-   the Compare button could be scrolled out of view behind a collapsed panel. */
-.home__section {
-    margin-bottom: 1.5rem;
-    padding: 1.25rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--surface-1);
-}
-
+/* ── Section headings (shared by both columns) ──────────────────────── */
 .home__section-head {
     margin-bottom: 1rem;
 }
@@ -151,7 +246,6 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: stretch;
     gap: 0.75rem;
-    margin-bottom: 1.25rem;
 }
 
 .home__slot {
@@ -234,19 +328,19 @@
     gap: 0.6rem;
     padding: 0.35rem 0.1rem;
     margin: 0.85rem 0 0.5rem;
-    border-bottom: 1px solid var(--border, var(--border));
+    border-bottom: 1px solid var(--border);
 }
 
 .home__group-name {
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.05em;
-    color: var(--text, var(--text));
+    color: var(--text);
 }
 
 .home__group-count {
     font-size: 0.72rem;
-    color: var(--text-muted, var(--text-muted));
+    color: var(--text-muted);
 }
 
 .home__grid {
@@ -299,6 +393,18 @@
     gap: 0.5rem;
 }
 
+/* ── Prompt (console, upper half) ───────────────────────────────────── */
+.home__prompt {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.home__prompt .home__section-head {
+    margin-bottom: 0;
+}
+
 /* ── Textarea + char counter (Finding #6) ───────────────────────────── */
 .home__textarea {
     width: 100%;
@@ -334,7 +440,6 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-top: 0.4rem;
     font-size: 0.75rem;
     color: var(--text-muted);
 }
@@ -352,9 +457,8 @@
     color: var(--accent-yellow);
 }
 
-/* ── Compare CTA ────────────────────────────────────────────────────── */
+/* ── Compare CTA (console, foot — never scrolls away) ────────────────── */
 .home__compare {
-    margin-bottom: 1.5rem;
     border: 1px solid rgba(45, 220, 132, 0.25);
     border-radius: var(--radius-lg);
     background: linear-gradient(135deg, rgba(45, 220, 132, 0.04), rgba(18, 184, 207, 0.04));
@@ -366,22 +470,26 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
-    padding: 1.25rem;
+    padding: 1rem 1.15rem;
 }
 
 .home__compare-copy {
-    flex: 1 1 12rem;
+    flex: 1 1 10rem;
     min-width: 0;
 }
 
 .home__error {
+    display: inline-block;
+    padding: 0 1.15rem 0.85rem;
     color: var(--accent-red);
     font-size: 0.85rem;
 }
 
-/* ── Recent duels ───────────────────────────────────────────────────── */
+/* ── Recent duels (foot of the picker column) ───────────────────────── */
 .home__recent {
-    margin-top: 2rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
 }
 
 .home__recent-head {
@@ -485,7 +593,7 @@
 
 /* ── Onboarding example (Finding #4) ────────────────────────────────── */
 .home__onboard {
-    margin-top: 2rem;
+    margin-top: 1.5rem;
     padding: 1.25rem;
     border: 1px dashed var(--border);
     border-radius: var(--radius-lg);
@@ -505,10 +613,6 @@
     font-size: 0.85rem;
     color: var(--text-muted);
 }
-
-/* The sticky ready bar that used to sit here is gone with the accordion. It existed to tell a
-   scrolled user that the comparison was set up, which was only necessary because the Compare
-   button could be collapsed out of view. It is always visible now. */
 
 /* Loading placeholders in the model grid. Only the stagger is dynamic — the markup passes
    it as --stagger; everything else lives here rather than in an inline style. */

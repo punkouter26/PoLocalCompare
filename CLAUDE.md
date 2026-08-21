@@ -137,11 +137,21 @@ runs. That is why the diff engine, the HTML analyzer, the prompt library and the
 `Shared/Analysis`, `Shared/Prompts` and `Shared/Demo` rather than beside the components that use
 them. Razor components stay thin wrappers over those statics.
 
-**Home is a flat form, not a wizard.** It was a three-panel disclosure accordion with a numbered
-stepper, step-advance rules and a sticky readiness bar that existed only because the Compare button
-could be collapsed out of view. The page is "two models, a prompt, a button" and now shows all of
-it at once (`home__section` / `home__compare`). Don't reintroduce `home__panel*` — the E2E-UI
-selectors point at the flat markup.
+**Home is a two-column workbench, not a wizard and not one column.** It was a three-panel
+disclosure accordion with a numbered stepper, step-advance rules and a sticky readiness bar that
+existed only because the Compare button could be collapsed out of view. Flattening it removed all
+three but left a single 880px column running header → models → prompt → Compare, so the button the
+page exists for still sat below every card in the catalog. It is a grid now (`home__layout`): the
+picker (`home__picker`) scrolls on the left, and a sticky console (`home__console`) carries the
+slots, the prompt and `home__compare` on the right. Three details there are load-bearing and easy
+to undo by accident. The console is `grid-row: 1 / span 2` while `home__header` takes only the left
+column's first row — that is what lets it start level with the title, so Compare lands inside the
+first viewport instead of below the fold. Only `home__console-scroll` scrolls; `home__console-foot`
+is `flex: 0 0 auto`, so Compare never scrolls away. And the console needs its explicit
+`box-sizing: border-box`: there is no global reset, so without it the padding is added to the
+`calc(100vh - …)` height and the foot hangs below the fold again. Below 1080px it collapses to one
+column in the original reading order. Don't reintroduce `home__panel*` or `home__section` — the
+E2E-UI selectors point at `home__title`, `home__grid` and `home__compare .po-btn`.
 
 **The Arena is the whole duel — streaming and judging.** `/processing` no longer exists; `POST
 /api/duels` navigates straight to `/arena/{id}`, which connects to `DuelHub`, shows the live
