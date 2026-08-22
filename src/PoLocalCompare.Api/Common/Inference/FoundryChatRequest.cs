@@ -14,6 +14,12 @@ public static class FoundryChatRequest
     public const string ApiVersion = "2024-12-01-preview";
 
     /// <summary>
+    /// Reasoning budget for GPT-5 / o-series deployments. See the note at the call site for why
+    /// this workload wants the floor rather than the default.
+    /// </summary>
+    public const string ReasoningEffort = "minimal";
+
+    /// <summary>
     /// Per-deployment chat route. A name that is not a deployment in this resource 404s here
     /// but may still resolve on <see cref="ModelInferenceUrl"/> — every Foundry caller runs
     /// that two-endpoint fallback, so both URLs are built here rather than at each call site.
@@ -106,6 +112,19 @@ public static class FoundryChatRequest
         {
             body["max_completion_tokens"] = maxTokens;
             // temperature intentionally omitted — reasoning models only allow the default.
+
+            // Reasoning effort was previously left at the service default, which meant every
+            // GPT-5-family duel spent thousands of reasoning tokens before emitting a single
+            // visible character — billed at output rates, and paid on the clock the TokenRace
+            // is measuring. That is close to pure waste for this workload: the task is "return
+            // an HTML document", the output format is fixed, and there is no multi-step problem
+            // to think through. Minimal keeps the reasoning path available (these models reject
+            // being asked to skip it) while spending as little of the budget on it as the API
+            // allows.
+            //
+            // Deployments that predate the parameter ignore an unknown field rather than
+            // rejecting it, so this is safe across the catalog.
+            body["reasoning_effort"] = ReasoningEffort;
         }
         else
         {

@@ -10,9 +10,9 @@
 <PageTitle>Auto demo — PoLocalCompare</PageTitle>
 
 <div class="demo">
-    <header class="demo__header">
-        <h1 class="demo__title"><span aria-hidden="true">▶</span> Auto demo</h1>
-        <p class="demo__subtitle">
+    <header class="po-header">
+        <h1 class="po-title"><span aria-hidden="true">▶</span> Auto demo</h1>
+        <p class="po-subtitle">
             Runs @(_plan?.Rounds.Count ?? DefaultRounds) duels back to back on randomly paired remote models,
             each judged automatically the moment it finishes.
         </p>
@@ -26,11 +26,11 @@
 
     @if (_loadError is not null)
     {
-        <p class="demo__error">@_loadError</p>
+        <p class="po-error">@_loadError</p>
     }
     else if (_plan is null)
     {
-        <p class="demo__status">Planning the run…</p>
+        <p class="po-status">Planning the run…</p>
     }
     else if (!_plan.CanRun)
     {
@@ -110,7 +110,7 @@
         @if (_completedCount > 0)
         {
             <section class="demo__standings" aria-label="Standings so far">
-                <h2 class="demo__section-title">Standings</h2>
+                <h2 class="po-section-title">Standings</h2>
                 <ul class="demo__standings-list">
                     @foreach (var entry in Standings())
                     {
@@ -126,7 +126,7 @@
 
         @* ── Queue ──────────────────────────────────────────────────────── *@
         <section aria-label="Duel queue">
-            <h2 class="demo__section-title">The run</h2>
+            <h2 class="po-section-title">The run</h2>
             <ol class="demo__queue-list">
                 @foreach (var state in _rounds)
                 {

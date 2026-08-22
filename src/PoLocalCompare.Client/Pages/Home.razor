@@ -2,6 +2,7 @@
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Challenges
 @using PoLocalCompare.Shared.Enums
 @using Microsoft.JSInterop
 @inject DuelApiClient ApiClient
@@ -9,6 +10,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject PromptHistoryService PromptHistory
+@inject BlindModeService Blind
 @inject WebGpuCapability WebGpu
 
 <PageTitle>Compare — PoLocalCompare</PageTitle>
@@ -29,13 +31,13 @@
            model catalog in DOM order, which is the reading order a screen reader gets. *@
         <header class="home__header">
             <div class="home__header-row">
-                <h1 class="home__title">Compare two models</h1>
+                <h1 class="home__title po-title">Compare two models</h1>
                 @if (_health is not null)
                 {
                     <span class="home__health @HealthClass()" title="@HealthTooltip()">@HealthLabel()</span>
                 }
             </div>
-            <p class="home__subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
+            <p class="po-subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
             @if (_health is not null && !_healthHasRemotes)
             {
                 <p class="home__health-warning">
@@ -48,8 +50,8 @@
         @* ── Left: pick two models ───────────────────────────────────── *@
         <section class="home__picker" aria-labelledby="home-models-heading">
             <div class="home__section-head">
-                <h2 id="home-models-heading" class="home__section-title">Choose two models</h2>
-                <p class="home__section-hint">Click a card to assign it. Click a selected card to remove it.</p>
+                <h2 id="home-models-heading" class="po-section-title">Choose two models</h2>
+                <p class="po-hint">Click a card to assign it. Click a selected card to remove it.</p>
             </div>
 
             @if (!_loading && _models.Count > 0)
@@ -200,6 +202,48 @@
                     </button>
                 </div>
             }
+
+            @* ── Your blind picks ──────────────────────────────────────────
+               Only votes the user cast themselves, and only on blind duels. An AI-judged duel
+               never lands here: nobody expressed a preference, so counting it would make this a
+               second view of the leaderboard instead of a record of taste. The divergence lines
+               are the point of the whole feature — they are the only place the app can tell you
+               your preference disagrees with the rating you would otherwise trust. *@
+            @if (_blindTally.Count > 0)
+            {
+                <div class="home__blindrec">
+                    <div class="home__blindrec-head">
+                        <h2 class="home__blindrec-title"><span aria-hidden="true">🙈</span> Your blind picks</h2>
+                        <button type="button" class="po-btn po-btn--sm po-btn--ghost"
+                                @onclick="ClearBlindVotesAsync">Clear</button>
+                    </div>
+
+                    @if (_blindDivergences.Count > 0)
+                    {
+                        <ul class="home__blindrec-diverge">
+                            @foreach (var d in _blindDivergences.Take(2))
+                            {
+                                <li @key="@($"{d.PreferredModelId}|{d.RankedModelId}")">
+                                    You picked <strong>@d.PreferredName</strong> over
+                                    <strong>@d.RankedName</strong> @d.PreferredWins–@d.RankedWins —
+                                    but the leaderboard ranks @d.RankedName #@d.RankedRank
+                                    and @d.PreferredName #@d.PreferredRank.
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    <ul class="home__blindrec-list">
+                        @foreach (var row in _blindTally.Take(6))
+                        {
+                            <li class="home__blindrec-item" @key="row.ModelId">
+                                <span class="home__blindrec-model">@row.DisplayName</span>
+                                <span class="home__blindrec-record">@row.Wins–@row.Losses</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
         </section>
 
         @* ── Right: the console (slots, prompt, Compare) ─────────────────
@@ -222,8 +266,8 @@
 
                 <section class="home__prompt" aria-labelledby="home-prompt-heading">
                     <div class="home__section-head">
-                        <h2 id="home-prompt-heading" class="home__section-title">Write your prompt</h2>
-                        <p class="home__section-hint">Both models will receive the same prompt.</p>
+                        <h2 id="home-prompt-heading" class="po-section-title">Write your prompt</h2>
+                        <p class="po-hint">Both models will receive the same prompt.</p>
                     </div>
 
                     <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
@@ -251,11 +295,59 @@
             </div>
 
             <div class="home__console-foot">
+                @* Blind mode. Sits in the foot rather than beside the prompt because it changes
+                   what Compare does — it shuffles the sides — so it belongs with the button it
+                   modifies, and the foot is the half of the console that never scrolls away. *@
+                <div class="home__blind">
+                    <label class="home__blind-toggle">
+                        <input type="checkbox"
+                               checked="@_blindMode"
+                               @onchange="ToggleBlindAsync" />
+                        <span class="home__blind-name"><span aria-hidden="true">🙈</span> Blind mode</span>
+                    </label>
+                    <p class="home__blind-hint" id="home-blind-hint">@BlindHint</p>
+                </div>
+
+                @* Challenge budget. A hard ceiling, not a scoring tweak: a model that blows it
+                   loses the duel outright however good its output was. That is a different
+                   question from "which is better", which is why these results are ranked on
+                   their own board rather than folded into the ELO column. *@
+                <div class="home__budget">
+                    <div class="home__budget-kinds" role="group" aria-label="Challenge budget">
+                        <span class="home__budget-label"><span aria-hidden="true">⏱</span> Challenge</span>
+                        @foreach (var kind in _budgetKinds)
+                        {
+                            <button type="button"
+                                    class="po-btn po-btn--sm @(_challengeKind == kind ? "po-btn--success" : "po-btn--secondary")"
+                                    aria-pressed="@(_challengeKind == kind ? "true" : "false")"
+                                    @onclick="() => SetChallengeKind(kind)">
+                                @ChallengeRules.KindLabel(kind)
+                            </button>
+                        }
+                    </div>
+
+                    @if (_challengeKind != ChallengeKind.None)
+                    {
+                        <div class="home__budget-values" role="group" aria-label="Budget ceiling">
+                            @foreach (var preset in ChallengeRules.PresetsFor(_challengeKind))
+                            {
+                                <button type="button"
+                                        class="po-btn po-btn--sm @(Math.Abs(_challengeThreshold - preset) < 1e-9 ? "po-btn--primary" : "po-btn--ghost")"
+                                        aria-pressed="@(Math.Abs(_challengeThreshold - preset) < 1e-9 ? "true" : "false")"
+                                        @onclick="() => _challengeThreshold = preset">
+                                    @ChallengeRules.Format(_challengeKind, preset)
+                                </button>
+                            }
+                        </div>
+                    }
+                    <p class="home__budget-hint">@ChallengeHint</p>
+                </div>
+
                 <section class="home__compare" aria-labelledby="home-compare-heading">
                     <div class="home__compare-row">
                         <div class="home__compare-copy">
-                            <h2 id="home-compare-heading" class="home__section-title">Compare</h2>
-                            <p class="home__section-hint">@CompareHint</p>
+                            <h2 id="home-compare-heading" class="po-section-title">Compare</h2>
+                            <p class="po-hint">@CompareHint</p>
                         </div>
                         <button class="po-btn po-btn--success po-btn--lg"
                                 disabled="@(!CanCompare)"
@@ -306,6 +398,45 @@
     private bool? _webGpuSupported;   // null = not yet probed
 
     private IReadOnlyList<RecentPrompt> _recentPrompts = [];
+
+    // ── Blind mode ───────────────────────────────────────────────────────────
+    // The toggle and the ledger both live in localStorage; blindness never reaches the server,
+    // because the duel is identical either way and only its presentation differs.
+    private bool _blindMode;
+    private IReadOnlyList<BlindVote> _blindVotes = [];
+    private IReadOnlyList<BlindTallyRow> _blindTally = [];
+    private IReadOnlyList<BlindDivergence> _blindDivergences = [];
+
+    // ── Challenge budget ─────────────────────────────────────────────────────
+    // "None" is a real option in the group rather than a separate off switch, so the control
+    // reads as one four-way choice instead of a toggle plus a dependent selector.
+    private static readonly ChallengeKind[] _budgetKinds =
+    [
+        ChallengeKind.None,
+        ChallengeKind.MaxSeconds,
+        ChallengeKind.MaxCostUsd,
+        ChallengeKind.MaxTokens,
+    ];
+
+    private ChallengeKind _challengeKind = ChallengeKind.None;
+    private double _challengeThreshold;
+
+    private string ChallengeHint => _challengeKind == ChallengeKind.None
+        ? "No budget — the duel is judged on the output alone."
+        : $"Any model that goes over {ChallengeRules.Format(_challengeKind, _challengeThreshold)} "
+          + "forfeits, however good its output is. Both inside the budget and it is judged normally.";
+
+    private void SetChallengeKind(ChallengeKind kind)
+    {
+        _challengeKind = kind;
+        // Land on a sensible ceiling immediately: a selected kind with a zero threshold is
+        // dropped server-side, so the control would silently do nothing.
+        _challengeThreshold = ChallengeRules.PresetsFor(kind).FirstOrDefault();
+    }
+
+    private string BlindHint => _blindMode
+        ? "Sides are shuffled and the panels read Model A / Model B. Names are revealed when the verdict lands."
+        : "Model names are shown throughout the duel.";
 
     private bool HasModels => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
     private bool SameModelSelected => _leftModel is not null && _rightModel is not null && _leftModel.ModelId == _rightModel.ModelId;
@@ -393,12 +524,55 @@
     {
         _prompt = Prompt ?? string.Empty;
         _recentPrompts = await PromptHistory.GetAsync();
+        _blindMode = await Blind.GetEnabledAsync();
+        _blindVotes = await Blind.GetVotesAsync();
+        _blindTally = BlindPickLedger.Tally(_blindVotes);
         await LoadAsync();
     }
 
     // ── Prompt sourcing ──────────────────────────────────────────────────────
 
     private void ApplyPromptAsync(string text) => _prompt = text;
+
+    // ── Blind mode ───────────────────────────────────────────────────────────
+
+    private async Task ToggleBlindAsync(ChangeEventArgs e)
+    {
+        _blindMode = e.Value is true;
+        await Blind.SetEnabledAsync(_blindMode);
+    }
+
+    private async Task ClearBlindVotesAsync()
+    {
+        await Blind.ClearVotesAsync();
+        _blindVotes = [];
+        _blindTally = [];
+        _blindDivergences = [];
+    }
+
+    /// <summary>
+    /// Resolves the divergence lines, which need leaderboard ranks the picker does not otherwise
+    /// load. Skipped entirely when there are no votes, so the extra request only happens for a
+    /// user who has actually judged something blind.
+    /// </summary>
+    private async Task LoadBlindDivergencesAsync()
+    {
+        if (_blindVotes.Count == 0) return;
+
+        try
+        {
+            var board = await ApiClient.GetLeaderboardAsync();
+            if (board is null) return;
+
+            var ranks = board.ToDictionary(e => e.ModelId, e => e.Rank);
+            _blindDivergences = BlindPickLedger.Divergences(_blindVotes, ranks);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            // The tally above still renders. A missing leaderboard costs the divergence lines,
+            // which are commentary on the record rather than the record itself.
+        }
+    }
 
     private async Task ForgetRecentAsync(string text) =>
         _recentPrompts = await PromptHistory.RemoveAsync(text);
@@ -416,6 +590,9 @@
         // Shared with ModelHealthPanel via WebGpuCapability — single adapter/device request.
         var probe = await WebGpu.GetAsync();
         _webGpuSupported = probe?.Supported;
+        // Needs leaderboard ranks, so it is deliberately after first paint rather than in
+        // LoadAsync — the picker must not wait on commentary about past votes.
+        await LoadBlindDivergencesAsync();
         StateHasChanged();
     }
 
@@ -525,6 +702,10 @@
 
     private void AssignModel(ModelDto model)
     {
+        // Quiet confirmation that the click landed. Fire-and-forget: the picker must not wait
+        // on an AudioContext that may not be unlocked yet.
+        _ = AudioService.PlayTickAsync();
+
         // Both slots full + clicking a 3rd → show replace popover instead of silently overwriting.
         if (_leftModel is not null && _rightModel is not null
             && model.ModelId != _leftModel.ModelId
@@ -583,9 +764,25 @@
             _recentPrompts = await PromptHistory.RememberAsync(_prompt);
 
             await AudioService.PlaySnareRollAsync();
-            var dto = await ApiClient.CommenceDuelAsync(_leftModel!.ModelId, _rightModel!.ModelId, _prompt);
+
+            // Blind duels shuffle which picked model gets which panel. Without this, "left is
+            // the one I chose first" is a perfect tell and the mask is decorative — the user
+            // would know exactly which side is which while the labels claimed otherwise.
+            var swap = _blindMode && Random.Shared.Next(2) == 0;
+            var left = swap ? _rightModel! : _leftModel!;
+            var right = swap ? _leftModel! : _rightModel!;
+
+            var dto = await ApiClient.CommenceDuelAsync(
+                left.ModelId, right.ModelId, _prompt,
+                challengeKind: _challengeKind,
+                challengeThreshold: _challengeThreshold);
             if (dto is not null)
+            {
+                // Marked before navigating, so the Arena is already masked on its first render
+                // and a reload mid-generation does not reveal the names on the way back.
+                if (_blindMode) await Blind.MarkBlindAsync(dto.DuelId);
                 Nav.NavigateTo($"/arena/{dto.DuelId}");
+            }
             else
                 _error = "Could not start the duel. Please try again.";
         }

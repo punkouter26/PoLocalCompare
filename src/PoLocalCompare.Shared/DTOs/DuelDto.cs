@@ -39,6 +39,29 @@ public sealed class DuelDto
     public int AutoJudgeDelaySeconds { get; init; }
 
     /// <summary>
+    /// The budget this duel was fought under, or <see cref="ChallengeKind.None"/> for an
+    /// ordinary duel. The Arena renders the budget and each side's measurement from this.
+    /// </summary>
+    public ChallengeKind ChallengeKind { get; init; } = ChallengeKind.None;
+
+    /// <summary>The ceiling, in the units of <see cref="ChallengeKind"/>.</summary>
+    public double ChallengeThreshold { get; init; }
+
+    public bool IsChallenge => ChallengeKind != ChallengeKind.None;
+
+    /// <summary>
+    /// Each side's model type. Present so the Arena can render a cost measurement using the
+    /// same rule the server adjudicated with: a null cost means "free" for a browser or Ollama
+    /// model and "unknown" for a metered remote one, and the client cannot tell those apart
+    /// without this. Two views of the same duel disagreeing about whether a budget was met is
+    /// exactly the kind of split-brain this DTO exists to prevent.
+    /// </summary>
+    public ModelType LeftModelType { get; init; }
+
+    /// <inheritdoc cref="LeftModelType"/>
+    public ModelType RightModelType { get; init; }
+
+    /// <summary>
     /// Reason the auto-judge stood down on a still-<see cref="DuelVerdict.Pending"/> duel, if
     /// it has. Carries rate-limit notes ("HTTP 429") and per-side failure notes that are
     /// genuinely interesting to the human asked to finish the duel by hand; absent on duels

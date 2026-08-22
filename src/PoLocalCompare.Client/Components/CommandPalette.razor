@@ -1,0 +1,252 @@
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Prompts
+@implements IAsyncDisposable
+@inject NavigationManager Nav
+@inject DuelApiClient ApiClient
+@inject AudioService AudioService
+@inject IJSRuntime JS
+
+@* ── Command palette ──────────────────────────────────────────────────────
+   Ctrl/⌘-K from anywhere. Consolidates navigation that was spread across the nav bar, the
+   in-page links and the model picker into one keyboard surface — you can reach any page, any
+   model's profile, or start a duel with a library prompt without touching the mouse.
+
+   Rendered from MainLayout so it is available on every route. The whole thing is inert until
+   opened: no list is fetched, no DOM beyond this comment exists, and the keydown listener is
+   a single delegated handler registered once. *@
+
+@if (_open)
+{
+    @* Click-away layer. A plain div rather than a <dialog>: the app has no other modal, and
+       <dialog>'s focus trap would need JS to release on every navigation this thing performs. *@
+    <div class="palette__scrim" @onclick="Close"></div>
+
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+        <input @ref="_input"
+               class="palette__input"
+               type="text"
+               placeholder="Jump to a page, a model, or a prompt…"
+               aria-label="Search commands"
+               autocomplete="off"
+               @bind="_query"
+               @bind:event="oninput"
+               @onkeydown="OnKeyDownAsync" />
+
+        @if (Matches.Count == 0)
+        {
+            <p class="palette__empty">No matches for “@_query”.</p>
+        }
+        else
+        {
+            @* role=listbox with aria-activedescendant rather than roving tabindex: focus has to
+               stay in the input so typing keeps working while the arrows move the selection. *@
+            <ul class="palette__list" role="listbox" aria-label="Results">
+                @foreach (var (item, index) in Matches.Select((m, i) => (m, i)))
+                {
+                    <li id="@($"palette-option-{index}")"
+                        class="palette__item @(index == _selected ? "palette__item--active" : "")"
+                        role="option"
+                        aria-selected="@(index == _selected ? "true" : "false")"
+                        @key="item.Key"
+                        @onclick="() => RunAsync(item)">
+                        <span class="palette__icon" aria-hidden="true">@item.Icon</span>
+                        <span class="palette__label">@item.Label</span>
+                        <span class="po-chip palette__group">@item.Group</span>
+                    </li>
+                }
+            </ul>
+        }
+
+        <p class="palette__hint">
+            <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>↵</kbd> open · <kbd>esc</kbd> close
+        </p>
+    </div>
+}
+
+@code {
+    /// <summary>One thing the palette can do.</summary>
+    /// <param name="Key">Stable id for @key — labels are not unique across groups.</param>
+    private sealed record Command(string Key, string Icon, string Label, string Group, Func<Task> Run);
+
+    private bool _open;
+    private string _query = string.Empty;
+    private int _selected;
+    private ElementReference _input;
+    private bool _focusPending;
+
+    private DotNetObjectReference<CommandPalette>? _selfRef;
+
+    private List<Command> _commands = [];
+    private bool _modelsLoaded;
+
+    /// <summary>Cap on rendered rows. A palette listing 60 things is a page, not a shortcut.</summary>
+    private const int MaxResults = 8;
+
+    private List<Command> Matches =>
+        (string.IsNullOrWhiteSpace(_query)
+            ? _commands
+            : _commands.Where(c =>
+                c.Label.Contains(_query, StringComparison.OrdinalIgnoreCase)
+                || c.Group.Contains(_query, StringComparison.OrdinalIgnoreCase)))
+        .Take(MaxResults)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildStaticCommands();
+
+        _selfRef = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("registerPaletteHotkey", _selfRef);
+        }
+        catch (JSException)
+        {
+            // No interop available — the palette is then mouse-unreachable, which is an
+            // acceptable degradation for a pure accelerator.
+        }
+    }
+
+    /// <summary>Opened from JS by the global Ctrl/⌘-K handler.</summary>
+    [JSInvokable]
+    public async Task ToggleAsync()
+    {
+        _open = !_open;
+        _query = string.Empty;
+        _selected = 0;
+
+        if (_open)
+        {
+            _focusPending = true;
+            // Models are fetched on first open rather than at startup: the palette is an
+            // accelerator, and it must not add a request to every page load for the majority
+            // of sessions that never press the shortcut.
+            if (!_modelsLoaded) await LoadModelsAsync();
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending) return;
+        _focusPending = false;
+
+        try
+        {
+            await _input.FocusAsync();
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus — nothing to do.
+        }
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _query = string.Empty;
+    }
+
+    private void BuildStaticCommands()
+    {
+        _commands =
+        [
+            new("nav-compare",     "⚔",  "Compare — start a duel",      "Go to", () => GoAsync("/")),
+            new("nav-tournament",  "🏆", "Tournament — run a bracket",  "Go to", () => GoAsync("/tournament")),
+            new("nav-leaderboard", "📊", "Leaderboard",                 "Go to", () => GoAsync("/leaderboard")),
+            new("nav-challenge",   "⏱",  "Challenge board",             "Go to", () => GoAsync("/challenge")),
+            new("nav-archive",     "📁", "Archive",                     "Go to", () => GoAsync("/archive")),
+            new("nav-demo",        "▶",  "Run the auto demo",           "Go to", () => GoAsync("/demo")),
+        ];
+
+        // Prompts navigate to Compare pre-filled, which is the one thing the picker could not
+        // do from another page.
+        foreach (var template in PromptLibrary.All.Take(10))
+        {
+            var text = template.Text;
+            _commands.Add(new(
+                $"prompt-{template.Id}",
+                template.Emoji,
+                template.Title,
+                "Prompt",
+                () => GoAsync($"/?prompt={Uri.EscapeDataString(text)}")));
+        }
+    }
+
+    private async Task LoadModelsAsync()
+    {
+        _modelsLoaded = true;   // set first: a failed load must not retry on every keystroke
+
+        try
+        {
+            var models = await ApiClient.GetModelsAsync();
+            if (models is null) return;
+
+            foreach (var model in models)
+            {
+                var id = model.ModelId;
+                _commands.Add(new(
+                    $"model-{id}",
+                    "🤖",
+                    model.DisplayName,
+                    "Model",
+                    () => GoAsync($"/model/{id}")));
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            // Static commands still work; only model jumps are missing.
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                Close();
+                break;
+
+            case "ArrowDown":
+                _selected = Matches.Count == 0 ? 0 : (_selected + 1) % Matches.Count;
+                break;
+
+            case "ArrowUp":
+                _selected = Matches.Count == 0 ? 0 : (_selected - 1 + Matches.Count) % Matches.Count;
+                break;
+
+            case "Enter":
+                var match = Matches.ElementAtOrDefault(_selected);
+                if (match is not null) await RunAsync(match);
+                break;
+        }
+    }
+
+    private async Task RunAsync(Command command)
+    {
+        Close();
+        _ = AudioService.PlayTickAsync();
+        await command.Run();
+    }
+
+    private Task GoAsync(string url)
+    {
+        Nav.NavigateTo(url);
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("unregisterPaletteHotkey");
+        }
+        catch (Exception ex) when (ex is JSException or TaskCanceledException or InvalidOperationException)
+        {
+            // Page is going away anyway.
+        }
+
+        _selfRef?.Dispose();
+    }
+}

@@ -18,7 +18,7 @@ main {
 article.content {
     background-color: transparent;
     color: var(--text);
-    padding-top: 1rem;
+    padding-top: var(--space-md);
 }
 
 article.app-content {

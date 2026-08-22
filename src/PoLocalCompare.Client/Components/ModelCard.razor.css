@@ -5,11 +5,11 @@
     background: var(--surface-1);
     border: 1px solid var(--border);
     transition: all var(--transition-medium);
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--space-sm);
     border-radius: var(--radius-md);
     position: relative;
     overflow: hidden;
-    padding: 1rem;
+    padding: var(--space-md);
 }
 
 .model-card::before {
@@ -48,7 +48,7 @@
 }
 
 .model-card__slot-badge {
-    font-size: 0.7rem;
+    font-size: var(--text-2xs);
     font-weight: 700;
     width: 1.25rem;
     height: 1.25rem;
@@ -75,18 +75,18 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.35rem;
+    margin-bottom: var(--space-xs);
 }
 
 .model-card__name {
     color: var(--text);
     font-weight: 600;
-    font-size: 1rem;
+    font-size: var(--text-lg);
 }
 
 .model-card__badge {
-    font-size: 0.65rem;
-    padding: 0.2rem 0.45rem;
+    font-size: var(--text-2xs);
+    padding: var(--space-xs) var(--space-sm);
     border-radius: var(--radius-sm);
     font-weight: 700;
     text-transform: uppercase;
@@ -128,22 +128,22 @@
 
 .model-card__elo {
     color: var(--text);
-    font-size: 0.9rem;
-    margin-bottom: 0.25rem;
+    font-size: var(--text-md);
+    margin-bottom: var(--space-xs);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .model-card__stats {
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
 }
 
 .model-card__params {
     color: var(--text-muted);
-    font-size: 0.78rem;
-    margin-top: 0.15rem;
+    font-size: var(--text-sm);
+    margin-top: var(--space-2xs);
 }
 
 .model-card__params-value {
@@ -157,8 +157,8 @@
    was doing all the work, and it fails on a white card.) */
 .model-card__pricing {
     color: var(--text-muted);
-    font-size: 0.75rem;
-    margin-top: 0.25rem;
+    font-size: var(--text-xs);
+    margin-top: var(--space-xs);
 }
 
 .model-card__pricing--free {
@@ -168,7 +168,7 @@
 
 .model-card__pricing-unit {
     color: var(--text-dim);
-    font-size: 0.7rem;
+    font-size: var(--text-2xs);
 }
 
 /* Ripple effect on click */
@@ -194,7 +194,7 @@
 .model-card__badges {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--space-sm);
 }
 
 /* Cursor affordance. Dimming is owned by the caller's .home__card-disabled wrapper,

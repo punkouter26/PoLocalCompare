@@ -6,28 +6,17 @@
 
 .archive__title {
     color: var(--text);
-    font-size: 1.75rem;
+    font-size: var(--text-2xl);
     margin-bottom: 24px;
 }
 
-.archive__status,
-.archive__error,
-.archive__empty-card {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface-1);
-    padding: 1.1rem 1.2rem;
-    max-width: 760px;
-    animation: archive-rise 260ms ease-out;
-}
-
-.archive__empty-card h2 {
-    margin: 0 0 0.35rem;
+.po-empty h2 {
+    margin: 0 0 var(--space-xs);
     color: var(--text);
-    font-size: 1.15rem;
+    font-size: var(--text-xl);
 }
 
-.archive__empty-card p {
+.po-empty p {
     margin: 0;
     color: var(--text-muted);
 }
@@ -35,31 +24,14 @@
 .archive__empty-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.65rem;
-    margin-top: 0.85rem;
+    gap: var(--space-smd);
+    margin-top: var(--space-smd);
 }
-
-.archive__error {
-    color: var(--accent-red);
-}
-
-/* Row hover/cursor now come from .po-table--selectable in app.css; only the
-   inline actions column needs Archive-specific sizing because the buttons
-   are icon-only glyphs that must not stretch the row. */
-.archive__grid-caption {
-    caption-side: top;
-    text-align: left;
-    padding-bottom: 0.4rem;
-    font-size: 0.72rem;
-    color: var(--text-muted);
-}
-
-.archive__row-actions-col { width: 1%; }
 
 .archive__row-actions {
     white-space: nowrap;
     text-align: right;
-    padding: 0.25rem 0.5rem;
+    padding: var(--space-xs) var(--space-sm);
 }
 
 .archive__row-btn {
@@ -73,10 +45,10 @@
     background: var(--surface-2);
     color: var(--text);
     cursor: pointer;
-    font-size: 1rem;
+    font-size: var(--text-lg);
     line-height: 1;
     text-decoration: none;
-    margin-left: 0.25rem;
+    margin-left: var(--space-xs);
     transition: background-color 120ms ease, border-color 120ms ease;
 }
 
@@ -91,9 +63,10 @@
     text-decoration: none;
 }
 
-/* Rows are now keyboard-operable: a visible focus ring on the row signals where
-   the user is, without colouring the whole row on every selection. */
-.archive__rows tbody tr:focus-visible {
+/* RadzenDataGrid renders the rows now, so the focus ring hangs off its own class rather
+   than the hand-rolled table's. Kept because the grid's default ring is faint against this
+   app's surfaces. */
+.archive__grid ::deep .rz-grid-table tr:focus-visible {
     outline: 2px solid var(--accent-green);
     outline-offset: -2px;
 }
@@ -107,7 +80,7 @@
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
     font-weight: 600;
 }
 
@@ -156,23 +129,23 @@
 
 .archive__count {
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: var(--text-md);
 }
 
 .archive__filters {
     display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
     flex-wrap: wrap;
 }
 
 .archive__filter-chip {
-    padding: 0.25rem 0.75rem;
+    padding: var(--space-xs) var(--space-smd);
     border-radius: 999px;
     border: 1px solid var(--border);
     background: var(--surface-1);
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
     cursor: pointer;
     transition: all 0.15s;
 }
@@ -193,12 +166,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
+    gap: var(--space-md);
+    margin-bottom: var(--space-smd);
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--surface-2);
-    padding: 0.6rem 0.8rem;
+    padding: var(--space-sm) var(--space-smd);
     color: var(--text);
 }
 
@@ -211,8 +184,7 @@
     background: var(--surface-2);
     color: var(--text);
     border-radius: 6px;
-    padding: 0.3rem 0.65rem;
+    padding: var(--space-xs) var(--space-smd);
     cursor: pointer;
 }
 
-@media (max-width: 1023px) {}

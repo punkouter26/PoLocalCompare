@@ -5,7 +5,7 @@
 .navmenu {
     background-color: var(--surface-base);
     border-bottom: 1px solid var(--border);
-    padding: 0 1rem;
+    padding: 0 var(--space-md);
     min-height: 3.5rem;
     position: sticky;
     top: 0;
@@ -25,20 +25,20 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: var(--space-smd);
 }
 
 .navmenu__brand {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex: 0 0 auto;
     white-space: nowrap;
     min-height: 44px;           /* ≥44px touch target */
     text-decoration: none;
     color: var(--text);
     font-weight: 700;
-    font-size: 1.1rem;
+    font-size: var(--text-xl);
     letter-spacing: -0.02em;
 }
 
@@ -57,7 +57,7 @@
     background: linear-gradient(135deg, rgba(18, 184, 207, 0.28), rgba(45, 220, 132, 0.28));
     border: 1px solid rgba(18, 184, 207, 0.4);
     color: var(--text);
-    font-size: 0.68rem;
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.04em;
 }
@@ -92,7 +92,7 @@
 .navmenu__collapse {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     min-width: 0;
     flex: 1 1 auto;
 }
@@ -100,7 +100,7 @@
 .navmenu__links {
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--space-xs);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -120,13 +120,13 @@
 ::deep .navmenu__link {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-xs);
     white-space: nowrap;
     color: var(--text-muted);
-    padding: 0.5rem 0.85rem;
+    padding: var(--space-sm) var(--space-smd);
     border-radius: 6px;
     text-decoration: none;
-    font-size: 0.9rem;
+    font-size: var(--text-md);
     transition: color 0.15s ease, background 0.15s ease;
 }
 
@@ -142,10 +142,20 @@
 }
 
 .navmenu__link-text {
-    font-size: 0.88rem;
+    font-size: var(--text-md);
 }
 
 /* ── Mobile collapsed menu ──────────────────────────────────────────────────── */
+/* ── Known debt: Bootstrap-era breakpoints ────────────────────────────────
+   767.98 / 991.98 / 1279.98 are Bootstrap's off-by-0.02 boundaries, left from before Bootstrap
+   was removed. They are NOT on the app's 640/1024/1400 scale. The fractional part is
+   load-bearing here rather than cosmetic — each pairs with a `min-width: 768px` rule, and
+   rounding one side without the other opens a gap where neither matches.
+
+   Deliberately not consolidated in the 2026-08-22 design-token pass: the nav is the one
+   surface where a wrong breakpoint is immediately visible (the hamburger appearing at the
+   wrong width), and that pass had no way to verify the result in a browser. Fix it with the
+   E2E-UI suite open. */
 @media (max-width: 767.98px) {
     .navmenu__inner {
         flex-wrap: wrap;
@@ -161,7 +171,7 @@
         width: 100%;
         order: 3;
         border-top: 1px solid var(--border);
-        padding: 0.5rem 0;
+        padding: var(--space-sm) 0;
     }
 
     .navmenu__collapse--open {
@@ -176,14 +186,14 @@
     }
 
     ::deep .navmenu__link {
-        padding: 0.75rem 0.5rem;
+        padding: var(--space-smd) var(--space-sm);
         border-radius: 0;
     }
 
     .navmenu__auth {
         width: 100%;
         justify-content: flex-start;
-        padding: 0.5rem 0;
+        padding: var(--space-sm) 0;
     }
 }
 
@@ -195,9 +205,9 @@
     color: #ffffff;
     font-weight: 700;
     text-align: center;
-    padding: 0.35rem 1rem;
+    padding: var(--space-xs) var(--space-md);
     letter-spacing: 0.05em;
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
     width: 100%;
     display: block;
 }
@@ -206,7 +216,7 @@
 .navmenu__auth {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex-shrink: 0;
     margin-left: auto;
 }
@@ -219,13 +229,13 @@
 }
 
 .navmenu__theme-toggle {
-    padding-inline: 0.7rem;
+    padding-inline: var(--space-smd);
 }
 
 .navmenu__user-badge {
-    font-size: 0.78rem;
+    font-size: var(--text-sm);
     font-weight: 600;
-    padding: 0.25rem 0.6rem;
+    padding: var(--space-xs) var(--space-sm);
     border-radius: 999px;
     letter-spacing: 0.03em;
     white-space: nowrap;
@@ -272,11 +282,11 @@
 
 /* ── Theme toggle (System → Light → Dark) ──────────────────────────────────── */
 .navmenu__theme-glyph {
-    font-size: 0.95rem;
+    font-size: var(--text-lg);
     line-height: 1;
 }
 
-@media (max-width: 575px) {
+@media (max-width: 640px) {
     /* Keep the glyph as the affordance on narrow screens; the label is redundant with aria-label. */
     .navmenu__theme-label {
         display: none;
@@ -290,12 +300,12 @@
 .navmenu__ticker {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     min-width: 0;
     flex: 0 1 auto;
     overflow: hidden;
-    margin-inline: 0.5rem;
-    font-size: 0.72rem;
+    margin-inline: var(--space-sm);
+    font-size: var(--text-xs);
 }
 
 /* flex: 0 0 auto is load-bearing. As a shrinkable item the pill was squeezed narrower
@@ -304,10 +314,10 @@
 .navmenu__ticker-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: var(--space-xs);
     flex: 0 0 auto;
     max-width: 100%;
-    padding: 0.1rem 0.55rem;
+    padding: var(--space-2xs) var(--space-sm);
     border-radius: 9999px;
     font-weight: 700;
     white-space: nowrap;
@@ -399,7 +409,7 @@
     }
 
     ::deep .navmenu__link {
-        padding-inline: 0.55rem;
+        padding-inline: var(--space-sm);
     }
 
     .navmenu__user-badge {
@@ -419,7 +429,7 @@
    is no longer scarce but vertical space is — so it stays on one row and drops the excerpt. */
 @media (max-width: 767.98px) {
     .navmenu__ticker {
-        margin: 0.4rem 0 0;
+        margin: var(--space-sm) 0 0;
         flex-wrap: wrap;
     }
 

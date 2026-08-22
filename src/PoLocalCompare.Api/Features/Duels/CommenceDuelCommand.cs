@@ -1,4 +1,6 @@
 // SOLID: Single Responsibility
+using PoLocalCompare.Shared.Enums;
+
 namespace PoLocalCompare.Api.Features.Duels;
 
 /// <param name="AutoJudgeDelaySecondsOverride">
@@ -11,12 +13,19 @@ namespace PoLocalCompare.Api.Features.Duels;
 /// preferred_username of the caller, or "anonymous" when the open gate is in effect. Stamped
 /// onto <c>Duel.OwnerId</c> for forensic audit. Never used for authorization.
 /// </param>
+/// <param name="ChallengeKind">
+/// Budget this duel is fought under. <see cref="Enums.ChallengeKind.None"/> — the default — is an
+/// ordinary duel, so every existing caller is unaffected.
+/// </param>
+/// <param name="ChallengeThreshold">The ceiling, in the units of <paramref name="ChallengeKind"/>.</param>
 public sealed record CommenceDuelCommand(
     ModelId LeftModelId,
     ModelId RightModelId,
     string PromptText,
     int? AutoJudgeDelaySecondsOverride = null,
-    string? Actor = null)
+    string? Actor = null,
+    ChallengeKind ChallengeKind = ChallengeKind.None,
+    double ChallengeThreshold = 0)
 {
     public const int MaxPromptLength = 10000;
     public const int MinPromptLength = 10;

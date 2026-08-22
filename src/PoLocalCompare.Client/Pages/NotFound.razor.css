@@ -6,7 +6,7 @@
     align-items: center;
     justify-content: center;
     min-height: 60vh;
-    padding: 2rem 1rem;
+    padding: var(--space-xl) var(--space-md);
 }
 
 .not-found__card {
@@ -14,7 +14,7 @@
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 3rem 2.5rem;
+    padding: var(--space-2xl) var(--space-xl);
     max-width: 420px;
     width: 100%;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
@@ -22,24 +22,24 @@
 
 .not-found__icon {
     display: block;
-    font-size: 3.5rem;
+    font-size: var(--text-4xl);
     font-weight: 900;
     color: var(--accent-green);
     letter-spacing: -0.04em;
-    margin-bottom: 0.75rem;
+    margin-bottom: var(--space-smd);
     opacity: 0.7;
 }
 
 .not-found__title {
-    font-size: 1.4rem;
+    font-size: var(--text-2xl);
     font-weight: 700;
-    margin: 0 0 0.6rem;
+    margin: 0 0 var(--space-sm);
     color: var(--text);
 }
 
 .not-found__message {
     color: var(--text-muted);
-    margin: 0 0 1.75rem;
+    margin: 0 0 var(--space-lg);
     line-height: 1.5;
 }
 

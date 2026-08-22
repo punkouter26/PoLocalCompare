@@ -143,13 +143,24 @@ public sealed class DuelExecutionService
 
             await lobby.DuelCompletedAsync(duel, leftModel.DisplayName, rightModel.DisplayName, cancellationToken);
 
+            // A challenge budget is arithmetic over the result rows, so it is settled before
+            // anything reads the outputs — and without the LLM, which means it keeps working
+            // with AiJudge:Enabled=false. It returns true only when the budget actually decided
+            // the duel; a budget both models met separates nothing and falls through to the
+            // ordinary judge below.
+            var decidedByBudget = await services.GetRequiredService<ChallengeAdjudicator>()
+                .TryAdjudicateAsync(duelId, cancellationToken);
+
             // Hand off to the auto-judge, which waits out the grace window before deciding.
             // Run inline rather than as a second queued item: BackgroundTaskService awaits each
             // work item before dequeuing the next, so a queued delay would stall the next duel.
             // The duel is not finished until it has a verdict, so blocking here is the honest
             // shape — and AutoJudge.RunAsync never throws.
-            await services.GetRequiredService<AutoJudge>()
-                .RunAsync(duelId, cancellationToken, autoJudgeDelaySecondsOverride);
+            if (!decidedByBudget)
+            {
+                await services.GetRequiredService<AutoJudge>()
+                    .RunAsync(duelId, cancellationToken, autoJudgeDelaySecondsOverride);
+            }
         }
         catch (Exception ex)
         {

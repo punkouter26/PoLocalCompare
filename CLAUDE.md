@@ -85,9 +85,11 @@ their host runs as `Development`.
 **Verdicts are human-first, then auto-judged.** A human who picks a winner in the Arena within
 `AiJudge:DelaySeconds` of the duel finishing always decides it. Otherwise `AutoJudge` asks a Foundry
 model which output follows the prompt better and records that verdict itself. ELO still moves only
-through `RecordVerdictHandler`, but it now has two callers, so **every verdict carries a
-`VerdictSource`** (`Human` or `Ai`) — never add a write path that moves ELO without setting it, or
-the leaderboard silently blends two different signals with no way to separate them afterwards.
+through `RecordVerdictHandler`, but it now has three callers, so **every verdict carries a
+`VerdictSource`** (`Human`, `Ai` or `Constraint`) — never add a write path that moves ELO without
+setting it, or the leaderboard silently blends different signals with no way to separate them
+afterwards. `Constraint` is a challenge-budget forfeit: nothing read the outputs, which is why it
+is a third value rather than filed under `Ai`.
 
 Three invariants hold the design together. A human decision always wins the race (`AutoJudge`
 re-reads the duel and stands down on anything but `Pending`, and `RecordVerdictHandler` throws on a
@@ -96,9 +98,12 @@ leaves the duel `Pending` rather than guessing; ELO must never move on no eviden
 `AiJudge:Enabled=false` genuinely restores the old human-only behaviour.
 
 This reverses the original human-only rule; PRD §9 item 7 records why it was that way and item 9 why
-it changed. Note the default 5-second window is too short to read two outputs, so in practice the
-judge decides nearly every duel — widen `DelaySeconds` if the human path needs to be usable.
-The Arena still offers **Retry duel** for transient failures.
+it changed. **`AiJudge:DelaySeconds` is 10** (PRD §9 item 21) — short on purpose, so a duel resolves
+while you are still looking at it. At that width the judge decides nearly every duel and the human
+path is the Arena's vote buttons during the countdown; widen it if you want verdicts to be genuinely
+human-first. `AutoJudgeOptions` used to document a "30-second floor applied at validation time" that
+never existed — there is no options validator here, and the only clamp is the endpoint's 0–3600 on
+the per-duel override. The Arena still offers **Retry duel** for transient failures.
 
 **The model catalog is spread across three files that must agree.**
 [ModelSeeder.cs](src/PoLocalCompare.Api/Features/Models/ModelSeeder.cs) is the catalog, but it seeds
@@ -160,7 +165,51 @@ E2E-UI selectors point at `home__title`, `home__grid` and `home__compare .po-btn
 `OnStartLocalInference`, runs `WebLlmService`, and POSTs to `/api/duels/{id}/local-result`. A
 change that breaks that handler stalls every WebGPU pairing at `Initializing` with no error.
 
-**There is no UI component library, and `.po-btn` is the only button.** Radzen was removed; buttons
+**There is a design-token scale, and raw values are the defect.** `app.css` defines
+`--text-2xs…--text-4xl` (9 steps), `--space-2xs…--space-2xl` (9 steps), `--leading-*`,
+`--weight-*` and `--radius-*`. Every `font-size` and every padding/gap/margin in the app goes
+through them — there are **zero** raw `rem` values left in either. Before the 2026-08-22 pass
+there were 31 distinct font sizes with no tokens at all (thirteen of them inside the 0.7–0.95rem
+band, where nobody can see the difference) and 28 raw spacing values sitting alongside a
+five-step scale too coarse to be usable. If you find yourself typing `font-size: 0.82rem`, the
+scale is missing a step — add the step, don't add the value.
+
+**Three breakpoints: 640 / 1024 / 1400.** They are a convention, not tokens, because a custom
+property is illegal inside a `@media` condition and `@custom-media` has no native support — the
+list lives in a comment in `app.css` and is enforced by review. Two documented exceptions:
+Home collapses at **1080px** (the picker-plus-console grid is genuinely tight below that), and
+`NavMenu.razor.css` still carries Bootstrap's `767.98/991.98/1279.98` boundaries, where the
+fractional part is load-bearing against paired `min-width` rules. Everything else was 13
+arbitrary values, and eight stylesheets had no responsive handling at all.
+
+**Shared text and layout primitives, same rule as `.po-btn`.** `.po-page` (+`--narrow`/`--wide`),
+`.po-header`, `.po-title`, `.po-subtitle`, `.po-section-title`, `.po-section`, `.po-hint`,
+`.po-status`, `.po-error`, `.po-empty`, `.po-chip`, `.po-glass`, `.po-lift`, `.po-glow`. These
+replaced ~55 per-surface classes doing eight jobs (11 different `__title`, 9 `__error`,
+8 `__status`, 7 `__header`…) — the identical drift that produced twelve competing button
+classes. A surface that needs a tweak adds a **layout-only** class alongside the primitive.
+Note `home__title`, `archive__title`, `arena__title` and `leaderboard__title` are kept purely as
+E2E-UI selector hooks and carry no styling; that suite is not in CI, so removing one fails
+silently.
+
+**Wide tables become cards below 640px.** `.po-table--cards` turns each `<td>` into a labelled
+row using `data-label` on the cell. The table stays a real `<table>` with real `<th scope>`, so
+the accessibility tree is unchanged and `::before` content is not announced twice; only the
+visual presentation changes. Cells opt out with `.po-cell--bare`. A table without `data-label`
+degrades to the old horizontal scroll rather than breaking.
+
+**Radzen is back, for exactly two components.** `RadzenDataGrid` on the Archive (the one table
+with real volume, paging and a genuine use for virtualisation) and `RadzenChart` on the model
+profile. It is **not** a general adoption: `.po-btn` is still the only button and the folded
+per-surface button classes stay folded. Two costs to know about — `Radzen.ThemeService` collides
+with this app's own `ThemeService`, so `@using Radzen` is deliberately *not* in `_Imports.razor`
+(only `Radzen.Blazor` is; the enums are imported per-file), and Radzen restores a second
+reflective-instantiation blocker on top of the Router's `NotFoundPage`, so `PublishTrimmed` now
+needs both resolved rather than one.
+
+**`.po-btn` is the only button, and Radzen is confined to two components.** Radzen was removed
+wholesale in an earlier pass and partially re-added on 2026-08-22 for `RadzenDataGrid` and
+`RadzenChart` only (see above). Everything else stayed removed: buttons
 and tables are `.po-btn` and `.po-table` in
 [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens. Twelve
 per-surface button classes (`wizard__btn`, `demo__btn`, `h2h__btn`, `lab__btn`, `source-compare__btn`
@@ -210,10 +259,61 @@ not retroactively change a stored duel. Likewise, the runtime probe injects a re
 the sandboxed *preview* only; the raw output is what gets persisted, analysed, diffed and shown by
 "View Source", so nothing a person judges or exports contains it.
 
+**Tournaments run on the server; demo mode runs in the client.** `/tournament` draws a seeded
+single-elimination bracket over 2 (a plain 1v1), 4 or 8 models and `TournamentRunner` plays it to
+the final on the background queue — so closing the tab does not stop the run, which is the whole
+difference from `/demo`. Seeding is standard tournament seeding (`1,8,4,5,2,7,3,6`), not a
+shuffle: a random draw routinely knocks the two best models out against each other in round one.
+Browser models are excluded — WebGPU inference needs a foreground tab. Two invariants: a bracket
+that cannot finish is **Abandoned, never Complete** (naming the last model standing as champion
+would invent an outcome), and a drawn match advances the **better seed**, which is why
+`BracketSlot` carries a seed number at all. The runner holds no state — every step re-reads the
+tournament — so a restart resumes rather than losing the run.
+
+**Blind mode never reaches the server.** The Home toggle shuffles which chosen model gets which
+Arena panel and masks both until a verdict lands. It is `localStorage` only, which is also what
+makes a *shared* Arena link behave correctly: the recipient sees the names, because the duel was
+never blind for them. The side shuffle is load-bearing — without it "left is the one I picked
+first" is a perfect tell. The mask is total by construction: every surface that names a side
+resolves through `Arena.LeftDisplayName`/`RightDisplayName`, so adding a new one that reads
+`_leftResult.ModelName` directly silently defeats the feature.
+
+**Challenge budgets are adjudicated before the judge.** A duel can carry a `ChallengeKind` +
+threshold; `ChallengeAdjudicator` runs ahead of `AutoJudge` in `DuelExecutionService`, because a
+budget is arithmetic rather than an opinion and must keep working with `AiJudge:Enabled=false`.
+One side inside the budget wins outright; both inside falls through to the ordinary judge; neither
+inside records a tie. Two measurement rules are load-bearing: a **failed run never meets a budget**
+(a crash has a short stored duration, so counting it would make failing fast the winning speed
+strategy), and an **unpriced model counts as zero spend** (otherwise every local model is
+disqualified from every cost challenge).
+
 **Demo mode writes real duels.** `/demo` runs ten remote-vs-remote duels that persist, get judged and
 move ELO, using `POST /api/duels` with `autoJudgeDelaySeconds: 0`. It is not a sandbox — if you need
 a throwaway run, wipe Azurite afterwards. The override is clamped 0–3600 and cannot switch the judge
 on: `AiJudge:Enabled=false` still restores human-only verdicts.
+
+**Motion is compositor-only, and that is a correctness constraint, not a style rule.** Browser
+models run WebLLM inference over **WebGPU in this same tab**, and two things depend on that GPU
+being free: the tok/s the `TokenRace` reports, and — since challenge mode — whether a model comes
+in under a `MaxSeconds` budget. A budget miss forfeits the duel and moves ELO, so a render loop
+competing for the GPU would not merely drop frames, it would **record wrong verdicts**. So:
+continuous motion is CSS transform/opacity only (`body::before` aurora drift, `.po-lift`,
+`.po-glow` in [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css)); `backdrop-filter` is fine
+(compositor, not the 3D pipeline); and the only canvas work in the app —
+[fx.js](src/PoLocalCompare.Client/wwwroot/js/fx.js) — is one-shot and fires only after inference
+has finished (verdict landed, champion crowned). Audio is exempt: it runs on the audio thread and
+never touches the GPU, which is why `PlayTokenBlipAsync` is safe to call mid-duel. **Do not add
+Three.js, PixiJS, Rapier or a WebGL/WebGPU render loop** without re-deciding this trade-off —
+it was considered and declined for exactly this reason.
+
+**Audio is synthesised, never a file.** [audio.js](src/PoLocalCompare.Client/wwwroot/js/audio.js)
+builds every cue from oscillators and noise buffers at play time. The previous version fetched
+`/audio/snare-roll.wav` and `/audio/success.wav`, both of which were **44-byte stubs** — a RIFF
+header with a zero-length data chunk — so every "sound" the app played was silence, invisibly,
+for as long as those cues existed. Synthesis removes the class of failure: there is no asset to be
+present-but-empty. Note `audio.js` and `fx.js` are `import()`ed with their own `?v=` cache-buster,
+the same trap as the `<script src>` tags — bump it when you edit them or the browser serves the
+old module.
 
 **Vertical slices.** Server code lives in `src/PoLocalCompare.Api/Features/<Feature>/` — endpoint,
 handlers, entities, and repository flat in one folder. `Common/` is only for genuinely cross-slice

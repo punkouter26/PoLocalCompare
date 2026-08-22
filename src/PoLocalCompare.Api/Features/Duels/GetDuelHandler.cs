@@ -87,6 +87,12 @@ public sealed class GetDuelHandler
                 ? duel.JudgeStoodDownReason
                 : null,
             AutoJudgeDelaySeconds = _autoJudgeOptions.Enabled ? _autoJudgeOptions.DelaySeconds : 0,
+            ChallengeKind = duel.ChallengeKind,
+            ChallengeThreshold = duel.ChallengeThreshold,
+            // Read from the catalog rather than the result rows: a duel where one side never
+            // produced a result still has to render its budget line correctly.
+            LeftModelType = (await _modelRepository.GetByIdAsync(duel.LeftModelId))?.ModelType ?? ModelType.Remote,
+            RightModelType = (await _modelRepository.GetByIdAsync(duel.RightModelId))?.ModelType ?? ModelType.Remote,
             OwnerId = duel.OwnerId,
             VerdictBy = duel.VerdictBy,
         };

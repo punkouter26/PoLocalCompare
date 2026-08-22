@@ -36,6 +36,13 @@
     --glass-border: rgba(16, 20, 28, 0.10);
     --glass-shadow: 0 8px 32px rgba(16, 20, 28, 0.12);
 
+    /* The blur that makes --glass-bg actually glass. Three surfaces (TokenRace, TelemetryHud,
+       OutputScorecard) set the translucent background without ever blurring what sits behind
+       it, which reads as "slightly see-through panel" rather than glassmorphism. Theme
+       independent — a blur radius is not a colour — so it is defined once in the base :root
+       and the [data-theme] blocks below are left alone. */
+    --glass-blur: 14px;
+
     --page-gradient:
         radial-gradient(circle at 15% -5%, rgba(10, 118, 132, 0.10), transparent 36%),
         radial-gradient(circle at 88% 0%, rgba(15, 122, 69, 0.08), transparent 34%),
@@ -163,12 +170,67 @@
     --transition-medium: 300ms ease;
     --spring-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
-    /* Spacing Scale */
+    /* ── Spacing scale ───────────────────────────────────────────────────
+       Extended from five steps to nine. The original scale jumped 0.25 → 0.5 → 1,
+       which left no token for the gaps people actually needed, so 28 distinct raw
+       rem values grew up alongside it (0.28, 0.35, 0.375, 0.45, 0.55, 0.6, 0.65,
+       0.7, 0.75, 0.8, 0.85 — most of them visually indistinguishable from each
+       other). The in-between steps below are the ones that were being hand-rolled;
+       adding them is what makes "use a token" a realistic instruction rather than
+       advice everyone has to ignore. */
+    --space-2xs: 0.125rem;
     --space-xs: 0.25rem;
     --space-sm: 0.5rem;
+    --space-smd: 0.75rem;
     --space-md: 1rem;
+    --space-mlg: 1.25rem;
     --space-lg: 1.5rem;
     --space-xl: 2rem;
+    --space-2xl: 3rem;
+
+    /* ── Typography scale ────────────────────────────────────────────────
+       There were no typography tokens at all, and 31 distinct font-size values —
+       thirteen of them inside the 0.7–0.95rem band (0.7, 0.72, 0.74, 0.75, 0.78,
+       0.8, 0.8125, 0.82, 0.85, 0.87, 0.875, 0.9, 0.95). Nobody can see the
+       difference between 0.72rem and 0.75rem; what they produce is a page where
+       nothing lines up on a vertical rhythm and every new surface invents its own
+       sizes. Seven steps, each a visible increment from the last. */
+    --text-2xs: 0.6875rem;   /* 11px — badges, seed numbers, table micro-labels */
+    --text-xs:  0.75rem;     /* 12px — metadata, captions, timestamps */
+    --text-sm:  0.8125rem;   /* 13px — secondary body, hints, table cells */
+    --text-md:  0.875rem;    /* 14px — body default */
+    --text-lg:  1rem;        /* 16px — emphasised body, section titles */
+    --text-xl:  1.25rem;     /* 20px — card and panel headings */
+    --text-2xl: 1.625rem;    /* 26px — page titles */
+    --text-3xl: 2.25rem;     /* 36px — hero */
+    --text-4xl: 3.5rem;      /* 56px — the 404 numeral, the only display-size text in the app */
+
+    /* Line heights. Tight for headings, open for prose — a single value across
+       both is what makes dense tables feel airy and paragraphs feel cramped. */
+    --leading-tight: 1.2;
+    --leading-snug: 1.35;
+    --leading-normal: 1.55;
+
+    --weight-normal: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
+    /* ── Breakpoints ─────────────────────────────────────────────────────
+       Documented values, NOT custom properties: a custom property is illegal
+       inside a @media condition (`@media (max-width: var(--bp-md))` does not
+       work), and @custom-media has no native support. So these are a convention
+       enforced by review, and they are listed here because that is the only place
+       a convention can live.
+
+           --bp-sm   640px   phone      → single column, tables become cards
+           --bp-md  1024px   tablet     → two columns collapse to one
+           --bp-lg  1400px   wide       → max content width reached
+
+       Before this, 13 different breakpoints were in use (360, 420, 575, 720, 760,
+       768, 820, 900, 1000, 1023, 1080, 1200, 1360, 1400) and eight stylesheets had
+       none at all. New media queries use one of the three above unless there is a
+       specific reason written next to it. */
 
     /* Border Radius Scale */
     --radius-sm: 0.375rem;
@@ -315,11 +377,11 @@ a:hover {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
+    gap: var(--space-sm);
     min-height: var(--target-min);
-    padding: 0.45rem 1rem;
+    padding: var(--space-sm) var(--space-md);
     font: inherit;
-    font-size: 0.85rem;
+    font-size: var(--text-md);
     font-weight: 600;
     line-height: 1.2;
     color: var(--text);
@@ -344,16 +406,16 @@ a:hover {
 }
 
 .po-btn--lg {
-    padding: 0.6rem 1.35rem;
-    font-size: 0.95rem;
+    padding: var(--space-sm) var(--space-mlg);
+    font-size: var(--text-lg);
 }
 
 /* Compact form for nav chrome and in-card action rows. Keeps the 24×24 minimum
    target (SC 2.5.8) — it shrinks the padding, not the hit area. */
 .po-btn--sm {
     min-height: 24px;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.78rem;
+    padding: var(--space-xs) var(--space-smd);
+    font-size: var(--text-sm);
 }
 
 /* Full-width inside a card or a stacked action column. */
@@ -438,23 +500,23 @@ a:hover {
 .po-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
 }
 
 .po-table th {
     text-align: left;
-    font-weight: 600;
-    font-size: 0.72rem;
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-muted);
-    padding: 0.55rem 0.7rem;
+    padding: var(--space-sm) var(--space-smd);
     border-bottom: 1px solid var(--border-strong);
     white-space: nowrap;
 }
 
 .po-table td {
-    padding: 0.55rem 0.7rem;
+    padding: var(--space-sm) var(--space-smd);
     border-bottom: 1px solid var(--border);
     color: var(--text);
     vertical-align: middle;
@@ -481,7 +543,7 @@ a:hover {
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 
 .content {
-    padding-top: 1.1rem;
+    padding-top: var(--space-md);
     background-color: transparent;
     color: var(--text);
     min-height: 100vh;
@@ -502,7 +564,7 @@ a:hover {
     box-sizing: border-box;
     display: none;
     left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    padding: var(--space-sm) var(--space-mlg) var(--space-smd) var(--space-mlg);
     position: fixed;
     width: 100%;
     z-index: 1000;
@@ -560,23 +622,23 @@ code {
     border: 2px solid var(--accent-red);
     border-radius: 0.5rem;
     color: var(--accent-red);
-    margin-top: 2rem;
-    padding: 1.5rem;
+    margin-top: var(--space-xl);
+    padding: var(--space-lg);
 }
 
 .dev-error-panel h4 {
     color: var(--accent-red);
-    margin-bottom: 0.75rem;
+    margin-bottom: var(--space-smd);
 }
 
 .dev-error-panel pre {
     background-color: #0d0000;
     border-radius: 0.25rem;
     color: #ff9999;
-    font-size: 0.75rem;
-    margin-top: 0.5rem;
+    font-size: var(--text-xs);
+    margin-top: var(--space-sm);
     overflow-x: auto;
-    padding: 0.75rem;
+    padding: var(--space-smd);
     white-space: pre-wrap;
     word-break: break-all;
 }
@@ -586,8 +648,8 @@ code {
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     color: var(--text-muted);
-    margin-top: 2rem;
-    padding: 1.5rem;
+    margin-top: var(--space-xl);
+    padding: var(--space-lg);
     text-align: center;
 }
 
@@ -684,8 +746,8 @@ p a, li a, td a {
    itself failed to load — that is one of the failures it exists to report. */
 #boot-timeout-ui {
     max-width: 720px;
-    margin: 1rem auto;
-    padding: 1rem;
+    margin: var(--space-md) auto;
+    padding: var(--space-md);
     border: 1px solid #5f1f1f;
     background: #1b0f0f;
     color: #ffdada;
@@ -694,13 +756,13 @@ p a, li a, td a {
 }
 
 #boot-timeout-ui h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-lg);
     color: inherit;
 }
 
 #boot-timeout-ui p {
-    margin: 0 0 0.75rem;
+    margin: 0 0 var(--space-smd);
     line-height: 1.4;
 }
 
@@ -714,4 +776,429 @@ p a, li a, td a {
 
 .boot-timeout__sep {
     opacity: 0.6;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Motion and depth
+   ══════════════════════════════════════════════════════════════════════════
+
+   Everything below is compositor work — transform and opacity only — with no JavaScript
+   frame loop behind any of it. That is a hard constraint rather than a preference: browser
+   models run WebLLM inference over WebGPU in this same tab, and since challenge mode a
+   MaxSeconds budget decides duels and moves ELO. A render loop competing for the GPU would
+   not merely drop frames, it would record wrong verdicts. Continuous motion therefore stays
+   on the compositor, and the only canvas work in the app (fx.js) is one-shot and fires when
+   inference has already finished.
+
+   Every effect here is off under prefers-reduced-motion. */
+
+/* ── Aurora: a slow drift over the static --page-gradient already on <body> ────
+   A separate fixed layer rather than animating the body's own background, because animating
+   background-position repaints the whole page every frame; translating a composited layer
+   does not. The body gradient stays underneath as the reduced-motion and no-support base. */
+body::before {
+    content: "";
+    position: fixed;
+    /* Oversized and offset so the drift never exposes an edge. */
+    inset: -25%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 20% 25%, rgba(45, 220, 132, 0.10), transparent 42%),
+        radial-gradient(circle at 78% 18%, rgba(83, 166, 255, 0.09), transparent 40%),
+        radial-gradient(circle at 55% 82%, rgba(74, 91, 212, 0.07), transparent 45%);
+    will-change: transform;
+    animation: aurora-drift 42s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+    from { transform: translate3d(-2%, -1%, 0) scale(1.00) rotate(0deg); }
+    to   { transform: translate3d(2%, 1.5%, 0) scale(1.06) rotate(2deg); }
+}
+
+/* ── Glass ────────────────────────────────────────────────────────────────
+   Opt-in utility for new surfaces. The three existing consumers of --glass-bg set the blur
+   in their own scoped stylesheets alongside the background they already had. */
+.po-glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+}
+
+/* ── Lift ─────────────────────────────────────────────────────────────────
+   Shared hover treatment for card-like surfaces. Transform and shadow only, so it composites. */
+.po-lift {
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.po-lift:hover,
+.po-lift:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: var(--glass-shadow);
+}
+
+/* ── Rank glow ────────────────────────────────────────────────────────────
+   Marks the leader on a board. Opacity-pulsed on a pseudo-element rather than animating
+   box-shadow on the element itself, which cannot composite. */
+.po-glow {
+    position: relative;
+}
+
+.po-glow::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(circle, var(--accent-green), transparent 70%);
+    opacity: 0.25;
+    pointer-events: none;
+    animation: po-glow-pulse 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes po-glow-pulse {
+    from { opacity: 0.14; }
+    to   { opacity: 0.42; }
+}
+
+/* ── Particle overlay ─────────────────────────────────────────────────────
+   Created and removed by fx.js. Non-interactive is load-bearing: the verdict burst paints
+   directly over the vote buttons, and must never swallow a click meant for them. */
+.fx-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body::before {
+        animation: none;
+    }
+
+    .po-lift,
+    .po-lift:hover,
+    .po-lift:focus-visible {
+        transform: none;
+        transition: none;
+    }
+
+    .po-glow::after {
+        animation: none;
+        opacity: 0.25;
+    }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Shared surface primitives
+   ══════════════════════════════════════════════════════════════════════════
+
+   These exist because the same eight jobs were being done by ~55 per-surface classes:
+   11 different __title, 9 __error, 8 __status, 7 __header, 6 __empty, 5 __subtitle,
+   5 __section-title and 4 __section-hint. That is precisely the failure CLAUDE.md already
+   records once — twelve per-surface button classes that each reimplemented the same thing
+   locally and drifted apart, folded into .po-btn — recurring in typography instead.
+
+   The rule is the same as for buttons: a surface that needs a tweak adds a LAYOUT-ONLY class
+   alongside the primitive (.arena__action-btn is the pattern). New visual variants go here as
+   a modifier, never in a .razor.css. */
+
+/* ── Page shell ───────────────────────────────────────────────────────────
+   Seven different container max-widths were in use (1000, 1080, 1100, 1200, 1360, 1400 …),
+   so the content edge visibly jumped as you navigated between pages. */
+.po-page {
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding: var(--space-lg) var(--space-md) var(--space-2xl);
+}
+
+/* Reading-width surfaces: forms and prose, where a full 1200px line is too long to track. */
+.po-page--narrow { max-width: 900px; }
+
+/* Data-dense surfaces: wide tables and the tournament bracket. */
+.po-page--wide { max-width: 1400px; }
+
+/* ── Text primitives ──────────────────────────────────────────────────────*/
+
+.po-title {
+    margin: 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+    letter-spacing: -0.015em;
+    color: var(--text);
+}
+
+.po-subtitle {
+    max-width: 60ch;                     /* prose stops being readable past ~75ch */
+    margin: var(--space-xs) 0 0;
+    font-size: var(--text-md);
+    line-height: var(--leading-normal);
+    color: var(--text-muted);
+}
+
+.po-section-title {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-snug);
+    color: var(--text);
+}
+
+.po-hint {
+    max-width: 60ch;
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    color: var(--text-muted);
+}
+
+/* Transient "loading…" / "nothing yet" text. Italic is the whole distinction from --hint:
+   it reads as a temporary state rather than as permanent guidance. */
+.po-status {
+    margin: 0;
+    font-size: var(--text-md);
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+.po-error {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-normal);
+    color: var(--accent-red);
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────
+   A dashed box with a heading, a line of guidance and a way out. Six surfaces had each
+   invented their own; the shape was the same every time. */
+.po-empty {
+    padding: var(--space-xl) var(--space-md);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
+    text-align: center;
+}
+
+.po-empty__title {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+}
+
+.po-empty__hint {
+    margin: 0 0 var(--space-md);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    color: var(--text-muted);
+}
+
+/* ── Page header ──────────────────────────────────────────────────────────
+   Title, optional status chip on the same baseline, subtitle underneath. */
+.po-header {
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--border);
+}
+
+.po-header__row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-smd);
+}
+
+/* ── Section ──────────────────────────────────────────────────────────────*/
+.po-section {
+    margin-top: var(--space-lg);
+}
+
+/* ── Chip ─────────────────────────────────────────────────────────────────
+   Small uppercase label — model types, statuses, counts. Was reimplemented per surface as
+   __type-badge, __status, __entrant-type, __group-count and more. */
+.po-chip {
+    display: inline-block;
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.po-chip--ok    { color: var(--accent-green); }
+.po-chip--warn  { color: var(--accent-yellow); }
+.po-chip--error { color: var(--accent-red); }
+
+/* Solid variant for a state that should read as active rather than descriptive. */
+.po-chip--solid {
+    background: var(--accent-green);
+    color: var(--on-accent-green);
+}
+
+/* ── Responsive tables ────────────────────────────────────────────────────
+   Below --bp-sm a data table stops being a table and becomes a stack of cards.
+
+   The previous behaviour was `overflow-x: auto` on .po-table-wrap and nothing else, so on a
+   phone a six-column leaderboard was a horizontally-scrolling strip: you could see the rank
+   or the ELO but never both, and the column you needed was always off-screen. Scrolling
+   sideways to read one row is the failure mode this replaces.
+
+   How it works: each <td> is turned into a labelled row using the header text carried in a
+   data-label attribute on the cell. The table keeps its semantics — it is still a real
+   <table> with real <th> scope attributes, so a screen reader is unaffected; only the visual
+   presentation changes. Cells opt out with .po-cell--bare when the label would be noise
+   (an actions cell, a rank badge).
+
+   Requires markup support: cells need data-label="…". A table without it degrades to the
+   old horizontal scroll rather than breaking, because the label is rendered from an
+   attribute that simply is not there. */
+@media (max-width: 640px) {
+    .po-table--cards thead {
+        /* Not display:none — that removes it from the accessibility tree too. Clipped instead,
+           so the header cells still exist for anything reading the table structure. */
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .po-table--cards,
+    .po-table--cards tbody,
+    .po-table--cards tr,
+    .po-table--cards td {
+        display: block;
+        width: 100%;
+    }
+
+    .po-table--cards tr {
+        margin-bottom: var(--space-smd);
+        padding: var(--space-sm) var(--space-smd);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface-1);
+    }
+
+    .po-table--cards td {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-md);
+        padding: var(--space-xs) 0;
+        border-bottom: 1px solid var(--border);
+        text-align: right;
+    }
+
+    .po-table--cards tr td:last-child {
+        border-bottom: none;
+    }
+
+    /* The header text, restated per cell. content: attr() cannot be read by most screen
+       readers, which is exactly right here — the real <th> is still in the tree, so voicing
+       this too would say every column name twice. */
+    .po-table--cards td[data-label]::before {
+        content: attr(data-label);
+        flex: 0 0 auto;
+        color: var(--text-muted);
+        font-size: var(--text-2xs);
+        font-weight: var(--weight-semibold);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        text-align: left;
+    }
+
+    /* Cells where a label adds nothing — an actions row, a rank badge. */
+    .po-table--cards td.po-cell--bare {
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    /* The card is the row; the wrapper no longer needs to scroll. */
+    .po-table-wrap {
+        overflow-x: visible;
+    }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   View transitions and scroll-driven reveals
+   ══════════════════════════════════════════════════════════════════════════
+
+   Both are native CSS with no JavaScript behind them, which is what makes them safe under
+   the constraint recorded in CLAUDE.md: they run on the compositor and never touch the
+   WebGPU device WebLLM generates on, so they cannot skew tok/s or a MaxSeconds budget.
+
+   Both degrade to nothing on a browser without support — the page simply appears, which is
+   what it did before. Neither is load-bearing for any content. */
+
+/* ── Cross-document view transitions ──────────────────────────────────────
+   Opt the app into the browser's own page-transition machinery. Blazor navigation is
+   same-document, so this covers the SPA route swaps the Router performs. */
+@view-transition {
+    navigation: auto;
+}
+
+::view-transition-old(root) {
+    animation: vt-fade-out 90ms ease-out both;
+}
+
+::view-transition-new(root) {
+    animation: vt-fade-in 160ms ease-out both;
+}
+
+@keyframes vt-fade-out {
+    to { opacity: 0; }
+}
+
+@keyframes vt-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* ── Scroll-driven reveal ─────────────────────────────────────────────────
+   Ties an element's entrance to its own position in the scroller rather than to a timer, so
+   a long page reveals as you read it and a short one is simply already done.
+
+   animation-timeline is the whole point: there is no IntersectionObserver, no scroll handler,
+   and no main-thread work per frame. On a browser without scroll-driven animation support the
+   declaration is ignored and `animation` never runs against a timeline, so the element sits at
+   its final state — visible — which is the correct fallback.
+
+   Opt in per surface with .po-reveal; it is deliberately not applied to everything, because a
+   page where every element fades is slower to read, not nicer. */
+@supports (animation-timeline: view()) {
+    .po-reveal {
+        animation: po-reveal-in linear both;
+        animation-timeline: view();
+        /* Finish well before the element reaches the middle of the screen — an element still
+           animating while you are reading it is a distraction, not an entrance. */
+        animation-range: entry 0% cover 22%;
+    }
+
+    @keyframes po-reveal-in {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: none; }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation: none;
+    }
+
+    .po-reveal {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
 }

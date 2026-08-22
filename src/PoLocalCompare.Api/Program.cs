@@ -376,6 +376,8 @@ try
     app.MapArchiveEndpoints();
     app.MapLeaderboardEndpoints();
     app.MapOllamaEndpoints();
+    app.MapTournamentsEndpoints(allowAnonymousWrites: allowAnonymousWrites);
+    app.MapChallengesEndpoints();
 
     // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
     if (app.Environment.IsDevelopment())

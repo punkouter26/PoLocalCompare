@@ -7,8 +7,11 @@
     <!-- Standards §6.6: the assembly is trim-annotated (IsTrimmable + analyzer), but the app
          publishes untrimmed: the Router's NotFoundPage instantiates components via reflection,
          which the IL trimmer strips in Release publish (CtorNotLocated at runtime → the Blazor
-         view tree fails to mount). Radzen is gone, so this is now the only blocker; revisit
-         with a Release publish smoke test before flipping PublishTrimmed on. -->
+         view tree fails to mount). Radzen.Blazor was re-added on 2026-08-22 for two
+         components (RadzenDataGrid on the Archive, RadzenChart on the model profile), which
+         restores a second reflective-instantiation blocker on top of the Router's. Nothing
+         regressed because PublishTrimmed was already false, but flipping it on now needs
+         both resolved rather than one. -->
     <IsTrimmable>true</IsTrimmable>
     <PublishTrimmed>false</PublishTrimmed>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
@@ -25,6 +28,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+    <PackageReference Include="Radzen.Blazor" />
   </ItemGroup>
 
   <ItemGroup>

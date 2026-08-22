@@ -10,7 +10,7 @@
 @inject DuelApiClient ApiClient
 
 <div class="leaderboard">
-    <h1 class="leaderboard__title">Leaderboard</h1>
+    <h1 class="leaderboard__title po-title">Leaderboard</h1>
 
     <div class="leaderboard__controls">
         <span class="leaderboard__sort-label">Sort by:</span>
@@ -44,17 +44,17 @@
 
     @if (_loading)
     {
-        <p class="leaderboard__status">Loading leaderboard...</p>
+        <p class="po-status">Loading leaderboard...</p>
     }
     else if (!string.IsNullOrEmpty(_error))
     {
-        <p class="leaderboard__error">@_error</p>
+        <p class="po-error">@_error</p>
     }
     else
     {
         @if (_entries.Count > 0 && _entries.All(e => e.DuelCount == 0))
         {
-            <div class="leaderboard__empty-state">
+            <div class="po-empty">
                 <h2>🏁 No competitive history yet</h2>
                 <p>Run your first duel to generate ELO trends, win rates and quality comparisons.</p>
                 <div class="leaderboard__empty-actions">
@@ -64,8 +64,8 @@
         }
         @* Rows open the kill-list panel, so they are keyboard-operable (SC 2.1.1). *@
         <div class="po-table-wrap leaderboard__grid--scrollable">
-            <table class="po-table po-table--selectable leaderboard__grid">
-                <caption class="visually-hidden">Model rankings - select a row for head-to-head history</caption>
+            <table class="po-table po-table--selectable po-table--cards leaderboard__grid">
+                <caption class="visually-hidden">Model rankings - select a model name to open its profile</caption>
                 <thead>
                     <tr>
                         <th scope="col">Rank</th>
@@ -79,16 +79,14 @@
                     {
                         var entry = _displayedEntries[i];
                         var dr = i + 1;
-                        @* The disclosure lives on the button in the name cell, not on the row.
-                           `aria-expanded`/`aria-controls` are invalid on role=row (axe:
-                           aria-conditional-attr, serious) and a <tr> is not an operable control.
-                           The row keeps its click as a convenience for pointer users; the button
-                           is what carries the semantics and the keyboard path. *@
-                        <tr @onclick="() => OnRowSelect(entry)">
-                            <td>
+                        @* No handler on the row itself: a <tr> is not an operable control, and
+                           the link in the name cell is now the whole affordance rather than a
+                           keyboard fallback for a pointer-only row click. *@
+                        <tr>
+                            <td class="po-cell--bare">
                                 @if (dr == 1)
                                 {
-                                    <span class="leaderboard__rank leaderboard__rank--gold" title="#1 Ranked">&#x1F947;</span>
+                                    <span class="leaderboard__rank leaderboard__rank--gold po-glow" title="#1 Ranked">&#x1F947;</span>
                                 }
                                 else if (dr == 2)
                                 {
@@ -103,13 +101,14 @@
                                     <span class="leaderboard__rank">@dr</span>
                                 }
                             </td>
-                            <td>
-                                <button type="button"
-                                        class="po-btn po-btn--ghost po-btn--sm leaderboard__row-btn"
-                                        aria-controls="@KillListPanelId"
-                                        aria-expanded="@(_selected?.ModelId == entry.ModelId ? "true" : "false")"
-                                        @onclick="() => OnRowSelect(entry)"
-                                        @onclick:stopPropagation="true">
+                            <td data-label="Model">
+                                @* Opens the model's own page. This used to expand a kill-list
+                                   drawer under the table; the kill list answers a question about
+                                   one model, so it moved to that model's page along with the
+                                   rating history and output gallery it belongs beside. *@
+                                <a class="po-btn po-btn--ghost po-btn--sm leaderboard__row-btn"
+                                   href="@($"/model/{entry.ModelId}")"
+                                   title="@($"Open {entry.DisplayName}")">
                                     @entry.DisplayName
                                     @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
                                     {
@@ -117,10 +116,10 @@
                                             @ModelTypeGroup.ShortLabel(mtype)
                                         </span>
                                     }
-                                </button>
+                                </a>
                             </td>
-                            <td>@((int)Math.Round(entry.CurrentElo))</td>
-                            <td>
+                            <td data-label="ELO">@((int)Math.Round(entry.CurrentElo))</td>
+                            <td data-label="Value">
                                 @* Value = ELO earned per dollar of API spend, with the divisor
                                    floored at $0.0001 server-side. Reads as a big number, hence the
                                    tabular-nums treatment; suppress for rows that have no cost. *@
@@ -150,67 +149,6 @@
             </div>
         }
 
-        @if (_selected is not null)
-        {
-            <div id="@KillListPanelId" class="leaderboard__killlist-panel">
-                <div class="leaderboard__killlist-header">
-                    <span class="leaderboard__killlist-title">@KillListPanelText</span>
-                    <button type="button" class="po-btn leaderboard__killlist-close"
-                            aria-label="Close kill list" @onclick="CloseKillList">✕</button>
-                </div>
-                @if (_killListLoading)
-                {
-                    <p class="leaderboard__status">Loading kill list...</p>
-                }
-                else if (_killListError is not null)
-                {
-                    <p class="leaderboard__error">@_killListError</p>
-                }
-                else if (_killList.Count == 0)
-                {
-                    <p class="leaderboard__status">No head-to-head history yet.</p>
-                }
-                else
-                {
-                    <div class="po-table-wrap">
-                        <table class="po-table">
-                            <caption class="visually-hidden">Head-to-head record against each opponent</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Opponent</th>
-                                    <th scope="col" title="Wins/losses, then ties when there are any">W/L/T</th>
-                                    <th scope="col">Win %</th>
-                                    <th scope="col">Last Duel</th>
-                                    @* The only thing the deleted /h2h page offered that this
-                                       table did not: a way to run the pairing again. *@
-                                    <th scope="col"><span class="visually-hidden">Rematch</span></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var row in _killList)
-                                {
-                                    var total = row.Wins + row.Losses + row.Draws;
-                                    var pct = total > 0 ? (row.Wins * 100.0 / total) : 0;
-                                    <tr>
-                                        <td>@row.OpponentName</td>
-                                        <td>@row.Wins/@row.Losses@(row.Draws > 0 ? $"/{row.Draws}" : "")</td>
-                                        <td>@(total > 0 ? $"{pct:F0}%" : "-")</td>
-                                        <td>@(row.LastDuelAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                                        <td>
-                                            <a class="po-btn po-btn--sm po-btn--secondary"
-                                               href="@RematchHref(row)"
-                                               title="@($"Set up {_selected?.DisplayName} vs {row.OpponentName} on the compare page")">
-                                                ⚔ Rematch
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-        }
     }
 </div>
 
@@ -222,28 +160,14 @@
     private bool _loading = true;
     private string? _error;
 
-    private LeaderboardEntryDto? _selected;
-    private readonly List<HeadToHeadDto> _killList = [];
-    private bool _killListLoading;
-    private string? _killListError;
-
     private string _sortBy = "Elo";
     private bool IsQualitySort => string.Equals(_sortBy, "Quality", StringComparison.OrdinalIgnoreCase);
     private bool IsCostSort => string.Equals(_sortBy, "Cost", StringComparison.OrdinalIgnoreCase);
     private bool IsValueSort => string.Equals(_sortBy, "Value", StringComparison.OrdinalIgnoreCase);
     private bool IsEloSort => !IsQualitySort && !IsCostSort && !IsValueSort;
 
-    /// <summary>
-    /// Compare page prefilled with this pairing. Same querystring the Archive's Re-Challenge
-    /// uses, so there is one way to reopen a matchup rather than two.
-    /// </summary>
-    private string RematchHref(HeadToHeadDto row) =>
-        $"/?leftModelId={Uri.EscapeDataString(_selected?.ModelId.Value ?? string.Empty)}" +
-        $"&rightModelId={Uri.EscapeDataString(row.OpponentModelId.Value)}";
-
     /// <summary>aria-pressed needs the lowercase JS-style literal, not .NET's "True"/"False".</summary>
     private static string Pressed(bool on) => on ? "true" : "false";
-    private string KillListPanelText => _selected is null ? "Kill List" : $"Kill List: {_selected.DisplayName}";
 
     /// <summary>Headline label mirrors the active sort — "Top ELO" / "Cheapest" /
     /// "Highest quality" / "Best Value" — so a sorted-by-cost view doesn't claim the leader is the top.</summary>
@@ -254,10 +178,6 @@
         "Value"      => "Best Value",
         _            => "Top ELO",
     };
-
-    /// <summary>Stable id referenced by each row's aria-controls, so a screen reader
-    /// knows which kill-list panel the row expanded.</summary>
-    private const string KillListPanelId = "leaderboard-killlist-panel";
 
     protected override async Task OnInitializedAsync()
     {
@@ -290,20 +210,10 @@
             : _entries;
     }
 
-    private void CloseKillList()
-    {
-        _selected = null;
-        _killList.Clear();
-        _killListError = null;
-    }
-
     private async Task LoadLeaderboardAsync()
     {
         _loading = true;
         _error = null;
-        _selected = null;
-        _killList.Clear();
-        _killListError = null;
 
         try
         {
@@ -324,32 +234,7 @@
         }
     }
 
-    private async Task OnRowSelect(LeaderboardEntryDto row)
-    {
-        _selected = row;
-        _killListLoading = true;
-        _killListError = null;
-        _killList.Clear();
-
-        try
-        {
-            var rows = await ApiClient.GetKillListAsync(row.ModelId);
-            if (rows is not null)
-            {
-                _killList.AddRange(rows);
-            }
-        }
-        catch (Exception ex)
-        {
-            _killListError = $"Failed to load kill list: {ex.Message}";
-        }
-        finally
-        {
-            _killListLoading = false;
-        }
-    }
-
-    // The row's keydown handler is gone with the row's tabindex: the model-name button is a
-    // real <button>, so Enter and Space are the browser's job now rather than ours.
+    // No row keydown handler and no row tabindex: the model-name cell holds a real anchor, so
+    // focus, Enter and the browser's own open-in-new-tab affordances all come for free.
 }
 

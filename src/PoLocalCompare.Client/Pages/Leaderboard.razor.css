@@ -1,28 +1,28 @@
 .leaderboard {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 1.25rem 1rem;
+    padding: var(--space-mlg) var(--space-md);
     color: var(--text);
 }
 
 .leaderboard__title {
-    font-size: 2rem;
+    font-size: var(--text-3xl);
     font-weight: 800;
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-md);
     color: var(--text);
 }
 
 .leaderboard__controls {
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-md);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex-wrap: wrap;
     justify-content: flex-start;
 }
 
 .leaderboard__sort-label {
-    font-size: 0.875rem;
+    font-size: var(--text-md);
     color: var(--text-muted);
     font-weight: 500;
 }
@@ -37,7 +37,7 @@
 .leaderboard__row-btn {
     inline-size: 100%;
     justify-content: flex-start;
-    gap: 0.4rem;
+    gap: var(--space-sm);
     padding-inline: 0;
     border: none;
     background: none;
@@ -51,7 +51,7 @@
     padding: 0 4px;
 }
 
-.leaderboard__rank { font-size: 1.1rem; }
+.leaderboard__rank { font-size: var(--text-xl); }
 .leaderboard__rank--gold   { filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.7)); }
 .leaderboard__rank--silver { filter: drop-shadow(0 0 4px rgba(180, 180, 180, 0.6)); }
 .leaderboard__rank--bronze { filter: drop-shadow(0 0 4px rgba(180, 100, 40, 0.5)); }
@@ -60,9 +60,9 @@
 .leaderboard__filter {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--space-sm);
     min-height: var(--target-min);
-    font-size: 0.85rem;
+    font-size: var(--text-md);
     color: var(--text-muted);
     cursor: pointer;
 }
@@ -80,11 +80,11 @@
 
 .leaderboard__type-badge {
     display: inline-block;
-    font-size: 0.62rem;
-    padding: 0.1rem 0.35rem;
+    font-size: var(--text-2xs);
+    padding: var(--space-2xs) var(--space-xs);
     border-radius: 0.25rem;
     font-weight: 700;
-    margin-left: 0.4rem;
+    margin-left: var(--space-sm);
     vertical-align: middle;
     letter-spacing: 0.04em;
 }
@@ -109,7 +109,7 @@
 }
 
 .leaderboard__grid {
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-md);
 }
 
 .leaderboard__grid--scrollable {
@@ -117,88 +117,38 @@
     -webkit-overflow-scrolling: touch;
 }
 
-.leaderboard__empty-state {
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px 24px;
-    margin-bottom: 1.5rem;
-    text-align: left;
-    color: var(--text-muted);
-    animation: leaderboard-fade 280ms ease-out;
-}
-
-.leaderboard__empty-state h2 {
-    margin: 0 0 0.35rem;
+.po-empty h2 {
+    margin: 0 0 var(--space-xs);
     color: var(--text);
-    font-size: 1.15rem;
+    font-size: var(--text-xl);
 }
 
-.leaderboard__empty-state p {
+.po-empty p {
     margin: 0;
 }
 
 .leaderboard__empty-actions {
-    margin-top: 0.85rem;
+    margin-top: var(--space-smd);
     display: flex;
     flex-wrap: wrap;
-    gap: 0.55rem;
+    gap: var(--space-sm);
 }
 
 .leaderboard__summary {
     display: flex;
-    gap: 2rem;
+    gap: var(--space-xl);
     flex-wrap: wrap;
-    padding: 0.65rem 1rem;
+    padding: var(--space-smd) var(--space-md);
     background: var(--surface-1);
     border: 1px solid var(--surface-2);
     border-radius: 8px;
     color: var(--text-muted);
-    font-size: 0.8rem;
-    margin-bottom: 1rem;
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-md);
 }
 
 .leaderboard__summary strong {
     color: var(--text);
-}
-
-.leaderboard__killlist-panel {
-    margin-top: 1.5rem;
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    background: var(--surface-1);
-    padding: 0;
-    overflow: hidden;
-}
-
-.leaderboard__killlist-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    background: var(--surface-2);
-    border-bottom: 1px solid var(--border);
-}
-
-.leaderboard__killlist-title {
-    font-weight: 600;
-    font-size: 1rem;
-}
-
-.leaderboard__killlist-close {
-    margin-left: auto;
-}
-
-.leaderboard__status {
-    color: var(--text-muted);
-    font-style: italic;
-    padding: 0.75rem 1rem;
-}
-
-.leaderboard__error {
-    color: var(--accent-red);
-    font-weight: 600;
-    padding: 0.75rem 1rem;
 }
 
 @keyframes leaderboard-fade {
@@ -209,10 +159,6 @@
 /* Placeholder shown in a grid cell that has no value yet. */
 .leaderboard__no-data {
     color: var(--text-muted);
-}
-
-.leaderboard__no-data--note {
-    font-style: italic;
 }
 
 /* Value = ELO earned per dollar of API spend. The figure can be in the millions, so we

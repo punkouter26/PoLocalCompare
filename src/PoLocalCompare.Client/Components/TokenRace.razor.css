@@ -1,5 +1,10 @@
 .token-race {
     background: var(--glass-bg);
+    /* The blur the --glass-bg token always implied. Without it this is a translucent panel,
+       not glass. backdrop-filter composites on the GPU compositor, not the 3D pipeline, so it
+       does not contend with WebLLM inference the way a shader pass would. */
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     padding: var(--space-md) var(--space-lg);
@@ -22,7 +27,7 @@
 }
 
 .token-race__title {
-    font-size: 0.95rem;
+    font-size: var(--text-lg);
     font-weight: 700;
     color: var(--text);
     margin: 0;
@@ -30,7 +35,7 @@
 
 .token-race__ticker {
     margin: 0;
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--accent-cyan);
     font-variant-numeric: tabular-nums;
@@ -56,25 +61,25 @@
 }
 
 .token-race__name {
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     font-weight: 700;
     color: var(--text);
     overflow-wrap: anywhere;
 }
 
 .token-race__leader-tag {
-    font-size: 0.6rem;
+    font-size: var(--text-2xs);
     font-weight: 800;
     letter-spacing: 0.06em;
     color: var(--on-accent-green);
     background: var(--accent-green);
     border-radius: var(--radius-full);
-    padding: 0.05rem 0.45rem;
+    padding: var(--space-2xs) var(--space-sm);
 }
 
 .token-race__status {
     margin-left: auto;
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -118,7 +123,7 @@
     top: 50%;
     left: var(--pos, 0%);
     transform: translate(-50%, -50%);
-    font-size: 0.95rem;
+    font-size: var(--text-lg);
     line-height: 1;
     transition: left var(--transition-medium);
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
@@ -140,7 +145,7 @@
     flex-wrap: wrap;
     gap: var(--space-md);
     margin-top: var(--space-xs);
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 }

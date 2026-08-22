@@ -15,30 +15,53 @@ public sealed class AutoJudgeOptions
 
     /// <summary>
     /// Grace period between a duel finishing and the judge deciding. A human who picks inside
-    /// this window wins the race and the judge stands down. Note that at very short values a
-    /// person cannot realistically read both outputs, so effectively every duel becomes
-    /// LLM-judged — widen this if you want the human path to be usable.
-    ///
-    /// A 30-second floor is applied at validation time: less than that and the countdown UI
-    /// would race the reader rather than help them, and the Arena defaults to <c>0</c>
-    /// (immediate) only for the unattended demo path.
+    /// this window wins the race and the judge stands down.
     /// </summary>
-    public int DelaySeconds { get; set; } = 30;
+    /// <remarks>
+    /// There is no floor — the value is used as configured, and the endpoint clamps only the
+    /// per-duel override to 0–3600. (A previous version of this comment claimed a 30-second
+    /// floor was "applied at validation time"; no such validation ever existed, and the shipped
+    /// value is now 10.)
+    ///
+    /// At 10 seconds the judge decides nearly every duel, which is deliberate: a duel resolves
+    /// while the user is still watching it rather than parking on the page waiting for a click.
+    /// The human path is the Arena's vote buttons during the countdown. Widen this if you want
+    /// verdicts to be genuinely human-first — see PRD §9 for why this reversed twice.
+    /// </remarks>
+    public int DelaySeconds { get; set; } = 10;
 
     /// <summary>
     /// Foundry deployment used as judge. Must be a deployment that exists in the configured
     /// Foundry resource; it does not have to be one of the seeded duelling models.
     /// </summary>
-    public string Deployment { get; set; } = "gpt-5.4-nano";
+    /// <remarks>
+    /// <c>gpt-5-nano</c> rather than <c>gpt-5.4-nano</c>: the judge does a constrained
+    /// comparison of two documents and returns structured JSON against a fixed schema, which
+    /// is not a task the newer nano does better. It is roughly four times cheaper per input
+    /// token and three times cheaper per output token, and with <see cref="DelaySeconds"/> at
+    /// 10 it decides very nearly every duel — so this is the most-executed model call in the
+    /// app, not an occasional one.
+    /// </remarks>
+    public string Deployment { get; set; } = "gpt-5-nano";
 
     /// <summary>Ceiling on the judge call itself, so a hung judge cannot pin the duel queue.</summary>
     public int TimeoutSeconds { get; set; } = 30;
 
     /// <summary>
-    /// Characters of each model's HTML given to the judge. Full documents blow the context
-    /// budget and the opening of a document is what distinguishes adherence in practice.
+    /// Characters of each model's HTML given to the judge, per side.
     /// </summary>
-    public int MaxOutputChars { get; set; } = 6000;
+    /// <remarks>
+    /// Full documents blow the context budget, and what distinguishes prompt adherence is
+    /// visible near the head and tail — which is why <c>FoundryDuelJudge.Truncate</c> keeps
+    /// both ends and elides the middle rather than simply cutting off.
+    ///
+    /// Halved from 6,000 on 2026-08-22. Two sides at 6,000 characters was roughly 3,000 input
+    /// tokens on every judged duel, and at a 10-second grace window that is nearly every duel.
+    /// The head-and-tail shape means the discriminating parts of both documents still reach
+    /// the judge at 3,000. If judgements look worse after this, raise it back — the value is
+    /// configuration precisely because it is a quality/cost dial rather than a constant.
+    /// </remarks>
+    public int MaxOutputChars { get; set; } = 3000;
 
     /// <summary>
     /// Maximum number of times a single duel may be re-queued after a transient HTTP 429.

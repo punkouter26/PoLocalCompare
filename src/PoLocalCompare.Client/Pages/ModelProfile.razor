@@ -1,0 +1,333 @@
+@page "/model/{ModelIdText}"
+@using PoLocalCompare.Shared.Analysis
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@inject DuelApiClient ApiClient
+
+<PageTitle>@(_profile?.DisplayName ?? "Model") — PoLocalCompare</PageTitle>
+
+@* ── Model profile ────────────────────────────────────────────────────────
+   The destination the leaderboard never had. Every column in that table was terminal: you
+   could sort models but not open one. This is where a model's own record lives — standing,
+   rating curve, who it has beaten, what it costs, and the gallery, which is the only place
+   in the app that shows what a model actually produces without a duel wrapped around it.
+
+   The kill list moved here wholesale from the leaderboard's expanding panel. It answers a
+   question about one model, so it belongs on that model's page rather than in a drawer under
+   a table of all of them. *@
+<div class="profile po-page">
+    @if (_loading)
+    {
+        <p class="po-status">Loading model…</p>
+    }
+    else if (_error is not null)
+    {
+        <p class="po-error" role="status">@_error</p>
+        <a class="po-btn po-btn--secondary" href="/leaderboard">← Back to leaderboard</a>
+    }
+    else if (_profile is null)
+    {
+        <div class="po-empty">
+            <p class="po-empty__hint">
+                No model with that id — it may have been retired from the catalog since the link was made.
+            </p>
+            <a class="po-btn po-btn--primary" href="/leaderboard">← Back to leaderboard</a>
+        </div>
+    }
+    else
+    {
+        <header class="profile__header po-header">
+            <a class="profile__back" href="/leaderboard">← Leaderboard</a>
+
+            <div class="profile__identity">
+                <h1 class="po-title">@_profile.DisplayName</h1>
+                <span class="po-chip profile__type--@ModelTypeGroup.CssModifier(_profile.ModelType)">
+                    @ModelTypeGroup.Label(_profile.ModelType)
+                </span>
+            </div>
+
+            <div class="profile__standing">
+                @if (_profile.Rank > 0)
+                {
+                    <span class="profile__rank">#@_profile.Rank</span>
+                }
+                else
+                {
+                    <span class="profile__rank profile__rank--unranked" title="No judged duels yet">Unranked</span>
+                }
+                <span class="profile__elo">@((int)Math.Round(_profile.CurrentElo)) ELO</span>
+            </div>
+        </header>
+
+        @* ── Stat strip ────────────────────────────────────────────────────
+           Costs and speed sit beside the record deliberately: "is it good" and "what does it
+           cost to be that good" are the same decision, and splitting them across two surfaces
+           is what made the leaderboard's Value column need a paragraph of tooltip. *@
+        <dl class="profile__stats">
+            <div class="profile__stat">
+                <dt>Record</dt>
+                <dd>@_profile.WinCount<span class="profile__stat-sep">–</span>@_profile.LossCount@(_profile.DrawCount > 0 ? $"–{_profile.DrawCount}" : "")</dd>
+            </div>
+            <div class="profile__stat">
+                <dt>Win rate</dt>
+                <dd>@(_profile.DuelCount > 0 ? $"{_profile.WinRate * 100:F0}%" : "—")</dd>
+            </div>
+            <div class="profile__stat">
+                <dt>Duels</dt>
+                <dd>@_profile.DuelCount</dd>
+            </div>
+            <div class="profile__stat">
+                <dt>Avg speed</dt>
+                <dd>@(_profile.AvgTokenVelocity.HasValue ? $"{_profile.AvgTokenVelocity:F0} tok/s" : "—")</dd>
+            </div>
+            <div class="profile__stat">
+                <dt>Avg cost<span class="visually-hidden"> per duel</span></dt>
+                <dd>
+                    @if (_profile.AvgApiCostPerDuel.HasValue)
+                    {
+                        <span>$@_profile.AvgApiCostPerDuel.Value.ToString("F4")</span>
+                    }
+                    else
+                    {
+                        <span class="profile__no-data" title="Runs locally, or has no priced duels yet">free</span>
+                    }
+                </dd>
+            </div>
+            <div class="profile__stat">
+                <dt>Output quality</dt>
+                <dd>@(_profile.OutputQualityAvg.HasValue ? $"{_profile.OutputQualityAvg:F0}/100" : "—")</dd>
+            </div>
+        </dl>
+
+        @* ── Rating curve ──────────────────────────────────────────────────
+           Inline SVG rather than a charting library, for the same reason the prompts ask models
+           for one: there is no component library here and this is a polyline. *@
+        @if (_profile.EloHistory.Count > 1)
+        {
+            <section class="po-section" aria-labelledby="profile-elo-heading">
+                <h2 id="profile-elo-heading" class="po-section-title">Rating history</h2>
+                @* ── RadzenChart ───────────────────────────────────────────────
+                   Replaces a hand-rolled inline SVG polyline. What the component buys that the
+                   polyline did not have: hover tooltips carrying the opponent and the shift,
+                   a real value axis with gridlines instead of an unlabelled shape, and
+                   resize handling. The baseline at the starting rating is kept as an
+                   annotation, because a curve that ends above it should visibly be a net gain
+                   rather than just a line. *@
+                <div class="profile__chart-wrap">
+                    <RadzenChart Style="height: 220px">
+                        <RadzenLineSeries Data="@ChartPoints"
+                                          CategoryProperty="Label"
+                                          ValueProperty="Elo"
+                                          Title="Rating"
+                                          Smooth="false"
+                                          Stroke="var(--accent-green)"
+                                          StrokeWidth="2">
+                            <TooltipTemplate Context="point">
+                                <strong>@point.Opponent</strong>
+                                <div>@point.Outcome (@(point.Shift >= 0 ? "+" : "")@point.Shift.ToString("F1")) → @point.Elo.ToString("F0")</div>
+                            </TooltipTemplate>
+                        </RadzenLineSeries>
+
+                        <RadzenValueAxis Min="@ChartMin" Max="@ChartMax">
+                            <RadzenGridLines Visible="true" />
+                            <RadzenAxisTitle Text="ELO" />
+                        </RadzenValueAxis>
+
+                        @* The category axis is dates; showing all of them overlaps illegibly
+                           past a handful of duels, so only the ends are labelled. *@
+                        <RadzenCategoryAxis Visible="false" />
+                    </RadzenChart>
+
+                    <div class="profile__chart-axis">
+                        <span>@_profile.EloHistory[0].At.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                        <span>@_profile.EloHistory[^1].At.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                    </div>
+                </div>
+            </section>
+        }
+
+        @* ── Kill list ─────────────────────────────────────────────────────
+           Moved from the leaderboard's drawer. Rematch is kept: it was the one thing the
+           deleted /h2h page offered that the table did not. *@
+        <section class="po-section po-reveal" aria-labelledby="profile-killlist-heading">
+            <h2 id="profile-killlist-heading" class="po-section-title">Kill list</h2>
+
+            @if (_profile.KillList.Count == 0)
+            {
+                <p class="po-status">No head-to-head history yet.</p>
+            }
+            else
+            {
+                <div class="po-table-wrap">
+                    <table class="po-table po-table--cards">
+                        <caption class="visually-hidden">Head-to-head record against each opponent</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Opponent</th>
+                                <th scope="col" title="Wins/losses, then ties when there are any">W/L/T</th>
+                                <th scope="col">Win %</th>
+                                <th scope="col">Last duel</th>
+                                <th scope="col"><span class="visually-hidden">Rematch</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _profile.KillList)
+                            {
+                                var total = row.Wins + row.Losses + row.Draws;
+                                var pct = total > 0 ? (row.Wins * 100.0 / total) : 0;
+                                <tr @key="row.OpponentModelId">
+                                    <td data-label="Opponent">
+                                        <a class="profile__opponent" href="@($"/model/{row.OpponentModelId}")">@row.OpponentName</a>
+                                    </td>
+                                    <td data-label="W/L/T">@row.Wins/@row.Losses@(row.Draws > 0 ? $"/{row.Draws}" : "")</td>
+                                    <td data-label="Win %">@(total > 0 ? $"{pct:F0}%" : "-")</td>
+                                    <td data-label="Last duel">@(row.LastDuelAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                    <td class="po-cell--bare">
+                                        <a class="po-btn po-btn--sm po-btn--secondary"
+                                           href="@RematchHref(row)"
+                                           title="@($"Set up {_profile.DisplayName} vs {row.OpponentName} on the compare page")">
+                                            ⚔ Rematch
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        @* ── Gallery ───────────────────────────────────────────────────────
+           Live sandboxed iframes, not screenshots. Same sandbox as the Arena's viewport —
+           allow-scripts with no allow-same-origin — so a generated document still cannot reach
+           the parent frame, cookies or localStorage. Scaled down with a transform rather than
+           by resizing the frame, so each page lays out at its intended width and then shrinks;
+           rendering a 1200px design into a 300px frame would show its mobile breakpoint. *@
+        @if (_profile.WinningOutputs.Count > 0)
+        {
+            <section class="po-section po-reveal" aria-labelledby="profile-gallery-heading">
+                <h2 id="profile-gallery-heading" class="po-section-title">Winning outputs</h2>
+                <p class="po-hint">
+                    The most recent @_profile.WinningOutputs.Count duel@(_profile.WinningOutputs.Count == 1 ? "" : "s") this model won.
+                </p>
+
+                <div class="profile__gallery">
+                    @foreach (var item in _profile.WinningOutputs)
+                    {
+                        <a class="profile__gallery-item po-lift" href="@($"/arena/{item.DuelId}")" @key="item.DuelId">
+                            <div class="profile__gallery-frame">
+                                <iframe srcdoc="@HtmlPreview.Normalize(item.HtmlOutputRaw)"
+                                        sandbox="allow-scripts"
+                                        title="@($"Output for: {item.PromptSummary}")"
+                                        class="profile__gallery-iframe"
+                                        loading="lazy"
+                                        tabindex="-1"
+                                        aria-hidden="true"></iframe>
+                                @* Transparent cover: without it every click lands inside the
+                                   generated document instead of on the link wrapping it. *@
+                                <span class="profile__gallery-cover" aria-hidden="true"></span>
+                            </div>
+                            <span class="profile__gallery-prompt">@Truncate(item.PromptSummary, 80)</span>
+                            <span class="profile__gallery-meta">
+                                beat @item.OpponentName · @item.WonAt.ToLocalTime().ToString("yyyy-MM-dd")
+                            </span>
+                        </a>
+                    }
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string ModelIdText { get; set; } = string.Empty;
+
+    private ModelProfileDto? _profile;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // OnParametersSetAsync, not OnInitializedAsync: the kill list links model to model, so
+        // navigating from one profile to another reuses this component instance and an
+        // initialiser would never run for the second one.
+        _loading = true;
+        _error = null;
+        _profile = null;
+
+        if (string.IsNullOrWhiteSpace(ModelIdText))
+        {
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            _profile = await ApiClient.GetModelProfileAsync(ModelId.From(ModelIdText));
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not load this model: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// Compare page prefilled with this pairing — the same querystring the Archive's
+    /// Re-Challenge uses, so there is one way to reopen a matchup rather than two.
+    /// </summary>
+    private string RematchHref(HeadToHeadDto row) =>
+        $"/?leftModelId={Uri.EscapeDataString(_profile?.ModelId.Value ?? string.Empty)}" +
+        $"&rightModelId={Uri.EscapeDataString(row.OpponentModelId.Value)}";
+
+    private static string Truncate(string text, int max) =>
+        string.IsNullOrEmpty(text) || text.Length <= max ? text : text[..max].TrimEnd() + "…";
+
+    // ── Chart ────────────────────────────────────────────────────────────────
+    // The hand-rolled SVG geometry this replaced — viewBox constants, an inverted Y scale, a
+    // padded range and a points-string builder — is gone; RadzenChart owns all of it. What is
+    // left is the shape the series needs plus the axis bounds, because a rating chart auto-
+    // scaled to its own data exaggerates noise: three near-identical ratings would be drawn as
+    // a mountain range.
+
+    /// <summary>Where a rating starts before any duel moves it. Matches <c>Elo:StartingRating</c>.</summary>
+    private const double StartingElo = 1200;
+
+    /// <summary>One plotted point, flattened for the series and its tooltip.</summary>
+    private sealed record ChartPoint(string Label, double Elo, double Shift, string Outcome, string Opponent);
+
+    private List<ChartPoint> ChartPoints =>
+        _profile is null
+            ? []
+            : _profile.EloHistory
+                .Select(p => new ChartPoint(
+                    p.At.ToLocalTime().ToString("MMM d HH:mm"),
+                    p.Elo,
+                    p.Shift,
+                    p.Outcome,
+                    p.OpponentName))
+                .ToList();
+
+    /// <summary>
+    /// Vertical bounds, padded by 5% and floored at a 40-point window so a flat run reads as
+    /// flat rather than being magnified to fill the plot.
+    /// </summary>
+    private (double Min, double Max) ChartRange
+    {
+        get
+        {
+            var values = _profile!.EloHistory.Select(p => p.Elo).Append(StartingElo).ToList();
+            var min = values.Min();
+            var max = values.Max();
+            var span = Math.Max(max - min, 40);
+            var mid = (min + max) / 2;
+            return (mid - span / 2 * 1.05, mid + span / 2 * 1.05);
+        }
+    }
+
+    private double ChartMin => Math.Round(ChartRange.Min);
+    private double ChartMax => Math.Round(ChartRange.Max);
+}

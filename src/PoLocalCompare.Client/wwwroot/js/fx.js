@@ -1,0 +1,192 @@
+/**
+ * fx.js — Canvas2D particle bursts for the app's two payoff moments.
+ *
+ * Deliberately NOT a WebGL/WebGPU renderer, and deliberately not a persistent loop.
+ *
+ * Browser models run WebLLM inference over WebGPU in this same tab, and two numbers depend on
+ * that GPU being free: the tok/s the race reports, and — since challenge mode — whether a model
+ * comes in under a MaxSeconds budget. A budget miss forfeits the duel and moves ELO, so a
+ * render loop stealing GPU would not merely look bad, it would write wrong verdicts. So the
+ * only effects here are one-shot, they run on Canvas2D rather than the 3D pipeline, and they
+ * are fired at moments when inference has already finished: a verdict landing and a champion
+ * being crowned.
+ *
+ * Everything self-terminates. The canvas is created on demand, animated for well under a
+ * second, and removed — there is no idle cost when nothing is celebrating.
+ */
+
+/** Hard ceiling on concurrent bursts, so a fast click-through cannot stack canvases. */
+const MAX_ACTIVE = 2;
+let active = 0;
+
+function prefersReducedMotion() {
+    try {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Reads a design token off the document so particles inherit the live theme — including the
+ * user's explicit [data-theme] override, which is why this reads computed style rather than
+ * hard-coding a palette.
+ */
+function token(name, fallback) {
+    try {
+        const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return value || fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function createOverlay() {
+    const canvas = document.createElement('canvas');
+    // Fixed and non-interactive: the burst is decoration over whatever is underneath, and must
+    // never swallow a click meant for the verdict buttons behind it.
+    canvas.className = 'fx-overlay';
+    canvas.setAttribute('aria-hidden', 'true');
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+
+    document.body.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.scale(dpr, dpr);
+
+    return { canvas, ctx };
+}
+
+/**
+ * Fires a particle burst from a point.
+ *
+ * @param {object} options
+ * @param {number} options.x        origin, CSS pixels (defaults to viewport centre)
+ * @param {number} options.y        origin, CSS pixels
+ * @param {number} options.count    particle count
+ * @param {number} options.spread   initial speed, px/s
+ * @param {string[]} options.colors palette; defaults to the theme's accent
+ * @param {number} options.durationMs
+ */
+export function burst(options = {}) {
+    // Respecting reduced-motion by not animating at all, rather than by animating faster.
+    // A confetti burst has no non-moving equivalent worth substituting.
+    if (prefersReducedMotion()) return;
+    if (active >= MAX_ACTIVE) return;
+    if (!document.body) return;
+
+    const {
+        x = window.innerWidth / 2,
+        y = window.innerHeight / 3,
+        count = 90,
+        spread = 520,
+        durationMs = 1400,
+    } = options;
+
+    const colors = options.colors && options.colors.length
+        ? options.colors
+        : [
+            token('--accent-green', '#2ddc84'),
+            token('--accent-blue', '#53a6ff'),
+            token('--accent-yellow', '#eab308'),
+            token('--text', '#ffffff'),
+        ];
+
+    const overlay = createOverlay();
+    const ctx = overlay.ctx;
+    if (!ctx) {
+        overlay.canvas.remove();
+        return;
+    }
+
+    active++;
+
+    const gravity = 900;      // px/s², enough that the arc reads as falling confetti
+    const drag = 0.86;        // per second; without it everything exits the viewport at once
+
+    const particles = [];
+    for (let i = 0; i < count; i++) {
+        // Biased upward: a full circle sprays as much into the floor as the air, which reads
+        // as a puff rather than a celebration.
+        const angle = (-Math.PI / 2) + (Math.random() - 0.5) * Math.PI * 1.1;
+        const speed = spread * (0.35 + Math.random() * 0.65);
+
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 3 + Math.random() * 5,
+            spin: (Math.random() - 0.5) * 12,
+            rot: Math.random() * Math.PI,
+            color: colors[i % colors.length],
+        });
+    }
+
+    const started = performance.now();
+    let previous = started;
+
+    function frame(now) {
+        // Real elapsed time rather than a fixed step, so the arc is the same on a 144Hz display
+        // as on a 60Hz one. Clamped because a backgrounded tab resumes with a huge delta that
+        // would teleport every particle off screen.
+        const dt = Math.min((now - previous) / 1000, 0.05);
+        previous = now;
+
+        const elapsed = now - started;
+        const life = elapsed / durationMs;
+
+        if (life >= 1) {
+            overlay.canvas.remove();
+            active--;
+            return;
+        }
+
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        ctx.globalAlpha = 1 - life * life;   // hold opacity, then fade off quickly at the end
+
+        const decay = Math.pow(drag, dt);
+
+        for (const p of particles) {
+            p.vx *= decay;
+            p.vy = p.vy * decay + gravity * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.rot += p.spin * dt;
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+            ctx.restore();
+        }
+
+        requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+}
+
+/**
+ * Burst centred on an element — used for the verdict panel and the champion banner, so the
+ * effect originates from the thing being celebrated rather than from the middle of the screen.
+ * Falls back to the viewport centre when the selector matches nothing.
+ */
+export function burstFrom(selector, options = {}) {
+    let origin = {};
+
+    try {
+        const element = document.querySelector(selector);
+        if (element) {
+            const rect = element.getBoundingClientRect();
+            origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        }
+    } catch {
+        // Bad selector — fall through to the default centre.
+    }
+
+    burst({ ...origin, ...options });
+}

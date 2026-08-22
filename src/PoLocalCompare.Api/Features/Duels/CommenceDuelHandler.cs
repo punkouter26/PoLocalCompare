@@ -53,6 +53,10 @@ public sealed class CommenceDuelHandler(
             // Forensic only — never used for authorization. "anonymous" is the sentinel the
             // endpoint injects when the open gate is in effect and no claim is present.
             OwnerId = command.Actor ?? IdentityResolver.AnonymousActor,
+            // Stamped at creation: the rule a duel is judged by has to be part of its record,
+            // not a parameter of the run that adjudicated it.
+            ChallengeKind = command.ChallengeKind,
+            ChallengeThreshold = command.ChallengeThreshold,
         };
 
         await duelRepository.SaveAsync(duel);
@@ -71,6 +75,10 @@ public sealed class CommenceDuelHandler(
                 ? command.AutoJudgeDelaySecondsOverride ?? autoJudgeOptions.Value.DelaySeconds
                 : 0,
             IsPartial = false,
+            ChallengeKind = duel.ChallengeKind,
+            ChallengeThreshold = duel.ChallengeThreshold,
+            LeftModelType = leftModel.ModelType,
+            RightModelType = rightModel.ModelType,
             OwnerId = duel.OwnerId,
             VerdictBy = duel.VerdictBy,
         };

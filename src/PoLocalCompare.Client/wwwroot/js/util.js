@@ -81,3 +81,47 @@ window.scrollElementIntoView = function (id, options) {
 window.getLocationHref = function () {
     return window.location.href;
 };
+
+/**
+ * Command palette hotkey — Ctrl/⌘-K, registered once from CommandPalette.OnInitializedAsync.
+ *
+ * A single delegated listener on the document rather than per-component key handling: the
+ * palette has to open from any page and from inside any input, and Blazor's @onkeydown only
+ * fires for elements it rendered.
+ *
+ * Deliberately does NOT fire while the user is typing in a textarea — the prompt box is the
+ * main input on this app and swallowing a keystroke there would be worse than the shortcut
+ * being unavailable in that one place.
+ */
+let paletteRef = null;
+let paletteHandler = null;
+
+window.registerPaletteHotkey = (dotNetRef) => {
+    paletteRef = dotNetRef;
+    if (paletteHandler) return;
+
+    paletteHandler = (event) => {
+        if (!paletteRef) return;
+
+        const isToggle = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+        if (!isToggle) return;
+
+        const tag = document.activeElement && document.activeElement.tagName;
+        if (tag === 'TEXTAREA') return;
+
+        event.preventDefault();
+        paletteRef.invokeMethodAsync('ToggleAsync').catch(() => {
+            // Component disposed between keypress and dispatch — drop it.
+        });
+    };
+
+    document.addEventListener('keydown', paletteHandler);
+};
+
+window.unregisterPaletteHotkey = () => {
+    if (paletteHandler) {
+        document.removeEventListener('keydown', paletteHandler);
+        paletteHandler = null;
+    }
+    paletteRef = null;
+};

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using PoLocalCompare.Shared.DTOs;
+using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Client.Services;
 
@@ -36,13 +37,27 @@ public sealed class DuelApiClient
     /// Per-duel grace window before the AI judge decides. Null keeps the server's configured
     /// value; demo mode passes 0 so an unattended run never stalls waiting for a human pick.
     /// </param>
+/// <param name="challengeKind">
+    /// Budget the duel is fought under. <see cref="ChallengeKind.None"/> — the default — is an
+    /// ordinary duel, so existing callers are unaffected.
+    /// </param>
     public async Task<DuelDto?> CommenceDuelAsync(
         string leftModelId,
         string rightModelId,
         string promptText,
-        int? autoJudgeDelaySeconds = null)
+        int? autoJudgeDelaySeconds = null,
+        ChallengeKind challengeKind = ChallengeKind.None,
+        double challengeThreshold = 0)
     {
-        var body = new { leftModelId, rightModelId, promptText, autoJudgeDelaySeconds };
+        var body = new
+        {
+            leftModelId,
+            rightModelId,
+            promptText,
+            autoJudgeDelaySeconds,
+            challengeKind,
+            challengeThreshold,
+        };
         var response = await _http.PostAsJsonAsync("/api/duels", body);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<DuelDto>(JsonOptions);
@@ -122,6 +137,85 @@ public sealed class DuelApiClient
     {
         return await _http.GetFromJsonAsync<IReadOnlyList<HeadToHeadDto>>(
             $"/api/leaderboard/{modelId}/killlist", JsonOptions);
+    }
+
+    /// <summary>
+    /// Reads one model's profile, or null when the id names nothing.
+    /// </summary>
+    /// <remarks>
+    /// Uses <c>GetAsync</c> rather than <c>GetFromJsonAsync</c> for the same reason
+    /// <see cref="GetDuelAsync"/> does: a retired or mistyped model id must surface as the null
+    /// this signature promises, not as an exception that escapes to the ErrorBoundary.
+    /// </remarks>
+    public async Task<ModelProfileDto?> GetModelProfileAsync(ModelId modelId)
+    {
+        var response = await _http.GetAsync($"/api/leaderboard/{modelId}/profile");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ModelProfileDto>(JsonOptions);
+    }
+
+    // ── Tournaments ──────────────────────────────────────────────────────────
+
+    /// <summary>Models eligible to enter a bracket, strongest first — which is the seeding order.</summary>
+    public async Task<IReadOnlyList<TournamentEntrantDto>?> GetTournamentEntrantsAsync()
+    {
+        return await _http.GetFromJsonAsync<IReadOnlyList<TournamentEntrantDto>>(
+            "/api/tournaments/entrants", JsonOptions);
+    }
+
+    /// <summary>
+    /// Draws a bracket and starts it running server-side. The response is the drawn bracket, so
+    /// the page can paint the whole thing before the first match has finished.
+    /// </summary>
+    /// <remarks>
+    /// Reads the body on a 400 rather than throwing: every rejection here is a message the user
+    /// needs (wrong field size, a browser model in the field, a prompt that is too short), and
+    /// EnsureSuccessStatusCode would discard all of it.
+    /// </remarks>
+    public async Task<TournamentDto?> CreateTournamentAsync(IReadOnlyList<ModelId> modelIds, string promptText)
+    {
+        var body = new { modelIds, promptText };
+        var response = await _http.PostAsJsonAsync("/api/tournaments", body, JsonOptions);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ValidationProblemShape>(JsonOptions);
+            var detail = problem?.Errors?.SelectMany(e => e.Value).FirstOrDefault();
+            throw new InvalidOperationException(detail ?? "That bracket could not be drawn.");
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TournamentDto>(JsonOptions);
+    }
+
+    /// <summary>Reads one bracket, or null when the id names nothing.</summary>
+    public async Task<TournamentDto?> GetTournamentAsync(TournamentId tournamentId)
+    {
+        var response = await _http.GetAsync($"/api/tournaments/{tournamentId}");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<TournamentDto>(JsonOptions);
+    }
+
+    public async Task<IReadOnlyList<TournamentDto>?> ListTournamentsAsync(int limit = 10)
+    {
+        return await _http.GetFromJsonAsync<IReadOnlyList<TournamentDto>>(
+            $"/api/tournaments?limit={limit}", JsonOptions);
+    }
+
+    // ── Challenges ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Models ranked by how reliably they come in under one kind of budget. One kind at a time,
+    /// because "best" is seconds for one and dollars for another.
+    /// </summary>
+    public async Task<IReadOnlyList<ChallengeLeaderboardEntryDto>?> GetChallengeLeaderboardAsync(ChallengeKind kind)
+    {
+        return await _http.GetFromJsonAsync<IReadOnlyList<ChallengeLeaderboardEntryDto>>(
+            $"/api/challenges/leaderboard?kind={kind}", JsonOptions);
     }
 
     // ── Models ───────────────────────────────────────────────────────────────
@@ -223,4 +317,17 @@ public sealed class DuelApiClient
         public int LocalService { get; set; }
         public bool CloudMode { get; set; }
     }
+}
+
+/// <summary>
+/// The RFC 7807 validation-problem shape, only as far as this client reads it.
+/// </summary>
+/// <remarks>
+/// Declared here rather than using <c>ValidationProblemDetails</c>: that type lives in the MVC
+/// assembly, which the WebAssembly client does not reference, and one endpoint reading one field
+/// does not justify pulling it in.
+/// </remarks>
+internal sealed class ValidationProblemShape
+{
+    public Dictionary<string, string[]>? Errors { get; set; }
 }

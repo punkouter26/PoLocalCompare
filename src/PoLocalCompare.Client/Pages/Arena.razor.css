@@ -1,36 +1,35 @@
 .arena {
-    padding: 1rem;
+    padding: var(--space-md);
     max-width: 1400px;
     margin: 0 auto;
 }
 
 .arena__title {
-    font-size: 1.5rem;
+    font-size: var(--text-2xl);
     font-weight: 700;
     color: var(--text);
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--space-sm);
 }
 
 .arena__prompt-label {
     color: var(--text-muted);
-    font-size: 0.875rem;
-    margin-bottom: 1rem;
+    font-size: var(--text-md);
+    margin-bottom: var(--space-md);
 }
 
 .arena__owner-line {
     color: var(--text-muted);
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
     margin: -0.75rem 0 1rem;
 }
 
 .arena__judge-by {
     display: block;
     color: var(--text-muted);
-    font-size: 0.8125rem;
-    margin-top: 0.25rem;
+    font-size: var(--text-sm);
+    margin-top: var(--space-xs);
 }
 
-.arena__loading,
 .arena__error {
     color: var(--text-muted);
     font-style: italic;
@@ -52,7 +51,7 @@
     display: inline-flex;
     gap: 2px;
     padding: 2px;
-    margin-bottom: 0.85rem;
+    margin-bottom: var(--space-smd);
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -60,8 +59,8 @@
 
 .arena__view-btn {
     min-height: var(--target-min);
-    padding: 0.3rem 0.9rem;
-    font-size: 0.8rem;
+    padding: var(--space-xs) var(--space-md);
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--text-muted);
     background: transparent;
@@ -89,11 +88,11 @@
 .arena__viewports {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1024px) {
     .arena__viewports {
         grid-template-columns: 1fr;
         scroll-snap-type: y mandatory;
@@ -112,7 +111,7 @@
 .arena__viewport-panel {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     min-height: 600px;
 }
 
@@ -122,37 +121,43 @@
 
 .arena__hud {
     flex-shrink: 0;
+    /* Names a containment context so TelemetryHud can size its metric grid against this panel
+       rather than against the window — the panel is full width on a desktop duel, about half
+       that with two panels side by side, and narrower again on a phone, so the viewport is the
+       wrong thing for it to measure. Without this declaration the component's @container rules
+       match nothing and it falls back to two columns, which is the correct degradation. */
+    container: telemetry / inline-size;
 }
 
 .arena__failure-card {
     border: 1px solid var(--danger-border);
     background: var(--danger-surface);
     border-radius: 6px;
-    padding: 0.6rem 0.75rem;
+    padding: var(--space-sm) var(--space-smd);
     color: var(--accent-red);
 }
 
 .arena__failure-title {
-    font-size: 0.9rem;
+    font-size: var(--text-md);
     font-weight: 700;
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--space-xs);
 }
 
 .arena__failure-body {
-    font-size: 0.82rem;
+    font-size: var(--text-sm);
     line-height: 1.35;
 }
 
 .arena__failure-hint {
-    margin-top: 0.35rem;
-    font-size: 0.75rem;
+    margin-top: var(--space-xs);
+    font-size: var(--text-xs);
     color: var(--accent-red);
 }
 
 /* Finding #10: collapse raw error JSON behind a disclosure */
 .arena__failure-details {
-    margin-top: 0.45rem;
-    font-size: 0.78rem;
+    margin-top: var(--space-sm);
+    font-size: var(--text-sm);
 }
 
 .arena__failure-details summary {
@@ -160,7 +165,7 @@
     color: var(--accent-red);
     font-weight: 600;
     user-select: none;
-    padding: 0.15rem 0;
+    padding: var(--space-2xs) 0;
 }
 
 .arena__failure-details summary:hover {
@@ -168,14 +173,14 @@
 }
 
 .arena__failure-raw {
-    margin: 0.4rem 0 0;
-    padding: 0.55rem;
+    margin: var(--space-sm) 0 0;
+    padding: var(--space-sm);
     background: var(--surface-1);
     border: 1px solid var(--danger-border);
     border-radius: 4px;
     color: var(--text);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
@@ -185,9 +190,9 @@
 
 .arena__elo-badge {
     text-align: center;
-    font-size: 1.1rem;
+    font-size: var(--text-xl);
     font-weight: 700;
-    padding: 0.35rem;
+    padding: var(--space-xs);
     border-radius: 4px;
     /* The value counts up in C#; tabular figures stop the badge jittering as digits change. */
     font-variant-numeric: tabular-nums;
@@ -214,8 +219,8 @@
 .arena__actions {
     display: flex;
     justify-content: center;
-    gap: 1rem;
-    padding: 1rem 0;
+    gap: var(--space-md);
+    padding: var(--space-md) 0;
     flex-wrap: wrap;
 }
 
@@ -233,15 +238,15 @@
     z-index: 5;
     background: var(--surface-1);
     border-top: 1px solid var(--border);
-    padding: 0.75rem 1rem;
-    margin-top: 0.5rem;
+    padding: var(--space-smd) var(--space-md);
+    margin-top: var(--space-sm);
     box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
 }
 
 /* Follow-ups, not the decision: tighter, no forced width, and visually quieter than the
    vote row above them. Six same-sized large buttons in one row gave the page no primary. */
 .arena__actions--secondary {
-    gap: 0.5rem;
+    gap: var(--space-sm);
     padding-top: 0;
 }
 
@@ -258,10 +263,10 @@
 
 .arena__export-summary {
     display: inline-block;
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
     color: var(--text-muted);
     cursor: pointer;
-    padding: 0.25rem 0.5rem;
+    padding: var(--space-xs) var(--space-sm);
     min-block-size: var(--target-min, 24px);
 }
 
@@ -275,12 +280,12 @@
     text-align: center;
     color: var(--accent-green);
     font-weight: 600;
-    font-size: 1rem;
-    padding: 0.5rem 1.5rem;
+    font-size: var(--text-lg);
+    padding: var(--space-sm) var(--space-lg);
     background: var(--success-surface);
     border: 1px solid var(--success-border);
     border-radius: 4px;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--space-sm);
     /* UI#4: sticky verdict bar */
     position: sticky;
     top: 0;
@@ -301,10 +306,10 @@
 .arena__override-notice {
     text-align: center;
     color: var(--accent-yellow);
-    font-size: 0.875rem;
+    font-size: var(--text-md);
     font-weight: 600;
-    padding: 0.5rem 1rem;
-    margin-bottom: 0.5rem;
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-sm);
     background: var(--warn-surface);
     border: 1px solid var(--warn-border);
     border-radius: 4px;
@@ -313,9 +318,9 @@
 .arena__judge-note {
     text-align: center;
     color: var(--text);
-    font-size: 0.9rem;
-    padding: 0.4rem 0.75rem;
-    margin-bottom: 0.5rem;
+    font-size: var(--text-md);
+    padding: var(--space-sm) var(--space-smd);
+    margin-bottom: var(--space-sm);
 }
 
 .arena__judge-note--error {
@@ -337,9 +342,9 @@
 /* Explains pre-first-token silence for a browser model. Deliberately low-key: it reports
    that work is happening, so it must not read as an error. */
 .arena__stall-note {
-    margin: 0.5rem 0 0;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.8rem;
+    margin: var(--space-sm) 0 0;
+    padding: var(--space-sm) var(--space-smd);
+    font-size: var(--text-sm);
     color: var(--text-muted);
     background: var(--surface-1);
     border: 1px solid var(--border);
@@ -353,10 +358,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    margin: 0 0 0.75rem;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.8rem;
+    gap: var(--space-sm);
+    margin: 0 0 var(--space-smd);
+    padding: var(--space-sm) var(--space-smd);
+    font-size: var(--text-sm);
     color: var(--text-muted);
     background: var(--info-surface);
     border: 1px solid var(--info-border);
@@ -369,13 +374,13 @@
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0.5rem;
-    margin: 0.75rem 0;
-    padding: 0.55rem 0.85rem;
+    gap: var(--space-sm);
+    margin: var(--space-smd) 0;
+    padding: var(--space-sm) var(--space-smd);
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    font-size: 0.85rem;
+    font-size: var(--text-md);
     color: var(--text);
 }
 
@@ -392,7 +397,7 @@
 
 .arena__cost-total-breakdown {
     color: var(--text-muted);
-    font-size: 0.78rem;
+    font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
 }
 
@@ -400,9 +405,80 @@
    it is supporting evidence, not the headline. */
 .arena__judge-rationale {
     display: block;
-    margin-top: 0.25rem;
+    margin-top: var(--space-xs);
     color: var(--accent-green);
     font-weight: 400;
-    font-size: 0.85rem;
+    font-size: var(--text-md);
     font-style: italic;
 }
+
+/* ── Blind reveal ───────────────────────────────────────────────────────
+   Announces what the two masked panels actually were, on whichever verdict landed first.
+   Fades in rather than appearing, so the moment reads as a reveal instead of as a layout
+   shift — and drops to a plain appearance under reduced-motion. */
+.arena__reveal {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin: var(--space-md) 0 var(--space-sm);
+    padding: var(--space-smd) var(--space-md);
+    border: 1px solid var(--accent-green);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: var(--text-md);
+    animation: arena-reveal 420ms ease-out both;
+}
+
+@keyframes arena-reveal {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .arena__reveal {
+        animation: none;
+    }
+}
+
+/* ── Challenge budget ───────────────────────────────────────────────────
+   Above the outputs, because the ceiling changes what winning means. Each side's measured
+   value appears here as soon as its result exists, so a forfeit is visible rather than only
+   asserted in the verdict line. */
+.arena__budget {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-md);
+    margin: var(--space-smd) 0;
+    padding: var(--space-sm) var(--space-smd);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    font-size: var(--text-md);
+}
+
+.arena__budget-label {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.arena__budget-side {
+    font-variant-numeric: tabular-nums;
+}
+
+.arena__budget-side--met {
+    color: var(--accent-green);
+}
+
+.arena__budget-side--over {
+    color: var(--accent-red);
+}
+
+

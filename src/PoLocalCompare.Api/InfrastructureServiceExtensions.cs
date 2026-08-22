@@ -40,6 +40,8 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IDuelRepository, DuelRepository>();
         services.AddScoped<IEloHistoryRepository, EloHistoryRepository>();
         services.AddScoped<IDuelResultRepository, DuelResultRepository>();
+        services.AddScoped<ITournamentRepository, TournamentRepository>();
+        services.AddScoped<IChallengeRecordRepository, ChallengeRecordRepository>();
 
         // Typed HttpClients (standards §5.4) with uniform resilience (§5.6). Retries cover
         // connection-level failures and 5xx/408 before the SSE stream starts; 429 handling is

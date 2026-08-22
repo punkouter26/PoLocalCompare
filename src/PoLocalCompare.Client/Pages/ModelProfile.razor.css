@@ -1,0 +1,225 @@
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.profile__header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: var(--space-sm) var(--space-md);
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--border);
+}
+
+.profile__back {
+    grid-column: 1 / -1;
+    color: var(--text-muted);
+    font-size: var(--text-md);
+    text-decoration: none;
+}
+
+.profile__back:hover,
+.profile__back:focus-visible {
+    color: var(--text);
+    text-decoration: underline;
+}
+
+.profile__identity {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+/* Per-type accent. The modifier is built by interpolation
+   (profile__type--@ModelTypeGroup.CssModifier(...)), so it reads as dead to a text scan —
+   these three rules are the whole reason the markup emits it. */
+.profile__type--remote {
+    color: var(--accent-blue);
+}
+
+.profile__type--local {
+    color: var(--accent-green);
+}
+
+.profile__type--localservice {
+    color: var(--accent-yellow);
+}
+
+.profile__standing {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-smd);
+    font-variant-numeric: tabular-nums;
+}
+
+.profile__rank {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--accent-green);
+}
+
+.profile__rank--unranked {
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.profile__elo {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* ── Stat strip ─────────────────────────────────────────────────────── */
+
+.profile__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--space-smd);
+    margin: var(--space-mlg) 0 0;
+    padding: 0;
+}
+
+.profile__stat {
+    padding: var(--space-smd) var(--space-smd);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+}
+
+.profile__stat dt {
+    margin: 0 0 var(--space-xs);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.profile__stat dd {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.profile__stat-sep {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.profile__no-data {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.profile__opponent {
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+}
+
+.profile__opponent:hover,
+.profile__opponent:focus-visible {
+    color: var(--accent-green);
+}
+
+/* ── Rating chart ───────────────────────────────────────────────────── */
+
+.profile__chart-wrap {
+    padding: var(--space-smd);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-1);
+}
+
+.profile__chart-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-sm);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Gallery ────────────────────────────────────────────────────────── */
+
+.profile__gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: var(--space-md);
+}
+
+.profile__gallery-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    color: var(--text);
+    text-decoration: none;
+    /* Hover lift and its transition come from the shared .po-lift utility in app.css; only
+       the accent border is per-surface. A local copy of the same transform would fight it. */
+    transition: border-color 140ms ease;
+}
+
+.profile__gallery-item:hover,
+.profile__gallery-item:focus-visible {
+    border-color: var(--accent-green);
+}
+
+/* Fixed-ratio window the scaled page is cropped to. */
+.profile__gallery-frame {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+/* The frame lays out at a desktop width and is then scaled down, rather than being sized to
+   the tile — a generated page rendered into a 240px viewport would show its mobile layout,
+   which is not what won the duel. 1000/2.5 = 400px of tile width at the widest column. */
+.profile__gallery-iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1000px;
+    height: 750px;
+    border: 0;
+    transform: scale(0.25);
+    transform-origin: top left;
+    pointer-events: none;
+}
+
+.profile__gallery-cover {
+    position: absolute;
+    inset: 0;
+}
+
+.profile__gallery-prompt {
+    font-size: var(--text-sm);
+    line-height: 1.4;
+    color: var(--text);
+}
+
+.profile__gallery-meta {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+
+/* Tiles get wider than the 0.25 scale assumes on a large screen; nudge the scale up so the
+   captured area still fills them instead of leaving a band of background on the right. */
+@media (min-width: 1400px) {
+    .profile__gallery-iframe {
+        transform: scale(0.3);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .profile__gallery-item {
+        transition: none;
+    }
+}

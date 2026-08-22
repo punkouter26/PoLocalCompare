@@ -12,6 +12,11 @@
 
     <NavMenu />
 
+    @* Mounted once here rather than per page: the Ctrl/Cmd-K shortcut has to work from every
+       route, and a per-page copy would register the document listener several times over. It
+       renders nothing until opened. *@
+    <CommandPalette />
+
     <main id="main-content" tabindex="-1">
         <article class="content app-content">
             <ErrorBoundary @ref="_errorBoundary">

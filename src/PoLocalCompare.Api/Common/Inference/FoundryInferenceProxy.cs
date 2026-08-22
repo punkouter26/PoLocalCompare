@@ -52,16 +52,28 @@ public sealed class FoundryInferenceProxy(
             new { role = "user", content = promptFull }
         };
 
-        // Reasoning tokens are drawn from max_completion_tokens before visible output, so they
-        // need additional headroom to produce a comparable HTML document.
-        var maxTokens = FoundryChatRequest.IsReasoningModel(deploymentName) ? 16_384 : 4_096;
+        // Reasoning tokens are drawn from max_completion_tokens before visible output, so a
+        // reasoning model still needs headroom above the classic budget — but far less of it
+        // now that FoundryChatRequest pins reasoning_effort to minimal. 16,384 existed to
+        // survive an unbounded default-effort reasoning pass; 8,192 leaves roughly the same
+        // room for the document itself while capping the damage if a model ignores the hint.
+        var maxTokens = FoundryChatRequest.IsReasoningModel(deploymentName) ? 8_192 : 4_096;
 
         // Reasoning models (gpt-5*, o-series) require max_completion_tokens and reject custom temperature.
+        // 0.2 rather than 0.7. The task is "return valid HTML5 with inline CSS" — a fixed
+        // output format with no creative latitude worth sampling for — and high temperature
+        // buys only longer, more meandering documents: more tokens, more latency, more cost.
+        // It also makes duels more reproducible, which matters more here than in a typical
+        // app because these outputs are judged and the verdict moves a persistent rating.
+        // Reasoning models ignore this (they reject a non-default temperature and
+        // FoundryChatRequest omits the field for them).
+        const double GenerationTemperature = 0.2;
+
         var deploymentRequestBody = FoundryChatRequest.Build(
-            deploymentName, messages, maxTokens, temperature: 0.7, stream: true, includeModelField: false);
+            deploymentName, messages, maxTokens, GenerationTemperature, stream: true, includeModelField: false);
 
         var modelInferenceRequestBody = FoundryChatRequest.Build(
-            deploymentName, messages, maxTokens, temperature: 0.7, stream: true, includeModelField: true);
+            deploymentName, messages, maxTokens, GenerationTemperature, stream: true, includeModelField: true);
 
         var deploymentJson = JsonSerializer.Serialize(deploymentRequestBody);
         var modelInferenceJson = JsonSerializer.Serialize(modelInferenceRequestBody);

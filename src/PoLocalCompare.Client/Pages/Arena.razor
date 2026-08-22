@@ -2,6 +2,7 @@
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Challenges
 @using PoLocalCompare.Shared.Enums
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
@@ -9,15 +10,17 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject WebLlmService WebLlm
+@inject BlindModeService Blind
+@inject FxService Fx
 
 <PageTitle>Arena — PoLocalCompare</PageTitle>
 
 <div class="arena">
-    <h1 class="arena__title">Arena — Judge the Duel</h1>
+    <h1 class="arena__title po-title">Arena — Judge the Duel</h1>
 
     @if (_loading)
     {
-        <p class="arena__loading">Loading duel results…</p>
+        <p class="po-status">Loading duel results…</p>
     }
     else if (_duel is null)
     {
@@ -35,6 +38,31 @@
         @if (!string.IsNullOrWhiteSpace(_duel.OwnerId))
         {
             <p class="arena__owner-line">Started by <strong>@_duel.OwnerId</strong></p>
+        }
+
+        @* ── Challenge budget ─────────────────────────────────────────────
+           Stated before the outputs, because it changes what winning means: a model that goes
+           over the ceiling loses regardless of what it produced. Each side's measurement lands
+           here once its result exists, so the forfeit is visible rather than only asserted in
+           the verdict line. *@
+        @if (_duel.IsChallenge)
+        {
+            <div class="arena__budget">
+                <span class="arena__budget-label">
+                    <span aria-hidden="true">⏱</span>
+                    @ChallengeRules.KindLabel(_duel.ChallengeKind) challenge —
+                    @ChallengeRules.Describe(_duel.ChallengeKind, _duel.ChallengeThreshold)
+                </span>
+                @if (_leftResult is not null || _rightResult is not null)
+                {
+                    <span class="arena__budget-side @(MetBudget(_leftResult) ? "arena__budget-side--met" : "arena__budget-side--over")">
+                        @LeftDisplayName @MeasuredText(_leftResult) @(MetBudget(_leftResult) ? "✓" : "✗")
+                    </span>
+                    <span class="arena__budget-side @(MetBudget(_rightResult) ? "arena__budget-side--met" : "arena__budget-side--over")">
+                        @RightDisplayName @MeasuredText(_rightResult) @(MetBudget(_rightResult) ? "✓" : "✗")
+                    </span>
+                }
+            </div>
         }
 
         @* ── Live race ────────────────────────────────────────────────────
@@ -97,12 +125,17 @@
                     @if (_leftResult?.IsFailure == true)
                     {
                         <div class="arena__failure-card">
-                            <div class="arena__failure-title">❌ @(_leftResult.ModelName ?? _duel.LeftModelId) failed</div>
+                            <div class="arena__failure-title">❌ @LeftDisplayName failed</div>
                             <div class="arena__failure-body">@(FirstLine(_leftResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
-                            <details class="arena__failure-details">
-                                <summary>Show technical details</summary>
-                                <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
-                            </details>
+                            @* Held back while blind: a runtime failure message routinely names
+                               the deployment or the WebLLM model id, which is the whole secret. *@
+                            @if (!IsMasked)
+                            {
+                                <details class="arena__failure-details">
+                                    <summary>Show technical details</summary>
+                                    <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
+                                </details>
+                            }
                             <div class="arena__failure-hint">Retry the duel, or start a new one with a different pairing.</div>
                         </div>
                     }
@@ -110,7 +143,7 @@
                     {
                         <SandboxedViewport
                             HtmlContent="@(_leftStreamingHtml ?? _leftResult?.HtmlOutputRaw ?? string.Empty)"
-                            ModelName="@(_leftResult?.ModelName ?? _duel.LeftModelId)"
+                            ModelName="@LeftDisplayName"
                             IsLoser="@(_loserModelId == _duel.LeftModelId)"
                             ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.LeftModelId)"
                             ProbeRuntime="@(!_duelStillRunning)"
@@ -122,7 +155,7 @@
                         @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
                         {
                             <div>
-                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, _leftResult.ModelName ?? _duel.LeftModelId)">
+                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, LeftDisplayName)">
                                     &lt;/&gt; View Source
                                 </button>
                             </div>
@@ -140,12 +173,15 @@
                     @if (_rightResult?.IsFailure == true)
                     {
                         <div class="arena__failure-card">
-                            <div class="arena__failure-title">❌ @(_rightResult.ModelName ?? _duel.RightModelId) failed</div>
+                            <div class="arena__failure-title">❌ @RightDisplayName failed</div>
                             <div class="arena__failure-body">@(FirstLine(_rightResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
-                            <details class="arena__failure-details">
-                                <summary>Show technical details</summary>
-                                <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
-                            </details>
+                            @if (!IsMasked)
+                            {
+                                <details class="arena__failure-details">
+                                    <summary>Show technical details</summary>
+                                    <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
+                                </details>
+                            }
                             <div class="arena__failure-hint">Retry the duel, or start a new one with a different pairing.</div>
                         </div>
                     }
@@ -153,7 +189,7 @@
                     {
                         <SandboxedViewport
                             HtmlContent="@(_rightStreamingHtml ?? _rightResult?.HtmlOutputRaw ?? string.Empty)"
-                            ModelName="@(_rightResult?.ModelName ?? _duel.RightModelId)"
+                            ModelName="@RightDisplayName"
                             IsLoser="@(_loserModelId == _duel.RightModelId)"
                             ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.RightModelId)"
                             ProbeRuntime="@(!_duelStillRunning)"
@@ -165,7 +201,7 @@
                         @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
                         {
                             <div>
-                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, _rightResult.ModelName ?? _duel.RightModelId)">
+                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, RightDisplayName)">
                                     &lt;/&gt; View Source
                                 </button>
                             </div>
@@ -217,6 +253,19 @@
                 RightProbe="_rightProbe" />
         }
 
+        @* ── Blind reveal ─────────────────────────────────────────────────
+           Fires on whichever verdict lands first, human or AI. Stated explicitly rather than
+           just swapping the labels: a name that silently changes mid-page is a thing the reader
+           has to notice, and the point of the exercise is knowing what you just picked. *@
+        @if (_blind && _verdictRecorded)
+        {
+            <div class="arena__reveal" role="status">
+                <span aria-hidden="true">🙈</span>
+                Revealed — <strong>@BlindLabels.Left</strong> was @LeftRealName,
+                <strong>@BlindLabels.Right</strong> was @RightRealName.
+            </div>
+        }
+
         @if (_verdictRecorded)
         {
             @* SC 4.1.3 Status Messages — announced without moving focus. *@
@@ -237,6 +286,18 @@
                     @if (!string.IsNullOrWhiteSpace(_judgeRationale))
                     {
                         <span class="arena__judge-rationale">“@_judgeRationale”</span>
+                    }
+                }
+                else if (_verdictSource == VerdictSource.Constraint)
+                {
+                    @* Nothing read the outputs here — the budget decided it. Said plainly, so a
+                       forfeit is never mistaken for a judgement about quality. *@
+                    <span>
+                        Won on the challenge budget — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
+                    </span>
+                    @if (!string.IsNullOrWhiteSpace(_judgeRationale))
+                    {
+                        <span class="arena__judge-rationale">@_judgeRationale</span>
                     }
                 }
                 else if (_verdictSource == VerdictSource.Ai)
@@ -260,7 +321,8 @@
                 {
                     <span class="arena__judge-by">Judged by <strong>@_duel.VerdictBy</strong></span>
                 }
-                else if (_verdictSource == VerdictSource.Ai && !string.IsNullOrWhiteSpace(_duel.JudgeModel))
+                else if (_verdictSource is VerdictSource.Ai or VerdictSource.Constraint
+                         && !string.IsNullOrWhiteSpace(_duel.JudgeModel))
                 {
                     <span class="arena__judge-by">Judge: <strong>@_duel.JudgeModel</strong></span>
                 }
@@ -436,6 +498,13 @@
     private bool _optimistic;
     private string? _overriddenNotice;
 
+    /// <summary>
+    /// True when this duel was started with blind mode on. Read from localStorage rather than
+    /// from the duel record: blindness is presentational and per-browser, so a shared Arena link
+    /// correctly shows the names to whoever opens it — the duel was never blind for them.
+    /// </summary>
+    private bool _blind;
+
     // Animated ELO readouts. The badge counts up to the real shift instead of snapping, which
     // is the only part of a verdict with any weight behind it.
     private double _eloDisplayLeft;
@@ -478,8 +547,22 @@
     /// </summary>
     private bool CanStillVote => !_verdictRecorded && !BothSidesFailed() && !_duelStillRunning;
 
-    private string LeftDisplayName => _leftResult?.ModelName ?? _duel?.LeftModelId ?? "Left";
-    private string RightDisplayName => _rightResult?.ModelName ?? _duel?.RightModelId ?? "Right";
+    /// <summary>The model's actual name, whether or not the duel is currently masked.</summary>
+    private string LeftRealName => _leftResult?.ModelName ?? _duel?.LeftModelId ?? "Left";
+
+    /// <inheritdoc cref="LeftRealName"/>
+    private string RightRealName => _rightResult?.ModelName ?? _duel?.RightModelId ?? "Right";
+
+    /// <summary>
+    /// Whether identity is currently hidden. Every surface that names a side — viewport
+    /// caption, race lanes, scorecard columns, cost breakdown, failure card, View Source tab
+    /// title, vote buttons — resolves its name through <see cref="LeftDisplayName"/> or
+    /// <see cref="RightDisplayName"/>, so this one flag is the whole mask.
+    /// </summary>
+    private bool IsMasked => _blind && !_verdictRecorded;
+
+    private string LeftDisplayName => IsMasked ? BlindLabels.Left : LeftRealName;
+    private string RightDisplayName => IsMasked ? BlindLabels.Right : RightRealName;
 
     /// <summary>
     /// Sums the two sides' API costs. Models without a Foundry rate return null and contribute
@@ -511,6 +594,36 @@
     };
 
     private static string? FirstLine(string? reason) => FailureReasonText.FirstLine(reason);
+
+    // ── Challenge budget ─────────────────────────────────────────────────────
+    // Measured client-side from the same result row the server adjudicated on, through the same
+    // shared rules — so what the page shows and what decided the duel cannot disagree.
+
+    private ChallengeMeasurement? Measure(DuelResultDto? result)
+    {
+        if (_duel is null || !_duel.IsChallenge || result is null) return null;
+
+        // isMetered has to match what ChallengeAdjudicator passed, or the page shows a tick
+        // beside a side the server forfeited. A remote model with no recorded cost is unknown,
+        // not free — see ChallengeRules.CostOf.
+        var isMetered = result.ModelId == _duel.LeftModelId
+            ? _duel.LeftModelType == ModelType.Remote
+            : _duel.RightModelType == ModelType.Remote;
+
+        return ChallengeRules.Measure(
+            _duel.ChallengeKind,
+            _duel.ChallengeThreshold,
+            result.IsFailure,
+            result.TotalDurationMs,
+            result.ApiCostUsd,
+            result.TokenCount,
+            isMetered);
+    }
+
+    private bool MetBudget(DuelResultDto? result) => Measure(result)?.Met ?? false;
+
+    private string MeasuredText(DuelResultDto? result) =>
+        _duel is null ? string.Empty : ChallengeRules.Format(_duel.ChallengeKind, Measure(result)?.Measured);
 
     private void OnLeftProbe(RuntimeProbeReport report)
     {
@@ -599,6 +712,9 @@
                 if (!confirmed) ctx.PreventNavigation();
             }
         });
+
+        // Before the duel loads, so the very first render of the panels is already masked.
+        _blind = await Blind.IsBlindAsync(_duelId);
 
         try
         {
@@ -722,6 +838,12 @@
         await PulseAsync(30);
         _ = AudioService.PlaySuccessAsync();
 
+        // Banked on the click rather than on the server's answer. This ledger records what the
+        // user preferred, not what was ultimately recorded — a pick that loses the race to the
+        // AI judge was still a pick, and it is exactly as informative about their taste. Voting
+        // again after a rollback replaces the entry, since the ledger is keyed on duel id.
+        await RecordBlindVoteAsync(verdict);
+
         try
         {
             var response = await ApiClient.RecordVerdictAsync(_duelId, new VerdictRequestDto { Verdict = verdict });
@@ -776,6 +898,26 @@
         return true;
     }
 
+    /// <summary>
+    /// Adds this pick to the local blind ledger. No-ops for a sighted duel, and for anything
+    /// that is not a straight Left/Right choice — a tie expresses no preference.
+    /// </summary>
+    private async Task RecordBlindVoteAsync(DuelVerdict verdict)
+    {
+        if (!_blind || _duel is null) return;
+        if (verdict is not (DuelVerdict.Left or DuelVerdict.Right)) return;
+
+        var leftWon = verdict == DuelVerdict.Left;
+
+        await Blind.RecordVoteAsync(new BlindVote(
+            DuelId: _duelId,
+            WinnerModelId: leftWon ? _duel.LeftModelId : _duel.RightModelId,
+            WinnerName: leftWon ? LeftRealName : RightRealName,
+            LoserModelId: leftWon ? _duel.RightModelId : _duel.LeftModelId,
+            LoserName: leftWon ? RightRealName : LeftRealName,
+            VotedAt: DateTimeOffset.UtcNow));
+    }
+
     private void RollBackOptimisticVerdict()
     {
         _verdictRecorded = false;
@@ -790,6 +932,8 @@
 
     private void AdoptVerdict(DuelVerdict verdict, string? winner, string? loser, VerdictSource source, string? rationale)
     {
+        var wasAlreadyFinal = _verdictRecorded && !_optimistic;
+
         _verdictRecorded = true;
         _optimistic = false;
         _verdictValue = verdict;
@@ -797,6 +941,38 @@
         _loserModelId = loser;
         _verdictSource = source;
         _judgeRationale = rationale;
+
+        // Only on the transition into a settled verdict. Re-adopting the same verdict happens
+        // on every reconcile and poll, and replaying the celebration each time would turn the
+        // payoff moment into a stutter.
+        if (!wasAlreadyFinal) _ = CelebrateVerdictAsync(verdict);
+    }
+
+    /// <summary>
+    /// The duel's payoff: a burst over the verdict banner and a cue that matches the outcome.
+    /// </summary>
+    /// <remarks>
+    /// Safe here specifically because generation has finished — the burst is Canvas2D and
+    /// one-shot, and the GPU it would otherwise contend with is no longer running inference.
+    /// Nothing is awaited by the caller; a browser with no AudioContext or no canvas simply
+    /// does not celebrate.
+    /// </remarks>
+    private async Task CelebrateVerdictAsync(DuelVerdict verdict)
+    {
+        try
+        {
+            if (verdict == DuelVerdict.Tie)
+            {
+                await AudioService.PlayTieAsync();
+                return;
+            }
+
+            await Fx.BurstFromAsync(".arena__verdict-recorded");
+        }
+        catch (Exception ex) when (ex is JSException or TaskCanceledException or ObjectDisposedException)
+        {
+            // Decoration only — never let it reach the ErrorBoundary over a finished duel.
+        }
     }
 
     // ── ELO count-up ──────────────────────────────────────────────────────────
@@ -1096,6 +1272,12 @@
 
         // Coalesced, not immediate: this fires once per token batch on both sides at once.
         _streamRender?.Request();
+
+        // Audio runs on the browser's audio thread and never touches the WebGPU device WebLLM
+        // is generating on, so — unlike a particle effect — this is safe to fire mid-duel. The
+        // module throttles to one blip per 130 ms per side; batches arrive far faster.
+        if (update.TokenVelocity is { } velocity && velocity > 0)
+            _ = AudioService.PlayTokenBlipAsync(velocity, update.Side);
     }
 
     /// <summary>Records which sides run in the browser so the stall hint can explain the silence.</summary>
@@ -1159,6 +1341,10 @@
 
         // Same reasoning as the hub handler: the WebLLM worker reports per token batch.
         _streamRender?.Request();
+
+        var blipVelocity = isLeft ? _leftTokenVelocity : _rightTokenVelocity;
+        if (blipVelocity is { } sampled && sampled > 0)
+            _ = AudioService.PlayTokenBlipAsync(sampled, isLeft ? "Left" : "Right");
     }
 
     /// <summary>Tokens per second excluding warm-up, so a slow model load does not read as slow generation.</summary>

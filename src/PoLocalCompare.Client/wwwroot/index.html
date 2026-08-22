@@ -11,6 +11,10 @@
     <link href="PoLocalCompare.Client.styles.css" rel="stylesheet" />
     <!-- Loaded in <head>, before first paint: applying the theme after the body renders
          flashes the wrong palette on every navigation. -->
+    <!-- Radzen: scoped to RadzenDataGrid (Archive) and RadzenChart (model profile). The
+         base theme is used rather than a full Radzen theme, so it styles only Radzen's
+         own components and cannot restyle .po-btn or anything else in the app. -->
+    <link rel="stylesheet" href="_content/Radzen.Blazor/css/material-base.css" />
     <script src="js/theme.js?v=2"></script>
     <script type="importmap"></script>
 </head>
@@ -128,7 +132,8 @@
         });
     </script>
     <script src="/js/diag-interop.js?v=4"></script>
-    <script src="/js/util.js?v=3"></script>
+    <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
+    <script src="/js/util.js?v=4"></script>
     <script src="/js/compare.js?v=1"></script>
 </body>
 

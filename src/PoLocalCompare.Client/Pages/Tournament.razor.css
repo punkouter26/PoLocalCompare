@@ -1,0 +1,376 @@
+.tourney__prompt {
+    max-width: 60rem;
+    margin: var(--space-sm) 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-md);
+    font-style: italic;
+    line-height: 1.5;
+}
+
+.tourney__status {
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.tourney__status--running {
+    background: var(--accent-green);
+    color: var(--on-accent-green);
+}
+
+.tourney__status--complete {
+    color: var(--accent-green);
+}
+
+.tourney__status--abandoned {
+    color: var(--accent-red);
+}
+
+/* ── Run banners ────────────────────────────────────────────────────── */
+
+.tourney__champion,
+.tourney__abandoned,
+.tourney__progress {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    padding: var(--space-smd) var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--text-md);
+}
+
+.tourney__champion {
+    border: 1px solid var(--accent-green);
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.tourney__champion-text {
+    flex: 1;
+    min-width: 12rem;
+}
+
+.tourney__champion-crown {
+    font-size: var(--text-2xl);
+}
+
+.tourney__abandoned {
+    border: 1px solid var(--accent-red);
+    background: var(--surface-1);
+    color: var(--text);
+}
+
+.tourney__progress {
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    color: var(--text-muted);
+}
+
+.tourney__watch {
+    margin-left: var(--space-sm);
+    color: var(--accent-green);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.tourney__watch:hover,
+.tourney__watch:focus-visible {
+    text-decoration: underline;
+}
+
+/* ── Bracket ────────────────────────────────────────────────────────── */
+
+/* Scrolls inside its own container rather than pushing the page sideways: three rounds of
+   cards is wider than a phone whatever the card width. */
+.tourney__bracket-wrap {
+    margin-top: var(--space-lg);
+    overflow-x: auto;
+}
+
+.tourney__bracket {
+    display: grid;
+    grid-template-columns: repeat(var(--rounds, 3), minmax(13rem, 1fr));
+    gap: var(--space-md);
+    min-width: min-content;
+}
+
+.tourney__round {
+    display: flex;
+    flex-direction: column;
+}
+
+.tourney__round-title {
+    margin: 0 0 var(--space-sm);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* space-around is what aligns each match against the pair feeding it: every round has half as
+   many cards in the same height, so each one centres on the gap between its two sources. */
+.tourney__round-matches {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: var(--space-smd);
+}
+
+.tourney__match {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+}
+
+.tourney__match--running {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 0 1px var(--accent-green);
+}
+
+.tourney__match--pending {
+    opacity: 0.6;
+}
+
+.tourney__match--failed {
+    border-color: var(--accent-red);
+}
+
+/* A decided match recedes so the bracket's live edge is what the eye lands on — by the final
+   round most of the board is history. (A ready match gets no modifier: it looks like the base
+   card, and a rule restating the default is dead weight.) */
+.tourney__match--decided {
+    background: var(--surface-2);
+}
+
+.tourney__slot {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-md);
+}
+
+.tourney__slot--won {
+    background: var(--surface-2);
+    color: var(--text);
+    font-weight: 700;
+}
+
+.tourney__slot--lost {
+    color: var(--text-muted);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
+.tourney__slot--empty {
+    color: var(--text-muted);
+}
+
+.tourney__slot-seed {
+    flex: 0 0 1.1rem;
+    color: var(--text-muted);
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.tourney__slot-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tourney__slot-badge {
+    flex: 0 0 auto;
+}
+
+.tourney__match-link {
+    margin-top: var(--space-xs);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    text-decoration: none;
+}
+
+.tourney__match-link:hover,
+.tourney__match-link:focus-visible {
+    color: var(--accent-green);
+    text-decoration: underline;
+}
+
+.tourney__tiebreak,
+.tourney__match-error {
+    margin-top: var(--space-xs);
+    font-size: var(--text-2xs);
+    line-height: 1.4;
+}
+
+.tourney__tiebreak {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.tourney__match-error {
+    color: var(--accent-red);
+}
+
+.tourney__section-head {
+    margin-bottom: var(--space-sm);
+}
+
+.tourney__sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.tourney__entrants {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: var(--space-sm);
+    margin: 0 0 var(--space-smd);
+    padding: 0;
+    list-style: none;
+}
+
+.tourney__entrant {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) var(--space-smd);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-md);
+    text-align: left;
+    cursor: pointer;
+}
+
+.tourney__entrant:hover {
+    border-color: var(--accent-green);
+}
+
+.tourney__entrant--chosen {
+    border-color: var(--accent-green);
+    background: var(--surface-2);
+}
+
+.tourney__entrant-check {
+    flex: 0 0 1rem;
+    color: var(--accent-green);
+    font-weight: 700;
+}
+
+.tourney__entrant-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tourney__entrant-elo {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.tourney__textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--space-smd);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-md);
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.tourney__prompt-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+}
+
+/* ── Actions and history ────────────────────────────────────────────── */
+
+.tourney__actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-smd);
+    margin-top: var(--space-lg);
+}
+
+.tourney__start-hint {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+.tourney__recent {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tourney__recent-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: var(--text-md);
+    text-decoration: none;
+}
+
+.tourney__recent-item:hover .tourney__recent-prompt,
+.tourney__recent-item:focus-visible .tourney__recent-prompt {
+    color: var(--accent-green);
+}
+
+.tourney__recent-prompt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tourney__recent-meta {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+.tourney__recent-champ {
+    color: var(--text);
+    font-weight: 600;
+}
+
+@media (max-width: 640px) {
+    .tourney__bracket {
+        grid-template-columns: repeat(var(--rounds, 3), minmax(11rem, 1fr));
+    }
+}

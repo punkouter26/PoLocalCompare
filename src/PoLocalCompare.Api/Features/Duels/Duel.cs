@@ -55,6 +55,19 @@ public sealed class Duel
     public bool IsPartial { get; set; }
 
     /// <summary>
+    /// The budget this duel was fought under, or <see cref="ChallengeKind.None"/> for an
+    /// ordinary duel. Persisted rather than derived so a challenge stays checkable from the
+    /// stored row after the fact — the rule a duel was judged by is part of its record.
+    /// </summary>
+    public ChallengeKind ChallengeKind { get; set; } = ChallengeKind.None;
+
+    /// <summary>The ceiling, in the units of <see cref="ChallengeKind"/>. Zero when there is none.</summary>
+    public double ChallengeThreshold { get; set; }
+
+    /// <summary>True when this duel was fought under a budget.</summary>
+    public bool IsChallenge => ChallengeKind != ChallengeKind.None;
+
+    /// <summary>
     /// Actor that created the duel (preferred_username claim, or "anonymous" when the gate
     /// is open). Forensically stamped, never used for authorization. Nullable so existing
     /// rows deserialise cleanly after the schema addition.

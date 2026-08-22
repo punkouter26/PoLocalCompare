@@ -6,10 +6,15 @@
    lightens on a light one. */
 .telemetry-hud {
     background: var(--glass-bg);
+    /* The blur the --glass-bg token always implied. Without it this is a translucent panel,
+       not glass. backdrop-filter composites on the GPU compositor, not the 3D pipeline, so it
+       does not contend with WebLLM inference the way a shader pass would. */
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 0.75rem;
-    font-size: 0.78rem;
+    padding: var(--space-smd);
+    font-size: var(--text-sm);
     color: var(--text);
     backdrop-filter: blur(4px);
 }
@@ -17,11 +22,11 @@
 /* Diagnostics disclosure. Closed by default — these are the numbers you go looking for,
    not the ones you compare two models on. */
 .telemetry-hud__more {
-    margin-top: 0.5rem;
+    margin-top: var(--space-sm);
 }
 
 .telemetry-hud__more-summary {
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     color: var(--text-muted);
     cursor: pointer;
     min-height: var(--target-min);
@@ -42,13 +47,14 @@
 .telemetry-hud__grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.35rem 0.75rem;
+    /* See the container-query note at the foot of this file. */
+    gap: var(--space-xs) var(--space-smd);
 }
 
 .telemetry-hud__item {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: var(--space-2xs);
 }
 
 .telemetry-hud__item--wide {
@@ -57,7 +63,7 @@
 
 .telemetry-hud__label {
     color: var(--text-muted);
-    font-size: 0.7rem;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -79,4 +85,25 @@
 .telemetry-hud__pending {
     color: var(--text-muted);
     font-style: italic;
+}
+
+
+/* ── Container queries ────────────────────────────────────────────────────
+   This HUD is placed inside the Arena's viewport panel, whose width varies far more than the
+   viewport's does: full width on a desktop duel, roughly half that when the Arena is showing
+   two panels side by side, and narrower again on a phone. A @media query asks the wrong
+   question in all three cases — it measures the window, not the box this component was given.
+
+   The panel opts in by declaring itself a container (see .arena__hud), and the metric grid
+   then responds to the space it actually has. */
+@container telemetry (max-width: 260px) {
+    .telemetry-hud__grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@container telemetry (min-width: 520px) {
+    .telemetry-hud__grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }

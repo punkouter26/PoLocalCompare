@@ -1,0 +1,589 @@
+@page "/tournament"
+@page "/tournament/{TournamentIdText}"
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Shared.Prompts
+@using PoLocalCompare.Shared.Tournaments
+@implements IDisposable
+@inject DuelApiClient ApiClient
+@inject NavigationManager Nav
+@inject AudioService AudioService
+@inject FxService Fx
+
+<PageTitle>Tournament — PoLocalCompare</PageTitle>
+
+@* ── Tournament ───────────────────────────────────────────────────────────
+   Two views behind one route: the draw (no id) and the bracket (with one). They are one
+   component because creating a bracket navigates straight into watching it, and splitting
+   them would remount the page at exactly the moment the first match starts.
+
+   The bracket runs server-side. This page is a viewer — it polls and paints, and closing the
+   tab does not stop the run. That is the whole difference from demo mode, which orchestrates
+   its rounds from the client and dies with the tab. *@
+<div class="tourney po-page po-page--wide">
+    @if (_tournament is not null)
+    {
+        @* ── Bracket view ───────────────────────────────────────────────── *@
+        <header class="po-header">
+            <div class="po-header__row">
+                <h1 class="po-title">@SizeLabel(_tournament.Size)</h1>
+                <span class="tourney__status tourney__status--@_tournament.Status.ToString().ToLowerInvariant()">
+                    @StatusLabel(_tournament)
+                </span>
+            </div>
+            <p class="tourney__prompt">@_tournament.PromptText</p>
+        </header>
+
+        @if (_tournament.Status == TournamentStatus.Complete && _tournament.ChampionName is not null)
+        {
+            <div class="tourney__champion po-glass" role="status">
+                <span class="tourney__champion-crown" aria-hidden="true">🏆</span>
+                <span class="tourney__champion-text">
+                    <strong>@_tournament.ChampionName</strong> wins the @SizeLabel(_tournament.Size).
+                </span>
+                <a class="po-btn po-btn--sm po-btn--secondary"
+                   href="@($"/model/{_tournament.ChampionModelId}")">View model</a>
+            </div>
+        }
+        else if (_tournament.Status == TournamentStatus.Abandoned)
+        {
+            @* Never shown as a result. A bracket that could not finish has no champion, and
+               presenting the last model standing as one would be inventing an outcome. *@
+            <div class="tourney__abandoned" role="status">
+                <span aria-hidden="true">⚠</span>
+                Run stopped — @(_tournament.AbandonedReason ?? "a match could not be decided.")
+                No champion was crowned and the bracket is left as it stood.
+            </div>
+        }
+        else
+        {
+            <div class="tourney__progress" role="status">
+                <span aria-hidden="true">⚔</span>
+                @_tournament.DecidedCount of @_tournament.TotalMatches matches decided.
+                @if (RunningMatch is not null)
+                {
+                    <span>
+                        Now: <strong>@RunningMatch.SlotAName</strong> vs <strong>@RunningMatch.SlotBName</strong>
+                        @if (RunningMatch.DuelId is { } liveDuelId)
+                        {
+                            <a class="tourney__watch" href="@($"/arena/{liveDuelId}")">Watch →</a>
+                        }
+                    </span>
+                }
+                else
+                {
+                    <span>Starting the next match…</span>
+                }
+            </div>
+        }
+
+        @* Columns are rounds. Each column is centred against the one before it, so the pairs
+           that feed a match sit either side of it — that alignment is what makes it read as a
+           bracket rather than as three lists. *@
+        <div class="tourney__bracket-wrap">
+            <div class="tourney__bracket" style="--rounds: @RoundCount">
+                @foreach (var round in _tournament.Matches.GroupBy(m => m.Round).OrderBy(g => g.Key))
+                {
+                    <div class="tourney__round" @key="round.Key">
+                        <h2 class="tourney__round-title">@round.First().RoundName</h2>
+                        <div class="tourney__round-matches">
+                            @foreach (var match in round.OrderBy(m => m.Index))
+                            {
+                                <div class="tourney__match po-lift @MatchClass(match)" @key="@($"{match.Round}-{match.Index}")">
+                                    @RenderSlot(match, isSlotA: true)
+                                    @RenderSlot(match, isSlotA: false)
+
+                                    @if (match.DuelId is { } duelId)
+                                    {
+                                        <a class="tourney__match-link" href="@($"/arena/{duelId}")">
+                                            @(match.IsDecided ? "View duel →" : "Watch live →")
+                                        </a>
+                                    }
+                                    @if (match.WonOnSeedTieBreak)
+                                    {
+                                        <span class="tourney__tiebreak" title="The judge called it a draw; the better seed advances.">
+                                            drawn — advanced on seed
+                                        </span>
+                                    }
+                                    @if (match.FailureReason is not null)
+                                    {
+                                        <span class="tourney__match-error">@match.FailureReason</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="tourney__actions">
+            <a class="po-btn po-btn--primary" href="/tournament">⚔ New tournament</a>
+            <a class="po-btn" href="/leaderboard">📊 Leaderboard</a>
+        </div>
+    }
+    else if (_loadingTournament)
+    {
+        <p class="po-status">Loading bracket…</p>
+    }
+    else if (!string.IsNullOrEmpty(TournamentIdText))
+    {
+        <div class="po-empty">
+            <p class="po-empty__hint">
+                No tournament with that id — it may have been wiped with the local storage.
+            </p>
+            <a class="po-btn po-btn--primary" href="/tournament">Draw a new bracket</a>
+        </div>
+    }
+    else
+    {
+        @* ── Draw view ──────────────────────────────────────────────────── *@
+        <header class="po-header">
+            <h1 class="po-title">Run a tournament</h1>
+            <p class="po-subtitle">
+                One prompt, a seeded bracket, every match judged automatically. It runs on the
+                server — you can close this tab and come back to the result.
+            </p>
+        </header>
+
+        <section class="po-section" aria-labelledby="tourney-size-heading">
+            <h2 id="tourney-size-heading" class="po-section-title">Bracket size</h2>
+            <div class="tourney__sizes" role="group" aria-label="Bracket size">
+                @foreach (var size in BracketPlanner.SupportedSizes)
+                {
+                    <button type="button"
+                            class="po-btn @(_size == size ? "po-btn--success" : "po-btn--secondary")"
+                            aria-pressed="@(_size == size ? "true" : "false")"
+                            @onclick="() => SetSize(size)">
+                        @SizeLabel(size)
+                    </button>
+                }
+            </div>
+            <p class="po-hint">@SizeHint(_size)</p>
+        </section>
+
+        <section class="po-section" aria-labelledby="tourney-field-heading">
+            <div class="tourney__section-head">
+                <h2 id="tourney-field-heading" class="po-section-title">
+                    Field — @_selected.Count of @_size chosen
+                </h2>
+                <p class="po-hint">
+                    Seeded by rating, so the top two seeds can only meet in the final.
+                    Browser models are not listed: a bracket keeps running after you close the tab,
+                    and WebGPU inference needs this one open.
+                </p>
+            </div>
+
+            @if (_loadingEntrants)
+            {
+                <p class="po-status">Loading models…</p>
+            }
+            else if (_entrants.Count < _size)
+            {
+                <p class="po-error">
+                    Only @_entrants.Count server-side model@(_entrants.Count == 1 ? " is" : "s are") available —
+                    a @SizeLabel(_size).ToLowerInvariant() needs @_size.
+                </p>
+            }
+            else
+            {
+                <ul class="tourney__entrants">
+                    @foreach (var entrant in _entrants)
+                    {
+                        var index = _selected.IndexOf(entrant.ModelId);
+                        var chosen = index >= 0;
+                        <li @key="entrant.ModelId">
+                            <button type="button"
+                                    class="tourney__entrant @(chosen ? "tourney__entrant--chosen" : "")"
+                                    aria-pressed="@(chosen ? "true" : "false")"
+                                    @onclick="() => ToggleEntrant(entrant.ModelId)">
+                                <span class="tourney__entrant-check" aria-hidden="true">@(chosen ? "✓" : "")</span>
+                                <span class="tourney__entrant-name">@entrant.DisplayName</span>
+                                <span class="po-chip">@ModelTypeGroup.ShortLabel(entrant.ModelType)</span>
+                                <span class="tourney__entrant-elo">@((int)Math.Round(entrant.CurrentElo))</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+
+                <button type="button" class="po-btn po-btn--sm po-btn--ghost" @onclick="AutoFillTopSeeds">
+                    ⚡ Fill with the top @_size
+                </button>
+            }
+        </section>
+
+        <section class="po-section" aria-labelledby="tourney-prompt-heading">
+            <h2 id="tourney-prompt-heading" class="po-section-title">The prompt</h2>
+            <p class="po-hint">
+                Every match in the bracket gets this same prompt — that is what makes the winner mean something.
+            </p>
+            <textarea class="tourney__textarea"
+                      rows="4"
+                      maxlength="4000"
+                      placeholder="e.g. Build a self-contained single HTML file with a working scientific calculator."
+                      @bind="_prompt"
+                      @bind:event="oninput"></textarea>
+
+            <div class="tourney__prompt-picks">
+                @foreach (var template in PromptLibrary.SelfRunning.Take(6))
+                {
+                    <button type="button" class="po-btn po-btn--sm po-btn--secondary"
+                            @key="template.Id"
+                            @onclick="() => _prompt = template.Text">
+                        <span aria-hidden="true">@template.Emoji</span> @template.Title
+                    </button>
+                }
+            </div>
+        </section>
+
+        <div class="tourney__actions">
+            <button type="button" class="po-btn po-btn--success po-btn--lg"
+                    disabled="@(!CanStart)"
+                    @onclick="StartAsync">
+                @(_starting ? "Drawing…" : "Start tournament →")
+            </button>
+            <span class="tourney__start-hint">@StartHint</span>
+        </div>
+
+        @if (_error is not null)
+        {
+            <p class="po-error" role="status">@_error</p>
+        }
+
+        @if (_recent.Count > 0)
+        {
+            <section class="po-section" aria-labelledby="tourney-recent-heading">
+                <h2 id="tourney-recent-heading" class="po-section-title">Recent tournaments</h2>
+                <ul class="tourney__recent">
+                    @foreach (var run in _recent)
+                    {
+                        <li @key="run.TournamentId">
+                            <a class="tourney__recent-item" href="@($"/tournament/{run.TournamentId}")">
+                                <span class="tourney__recent-prompt">@Truncate(run.PromptText, 60)</span>
+                                <span class="tourney__recent-meta">
+                                    @SizeLabel(run.Size) ·
+                                    @if (run.ChampionName is not null)
+                                    {
+                                        <span class="tourney__recent-champ">🏆 @run.ChampionName</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@StatusLabel(run)</span>
+                                    }
+                                </span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string? TournamentIdText { get; set; }
+
+    // ── Draw state ───────────────────────────────────────────────────────────
+    private int _size = 8;
+    private List<TournamentEntrantDto> _entrants = [];
+    private readonly List<ModelId> _selected = [];
+    private string _prompt = string.Empty;
+    private bool _loadingEntrants = true;
+    private bool _starting;
+    private string? _error;
+    private List<TournamentDto> _recent = [];
+
+    // ── Bracket state ────────────────────────────────────────────────────────
+    private TournamentDto? _tournament;
+    private bool _loadingTournament;
+    private PeriodicTimer? _pollTimer;
+    private CancellationTokenSource? _pollCts;
+
+    /// <summary>
+    /// How often the bracket is re-read while it runs. The server owns the run, so this is a
+    /// viewer refresh rather than a control loop — slow enough not to hammer storage, fast
+    /// enough that a match finishing is visible while you are still looking at it.
+    /// </summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+
+    private bool CanStart => _selected.Count == _size
+        && _prompt.Trim().Length >= 10
+        && !_starting;
+
+    private string StartHint => (_selected.Count == _size, _prompt.Trim().Length >= 10) switch
+    {
+        (false, _) => $"Choose {_size - _selected.Count} more model{(_size - _selected.Count == 1 ? "" : "s")}.",
+        (true, false) => "Write a prompt for the bracket.",
+        _ => $"{_size} models · {_size - 1} duels · judged automatically.",
+    };
+
+    private int RoundCount => _tournament is null ? 0 : BracketPlanner.RoundCount(_tournament.Size);
+
+    private TournamentMatchDto? RunningMatch => _tournament?.Matches.FirstOrDefault(m => m.IsRunning);
+
+    private static string SizeLabel(int size) => size switch
+    {
+        2 => "1v1",
+        4 => "4-model bracket",
+        _ => $"{size}-model bracket",
+    };
+
+    private static string SizeHint(int size) => size switch
+    {
+        2 => "A single match, run and judged through the same machinery as a full bracket.",
+        4 => "Two semi-finals and a final — three duels.",
+        _ => "Quarter-finals, semis and a final — seven duels.",
+    };
+
+    private static string StatusLabel(TournamentDto tournament) => tournament.Status switch
+    {
+        TournamentStatus.Pending => "Drawn",
+        TournamentStatus.Running => "Running",
+        TournamentStatus.Complete => "Complete",
+        _ => "Stopped",
+    };
+
+    private static string MatchClass(TournamentMatchDto match) =>
+        match switch
+        {
+            { FailureReason: not null } => "tourney__match--failed",
+            { IsDecided: true } => "tourney__match--decided",
+            { IsRunning: true } => "tourney__match--running",
+            // A ready match looks like the base card, so it gets no modifier at all — a class
+            // whose rule restates the default is the kind of dead weight this codebase keeps
+            // accumulating. Pending is the one that differs: it is dimmed, because it is
+            // waiting on a winner that does not exist yet.
+            { IsReady: true } => "",
+            _ => "tourney__match--pending",
+        };
+
+    private static string Truncate(string text, int max) =>
+        string.IsNullOrEmpty(text) || text.Length <= max ? text : text[..max].TrimEnd() + "…";
+
+    /// <summary>
+    /// Renders one side of a match. A slot with no model yet is a placeholder rather than a
+    /// blank, so an unplayed round reads as "waiting for a winner" instead of as a broken card.
+    /// </summary>
+    private RenderFragment RenderSlot(TournamentMatchDto match, bool isSlotA) => builder =>
+    {
+        var modelId = isSlotA ? match.SlotAModelId : match.SlotBModelId;
+        var name = isSlotA ? match.SlotAName : match.SlotBName;
+        var seed = isSlotA ? match.SlotASeed : match.SlotBSeed;
+        var won = match.WinnerModelId is { } winner && winner == modelId;
+        var lost = match.IsDecided && !won && !modelId.IsEmpty;
+
+        var css = "tourney__slot"
+            + (won ? " tourney__slot--won" : "")
+            + (lost ? " tourney__slot--lost" : "")
+            + (modelId.IsEmpty ? " tourney__slot--empty" : "");
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", css);
+
+        if (modelId.IsEmpty)
+        {
+            builder.OpenElement(2, "span");
+            builder.AddAttribute(3, "class", "tourney__slot-name");
+            builder.AddContent(4, "—");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(5, "span");
+            builder.AddAttribute(6, "class", "tourney__slot-seed");
+            builder.AddAttribute(7, "title", $"Seed {seed}");
+            builder.AddContent(8, seed);
+            builder.CloseElement();
+
+            builder.OpenElement(9, "span");
+            builder.AddAttribute(10, "class", "tourney__slot-name");
+            builder.AddContent(11, name);
+            builder.CloseElement();
+
+            if (won)
+            {
+                builder.OpenElement(12, "span");
+                builder.AddAttribute(13, "class", "tourney__slot-badge");
+                builder.AddAttribute(14, "aria-label", "Winner");
+                builder.AddContent(15, "🏆");
+                builder.CloseElement();
+            }
+        }
+
+        builder.CloseElement();
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // OnParametersSetAsync rather than OnInitializedAsync: navigating from the draw to a
+        // bracket keeps this component instance, so an initialiser would never run for it.
+        StopPolling();
+
+        if (string.IsNullOrWhiteSpace(TournamentIdText))
+        {
+            _tournament = null;
+            await LoadDrawAsync();
+            return;
+        }
+
+        _loadingTournament = true;
+        _tournament = null;
+
+        try
+        {
+            _tournament = await ApiClient.GetTournamentAsync(TournamentId.From(TournamentIdText));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = $"Could not load the bracket: {ex.Message}";
+        }
+        finally
+        {
+            _loadingTournament = false;
+        }
+
+        if (_tournament is { Status: TournamentStatus.Pending or TournamentStatus.Running })
+            StartPolling();
+    }
+
+    private async Task LoadDrawAsync()
+    {
+        _loadingEntrants = true;
+
+        try
+        {
+            var entrantsTask = ApiClient.GetTournamentEntrantsAsync();
+            var recentTask = ApiClient.ListTournamentsAsync(5);
+
+            _entrants = (await entrantsTask)?.ToList() ?? [];
+            _recent = (await recentTask)?.ToList() ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = $"Could not load the model list: {ex.Message}";
+        }
+        finally
+        {
+            _loadingEntrants = false;
+        }
+    }
+
+    private void SetSize(int size)
+    {
+        _size = size;
+
+        // Trim rather than clear: shrinking from 8 to 4 keeps the first four picks, which is
+        // almost always what someone reducing the size meant.
+        while (_selected.Count > _size) _selected.RemoveAt(_selected.Count - 1);
+    }
+
+    private void ToggleEntrant(ModelId modelId)
+    {
+        if (_selected.Remove(modelId)) return;
+        if (_selected.Count >= _size) return;
+        _selected.Add(modelId);
+    }
+
+    private void AutoFillTopSeeds()
+    {
+        _selected.Clear();
+        _selected.AddRange(_entrants.Take(_size).Select(e => e.ModelId));
+    }
+
+    private async Task StartAsync()
+    {
+        if (!CanStart) return;
+
+        _starting = true;
+        _error = null;
+
+        try
+        {
+            await AudioService.PlaySnareRollAsync();
+            var drawn = await ApiClient.CreateTournamentAsync(_selected, _prompt.Trim());
+
+            if (drawn is not null)
+                Nav.NavigateTo($"/tournament/{drawn.TournamentId}");
+            else
+                _error = "Could not draw the bracket. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    // ── Polling ──────────────────────────────────────────────────────────────
+
+    private void StartPolling()
+    {
+        _pollCts = new CancellationTokenSource();
+        _pollTimer = new PeriodicTimer(PollInterval);
+        _ = PollAsync(_pollTimer, _pollCts.Token);
+    }
+
+    private async Task PollAsync(PeriodicTimer timer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                var fresh = await ApiClient.GetTournamentAsync(TournamentId.From(TournamentIdText!));
+                if (fresh is null) continue;
+
+                var wasComplete = _tournament?.Status == TournamentStatus.Complete;
+                _tournament = fresh;
+                await InvokeAsync(StateHasChanged);
+
+                if (fresh.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
+                {
+                    // One flourish on the transition only — a poll that re-reads a finished
+                    // bracket must not replay it. Safe at this point by construction: the run
+                    // is over, so nothing is competing for the GPU.
+                    if (!wasComplete)
+                    {
+                        if (fresh.Status == TournamentStatus.Complete)
+                        {
+                            _ = AudioService.PlayFanfareAsync();
+                            // Bigger than a duel verdict, because a final is.
+                            _ = Fx.ChampionBurstAsync(".tourney__champion");
+                        }
+                        else
+                        {
+                            // An abandoned run is not a result and must not sound like one.
+                            _ = AudioService.PlayDefeatAsync();
+                        }
+                    }
+
+                    StopPolling();
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigated away.
+        }
+        catch (Exception)
+        {
+            // A failed poll is not a failed run — the bracket is server-side. Stop refreshing
+            // rather than replacing what is on screen with an error about fetching it.
+            StopPolling();
+        }
+    }
+
+    private void StopPolling()
+    {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        _pollCts = null;
+        _pollTimer?.Dispose();
+        _pollTimer = null;
+    }
+
+    public void Dispose() => StopPolling();
+}

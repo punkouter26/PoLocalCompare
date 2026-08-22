@@ -12,6 +12,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetDuelHandler>();
         services.AddScoped<GetLeaderboardHandler>();
         services.AddScoped<GetKillListHandler>();
+        services.AddScoped<GetModelProfileHandler>();
         services.AddScoped<ListDuelsHandler>();
         services.AddScoped<ExportLabReportHandler>();
         services.AddScoped<GetModelAvailabilityHandler>();
@@ -24,6 +25,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<LobbyNotifier>();
         services.AddScoped<DemoPlanHandler>();
         services.AddScoped<OrphanModelIdRemapper>();
+        services.AddScoped<CreateTournamentHandler>();
+        services.AddScoped<ChallengeAdjudicator>();
+        services.AddScoped<GetChallengeLeaderboardHandler>();
+        // Singleton like DuelExecutionService, and for the same reason: it is queued from a
+        // request but outlives it, so it resolves its own scope per step rather than capturing
+        // the request's.
+        services.AddSingleton<TournamentRunner>();
 
         services.AddScoped<RecordVerdictHandler>(sp =>
         {

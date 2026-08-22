@@ -11,7 +11,7 @@ namespace PoLocalCompare.Api.Common.Persistence;
 /// </summary>
 public static class AzuriteSetup
 {
-    private static readonly string[] RequiredTables = ["Models", "Duels", "DuelResults", "EloHistory"];
+    private static readonly string[] RequiredTables = ["Models", "Duels", "DuelResults", "EloHistory", "Tournaments", "ChallengeRecords"];
     private const int MaxRetries = 5;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
 

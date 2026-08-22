@@ -70,14 +70,19 @@ PoLocalCompare.slnx
 │   │   │   ├── Models/                 ← endpoints, handlers, Model entity, ModelRepository, ModelSeeder
 │   │   │   ├── Archive/                ← lab-report export handler + HTML renderer
 │   │   │   ├── Ollama/                 ← status/pull endpoints
+│   │   │   ├── Tournaments/            ← Tournament aggregate, TournamentRunner (server-side
+│   │   │   │                             bracket orchestration), repository, endpoints
+│   │   │   ├── Challenges/             ← ChallengeRecord + repository, ChallengeAdjudicator
+│   │   │   │                             (budget forfeits, runs ahead of AutoJudge), board handler
 │   │   │   └── Diagnostics/            ← /health, /api/diag/*, E2E helpers
 │   │   ├── Common/
-│   │   │   ├── Domain/                 ← cross-slice calculators & value objects
 │   │   │   ├── Inference/              ← IRemoteInferenceProxy + Foundry/Ollama typed-HttpClient proxies
 │   │   │   ├── Background/             ← background task queue + hosted service
 │   │   │   ├── KeyVault/               ← prefix-scoped Key Vault configuration
 │   │   │   ├── Persistence/            ← Azurite table bootstrap
 │   │   │   └── Telemetry/              ← RateLimitedSampler (§6.3)
+│   │   │                                 (Domain/ was dissolved in the 2026-08-13 prune — all four
+│   │   │                                  calculators had exactly one consuming slice each)
 │   │   ├── Auth/                       ← BFF cookie session + Microsoft OIDC + dev fake scheme
 │   │   ├── Pages/                      ← /diag Razor page
 │   │   ├── GlobalUsings.cs             ← all slice namespaces project-wide
@@ -219,7 +224,8 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `Duel:TimeLimitSeconds` | `appsettings.json` | — (default 300) |
 | `Ollama:BaseUrl` | `appsettings.json` | — (`http://localhost:11434`) |
 | `AiJudge:Enabled` | `appsettings.json` | — (default `false` in code, `true` in appsettings) |
-| `AiJudge:DelaySeconds` | `appsettings.json` | — (default 5) |
+| `AiJudge:DelaySeconds` | `appsettings.json` | — (**10**; code default also 10) |
+| `Duel` challenge budget | per-request | `challengeKind` + `challengeThreshold` on `POST /api/duels`; non-positive threshold degrades to `None` |
 | `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-nano`) |
 
 ---
@@ -283,13 +289,17 @@ app purely over HTTP.
 | E2E UI | `tests/PoLocalCompare.E2EUI` | Playwright, headed Chrome, mobile + desktop viewports |
 
 **Ratio contract (100 / 50 / 25 / 25).** Unit is the baseline; integration ≈ 50% of unit, each
-E2E tier ≈ 25%. Current (2026-08-02): **186 unit / 82 integration / 45 E2E-API / 46 E2E-UI cases**
-(23 UI methods × 2 viewports). Counts are test *cases*, so a `[Theory]` contributes one per
-`InlineData`/viewport. Keep new work inside those proportions.
+E2E tier ≈ 25%. Current (2026-08-22): **171 unit / 101 integration / 41 E2E-API** — measured with
+`dotnet test --list-tests`, which is the only count worth quoting because it discovers what the
+runner actually runs. (The previously recorded 186/82/45 did not match any measurement; treat a
+hand-maintained figure here as stale unless it was taken that way.) E2E-UI is counted separately
+as methods × 2 viewports. Counts are test *cases*, so a `[Theory]` contributes one per
+`InlineData`. Integration currently runs a little rich against the contract (59% of unit rather
+than 50%); that is a known overshoot, not a target.
 
 The unit tier is heavier than the 100 baseline because `PoLocalCompare.Shared` now holds genuinely
-pure logic — the diff engine, the HTML analyzer, the demo planner — which is exactly what that tier
-is for. Note it lands there *because* the logic lives in `Shared`: `PoLocalCompare.Unit` references
+pure logic — the diff engine, the HTML analyzer, the demo planner, `BracketPlanner`,
+`ChallengeRules`, `BlindPickLedger` — which is exactly what that tier is for. Note it lands there *because* the logic lives in `Shared`: `PoLocalCompare.Unit` references
 only the Api project, so anything left inside `PoLocalCompare.Client` is untestable by any tier
 except E2E-UI, which is the one suite CI never runs. Put new browser-side logic in `Shared/`.
 

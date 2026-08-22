@@ -139,6 +139,8 @@ public sealed class DuelRepository : IDuelRepository
             ["EloShiftLoser"] = duel.EloShiftLoser,
             ["VerdictDeadline"] = duel.VerdictDeadline,
             ["IsPartial"] = duel.IsPartial,
+            ["ChallengeKind"] = duel.ChallengeKind.ToString(),
+            ["ChallengeThreshold"] = duel.ChallengeThreshold,
             ["VerdictSource"] = duel.VerdictSource.ToString(),
             ["JudgeRationale"] = duel.JudgeRationale,
             ["JudgeModel"] = duel.JudgeModel,
@@ -171,6 +173,12 @@ public sealed class DuelRepository : IDuelRepository
             EloShiftLoser = entity.GetDouble("EloShiftLoser"),
             VerdictDeadline = entity.GetDateTimeOffset("VerdictDeadline") ?? DateTimeOffset.MinValue,
             IsPartial = entity.GetBoolean("IsPartial") ?? false,
+            // Absent on every row written before challenge mode existed, which is correct:
+            // those duels were fought under no budget.
+            ChallengeKind = Enum.TryParse<ChallengeKind>(entity.GetString("ChallengeKind"), out var ck)
+                ? ck
+                : ChallengeKind.None,
+            ChallengeThreshold = entity.GetDouble("ChallengeThreshold") ?? 0,
             // Rows written before the auto-judge existed have no VerdictSource — they were
             // all human decisions, which is what the Human fallback says.
             VerdictSource = Enum.TryParse<VerdictSource>(entity.GetString("VerdictSource"), out var vs)
