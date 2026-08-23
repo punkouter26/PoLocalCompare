@@ -14,18 +14,7 @@ public class BracketPlannerTests
     // ── Sizes ─────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(2, 1)]
-    [InlineData(4, 2)]
-    [InlineData(8, 3)]
-    public void RoundCount_IsLogTwoOfTheField(int size, int expected)
-    {
-        Assert.Equal(expected, BracketPlanner.RoundCount(size));
-    }
-
-    [Theory]
-    [InlineData(1)]
-    [InlineData(3)]
-    [InlineData(6)]
+    [InlineData(4)]   // supported until 2026-08-23; the 4-model bracket was dropped
     [InlineData(16)]
     public void UnsupportedSizes_AreRejected(int size)
     {
@@ -36,9 +25,7 @@ public class BracketPlannerTests
     /// <summary>The last round is "Final" whatever the bracket size, because it counts back.</summary>
     [Theory]
     [InlineData(2, 0, "Final")]
-    [InlineData(4, 0, "Semi-finals")]
     [InlineData(8, 0, "Quarter-finals")]
-    [InlineData(8, 1, "Semi-finals")]
     [InlineData(8, 2, "Final")]
     public void RoundName_CountsBackFromTheFinal(int size, int round, string expected)
     {
@@ -53,15 +40,7 @@ public class BracketPlannerTests
         Assert.Equal([1, 8, 4, 5, 2, 7, 3, 6], BracketPlanner.SeedOrder(8));
     }
 
-    [Fact]
-    public void SeedOrder_ForFour_IsTheStandardLayout()
-    {
-        Assert.Equal([1, 4, 2, 3], BracketPlanner.SeedOrder(4));
-    }
-
     [Theory]
-    [InlineData(2)]
-    [InlineData(4)]
     [InlineData(8)]
     public void SeedOrder_UsesEverySeedExactlyOnce(int size)
     {
@@ -75,7 +54,6 @@ public class BracketPlannerTests
     /// best models out against each other in round one, producing a winner that says nothing.
     /// </summary>
     [Theory]
-    [InlineData(4)]
     [InlineData(8)]
     public void TopTwoSeeds_CannotMeetBeforeTheFinal(int size)
     {
@@ -97,21 +75,9 @@ public class BracketPlannerTests
         Assert.Equal([1, 2], new[] { Seed(decider.SlotA), Seed(decider.SlotB) }.OrderBy(x => x));
     }
 
-    [Fact]
-    public void FirstRound_PitsTheTopSeedAgainstTheBottomSeed()
-    {
-        var bracket = BracketPlanner.Build(Contenders(8), 8);
-        var opener = bracket.Single(m => m is { Round: 0, Index: 0 });
-
-        Assert.Equal(1, Seed(opener.SlotA));
-        Assert.Equal(8, Seed(opener.SlotB));
-    }
-
     // ── Shape ─────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(2, 1)]
-    [InlineData(4, 3)]
     [InlineData(8, 7)]
     public void Build_ProducesOneMatchLessThanTheField(int size, int expected)
     {
@@ -160,12 +126,13 @@ public class BracketPlannerTests
     [Fact]
     public void Advance_PlacesTheWinnerInTheNextRound()
     {
-        var bracket = BracketPlanner.Build(Contenders(4), 4);
+        var bracket = BracketPlanner.Build(Contenders(8), 8);
         var winner = bracket.Single(m => m is { Round: 0, Index: 1 }).SlotA;
 
-        var advanced = BracketPlanner.Advance(bracket, 0, 1, winner, 4);
+        var advanced = BracketPlanner.Advance(bracket, 0, 1, winner, 8);
 
-        Assert.Equal(winner, advanced.Single(m => m.Round == 1).SlotB);
+        // Odd match index feeds SlotB of the match above it — the parity rule, applied.
+        Assert.Equal(winner, advanced.Single(m => m is { Round: 1, Index: 0 }).SlotB);
     }
 
     [Fact]

@@ -56,8 +56,8 @@ public sealed class TournamentMatch
 /// aggregate would buy nothing but the risk of a half-written bracket.
 ///
 /// Bracket matches are ordinary duels — they persist, they are judged, and they move ELO,
-/// exactly as demo mode's do. That is deliberate: a tournament that did not count would be a
-/// simulation of the thing rather than the thing.
+/// exactly as a hand-started duel does. That is deliberate: a tournament that did not count
+/// would be a simulation of the thing rather than the thing.
 /// </remarks>
 public sealed class Tournament
 {

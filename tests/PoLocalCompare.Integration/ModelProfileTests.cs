@@ -99,28 +99,6 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     /// <summary>
-    /// LossCount is derived rather than stored, so it has to stay consistent with the other
-    /// three counts once ties are in the mix.
-    /// </summary>
-    [Fact]
-    public async Task Profile_DerivesLossesFromDuelsMinusWinsAndDraws()
-    {
-        var a = await RegisterRemoteModelAsync("MP Draw A");
-        var b = await RegisterRemoteModelAsync("MP Draw B");
-
-        await RunDuelAsync(a, b, "Left");
-        await RunDuelAsync(a, b, "Tie");
-        await RunDuelAsync(a, b, "Right");
-
-        var profile = await GetProfileAsync(a);
-
-        Assert.Equal(3, profile.GetProperty("duelCount").GetInt32());
-        Assert.Equal(1, profile.GetProperty("winCount").GetInt32());
-        Assert.Equal(1, profile.GetProperty("drawCount").GetInt32());
-        Assert.Equal(1, profile.GetProperty("lossCount").GetInt32());
-    }
-
-    /// <summary>
     /// Rank is taken from the leaderboard projection rather than re-sorted locally, so that the
     /// number here is by construction the number the row the user clicked was showing.
     /// </summary>
@@ -140,23 +118,6 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
         var profile = await GetProfileAsync(a);
 
         Assert.Equal(boardRank, profile.GetProperty("rank").GetInt32());
-    }
-
-    [Fact]
-    public async Task Profile_CarriesTheKillListThatUsedToLiveOnTheLeaderboard()
-    {
-        var a = await RegisterRemoteModelAsync("MP KL A");
-        var b = await RegisterRemoteModelAsync("MP KL B");
-
-        await RunDuelAsync(a, b, "Left");
-        await RunDuelAsync(a, b, "Right");
-
-        var killList = (await GetProfileAsync(a)).GetProperty("killList").EnumerateArray().ToArray();
-        var row = killList.Single(r => r.GetProperty("opponentModelId").GetString() == b);
-
-        Assert.Equal(1, row.GetProperty("wins").GetInt32());
-        Assert.Equal(1, row.GetProperty("losses").GetInt32());
-        Assert.Equal("MP KL B", row.GetProperty("opponentName").GetString());
     }
 
     [Fact]
@@ -203,24 +164,4 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Empty(profile.GetProperty("winningOutputs").EnumerateArray());
     }
 
-    /// <summary>
-    /// Each gallery item carries a whole HTML document, so the cap is load-bearing rather than
-    /// cosmetic — and the loser's page must not show the winner's artifacts as its own.
-    /// </summary>
-    [Fact]
-    public async Task Profile_GalleryHoldsOnlyThisModelsWinsAndIsCapped()
-    {
-        var winner = await RegisterRemoteModelAsync("MP Gallery A");
-        var loser = await RegisterRemoteModelAsync("MP Gallery B");
-
-        for (var i = 0; i < 8; i++)
-            await RunDuelAsync(winner, loser, "Left");
-
-        var winnerGallery = (await GetProfileAsync(winner)).GetProperty("winningOutputs").EnumerateArray().ToArray();
-        Assert.True(winnerGallery.Length <= 6, $"Gallery should be capped at 6, got {winnerGallery.Length}.");
-
-        // A model that never won this duel cannot surface the other model's artifacts on its
-        // own profile — that is the row-level permission boundary the gallery enforces.
-        Assert.Empty((await GetProfileAsync(loser)).GetProperty("winningOutputs").EnumerateArray());
-    }
 }

@@ -111,18 +111,17 @@ the per-duel override. The Arena still offers **Retry duel** for transient failu
 already run, so wipe Azurite (`docker compose down -v`) or the new entry never appears. Browser models
 additionally need a matching `prebuiltAppConfig` entry in
 [web-llm.js](src/PoLocalCompare.Client/wwwroot/js/web-llm.js);
-`SCRIPTS/plan-webllm-artifacts.py` parses both files, is the single source of the model list for the
-local downloader *and* the `Fetch WebLLM artifacts` workflow, and exits non-zero when they disagree —
-run it after any catalog edit. Retired seed IDs are commented out, never reused (007/008 are burnt).
+`SCRIPTS/plan-webllm-artifacts.py` parses both files, is the single source of the model list for
+`download-models.py`, and exits non-zero when they disagree — run it after any catalog edit. Retired seed IDs are commented out, never reused (007/008 are burnt).
 Ollama (`ModelType.LocalService`) models seed in **Development only**, so Production has no dead entries.
 
 **`web-llm.js` is a Git LFS object.** The vendored bundle is 6.5 MB — larger than all the source
 in the repo combined — so it is tracked through LFS rather than as an ordinary blob. A clone made
 without `git lfs install` gets a ~130-byte pointer file instead, and the symptom is every browser
 model failing at `import` time in `webllm-worker.js` while everything else works normally. The
-`build` job in [deploy.yml](.github/workflows/deploy.yml) and the `Fetch WebLLM artifacts`
-workflow both check out with `lfs: true` — the latter because `plan-webllm-artifacts.py` parses
-`web-llm.js` for the model list, so a pointer file breaks the catalog check too.
+`build` job in [deploy.yml](.github/workflows/deploy.yml) checks out with `lfs: true`.
+`plan-webllm-artifacts.py` also parses `web-llm.js` for the model list, so a pointer file breaks
+the catalog check as well as the app.
 
 **Browser weights are optional but bimodal.** With `wwwroot/models/` absent, WebLLM pulls weights from
 the CDN *and* `model_lib` `.wasm` files from raw.githubusercontent.com — two separate hosts, either of
@@ -138,9 +137,9 @@ serves the old worker and your change appears to do nothing. The same trap appli
 **Browser-side logic belongs in `PoLocalCompare.Shared`, not in the Client project.**
 `PoLocalCompare.Unit` references only the Api project, so anything pure that lives under
 `src/PoLocalCompare.Client/` cannot be reached by any tier except E2E-UI — the one suite CI never
-runs. That is why the diff engine, the HTML analyzer, the prompt library and the demo planner sit in
-`Shared/Analysis`, `Shared/Prompts` and `Shared/Demo` rather than beside the components that use
-them. Razor components stay thin wrappers over those statics.
+runs. That is why the diff engine, the HTML analyzer, the prompt library and the bracket planner
+sit in `Shared/Analysis`, `Shared/Prompts` and `Shared/Tournaments` rather than beside the
+components that use them. Razor components stay thin wrappers over those statics.
 
 **Home is a two-column workbench, not a wizard and not one column.** It was a three-panel
 disclosure accordion with a numbered stepper, step-advance rules and a sticky readiness bar that
@@ -198,21 +197,14 @@ the accessibility tree is unchanged and `::before` content is not announced twic
 visual presentation changes. Cells opt out with `.po-cell--bare`. A table without `data-label`
 degrades to the old horizontal scroll rather than breaking.
 
-**Radzen is back, for exactly two components.** `RadzenDataGrid` on the Archive (the one table
-with real volume, paging and a genuine use for virtualisation) and `RadzenChart` on the model
-profile. It is **not** a general adoption: `.po-btn` is still the only button and the folded
-per-surface button classes stay folded. Two costs to know about — `Radzen.ThemeService` collides
-with this app's own `ThemeService`, so `@using Radzen` is deliberately *not* in `_Imports.razor`
-(only `Radzen.Blazor` is; the enums are imported per-file), and Radzen restores a second
-reflective-instantiation blocker on top of the Router's `NotFoundPage`, so `PublishTrimmed` now
-needs both resolved rather than one.
-
-**`.po-btn` is the only button, and Radzen is confined to two components.** Radzen was removed
-wholesale in an earlier pass and partially re-added on 2026-08-22 for `RadzenDataGrid` and
-`RadzenChart` only (see above). Everything else stayed removed: buttons
-and tables are `.po-btn` and `.po-table` in
+**There is no component library — `.po-btn` is the only button.** Radzen was removed wholesale
+in an earlier pass, re-added on 2026-08-22 for `RadzenDataGrid` (Archive) and `RadzenChart` (model
+profile), then **removed again on 2026-08-23**: `Radzen.Blazor` cost 1.43 MB gzipped — 11.9% of
+the app's entire download — for two components. The Archive is a `.po-table` again and the profile
+chart is inline SVG; both files carry a comment saying so. Do not reintroduce it without re-taking
+that payload decision. Buttons and tables are `.po-btn` and `.po-table` in
 [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens. Twelve
-per-surface button classes (`wizard__btn`, `demo__btn`, `h2h__btn`, `lab__btn`, `source-compare__btn`
+per-surface button classes (`wizard__btn`, `h2h__btn`, `lab__btn`, `source-compare__btn`
 …) had each reimplemented the same thing locally and drifted apart; they were folded into `.po-btn`
 plus modifiers (`--sm --lg --block --primary --success --secondary --ghost --warn --danger`). A
 surface that needs a tweak adds a **layout-only** class alongside `.po-btn` — `arena__action-btn`,
@@ -259,10 +251,9 @@ not retroactively change a stored duel. Likewise, the runtime probe injects a re
 the sandboxed *preview* only; the raw output is what gets persisted, analysed, diffed and shown by
 "View Source", so nothing a person judges or exports contains it.
 
-**Tournaments run on the server; demo mode runs in the client.** `/tournament` draws a seeded
-single-elimination bracket over 2 (a plain 1v1), 4 or 8 models and `TournamentRunner` plays it to
-the final on the background queue — so closing the tab does not stop the run, which is the whole
-difference from `/demo`. Seeding is standard tournament seeding (`1,8,4,5,2,7,3,6`), not a
+**Tournaments run on the server.** `/tournament` draws a seeded single-elimination bracket over
+2 (a plain 1v1), 4 or 8 models and `TournamentRunner` plays it to the final on the background
+queue — so closing the tab does not stop the run. Seeding is standard tournament seeding (`1,8,4,5,2,7,3,6`), not a
 shuffle: a random draw routinely knocks the two best models out against each other in round one.
 Browser models are excluded — WebGPU inference needs a foreground tab. Two invariants: a bracket
 that cannot finish is **Abandoned, never Complete** (naming the last model standing as champion
@@ -285,12 +276,19 @@ One side inside the budget wins outright; both inside falls through to the ordin
 inside records a tie. Two measurement rules are load-bearing: a **failed run never meets a budget**
 (a crash has a short stored duration, so counting it would make failing fast the winning speed
 strategy), and an **unpriced model counts as zero spend** (otherwise every local model is
-disqualified from every cost challenge).
+disqualified from every cost challenge). There is **no challenge leaderboard** — `/challenge`,
+`ChallengesEndpoints`, `ChallengeRecord` and the `ChallengeRecords` table were deleted on
+2026-08-23. Adjudication was always the part that changes outcomes; the board was a second
+ranking of the same duels. The budget picker on Home stays, and a forfeit still moves ELO with
+`VerdictSource.Constraint`.
 
-**Demo mode writes real duels.** `/demo` runs ten remote-vs-remote duels that persist, get judged and
-move ELO, using `POST /api/duels` with `autoJudgeDelaySeconds: 0`. It is not a sandbox — if you need
-a throwaway run, wipe Azurite afterwards. The override is clamped 0–3600 and cannot switch the judge
-on: `AiJudge:Enabled=false` still restores human-only verdicts.
+**`autoJudgeDelaySeconds` is a per-duel override, and a tournament is its only caller.**
+`TournamentRunner` passes 0 so a bracket never stalls between rounds waiting for a human who is
+not there. The override is clamped 0–3600 and cannot switch the judge *on*: `AiJudge:Enabled=false`
+still restores human-only verdicts. (`/demo` used to be the other caller — ten client-orchestrated
+remote-vs-remote duels that persisted and moved ELO. It was deleted on 2026-08-23: it was a second
+implementation of the Arena's streaming UI whose only distinguishing feature was that it died with
+the tab, and it wrote real duels into the leaderboard while pretending to be a demo.)
 
 **Motion is compositor-only, and that is a correctness constraint, not a style rule.** Browser
 models run WebLLM inference over **WebGPU in this same tab**, and two things depend on that GPU
@@ -319,10 +317,11 @@ old module.
 handlers, entities, and repository flat in one folder. `Common/` is only for genuinely cross-slice
 code — `Common/Domain/` was dissolved in the 2026-08-13 prune because all four of its calculators
 had exactly one consuming slice (`GreenStatsCalculator`, `HtmlOutputNormalizer` and
-`HtmlOutputQualityScorer` to `Features/Duels`, `WinRateCalculator` to `Features/Leaderboard`). There is no Domain/Application/Infrastructure split; it was collapsed in 2026-07-06 (PRD §9).
+`HtmlOutputQualityScorer` now live in `Features/Scoring`, `WinRateCalculator` in
+`Features/Leaderboard`). There is no Domain/Application/Infrastructure split; it was collapsed in 2026-07-06 (PRD §9).
 
 **Streaming re-renders are coalesced, and the frames opt out.** Token-batch updates arrive far
-faster than a frame. `Arena` and `Demo` funnel their per-batch handlers through
+faster than a frame. `Arena` funnels its per-batch handlers through
 `RenderCoalescer.Request()` (~16 ms trailing edge) instead of calling `StateHasChanged` directly,
 and `SandboxedViewport` implements `ShouldRender` gated on an ordinal compare of its raw HTML —
 without that, every render re-emitted `srcdoc` and the browser tore down and reloaded the preview
@@ -349,6 +348,23 @@ that asserts on a global projection — `board[0]`, `Assert.Empty(board)`, a lea
 passes or fails on execution order, because sibling tests legitimately contribute rows. Scope
 assertions to the models the test created (`board.Single(r => r.ModelId == a)`) and assert
 *relative* order rather than absolute position.
+
+**Observability is Serilog and nothing else.** OpenTelemetry (tracing + metrics, the AspNetCore
+and HttpClient instrumentations, the OTLP and Azure Monitor exporters) and the
+`Serilog.Sinks.ApplicationInsights` sink were all removed on 2026-08-23 — six packages and ~100
+lines of `Program.cs` shipping to one App Insights resource by two independent paths, for a
+single-instance Free-tier App Service. `RateLimitedSampler` and `InferenceTelemetry` went with
+them, so `Common/Telemetry/` no longer exists. What is left is Serilog to console (App Service's
+log stream picks that up) plus daily rolling files in Development only. If you need distributed
+traces back, re-add the OTel packages — don't half-restore one exporter. OpenAPI/Scalar is
+untouched and still mounts at `/scalar` in Development.
+
+**The `/api/dev/*` endpoints require a session.** `POST /api/dev/reset` wipes Duels, DuelResults
+and EloHistory and resets every model to 1200. It and `/api/dev/remap-model-ids` are gated on
+`IsDevelopment()` *and* `RequireAuthorization()`; they were `AllowAnonymous` until 2026-08-23,
+which put an unauthenticated table wipe one `ASPNETCORE_ENVIRONMENT` slip from live data. In
+Development the fake-auth handler satisfies the policy from a header, so this costs nothing
+locally — don't "simplify" it back.
 
 **Persistence details that bite.** Table Storage writes are idempotent and ETag-safe: creates swallow
 409, updates are If-Match conditional, and duel writers re-read and reapply on 412. `HybridCache`

@@ -68,7 +68,7 @@ public sealed class AutoJudgeOptions
     /// The first attempt counts; e.g. 3 means up to two retries on top of the original call.
     /// Foundry rate-limit windows typically reset per-minute, so two retries with a one-minute
     /// gap is enough to ride out a short burst; anything more is a sustained quota problem
-    /// the demo's user should know about, not silence.
+    /// the operator should know about, not silence.
     /// </summary>
     public int RateLimitRetryMax { get; set; } = 2;
 

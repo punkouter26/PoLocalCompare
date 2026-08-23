@@ -1,5 +1,11 @@
 /**
- * diag-interop.js — JS bridge for ModelHealthPanel.razor <-> webllm-worker.js
+ * diag-interop.js — capability probes and the WebLLM diagnostic worker runner.
+ *
+ * Two callers, deliberately framework-free so they can share it: Home.razor (WebGPU only,
+ * via WebGpuCapability) and /js/diag-models.js, the vanilla-JS Model health table on the
+ * server-rendered /diag page. It was written for the Blazor ModelHealthPanel, which was
+ * removed on 2026-08-23 — `runModelDiag` still calls back through an object shaped like a
+ * .NET object reference because /diag hands it a duck-typed stand-in rather than forking it.
  */
 
 const _diagWorkers = {};
@@ -178,33 +184,12 @@ window.runModelDiag = async function (dotnetRef, diagId, webLlmModelId, prompt, 
     });
 };
 
-// ── Cancel helpers ───────────────────────────────────────────────────────────
-window.cancelModelDiag = function (diagId) {
-    if (_diagWorkers[diagId]) { _diagWorkers[diagId].terminate(); delete _diagWorkers[diagId]; }
-};
-
+// ── Cancel helper ────────────────────────────────────────────────────────────
+// Per-model cancel went with the Blazor panel's per-card buttons on 2026-08-23; the /diag
+// table runs the set and cancels the set.
 window.cancelAllModelDiags = function () {
     Object.keys(_diagWorkers).forEach(function (id) {
         _diagWorkers[id].terminate();
         delete _diagWorkers[id];
     });
 };
-
-// ── sessionStorage persistence ───────────────────────────────────────────────
-window.saveLabResult = function (modelId, data) {
-    try { sessionStorage.setItem('lab_' + modelId, JSON.stringify(data)); } catch (_) {}
-};
-
-window.loadLabResults = function () {
-    const out = {};
-    try {
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key && key.startsWith('lab_')) {
-                out[key.slice(4)] = JSON.parse(sessionStorage.getItem(key));
-            }
-        }
-    } catch (_) {}
-    return out;
-};
-

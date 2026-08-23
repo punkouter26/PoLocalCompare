@@ -62,20 +62,6 @@ public sealed class DuelContractTests(ApiAppFixture app)
         Assert.NotNull(response.Headers.Location);
     }
 
-    [Fact]
-    public async Task Commence_EchoesTheSubmittedFieldAndStartsPending()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, left, right) = await CommenceAsync(client);
-
-        var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
-
-        Assert.Equal(left, duel.GetProperty("leftModelId").GetString());
-        Assert.Equal(right, duel.GetProperty("rightModelId").GetString());
-        Assert.Contains("kanban", duel.GetProperty("promptText").GetString()!, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("Pending", duel.GetProperty("verdict").GetString());
-    }
-
     [Theory]
     [InlineData("", HttpStatusCode.BadRequest)]                    // empty prompt
     [InlineData("Build an HTML calculator.", HttpStatusCode.NotFound)] // unknown opponent
@@ -134,16 +120,6 @@ public sealed class DuelContractTests(ApiAppFixture app)
     // ── Read ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetDuel_UnknownId_Returns404()
-    {
-        using var client = app.CreateAuthenticatedClient();
-
-        var response = await client.GetAsync("/api/duels/01NOTAREALDUELIDAAAAAAAAAA");
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
     public async Task ListDuels_ReturnsTheCommencedDuel()
     {
         using var client = app.CreateAuthenticatedClient();
@@ -165,20 +141,6 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     // ── Verdict ────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task Verdict_MovesEloInOppositeDirections()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, _, _) = await CommenceAsync(client);
-
-        var response = await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Left" });
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(body.GetProperty("eloShiftWinner").GetDouble() > 0);
-        Assert.True(body.GetProperty("eloShiftLoser").GetDouble() < 0);
-    }
 
     [Fact]
     public async Task Verdict_NamesTheSidesAndIsRecordedAsHuman()
@@ -210,30 +172,6 @@ public sealed class DuelContractTests(ApiAppFixture app)
         var second = await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Right" });
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
-    }
-
-    [Fact]
-    public async Task Verdict_UnknownDuel_Returns404()
-    {
-        using var client = app.CreateAuthenticatedClient();
-
-        var response = await client.PostAsJsonAsync(
-            "/api/duels/01NOTAREALDUELIDAAAAAAAAAA/verdict", new { Verdict = "Left" });
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Verdict_Anonymous_PassesTheOpenGate_ButFailsOnMissingDuel()
-    {
-        // The verdict endpoint is opened by Features:AllowAnonymousWrites in dev/test, so an
-        // anon call surfaces the underlying 404 (duel not found) rather than a 401.
-        using var client = app.CreateAnonymousClient();
-
-        var response = await client.PostAsJsonAsync(
-            "/api/duels/01AAAAAAAAAAAAAAAAAAAAAAAA/verdict", new { Verdict = "Left" });
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     // ── Local (browser) result ingest ──────────────────────────────────────

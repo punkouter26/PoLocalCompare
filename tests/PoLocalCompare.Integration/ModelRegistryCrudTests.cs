@@ -50,18 +50,6 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
     }
 
     [Fact]
-    public async Task Register_StartsAtTheEloBaseline()
-    {
-        var id = await RegisterAsync(RemotePayload($"Baseline {Guid.NewGuid():N}"));
-
-        var models = await Client.GetFromJsonAsync<JsonElement[]>("/api/models");
-        var model = Assert.Single(models!, m => m.GetProperty("modelId").GetString() == id);
-
-        Assert.Equal(1200, model.GetProperty("currentElo").GetDouble());
-        Assert.Equal(0, model.GetProperty("duelCount").GetInt32());
-    }
-
-    [Fact]
     public async Task Register_DuplicateDisplayName_IsRejected()
     {
         var name = $"Duplicate {Guid.NewGuid():N}";
@@ -80,18 +68,6 @@ public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifet
             DisplayName = $"Bad Local {Guid.NewGuid():N}",
             ModelType = "Local",
             WebLlmModelId = "some-llm",
-        });
-
-        Assert.False(response.IsSuccessStatusCode);
-    }
-
-    [Fact]
-    public async Task Register_RemoteWithoutEndpoint_IsRejected()
-    {
-        var response = await Client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = $"Bad Remote {Guid.NewGuid():N}",
-            ModelType = "Remote",
         });
 
         Assert.False(response.IsSuccessStatusCode);

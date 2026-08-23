@@ -406,41 +406,6 @@
     font-style: italic;
 }
 
-/* ── Blind reveal ───────────────────────────────────────────────────────
-   Announces what the two masked panels actually were, on whichever verdict landed first.
-   Fades in rather than appearing, so the moment reads as a reveal instead of as a layout
-   shift — and drops to a plain appearance under reduced-motion. */
-.arena__reveal {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    margin: var(--space-md) 0 var(--space-sm);
-    padding: var(--space-smd) var(--space-md);
-    border: 1px solid var(--accent-green);
-    border-radius: var(--radius-md);
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: var(--text-md);
-    animation: arena-reveal 420ms ease-out both;
-}
-
-@keyframes arena-reveal {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .arena__reveal {
-        animation: none;
-    }
-}
-
 /* ── Challenge budget ───────────────────────────────────────────────────
    Above the outputs, because the ceiling changes what winning means. Each side's measured
    value appears here as soon as its result exists, so a forfeit is visible rather than only

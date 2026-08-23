@@ -41,8 +41,8 @@
 | **Secrets** | Azure Key Vault (`kv-poshared`, shared, **access-policy mode**) + App Service settings fallback |
 | **Identity** | System-assigned Managed Identity (per §5.4); Bicep grants Storage Table/Blob RBAC + kv-poshared access |
 | **Auth** | Microsoft OAuth (Prod) + GUEST mode (Dev/Test) |
-| **Logging** | Serilog → File + Console + App Insights |
-| **Telemetry** | OpenTelemetry → Azure Monitor |
+| **Logging** | Serilog → Console (all envs) + rolling File (Development only) |
+| **Telemetry** | None. OpenTelemetry + the App Insights sinks were removed 2026-08-23 (§9) |
 | **Versioning** | MinVer (Git tag driven, prefix `v`) |
 | **Styling** | Scoped `.razor.css` + design tokens; system-aware light/dark with an explicit override |
 
@@ -72,17 +72,17 @@ PoLocalCompare.slnx
 │   │   │   ├── Ollama/                 ← status/pull endpoints
 │   │   │   ├── Tournaments/            ← Tournament aggregate, TournamentRunner (server-side
 │   │   │   │                             bracket orchestration), repository, endpoints
-│   │   │   ├── Challenges/             ← ChallengeRecord + repository, ChallengeAdjudicator
-│   │   │   │                             (budget forfeits, runs ahead of AutoJudge), board handler
+│   │   │   ├── Challenges/             ← ChallengeAdjudicator only (budget forfeits, runs ahead
+│   │   │   │                             of AutoJudge). The board + ChallengeRecord were cut 2026-08-23
 │   │   │   └── Diagnostics/            ← /health, /api/diag/*, E2E helpers
 │   │   ├── Common/
 │   │   │   ├── Inference/              ← IRemoteInferenceProxy + Foundry/Ollama typed-HttpClient proxies
 │   │   │   ├── Background/             ← background task queue + hosted service
 │   │   │   ├── KeyVault/               ← prefix-scoped Key Vault configuration
-│   │   │   ├── Persistence/            ← Azurite table bootstrap
-│   │   │   └── Telemetry/              ← RateLimitedSampler (§6.3)
+│   │   │   └── Persistence/            ← Azurite table bootstrap
 │   │   │                                 (Domain/ was dissolved in the 2026-08-13 prune — all four
-│   │   │                                  calculators had exactly one consuming slice each)
+│   │   │                                  calculators had exactly one consuming slice each;
+│   │   │                                  Telemetry/ went with OpenTelemetry on 2026-08-23)
 │   │   ├── Auth/                       ← BFF cookie session + Microsoft OIDC + dev fake scheme
 │   │   ├── Pages/                      ← /diag Razor page
 │   │   ├── GlobalUsings.cs             ← all slice namespaces project-wide
@@ -97,16 +97,16 @@ PoLocalCompare.slnx
 │   │   ├── Analysis/                   ← OutputAnalysis, LineDiff, HtmlPreview — browser-side
 │   │   │                                 comparison logic; lives here so PoLocalCompare.Unit
 │   │   │                                 can test it without referencing the WASM project
-│   │   ├── Prompts/                    ← PromptLibrary (curated starter + demo prompts)
-│   │   ├── Demo/                       ← DemoPlanner (pure, seeded demo scheduling)
+│   │   ├── Prompts/                    ← PromptLibrary (curated starter prompts)
+│   │   ├── Tournaments/                ← BracketPlanner (pure, seeded bracket layout)
 │   │   └── Presentation/               ← view-models, enums and helpers the .razor files lean
 │   │                                     on (ModelDiagState, ModelTypeGroup, SourceViewMode,
 │   │                                     RuntimeProbeReport, FailureReasonText,
 │   │                                     RenderCoalescer). Moved out of Client/ so the Unit
 │   │                                     tier can reach them at all.
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
-│       ├── Pages/                      ← Home, Arena, Leaderboard, Archive,
-│       │                                 Demo, Login, NotFound
+│       ├── Pages/                      ← Home, Arena, Leaderboard, Archive, Tournament,
+│       │                                 ModelProfile, Login, NotFound
 │       │                                 (model-health is a Home section; Arena both
 │       │                                  streams a running duel and judges it)
 │       ├── Components/                 ← incl. OutputScorecard, SourceCompare, TokenRace,
@@ -141,9 +141,9 @@ PoLocalCompare.slnx
   public endpoints opt out explicitly with `.AllowAnonymous()`.
 - Table Storage writes are idempotent + ETag-safe (§5.5): creates swallow 409, updates are
   If-Match conditional (entities carry `ETag`), and duel writers re-read + reapply on 412.
-- Telemetry (§6.3): 100% sampling outside Production; Production caps traces via
-  `Common/Telemetry/RateLimitedSampler` (`Telemetry:MaxTracesPerSecond`, default 10/s);
-  Error+ log events ship to App Insights unsampled through a Serilog sink.
+- Telemetry: none. The OTel tracing/metrics pipeline, its two exporters and the
+  `Serilog.Sinks.ApplicationInsights` sink were removed on 2026-08-23 — two independent paths to
+  one App Insights resource on a single-instance F1 plan. Serilog to console is the whole story.
 - HttpClients (§5.4/§5.6): Foundry/Ollama proxies are typed clients with retry-only resilience
   (no per-attempt timeout — it would abort SSE streams); named "Foundry"/"Ollama"/"OllamaStatus"
   clients cover the remaining callers. Non-dev startup fail-fasts on unreachable Table Storage.
@@ -216,7 +216,6 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | Key | Primary Source | Fallback |
 |---|---|---|
 | `KeyVault:Uri` | App Service setting | `appsettings.json` |
-| `ApplicationInsights:ConnectionString` | Key Vault | App Service setting |
 | `ConnectionStrings:AzureTableStorage` | Key Vault | App Service setting |
 | `ConnectionStrings:AzureBlobStorage` | Key Vault | App Service setting |
 | `AzureAiFoundry:ApiKey` | Key Vault | `dotnet user-secrets` |
@@ -289,17 +288,15 @@ app purely over HTTP.
 | E2E UI | `tests/PoLocalCompare.E2EUI` | Playwright, headed Chrome, mobile + desktop viewports |
 
 **Ratio contract (100 / 50 / 25 / 25).** Unit is the baseline; integration ≈ 50% of unit, each
-E2E tier ≈ 25%. Current (2026-08-22): **171 unit / 101 integration / 41 E2E-API** — measured with
-`dotnet test --list-tests`, which is the only count worth quoting because it discovers what the
-runner actually runs. (The previously recorded 186/82/45 did not match any measurement; treat a
-hand-maintained figure here as stale unless it was taken that way.) E2E-UI is counted separately
-as methods × 2 viewports. Counts are test *cases*, so a `[Theory]` contributes one per
-`InlineData`. Integration currently runs a little rich against the contract (59% of unit rather
-than 50%); that is a known overshoot, not a target.
+E2E tier ≈ 25%. Current (2026-08-23): **100 unit / 50 integration / 25 E2E-API / 25 E2E-UI** —
+exactly on contract, verified by running each suite. Counts are test *cases*, so a `[Theory]`
+contributes one per `InlineData`, and E2E-UI counts methods × 2 viewports.
 
-The unit tier is heavier than the 100 baseline because `PoLocalCompare.Shared` now holds genuinely
-pure logic — the diff engine, the HTML analyzer, the demo planner, `BracketPlanner`,
-`ChallengeRules`, `BlindPickLedger` — which is exactly what that tier is for. Note it lands there *because* the logic lives in `Shared`: `PoLocalCompare.Unit` references
+The suite was 171/101/41 on 2026-08-22 and was cut back on 2026-08-23. Roughly a third of that
+came free with the `/demo` and challenge-board deletions; the rest was thinning near-duplicate
+`[InlineData]` rows and assertions already pinned by a neighbouring test. **Treat the contract as
+a budget: a new test in an at-capacity tier means retiring one, not appending.** Note the unit
+tier lands where it does *because* the logic lives in `Shared`: `PoLocalCompare.Unit` references
 only the Api project, so anything left inside `PoLocalCompare.Client` is untestable by any tier
 except E2E-UI, which is the one suite CI never runs. Put new browser-side logic in `Shared/`.
 
@@ -357,7 +354,6 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | Build | `dotnet-design-pattern-review` | After writing a service or domain object |
 | Build | `autoresearch` | Optimize measurable metrics (test pass rate, build size) |
 | Security | `security-review` | Full OWASP scan before merging to `main` |
-| Deploy | `appinsights-instrumentation` | Wire telemetry before going live |
 | Deploy | `azure-deployment-preflight` | Run immediately before `azd up` |
 | Operate | `azure-resource-health-diagnose` | When something breaks in Azure |
 | Document | `create-readme` | When the project is stable enough to describe |

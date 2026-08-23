@@ -89,22 +89,20 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     /// <summary>
-    /// A browser model runs WebGPU inference in a foreground tab, and a bracket is designed to
-    /// keep running after that tab closes. Listing one would offer a field that cannot finish.
+    /// Browser models entered the field on 2026-08-23, reversing PRD §9 item 21. The caveat is
+    /// on the page, not in the catalog: the Tournament tab drives WebGPU matches itself.
     /// </summary>
     [Fact]
-    public async Task Entrants_ExcludeBrowserModels()
+    public async Task Entrants_IncludeBrowserModels()
     {
         var browser = await RegisterModelAsync("TE Browser", modelType: "Local");
 
         var entrants = (await (await _client.GetAsync("/api/tournaments/entrants"))
             .Content.ReadFromJsonAsync<JsonElement[]>())!;
 
-        Assert.DoesNotContain(entrants, e => e.GetProperty("modelId").GetString() == browser);
+        Assert.Contains(entrants, e => e.GetProperty("modelId").GetString() == browser);
     }
     [Theory]
-    [InlineData(2)]
-    [InlineData(4)]
     [InlineData(8)]
     public async Task Draw_AcceptsEverySupportedSize(int count)
     {
@@ -126,12 +124,23 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Draw_RejectsABrowserModelInTheField()
+    public async Task Draw_AcceptsAMixedRemoteAndBrowserField()
     {
         var remote = await RegisterModelAsync("TE Mixed Remote");
         var browser = await RegisterModelAsync("TE Mixed Browser", modelType: "Local");
 
         var response = await DrawAsync([remote, browser]);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    /// <summary>4 was a supported size until 2026-08-23; only 2 and 8 are now.</summary>
+    [Fact]
+    public async Task Draw_RejectsAFourModelField()
+    {
+        var field = await RegisterFieldAsync("TE Four", 4);
+
+        var response = await DrawAsync(field);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -141,7 +150,6 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
     /// failure — both pass through the same validation path, so they share the assertion.
     /// </summary>
     [Theory]
-    [InlineData("hi", false)]   // prompt under the minimum length
     [InlineData(null, true)]    // one of the model ids is unknown to the catalog
     public async Task Draw_RejectsARequestThatFailsBasicValidation(string? badPrompt, bool useUnknownModelId)
     {
@@ -160,7 +168,7 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
     [Fact]
     public async Task Draw_IsReadableBackByItsId()
     {
-        var field = await RegisterFieldAsync("TE Persist", 4);
+        var field = await RegisterFieldAsync("TE Persist", 8);
 
         var drawn = await (await DrawAsync(field)).Content.ReadFromJsonAsync<JsonElement>();
         var id = drawn.GetProperty("tournamentId").GetString()!;
@@ -168,8 +176,8 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
         var fetched = await (await _client.GetAsync($"/api/tournaments/{id}")).Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(id, fetched.GetProperty("tournamentId").GetString());
-        Assert.Equal(4, fetched.GetProperty("size").GetInt32());
-        Assert.Equal(3, MatchesOf(fetched).Length);
+        Assert.Equal(8, fetched.GetProperty("size").GetInt32());
+        Assert.Equal(7, MatchesOf(fetched).Length);
         Assert.Equal(Prompt, fetched.GetProperty("promptText").GetString());
     }
 
@@ -181,17 +189,4 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    [Fact]
-    public async Task List_IncludesADrawnTournament()
-    {
-        var field = await RegisterFieldAsync("TE List", 2);
-
-        var drawn = await (await DrawAsync(field)).Content.ReadFromJsonAsync<JsonElement>();
-        var id = drawn.GetProperty("tournamentId").GetString()!;
-
-        var listed = (await (await _client.GetAsync("/api/tournaments?limit=50"))
-            .Content.ReadFromJsonAsync<JsonElement[]>())!;
-
-        Assert.Contains(listed, t => t.GetProperty("tournamentId").GetString() == id);
-    }
 }

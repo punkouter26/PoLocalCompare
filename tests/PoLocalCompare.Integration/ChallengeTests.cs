@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,8 +20,7 @@ namespace PoLocalCompare.Integration;
 /// what makes the assertions deterministic: no background queue, no timing window.
 ///
 /// The whole path is still real — Table Storage round-trip, <c>ChallengeRules</c>,
-/// <c>RecordVerdictHandler</c>, ELO movement and the challenge-record partitions the challenge
-/// board reads back.
+/// <c>RecordVerdictHandler</c> and the ELO movement a forfeit produces.
 /// </remarks>
 [Collection("Integration")]
 public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
@@ -113,22 +111,6 @@ public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
 
     private async Task<JsonElement> GetDuelAsync(DuelId duelId) =>
         (await (await _client.GetAsync($"/api/duels/{duelId}")).Content.ReadFromJsonAsync<JsonElement>())!;
-
-    private async Task<JsonElement[]> GetBoardAsync(ChallengeKind kind) =>
-        (await (await _client.GetAsync($"/api/challenges/leaderboard?kind={kind}"))
-            .Content.ReadFromJsonAsync<JsonElement[]>())!;
-
-    // ── Auth ──────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task ChallengeBoard_Anonymous_Returns401()
-    {
-        using var client = _host.CreateAnonymousClient();
-
-        var response = await client.GetAsync("/api/challenges/leaderboard?kind=MaxSeconds");
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
 
     // ── Adjudication ──────────────────────────────────────────────────────
 
@@ -225,109 +207,6 @@ public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
         var duel = await GetDuelAsync(duelId);
 
         Assert.Equal("Pending", duel.GetProperty("verdict").GetString());
-
-        // Scoped to this test's own models. The board is global and shared across every test
-        // class in this collection, so asserting it is empty outright made this pass or fail
-        // on execution order. What "left alone" means is that an unbudgeted duel banks no
-        // attempt for the models that ran it.
-        var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
-        Assert.DoesNotContain(board, r => r.GetProperty("modelId").GetString() == a);
-        Assert.DoesNotContain(board, r => r.GetProperty("modelId").GetString() == b);
     }
 
-    // ── The challenge board ───────────────────────────────────────────────
-
-    [Fact]
-    public async Task Board_RanksTheMoreReliableModelFirst()
-    {
-        var reliable = await RegisterRemoteModelAsync("CH Rank Reliable");
-        var erratic = await RegisterRemoteModelAsync("CH Rank Erratic");
-
-        await RunChallengeAsync(reliable, erratic, ChallengeKind.MaxSeconds, 5, 2.0, 9.0);
-        await RunChallengeAsync(reliable, erratic, ChallengeKind.MaxSeconds, 5, 3.0, 8.0);
-
-        var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
-
-        // Relative order, not absolute position. The board is global and every test class in
-        // this collection shares one Azurite, so another test's perfect-record model can
-        // legitimately sit at board[0]. Asserting index 0 made this test pass or fail on
-        // execution order.
-        var reliableRow = board.Single(r => r.GetProperty("modelId").GetString() == reliable);
-        var erraticRow = board.Single(r => r.GetProperty("modelId").GetString() == erratic);
-
-        Assert.Equal(2, reliableRow.GetProperty("attempts").GetInt32());
-        Assert.Equal(2, reliableRow.GetProperty("met").GetInt32());
-        Assert.Equal(1.0, reliableRow.GetProperty("passRate").GetDouble());
-        Assert.Equal(2, reliableRow.GetProperty("wins").GetInt32());
-        Assert.True(reliableRow.GetProperty("rank").GetInt32() < erraticRow.GetProperty("rank").GetInt32());
-    }
-
-    /// <summary>Every kind is a ceiling, so "best" is always the smallest measurement.</summary>
-    [Fact]
-    public async Task Board_BestIsTheModelsLowestMeasurement()
-    {
-        var a = await RegisterRemoteModelAsync("CH Best A");
-        var b = await RegisterRemoteModelAsync("CH Best B");
-
-        await RunChallengeAsync(a, b, ChallengeKind.MaxSeconds, 10, 4.0, 9.0);
-        await RunChallengeAsync(a, b, ChallengeKind.MaxSeconds, 10, 1.5, 9.0);
-
-        var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
-        var row = board.Single(r => r.GetProperty("modelId").GetString() == a);
-
-        Assert.Equal(1.5, row.GetProperty("best").GetDouble(), precision: 3);
-    }
-
-    /// <summary>
-    /// "Best" means seconds for one kind and dollars for another, so the board never mixes them.
-    /// </summary>
-    [Fact]
-    public async Task Board_IsFilteredToOneKind()
-    {
-        var a = await RegisterRemoteModelAsync("CH Kind A");
-        var b = await RegisterRemoteModelAsync("CH Kind B");
-
-        await RunChallengeAsync(a, b, ChallengeKind.MaxSeconds, 5, 2.0, 9.0);
-
-        Assert.NotEmpty(await GetBoardAsync(ChallengeKind.MaxSeconds));
-        Assert.Empty(await GetBoardAsync(ChallengeKind.MaxTokens));
-    }
-
-    /// <summary>
-    /// A model that has never attempted this kind is absent, not a zero row: it has not failed
-    /// the budget, and it has not met it either.
-    /// </summary>
-    [Fact]
-    public async Task Board_OmitsModelsThatHaveNeverAttemptedThisKind()
-    {
-        var a = await RegisterRemoteModelAsync("CH Absent A");
-        var b = await RegisterRemoteModelAsync("CH Absent B");
-        var bystander = await RegisterRemoteModelAsync("CH Absent Bystander");
-
-        await RunChallengeAsync(a, b, ChallengeKind.MaxSeconds, 5, 2.0, 9.0);
-
-        var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
-
-        Assert.DoesNotContain(board, r => r.GetProperty("modelId").GetString() == bystander);
-    }
-
-    /// <summary>
-    /// The loser's attempt is banked too — the board ranks how often a model comes in under
-    /// budget, which is a fact about every attempt rather than only the ones that won.
-    /// </summary>
-    [Fact]
-    public async Task Board_BanksTheLosingSidesAttemptAsAMiss()
-    {
-        var winner = await RegisterRemoteModelAsync("CH Miss Winner");
-        var loser = await RegisterRemoteModelAsync("CH Miss Loser");
-
-        await RunChallengeAsync(winner, loser, ChallengeKind.MaxSeconds, 5, 2.0, 9.0);
-
-        var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
-        var row = board.Single(r => r.GetProperty("modelId").GetString() == loser);
-
-        Assert.Equal(1, row.GetProperty("attempts").GetInt32());
-        Assert.Equal(0, row.GetProperty("met").GetInt32());
-        Assert.Equal(0, row.GetProperty("wins").GetInt32());
-    }
 }

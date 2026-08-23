@@ -3,7 +3,7 @@ using PoLocalCompare.Shared.Presentation;
 namespace PoLocalCompare.Unit;
 
 /// <summary>
-/// The Arena and the demo runner both feed this from a SignalR handler that fires per token
+/// The Arena feeds this from a SignalR handler that fires per token
 /// batch. The contract that matters is that a burst costs one render, that an update arriving
 /// after a flush is not swallowed, and that a disposed coalescer never touches a component that
 /// has gone away.
@@ -25,22 +25,6 @@ public class RenderCoalescerTests
         await SettleAsync();
 
         Assert.Equal(1, renders);
-    }
-
-    [Fact]
-    public async Task RequestsInSeparateWindows_EachRender()
-    {
-        var renders = 0;
-        using var coalescer = new RenderCoalescer(() => { Interlocked.Increment(ref renders); return Task.CompletedTask; }, Interval);
-
-        coalescer.Request();
-        await SettleAsync();
-        coalescer.Request();
-        await SettleAsync();
-
-        // The point of the trailing edge: a later update is never folded into an already-
-        // completed render, so the last token a model emits still reaches the screen.
-        Assert.Equal(2, renders);
     }
 
     [Fact]

@@ -26,13 +26,11 @@ public sealed class ChallengeAdjudicator(
     IDuelRepository duelRepository,
     IDuelResultRepository duelResultRepository,
     IModelRepository modelRepository,
-    IChallengeRecordRepository challengeRecordRepository,
     RecordVerdictHandler recordVerdict,
     ILogger<ChallengeAdjudicator> logger)
 {
     /// <summary>
-    /// Measures both sides, banks the attempt for each, and records a verdict when the budget
-    /// decides one. Never throws.
+    /// Measures both sides and records a verdict when the budget decides one. Never throws.
     /// </summary>
     /// <returns>
     /// True when the budget settled the duel, so the caller must not run the LLM judge. False
@@ -48,9 +46,9 @@ public sealed class ChallengeAdjudicator(
             var duel = await duelRepository.GetByIdAsync(duelId);
             if (duel is null || !duel.IsChallenge) return false;
 
-            // A human who picked inside the window already decided it. The attempt is still
-            // banked below so the challenge record reflects what was measured either way.
-            var alreadyJudged = duel.Verdict != DuelVerdict.Pending;
+            // A human who picked inside the window already decided it; there is nothing left
+            // for the budget to settle.
+            if (duel.Verdict != DuelVerdict.Pending) return false;
 
             var results = await duelResultRepository.GetByDuelIdAsync(duelId);
             var left = results.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
@@ -64,12 +62,7 @@ public sealed class ChallengeAdjudicator(
             var rightMeasure = MeasureSide(duel, right, rightModel);
             var outcome = ChallengeRules.Adjudicate(leftMeasure, rightMeasure);
 
-            var decision = alreadyJudged ? null : DecideFrom(outcome, duel, leftMeasure, rightMeasure);
-
-            // Banked before the verdict write: the measurement is a fact about the run, and it
-            // should survive even if recording the verdict loses a race.
-            await BankAttemptsAsync(duel, leftMeasure, rightMeasure, decision?.Verdict);
-
+            var decision = DecideFrom(outcome, duel, leftMeasure, rightMeasure);
             if (decision is null) return false;
 
             try
@@ -151,25 +144,5 @@ public sealed class ChallengeAdjudicator(
             // The "judge" is the rule, not a deployment. Named so the Arena's attribution line
             // says something true rather than falling back to a model that never ran.
             $"{ChallengeRules.KindLabel(duel.ChallengeKind)} budget");
-    }
-
-    /// <summary>
-    /// Records each side's attempt. Written for every challenge duel — including ones the budget
-    /// did not decide — because the challenge leaderboard ranks by how often a model comes in
-    /// under budget, which is a fact about every attempt rather than only the decisive ones.
-    /// </summary>
-    private async Task BankAttemptsAsync(
-        Duel duel,
-        ChallengeMeasurement left,
-        ChallengeMeasurement right,
-        DuelVerdict? verdict)
-    {
-        await challengeRecordRepository.SaveAsync(new ChallengeRecord(
-            duel.LeftModelId, duel.DuelId, duel.ChallengeKind, duel.ChallengeThreshold,
-            left.Measured, left.Met, won: verdict == DuelVerdict.Left, duel.RightModelId));
-
-        await challengeRecordRepository.SaveAsync(new ChallengeRecord(
-            duel.RightModelId, duel.DuelId, duel.ChallengeKind, duel.ChallengeThreshold,
-            right.Measured, right.Met, won: verdict == DuelVerdict.Right, duel.LeftModelId));
     }
 }

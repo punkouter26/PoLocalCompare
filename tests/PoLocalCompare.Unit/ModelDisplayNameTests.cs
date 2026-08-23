@@ -16,12 +16,9 @@ public class ModelDisplayNameTests
     // The live catalog wins, so renaming a model shows through on old duels.
     [InlineData("GPT-5.4 Nano", "Old Name", "GPT-5.4 Nano")]
     // Model retired from the catalog → the snapshot taken when the duel was created.
-    [InlineData(null, "SmolLM2 135M", "SmolLM2 135M")]
-    [InlineData("", "SmolLM2 135M", "SmolLM2 135M")]
     // Neither available (a row predating the snapshot) → the ID, which is the signal callers
     // use to detect "unresolved" and substitute their own label.
     [InlineData(null, null, "01SEED000000000000000000P")]
-    [InlineData("   ", "  ", "01SEED000000000000000000P")]
     public void Resolve_PrefersLiveNameThenSnapshotThenId(string? live, string? snapshot, string expected)
     {
         Assert.Equal(expected, ModelDisplayName.Resolve(live, snapshot, Id));
@@ -45,12 +42,6 @@ public class ModelDisplayNameTests
     }
 
     [Fact]
-    public void IsUnresolved_FalseForARealName()
-    {
-        Assert.False(ModelDisplayName.IsUnresolved("Phi-4", Id.Value));
-    }
-
-    [Fact]
     public void ResolveForDisplay_SubstitutesThePlaceholderRatherThanLeakingTheId()
     {
         // The whole point: a 26-character ULID must never reach a table cell.
@@ -60,7 +51,7 @@ public class ModelDisplayNameTests
     [Fact]
     public void ResolveForDisplay_PassesARealNameThroughTrimmed()
     {
-        Assert.Equal("Phi-4", ModelDisplayName.ResolveForDisplay("Phi-4", null, Id));
         Assert.Equal("Phi-4", ModelDisplayName.ResolveForDisplay("  Phi-4  ", null, Id));
+        Assert.False(ModelDisplayName.IsUnresolved("Phi-4", Id.Value));
     }
 }

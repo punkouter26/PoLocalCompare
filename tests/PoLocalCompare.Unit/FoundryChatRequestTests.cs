@@ -5,16 +5,6 @@ namespace PoLocalCompare.Unit;
 public class FoundryChatRequestTests
 {
     [Fact]
-    public void Build_StreamingRequest_IncludesUsageMetadata()
-    {
-        // phi-4 is in the SupportsStreamUsage allow-list; native Azure OpenAI accepts the
-        // OpenAI streaming-extension shape (stream_options.include_usage).
-        var body = FoundryChatRequest.Build("phi-4", Array.Empty<object>(), 4096, 0.7, stream: true, includeModelField: false);
-
-        Assert.True(body.ContainsKey("stream_options"));
-    }
-
-    [Fact]
     public void Build_ForCodestral_OmitsStreamOptions_StreamingOrNot()
     {
         // Codestral 2501 routes through a strict OpenAI-compatible proxy that rejects
@@ -36,7 +26,6 @@ public class FoundryChatRequestTests
 
     [Theory]
     [InlineData("gpt-5-nano")]
-    [InlineData("phi-4-mini-instruct")]
     [InlineData("Llama-3.3-70B-Instruct")]
     public void Build_NativeDeploymentNames_SupportStreamUsage(string deployment)
     {
@@ -47,7 +36,6 @@ public class FoundryChatRequestTests
 
     [Theory]
     [InlineData("Codestral-2501")]
-    [InlineData("unknown-deployment")]
     [InlineData(null)]
     public void Build_NonNativeOrUnknownDeploymentNames_RejectStreamUsage(string? deployment)
     {

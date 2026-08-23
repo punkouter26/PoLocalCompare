@@ -49,7 +49,6 @@ public sealed class FoundryInferenceProxy(
     {
         var result = new DuelResult(duelId, model.ModelId);
         var sw = Stopwatch.StartNew();
-        using var activity = InferenceTelemetry.ActivitySource.StartActivity("gen_ai.chat", ActivityKind.Client);
 
         var endpoint = _configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/');
         var apiKey = _configuration["AzureAiFoundry:ApiKey"];
@@ -247,14 +246,6 @@ public sealed class FoundryInferenceProxy(
             var outputCost = (result.TokenCount / 1_000_000.0) * (double)(model.OutputTokenPricePerMillion ?? 0);
             result.ApiCostUsd = inputCost + outputCost;
         }
-
-        activity?.SetTag("gen_ai.provider.name", "azure.ai.foundry");
-        activity?.SetTag("gen_ai.request.model", deploymentName);
-        activity?.SetTag("gen_ai.usage.input_tokens", result.PromptTokenCount);
-        activity?.SetTag("gen_ai.usage.output_tokens", result.TokenCount);
-        activity?.SetTag("gen_ai.response.finish_reasons", result.FinishReason);
-        activity?.SetTag("gen_ai.response.truncated", result.WasTruncated);
-        InferenceTelemetry.Record("azure.ai.foundry", deploymentName, result);
 
         _logger.LogInformation(
             "Inference complete for {Model}: {Tokens} tokens, {Bytes} bytes, {Ms}ms",

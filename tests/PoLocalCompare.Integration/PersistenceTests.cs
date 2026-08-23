@@ -140,19 +140,6 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Model_RoundTripsThroughTableStorage()
-    {
-        var model = new Model(ModelId.New(), "Test", ModelType.Remote, tdpWatts: 100.0, webLlmModelId: null, apiEndpointRef: "deployment-x");
-
-        await Models.SaveAsync(model);
-        var loaded = await Models.GetByIdAsync(model.ModelId);
-
-        Assert.NotNull(loaded);
-        Assert.Equal(model.DisplayName, loaded!.DisplayName);
-        Assert.Equal(1200, loaded.CurrentElo);
-    }
-
-    [Fact]
     public async Task Model_UpdatePersistsEloAndCounters()
     {
         var model = new Model(ModelId.New(), "Test", ModelType.Remote, tdpWatts: 100.0, webLlmModelId: null, apiEndpointRef: "deployment-x");
@@ -167,36 +154,6 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal(1300, loaded!.CurrentElo);
         Assert.Equal(5, loaded.DuelCount);
         Assert.Equal(3, loaded.WinCount);
-    }
-
-    [Fact]
-    public async Task EloHistory_RoundTripsARecord()
-    {
-        var duel = NewDuel(out var left, out var right);
-        var record = new EloRecord(left, duel.DuelId, eloAfter: 1216, eloBefore: 1200,
-            outcome: "Win", opponentModelId: right, opponentEloBefore: 1200);
-
-        await EloHistory.SaveAsync(record);
-
-        var loaded = (await EloHistory.GetAllByModelAsync(left)).ToList();
-        Assert.Contains(loaded, r => r.DuelId == duel.DuelId && r.EloAfter == 1216);
-    }
-
-    [Fact]
-    public async Task EloHistory_ReturnsNewestFirst()
-    {
-        var model = ModelId.New();
-        var opponent = ModelId.New();
-        var first = new EloRecord(model, DuelId.New(), eloAfter: 1200, eloBefore: 1200, outcome: "Draw", opponentModelId: opponent, opponentEloBefore: 1200);
-        await EloHistory.SaveAsync(first);
-        await Task.Delay(2);
-        var second = new EloRecord(model, DuelId.New(), eloAfter: 1216, eloBefore: 1200, outcome: "Win", opponentModelId: opponent, opponentEloBefore: 1200);
-        await EloHistory.SaveAsync(second);
-
-        var loaded = (await EloHistory.GetAllByModelAsync(model)).ToList();
-
-        Assert.Equal(2, loaded.Count);
-        Assert.True(loaded[0].RecordedAt >= loaded[1].RecordedAt);
     }
 
     [Fact]

@@ -7,16 +7,11 @@ param location string = 'westus2'
 param appServiceName string = 'app-polocalcompare-win'
 
 // ─── Shared platform resources (resource group: PoShared) ──────────────────────────
-@description('Shared resource group holding Key Vault and App Insights')
+@description('Shared resource group holding Key Vault')
 param sharedResourceGroupName string = 'PoShared'
 
 resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: 'kv-poshared'
-  scope: resourceGroup(sharedResourceGroupName)
-}
-
-resource sharedAppInsights 'Microsoft.Insights/components@2020-02-02' existing = {
-  name: 'poappideinsights8f9c9a4e'
   scope: resourceGroup(sharedResourceGroupName)
 }
 
@@ -71,10 +66,6 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'KeyVault__Uri'
           value: sharedKeyVault.properties.vaultUri
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: sharedAppInsights.properties.ConnectionString
         }
         {
           // Identity-based storage access: the app resolves Table/Blob endpoints from the

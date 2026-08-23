@@ -55,14 +55,6 @@ public sealed class HealthAndDiagnosticsTests(AzuriteFixture azurite) : IAsyncLi
     }
 
     [Fact]
-    public async Task DiagSmoke_ReportsTheEnvironment()
-    {
-        var body = await Client.GetFromJsonAsync<JsonElement>("/api/diag/smoke");
-
-        Assert.Equal("Development", body.GetProperty("environment").GetString());
-    }
-
-    [Fact]
     public async Task DiagPage_RendersAndMasksSecrets()
     {
         using var anonymous = _host.CreateAnonymousClient();

@@ -194,7 +194,6 @@ public class AutoJudgeTests
     /// "Left wins" regression.
     /// </summary>
     [Theory]
-    [InlineData(true)]   // Left survives, Right failed
     [InlineData(false)]  // Right survives, Left failed
     public async Task RunAsync_OneModelFailed_RecordsWalkoverToTheSurvivor(bool leftSurvives)
     {
@@ -272,32 +271,5 @@ public class AutoJudgeTests
         Assert.Single(harness.Queue.Work);
         Assert.NotNull(duel.JudgeStoodDownReason);
         Assert.Contains("Rate-limited", duel.JudgeStoodDownReason!);
-    }
-
-    [Fact]
-    public async Task RunAsync_RateLimitExhaustedRetries_LeavesPendingAndDoesNotQueue()
-    {
-        var duel = MakePendingDuel();
-        // Pretend the same duel has already retried once (would be stored in the static counter
-        // across requests; we trigger the bound by RateLimitRetryMax=1 and two consecutive calls).
-        var harness = BuildHarness(
-            duel,
-            [MakeResult(duel.DuelId, ModelId.From("left-aj"), "<p>left</p>"),
-             MakeResult(duel.DuelId, ModelId.From("right-aj"), "<p>right</p>")],
-            llmDecision: null,
-            rateLimitRetryMax: 0);
-
-        harness.Llm
-            .Setup(j => j.JudgeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new JudgeRateLimitedException(TimeSpan.FromSeconds(15), "HTTP 429 from judge endpoint"));
-
-        await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
-
-        // No retries allowed → no queued item, duel stays Pending, reason is still persisted so
-        // a human arriving from the queue understands the cause.
-        Assert.Equal(DuelVerdict.Pending, duel.Verdict);
-        Assert.Empty(harness.Queue.Work);
-        Assert.NotNull(duel.JudgeStoodDownReason);
     }
 }

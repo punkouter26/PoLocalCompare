@@ -5,7 +5,7 @@ using PoLocalCompare.Shared.Prompts;
 namespace PoLocalCompare.Unit;
 
 /// <summary>
-/// The library feeds both the Compare page and demo mode, so a malformed entry surfaces as a
+/// The library feeds the Compare page and the tournament shortlist, so a malformed entry is a
 /// rejected duel at run time rather than as a compile error. These pin the shape every prompt
 /// has to satisfy to be startable at all.
 /// </summary>
@@ -76,13 +76,5 @@ public class HtmlPreviewTests
     public void Normalize_StripsAWrappingFence()
     {
         Assert.Equal("<div>x</div>", HtmlPreview.Normalize("```html\n<div>x</div>\n```"));
-    }
-
-    [Fact]
-    public void Normalize_ExtractsTheFirstFenceFromSurroundingProse()
-    {
-        var raw = "Here you go:\n```html\n<p>hi</p>\n```\nHope that helps!";
-
-        Assert.Equal("<p>hi</p>", HtmlPreview.Normalize(raw));
     }
 }

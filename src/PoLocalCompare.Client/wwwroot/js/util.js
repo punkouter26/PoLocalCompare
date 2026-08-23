@@ -58,21 +58,6 @@ window.focusElement = function (id) {
 };
 
 /**
- * Scrolls the named element into view if it exists. Used by Archive.razor to drop the user
- * at the duel-details panel after a row select — <c>JS.InvokeVoidAsync("eval", ...)</c> would
- * work, but it executes arbitrary page code on every detail-panel focus and is hostile to any
- * future Content-Security-Policy that disables inline-eval. This helper does the same job
- * without the cost.
- *
- * @param {string} id - Target element id.
- * @param {ScrollIntoViewOptions} [options] - Optional behaviour tuning (block, behavior, …).
- */
-window.scrollElementIntoView = function (id, options) {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView(options || { behavior: 'smooth', block: 'nearest' });
-};
-
-/**
  * Returns the browser's current `window.location.href` as a string. Used by Home.razor when
  * the URL has query parameters (slot ids) that Blazor's named-supply-parameter matcher
  * occasionally drops — having the raw value as a fallback lets the page read the slots

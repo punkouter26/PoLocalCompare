@@ -39,8 +39,8 @@ internal static partial class AutoJudgeLog
 ///
 /// A fourth behaviour complements those: a judge that *temporarily* cannot reach the model —
 /// a 429 with a <c>Retry-After</c> header, mostly — is re-queued for the requested delay
-/// rather than stood down, so a Foundry rate-limit burst does not silently turn ten-demo runs
-/// into one-judge-recorded.
+/// rather than stood down, so a Foundry rate-limit burst does not silently turn a long unattended
+/// run into one-judge-recorded.
 /// </remarks>
 public sealed class AutoJudge
 {
@@ -87,7 +87,7 @@ public sealed class AutoJudge
     /// a failed auto-judge must leave the duel judgeable by hand, not break duel execution.
     /// </summary>
     /// <param name="delaySecondsOverride">
-    /// Replaces <see cref="AutoJudgeOptions.DelaySeconds"/> for this duel. Demo mode passes 0.
+    /// Replaces <see cref="AutoJudgeOptions.DelaySeconds"/> for this duel. A tournament passes 0.
     /// Note this cannot enable the judge: <see cref="AutoJudgeOptions.Enabled"/> is still the
     /// master switch, so <c>AiJudge:Enabled=false</c> genuinely restores human-only verdicts.
     /// </param>
@@ -101,7 +101,7 @@ public sealed class AutoJudge
         try
         {
             var configuredDelay = delaySecondsOverride ?? _options.DelaySeconds;
-            // Floor at 0 because demo mode legitimately wants 0 ("decide immediately, no human
+            // Floor at 0 because a tournament legitimately wants 0 ("decide immediately, no human
             // is watching"). Negative values come from misconfigured appsettings and would
             // skip the delay entirely, which is benign but ugly in the logs.
             var delaySeconds = Math.Clamp(configuredDelay, 0, 3600);
@@ -140,7 +140,7 @@ public sealed class AutoJudge
             }
 
             // Make the "could not decide" reason persistent on the duel so a human arriving at
-            // the Arena from the demo queue gets the same hint the judge had. Both sides
+            // the Arena later gets the same hint the judge had. Both sides
             // failed → no evidence to act on; leave Pending. (One-sided failures take the
             // walkover path inside DecideAsync, so they reach RecordAsync, not this branch —
             // see PRD §9 item 20.)
@@ -179,7 +179,7 @@ public sealed class AutoJudge
 
     /// <summary>
     /// Schedules a fresh attempt after <paramref name="retryAfter"/> via the same task queue the
-    /// duels themselves use, then returns so the next duel in the demo does not stall behind a
+    /// duels themselves use, then returns so the next queued duel does not stall behind a
     /// long <c>Retry-After</c>.
     /// </summary>
     private Task RequeueAfterRateLimitAsync(DuelId duelId, TimeSpan retryAfter, CancellationToken cancellationToken)
@@ -234,7 +234,7 @@ public sealed class AutoJudge
         // One side produced nothing. The survivor is direct model-quality evidence, not the
         // absence of it — recording a walkover moves the survivor's rating and reflects the
         // loser's failure in their DuelCount. PRD §9 item 20 reverses the "leave it Pending"
-        // decision from the prior pass once the demo's Kimi-vs-* duels surfaced the gap; the
+        // decision from the prior pass once a batch of Kimi-vs-* duels surfaced the gap; the
         // no-evidence guard in RecordVerdictHandler is unchanged because the survivor IS the
         // evidence (one result row, one failure row).
         if (leftOk != rightOk)

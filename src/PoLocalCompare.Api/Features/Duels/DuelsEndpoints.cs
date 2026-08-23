@@ -12,7 +12,7 @@ namespace PoLocalCompare.Api.Features.Duels;
 public static class DuelsEndpoints
 {
     /// <summary>
-    /// Reads (GET /api/duels, GET /api/duels/{id}, GET /api/duels/demo-plan) stay authenticated
+    /// Reads (GET /api/duels, GET /api/duels/{id}) stay authenticated
     /// so the leaderboard and archive can't be scraped anonymously. Writes are opened when
     /// <c>Features:AllowAnonymousWrites</c> is true (Development default). The flag is read
     /// once at startup; flipping it requires a restart.
@@ -244,21 +244,6 @@ public static class DuelsEndpoints
         .WithSummary("Ids of finished duels that still have no verdict — drives the nav badge.")
         .Produces<IReadOnlyList<DuelId>>(StatusCodes.Status200OK);
 
-        // GET /api/duels/demo-plan — the schedule for an unattended demo run.
-        // Read-only: it resolves pairings and prompts but writes nothing. The client starts each
-        // duel through the ordinary POST /api/duels, so demo duels are real duels.
-        group.MapGet("/demo-plan", async (
-            [FromQuery] int? rounds,
-            [FromQuery] int? seed,
-            [FromServices] DemoPlanHandler handler) =>
-        {
-            var plan = await handler.HandleAsync(rounds ?? 0, seed);
-            return Results.Ok(plan);
-        })
-        .WithName("GetDemoPlan")
-        .WithSummary("Returns the pairings and prompts for a self-running demo.")
-        .Produces<DemoPlanDto>(StatusCodes.Status200OK);
-
         return app;
     }
 
@@ -278,7 +263,7 @@ public static class DuelsEndpoints
 }
 
 /// <param name="AutoJudgeDelaySeconds">
-/// Optional per-duel grace window. Omit to use <c>AiJudge:DelaySeconds</c>; demo mode sends 0
+/// Optional per-duel grace window. Omit to use <c>AiJudge:DelaySeconds</c>; a tournament sends 0
 /// so an unattended run is never waiting on a human pick that will not come.
 /// </param>
 public sealed record CommenceDuelRequest(

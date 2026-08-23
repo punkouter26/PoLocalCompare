@@ -45,8 +45,8 @@ public sealed class DuelExecutionService
     }
 
     /// <param name="autoJudgeDelaySecondsOverride">
-    /// Replaces the configured grace window for this duel only — demo mode passes 0 so the run
-    /// does not pause between rounds waiting for a human who is not there.
+    /// Replaces the configured grace window for this duel only — a tournament passes 0 so the
+    /// bracket does not pause between rounds waiting for a human who is not there.
     /// </param>
     public Task EnqueueAsync(DuelId duelId, int? autoJudgeDelaySecondsOverride = null)
     {

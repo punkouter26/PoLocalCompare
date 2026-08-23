@@ -3,7 +3,7 @@ using Microsoft.JSInterop;
 namespace PoLocalCompare.Client.Services;
 
 /// <summary>
-/// Single-flight WebGPU capability probe shared by Home and ModelHealthPanel.
+/// Single-flight WebGPU capability probe for the Home model picker.
 ///
 /// Without this, every page that mounts a model picker re-requests a GPU adapter and
 /// device even when a sister component on the same page has already done so — both

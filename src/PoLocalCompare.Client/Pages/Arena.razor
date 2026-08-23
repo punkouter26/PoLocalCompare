@@ -10,7 +10,6 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject WebLlmService WebLlm
-@inject BlindModeService Blind
 @inject FxService Fx
 
 <PageTitle>Arena — PoLocalCompare</PageTitle>
@@ -130,7 +129,6 @@
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
                     IsDuelStillRunning="@_duelStillRunning"
-                    IsMasked="@IsMasked"
                     EloShiftDisplay="@(_eloShiftLeft.HasValue ? _eloDisplayLeft : null)"
                     OnProbeUpdated="OnLeftProbe"
                     OnViewSource="(html) => OpenSourceAsync(html, LeftDisplayName)" />
@@ -144,7 +142,6 @@
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
                     IsDuelStillRunning="@_duelStillRunning"
-                    IsMasked="@IsMasked"
                     EloShiftDisplay="@(_eloShiftRight.HasValue ? _eloDisplayRight : null)"
                     OnProbeUpdated="OnRightProbe"
                     OnViewSource="(html) => OpenSourceAsync(html, RightDisplayName)" />
@@ -185,19 +182,6 @@
                 RightName="@RightDisplayName"
                 LeftProbe="_leftProbe"
                 RightProbe="_rightProbe" />
-        }
-
-        @* ── Blind reveal ─────────────────────────────────────────────────
-           Fires on whichever verdict lands first, human or AI. Stated explicitly rather than
-           just swapping the labels: a name that silently changes mid-page is a thing the reader
-           has to notice, and the point of the exercise is knowing what you just picked. *@
-        @if (_blind && _verdictRecorded)
-        {
-            <div class="arena__reveal" role="status">
-                <span aria-hidden="true">🙈</span>
-                Revealed — <strong>@BlindLabels.Left</strong> was @LeftRealName,
-                <strong>@BlindLabels.Right</strong> was @RightRealName.
-            </div>
         }
 
         @if (_verdictRecorded)
@@ -425,13 +409,6 @@
     private bool _optimistic;
     private string? _overriddenNotice;
 
-    /// <summary>
-    /// True when this duel was started with blind mode on. Read from localStorage rather than
-    /// from the duel record: blindness is presentational and per-browser, so a shared Arena link
-    /// correctly shows the names to whoever opens it — the duel was never blind for them.
-    /// </summary>
-    private bool _blind;
-
     // Animated ELO readouts. The badge counts up to the real shift instead of snapping, which
     // is the only part of a verdict with any weight behind it.
     private double _eloDisplayLeft;
@@ -495,16 +472,13 @@
         ?? _duel?.RightModelId.ToString()
         ?? "Right";
 
-    /// <summary>
-    /// Whether identity is currently hidden. Every surface that names a side — viewport
-    /// caption, race lanes, scorecard columns, cost breakdown, failure card, View Source tab
-    /// title, vote buttons — resolves its name through <see cref="LeftDisplayName"/> or
-    /// <see cref="RightDisplayName"/>, so this one flag is the whole mask.
-    /// </summary>
-    private bool IsMasked => _blind && !_verdictRecorded;
-
-    private string LeftDisplayName => IsMasked ? BlindLabels.Left : LeftRealName;
-    private string RightDisplayName => IsMasked ? BlindLabels.Right : RightRealName;
+    // Every surface that names a side — viewport caption, race lanes, scorecard columns, cost
+    // breakdown, failure card, View Source tab title, vote buttons — resolves its name through
+    // these two rather than reading _leftResult.ModelName directly. Kept as an indirection after
+    // Blind mode was removed on 2026-08-23 so the fallback chain (result → duel snapshot → id)
+    // stays in one place instead of being restated at every call site.
+    private string LeftDisplayName => LeftRealName;
+    private string RightDisplayName => RightRealName;
 
     /// <summary>
     /// Sums the two sides' API costs. Models without a Foundry rate return null and contribute
@@ -640,9 +614,6 @@
             }
         });
 
-        // Before the duel loads, so the very first render of the panels is already masked.
-        _blind = await Blind.IsBlindAsync(_duelId);
-
         try
         {
             _duel = await ApiClient.GetDuelAsync(_duelId);
@@ -765,12 +736,6 @@
         await PulseAsync(30);
         _ = AudioService.PlaySuccessAsync();
 
-        // Banked on the click rather than on the server's answer. This ledger records what the
-        // user preferred, not what was ultimately recorded — a pick that loses the race to the
-        // AI judge was still a pick, and it is exactly as informative about their taste. Voting
-        // again after a rollback replaces the entry, since the ledger is keyed on duel id.
-        await RecordBlindVoteAsync(verdict);
-
         try
         {
             var response = await ApiClient.RecordVerdictAsync(_duelId, new VerdictRequestDto { Verdict = verdict });
@@ -823,26 +788,6 @@
 
         await AnimateEloAsync();
         return true;
-    }
-
-    /// <summary>
-    /// Adds this pick to the local blind ledger. No-ops for a sighted duel, and for anything
-    /// that is not a straight Left/Right choice — a tie expresses no preference.
-    /// </summary>
-    private async Task RecordBlindVoteAsync(DuelVerdict verdict)
-    {
-        if (!_blind || _duel is null) return;
-        if (verdict is not (DuelVerdict.Left or DuelVerdict.Right)) return;
-
-        var leftWon = verdict == DuelVerdict.Left;
-
-        await Blind.RecordVoteAsync(new BlindVote(
-            DuelId: _duelId,
-            WinnerModelId: leftWon ? _duel.LeftModelId : _duel.RightModelId,
-            WinnerName: leftWon ? LeftRealName : RightRealName,
-            LoserModelId: leftWon ? _duel.RightModelId : _duel.LeftModelId,
-            LoserName: leftWon ? RightRealName : LeftRealName,
-            VotedAt: DateTimeOffset.UtcNow));
     }
 
     private void RollBackOptimisticVerdict()

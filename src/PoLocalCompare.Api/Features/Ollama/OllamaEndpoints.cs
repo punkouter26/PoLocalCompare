@@ -9,13 +9,6 @@ public static class OllamaEndpoints
     {
         var group = app.MapGroup("/api/ollama").WithTags("Ollama").RequireAuthorization();
 
-        group.MapGet("/gpu-status", async (
-            [FromServices] GetOllamaGpuStatusHandler handler,
-            CancellationToken ct) => Results.Ok(await handler.HandleAsync(ct)))
-        .WithName("GetOllamaGpuStatus")
-        .WithSummary("Returns GPU vs CPU placement for each model currently loaded in Ollama.")
-        .Produces<IEnumerable<OllamaGpuStatusDto>>();
-
         group.MapGet("/available-models", async (
             [FromServices] ListOllamaModelsHandler handler,
             CancellationToken ct) => Results.Ok(await handler.HandleAsync(ct)))

@@ -15,7 +15,7 @@
     {
         <ArenaFailureCard DisplayName="@DisplayName"
                           FailureReason="@Result.FailureReason"
-                          IsMasked="@IsMasked" />
+                          />
     }
     else
     {
@@ -48,7 +48,7 @@
     /// <summary>The result row for this side, or <c>null</c> if the run has not produced one.</summary>
     [Parameter, EditorRequired] public DuelResultDto? Result { get; set; }
 
-    /// <summary>What this side is called in the UI — already resolved through Blind mode by the page.</summary>
+    /// <summary>What this side is called in the UI — resolved by the page.</summary>
     [Parameter, EditorRequired] public string DisplayName { get; set; } = string.Empty;
 
     /// <summary>The streaming HTML previewed while inference is running. Null once the run completes.</summary>
@@ -66,8 +66,6 @@
     /// <summary>True while the duel is still running; suppresses runtime probes when stable.</summary>
     [Parameter] public bool IsDuelStillRunning { get; set; }
 
-    /// <summary>True while the page is masked for Blind mode — suppresses technical details.</summary>
-    [Parameter] public bool IsMasked { get; set; }
 
     /// <summary>The id of the model that occupies this side — supplied by the page so the panel
     /// can compare it to the loser / winner ids without holding its own copy.</summary>

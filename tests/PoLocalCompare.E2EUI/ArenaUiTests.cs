@@ -42,7 +42,7 @@ public sealed class ArenaUiTests : UiTestBase
         var duelId = await FirstDuelIdAsync(page);
         // Stated rather than silently skipped: a green run that asserted nothing would be
         // worse than a red one that says what is missing.
-        Assert.True(duelId is not null, "No duels recorded — run a duel or /demo before this suite.");
+        Assert.True(duelId is not null, "No duels recorded — run a duel or a tournament before this suite.");
 
         await page.GotoAsync($"/arena/{duelId}");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });

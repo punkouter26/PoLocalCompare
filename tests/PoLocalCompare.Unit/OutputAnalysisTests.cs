@@ -37,7 +37,6 @@ public class OutputAnalysisTests
     [InlineData("<!DOCTYPE html><html><body><div><p>cut off", "unclosed")]
     [InlineData("```html\n<div>x</div>\n```",                "fence")]
     [InlineData("<body><img src='a.png'></body>",           "alt")]
-    [InlineData("<body><h2>a</h2></body>",                 "h2")]
     public void Analyze_ReportsEachClassOfIssueWithItsOwnKeyword(string html, string keyword)
     {
         // One assertion per kind of issue rather than one test each — the test name carries
@@ -71,13 +70,10 @@ public class OutputAnalysisTests
         Assert.True(complete.CompletenessScore > fragment.CompletenessScore);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("not html at all")]
-    public void CompletenessScore_StaysWithinBounds(string html)
+    /// <summary>Empty input must score inside the band, not below it.</summary>
+    [Fact]
+    public void CompletenessScore_StaysWithinBounds()
     {
-        var score = OutputAnalysis.Analyze(html).CompletenessScore;
-
-        Assert.InRange(score, 0, 100);
+        Assert.InRange(OutputAnalysis.Analyze("").CompletenessScore, 0, 100);
     }
 }

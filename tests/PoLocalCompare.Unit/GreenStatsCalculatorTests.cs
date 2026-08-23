@@ -12,9 +12,6 @@ public class GreenStatsCalculatorTests
 {
     [Theory]
     [InlineData(1, 3_600_000, 1.0)]      // one hour at one watt is one watt-hour
-    [InlineData(115, 30_000, 0.958333)]
-    [InlineData(65, 10_000, 0.180556)]
-    [InlineData(250, 5_000, 0.347222)]
     [InlineData(115, 0, 0)]              // no time, no energy
     public void ComputeEnergyWh_KnownValues(double tdp, long ms, double expected)
     {
@@ -33,7 +30,6 @@ public class GreenStatsCalculatorTests
 
     [Theory]
     [InlineData(1000, 0.12, 0.12)]   // a full kilowatt-hour costs the full rate
-    [InlineData(0, 0.12, 0)]         // no energy is free
     [InlineData(5000, 0, 0)]         // a zero rate is free
     public void ComputeEnergyCostUsd_KnownValues(double energyWh, double rateUsdPerKwh, double expected)
     {

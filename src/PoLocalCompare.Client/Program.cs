@@ -29,7 +29,6 @@ try
     builder.Services.AddScoped<AudioService>();
     builder.Services.AddScoped<ThemeService>();
     builder.Services.AddScoped<PromptHistoryService>();
-    builder.Services.AddScoped<BlindModeService>();
     builder.Services.AddScoped<FxService>();
     // Scoped, which under a WebAssembly host is one instance for the whole app session: the
     // ticker holds a single lobby SignalR connection that must survive page navigation rather
@@ -38,7 +37,7 @@ try
     builder.Services.AddScoped<WebLlmService>();
     builder.Services.AddTransient<SignalRDuelClient>();
 
-    // Single-flight WebGPU capability probe — shared between Home and ModelHealthPanel so
+    // Single-flight WebGPU capability probe, so
     // only one adapter/device request is made even when both mount on the same page.
     builder.Services.AddScoped<WebGpuCapability>();
     await builder.Build().RunAsync();

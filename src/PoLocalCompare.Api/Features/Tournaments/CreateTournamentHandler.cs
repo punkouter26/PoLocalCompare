@@ -10,16 +10,20 @@ public sealed class CreateTournamentHandler(
     ITournamentRepository tournamentRepository)
 {
     /// <summary>
-    /// Model types a bracket may contain.
+    /// Model types a bracket may contain — all of them, since 2026-08-23.
     /// </summary>
     /// <remarks>
-    /// Server-side execution only, for the same reason <see cref="Demo.DemoPlanner"/> restricts
-    /// its pool: a browser model runs WebGPU inference inside a foreground tab, and a bracket is
-    /// designed to keep going after that tab is closed. Including one would produce a run that
-    /// stalls at the first browser match with no way to finish it.
+    /// This reverses PRD §9 item 21, which excluded browser (WebGPU) models because a bracket is
+    /// designed to keep running after the tab is closed and browser inference cannot. That is
+    /// still true, and it is now a <em>caveat</em> rather than a prohibition: the Tournament page
+    /// joins the running match's hub group and drives WebGPU inference in the tab, exactly as the
+    /// Arena does. The consequence is real and stated on the page — close the tab during a
+    /// browser match and that match stalls until the duel's 15-minute watchdog fails it, which
+    /// hands the walkover to its opponent. Remote and Ollama matches are unaffected and still
+    /// finish with nothing open.
     /// </remarks>
     public static bool IsEligible(ModelType modelType) =>
-        modelType is ModelType.Remote or ModelType.LocalService;
+        modelType is ModelType.Remote or ModelType.LocalService or ModelType.Local;
 
     /// <summary>
     /// The models that can enter a bracket, strongest first — which is also the seeding order,
@@ -81,13 +85,6 @@ public sealed class CreateTournamentHandler(
         {
             if (!catalog.TryGetValue(id, out var model))
                 throw new ArgumentException($"Model '{id}' is not in the catalog.", nameof(modelIds));
-
-            if (!IsEligible(model.ModelType))
-            {
-                throw new ArgumentException(
-                    $"{model.DisplayName} runs in the browser, so it cannot enter an unattended bracket.",
-                    nameof(modelIds));
-            }
 
             entrants.Add(model);
         }

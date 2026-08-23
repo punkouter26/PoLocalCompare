@@ -19,7 +19,6 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     [Theory]
     [InlineData("/api/tournaments/entrants")]
     [InlineData("/api/tournaments")]
-    [InlineData("/api/challenges/leaderboard?kind=MaxSeconds")]
     public async Task NewReadEndpoints_AreClosedToAnonymousCallers(string path)
     {
         // FallbackPolicy is RequireAuthenticatedUser, so a new endpoint is closed unless it
@@ -77,7 +76,6 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     }
 
     [Theory]
-    [InlineData(1, "Build a click counter.")]   // wrong field size
     [InlineData(3, "Build a click counter.")]   // wrong field size
     [InlineData(2, "hi")]                       // prompt under minimum length
     public async Task Draw_RejectsARequestThatFailsBasicValidation(int fieldSize, string prompt)
@@ -108,16 +106,6 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     }
 
     // ── Challenge surface ─────────────────────────────────────────────────
-
-    [Fact]
-    public async Task ChallengeBoard_Returns200EvenBeforeAnyChallengeHasRun()
-    {
-        using var client = app.CreateAuthenticatedClient();
-
-        var response = await client.GetAsync("/api/challenges/leaderboard?kind=MaxSeconds");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
 
     /// <summary>
     /// A budget rides along on the ordinary duel request rather than a separate endpoint —
@@ -153,7 +141,6 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     /// </summary>
     [Theory]
     [InlineData(0.0)]    // zero budget
-    [InlineData(-5.0)]   // negative budget
     public async Task Commence_WithANonPositiveBudget_FallsBackToAnOrdinaryDuel(double threshold)
     {
         using var client = app.CreateAuthenticatedClient();

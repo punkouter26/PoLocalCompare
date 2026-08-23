@@ -63,14 +63,6 @@
     text-decoration: none;
 }
 
-/* RadzenDataGrid renders the rows now, so the focus ring hangs off its own class rather
-   than the hand-rolled table's. Kept because the grid's default ring is faint against this
-   app's surfaces. */
-.archive__grid ::deep .rz-grid-table tr:focus-visible {
-    outline: 2px solid var(--accent-green);
-    outline-offset: -2px;
-}
-
 @keyframes archive-rise {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }

@@ -9,6 +9,7 @@
 @inject NavigationManager Nav
 @inject AudioService AudioService
 @inject FxService Fx
+@inject WebLlmService WebLlm
 
 <PageTitle>Tournament — PoLocalCompare</PageTitle>
 
@@ -17,9 +18,11 @@
    component because creating a bracket navigates straight into watching it, and splitting
    them would remount the page at exactly the moment the first match starts.
 
-   The bracket runs server-side. This page is a viewer — it polls and paints, and closing the
-   tab does not stop the run. That is the whole difference from demo mode, which orchestrates
-   its rounds from the client and dies with the tab. *@
+   The bracket runs server-side, and this page is mostly a viewer — it polls and paints. The
+   exception is a browser (WebGPU) match: those cannot run on the server, so the page joins the
+   running match's hub group and drives that inference in this tab, exactly as the Arena does.
+   A bracket of remote/Ollama models still finishes with nothing open; one containing a browser
+   model needs this tab left open for its matches. *@
 <div class="tourney po-page po-page--wide">
     @if (_tournament is not null)
     {
@@ -75,6 +78,16 @@
                     <span>Starting the next match…</span>
                 }
             </div>
+
+            @* A browser match runs on this tab's GPU, so say so — the page is otherwise a
+               viewer and "you can close this" is the reasonable assumption to make about it. *@
+            @if (_drivingLocalMatch)
+            {
+                <div class="tourney__local-notice" role="status">
+                    <span aria-hidden="true">🖥</span>
+                    Running a browser model in this tab — keep it open until the match finishes.
+                </div>
+            }
         }
 
         @* Columns are rounds. Each column is centred against the one before it, so the pairs
@@ -141,8 +154,9 @@
         <header class="po-header">
             <h1 class="po-title">Run a tournament</h1>
             <p class="po-subtitle">
-                One prompt, a seeded bracket, every match judged automatically. It runs on the
-                server — you can close this tab and come back to the result.
+                One prompt, a seeded bracket, every match judged automatically. Remote and
+                Ollama matches run on the server, so you can close this tab and come back to the
+                result. Browser models run in this tab — see the note under the field.
             </p>
         </header>
 
@@ -168,10 +182,17 @@
                     Field — @_selected.Count of @_size chosen
                 </h2>
                 <p class="po-hint">
-                    Seeded by rating, so the top two seeds can only meet in the final.
-                    Browser models are not listed: a bracket keeps running after you close the tab,
-                    and WebGPU inference needs this one open.
+                    Seeded by rating, so the top two seeds can only meet in the final. Remote,
+                    Ollama and browser models can all enter.
                 </p>
+                @if (_selected.Any(id => _entrants.FirstOrDefault(e => e.ModelId == id)?.ModelType == ModelType.Local))
+                {
+                    <p class="po-hint po-fg--err">
+                        ⚠ Your field includes a browser (WebGPU) model. Those run in this tab, so
+                        leave it open while the bracket is running — closing it stalls that match
+                        until the duel's watchdog fails it and hands the walkover to its opponent.
+                    </p>
+                }
             </div>
 
             @* The slot reserves height for the entrant list while it loads. Without it this block
@@ -187,7 +208,7 @@
                 else if (_entrants.Count < _size)
                 {
                     <p class="po-error">
-                    Only @_entrants.Count server-side model@(_entrants.Count == 1 ? " is" : "s are") available —
+                    Only @_entrants.Count model@(_entrants.Count == 1 ? " is" : "s are") registered —
                     a @SizeLabel(_size).ToLowerInvariant() needs @_size.
                     </p>
                 }
@@ -307,6 +328,16 @@
     private PeriodicTimer? _pollTimer;
     private CancellationTokenSource? _pollCts;
 
+    // ── Browser-model matches ────────────────────────────────────────────────
+    // A WebGPU model cannot run on the server, so for those matches this page plays the role
+    // the Arena plays for a single duel: join the running duel's hub group, answer
+    // StartLocalInference, and POST the result back. The hub follows the running match rather
+    // than the tournament, because StartLocalInference is addressed to `duel:{duelId}`.
+    private SignalRDuelClient? _hub;
+    private DuelId? _hubDuelId;
+    private LocalInferenceDriver? _localInference;
+    private bool _drivingLocalMatch;
+
     /// <summary>
     /// How often the bracket is re-read while it runs. The server owns the run, so this is a
     /// viewer refresh rather than a control loop — slow enough not to hammer storage, fast
@@ -332,14 +363,12 @@
     private static string SizeLabel(int size) => size switch
     {
         2 => "1v1",
-        4 => "4-model bracket",
         _ => $"{size}-model bracket",
     };
 
     private static string SizeHint(int size) => size switch
     {
         2 => "A single match, run and judged through the same machinery as a full bracket.",
-        4 => "Two semi-finals and a final — three duels.",
         _ => "Quarter-finals, semis and a final — seven duels.",
     };
 
@@ -534,6 +563,72 @@
         _ = PollAsync(_pollTimer, _pollCts.Token);
     }
 
+    /// <summary>
+    /// Keeps the hub connection pointed at whichever match is currently running, so a browser
+    /// model in that match gets driven from this tab. A no-op for a bracket of remote/Ollama
+    /// models: the server never sends StartLocalInference for those, so the connection sits idle.
+    /// </summary>
+    /// <remarks>
+    /// Reconnecting per match rather than holding one connection is deliberate — the server
+    /// addresses StartLocalInference to the duel group, and a bracket is seven different duels.
+    /// The server re-sends that signal every 5 s, so joining a match already in flight still
+    /// picks it up rather than deadlocking on a missed first send.
+    /// </remarks>
+    private async Task EnsureHubForRunningMatchAsync()
+    {
+        var runningDuelId = RunningMatch?.DuelId;
+
+        if (runningDuelId == _hubDuelId) return;
+
+        await DisconnectHubAsync();
+        if (runningDuelId is null) return;
+
+        try
+        {
+            _localInference ??= new LocalInferenceDriver(WebLlm, ApiClient);
+            _hub = new SignalRDuelClient();
+            _hub.OnStartLocalInference += OnStartLocalInference;
+            await _hub.ConnectAsync(Nav.BaseUri.TrimEnd('/'), runningDuelId.Value);
+            _hubDuelId = runningDuelId;
+        }
+        catch (Exception)
+        {
+            // A hub that will not connect costs browser matches, not the bracket. The next poll
+            // retries; remote and Ollama matches finish regardless.
+            await DisconnectHubAsync();
+        }
+    }
+
+    private void OnStartLocalInference(StartLocalInferencePayload payload)
+    {
+        // A reconnect replays this signal, and so does the server's 5-second resend; the driver
+        // owns the de-duplication.
+        if (_localInference is null || !_localInference.TryClaim(payload.ModelId)) return;
+
+        _drivingLocalMatch = true;
+        _ = InvokeAsync(StateHasChanged);
+
+        _ = Task.Run(async () =>
+        {
+            // Every failure path is handled inside the driver and reported to the server, so
+            // there is no outcome here worth awaiting beyond clearing the banner.
+            await _localInference.RunAsync(payload);
+            _drivingLocalMatch = false;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private async Task DisconnectHubAsync()
+    {
+        if (_hub is not null)
+        {
+            _hub.OnStartLocalInference -= OnStartLocalInference;
+            await _hub.DisposeAsync();
+            _hub = null;
+        }
+        _hubDuelId = null;
+    }
+
     private async Task PollAsync(PeriodicTimer timer, CancellationToken cancellationToken)
     {
         try
@@ -545,6 +640,7 @@
 
                 var wasComplete = _tournament?.Status == TournamentStatus.Complete;
                 _tournament = fresh;
+                await EnsureHubForRunningMatchAsync();
                 await InvokeAsync(StateHasChanged);
 
                 if (fresh.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
@@ -568,6 +664,7 @@
                     }
 
                     StopPolling();
+                    await DisconnectHubAsync();
                     return;
                 }
             }
@@ -593,5 +690,12 @@
         _pollTimer = null;
     }
 
-    public void Dispose() => StopPolling();
+    public void Dispose()
+    {
+        StopPolling();
+        // Fire-and-forget: IDisposable cannot await, and the hub's own dispose is best-effort.
+        // A browser match already in flight keeps running until its worker finishes, which is
+        // what we want — navigating away mid-match should not strand the duel.
+        _ = DisconnectHubAsync();
+    }
 }

@@ -30,7 +30,6 @@ public sealed class OllamaInferenceProxy(
     {
         var result = new DuelResult(duelId, model.ModelId);
         var sw = Stopwatch.StartNew();
-        using var activity = InferenceTelemetry.ActivitySource.StartActivity("gen_ai.chat", ActivityKind.Client);
 
         var baseUrl = (_configuration["Ollama:BaseUrl"] ?? "http://localhost:11434").TrimEnd('/');
         var modelName = model.ApiEndpointRef;
@@ -112,13 +111,6 @@ public sealed class OllamaInferenceProxy(
         _logger.LogInformation(
             "Ollama inference complete for {Model}: {Tokens} tokens, {Bytes} bytes, {Ms}ms",
             modelName, result.TokenCount, result.HtmlOutputSizeBytes, result.TotalDurationMs);
-
-        activity?.SetTag("gen_ai.provider.name", "ollama");
-        activity?.SetTag("gen_ai.request.model", modelName);
-        activity?.SetTag("gen_ai.usage.output_tokens", result.TokenCount);
-        activity?.SetTag("gen_ai.response.finish_reasons", result.FinishReason);
-        activity?.SetTag("gen_ai.response.truncated", result.WasTruncated);
-        InferenceTelemetry.Record("ollama", modelName, result);
 
         return result;
     }

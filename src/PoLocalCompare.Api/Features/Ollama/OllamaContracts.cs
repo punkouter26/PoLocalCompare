@@ -8,14 +8,6 @@ public sealed record OllamaBenchmarkRequest(string ModelName, string Prompt);
 // ── Ollama daemon wire formats ────────────────────────────────────────────────
 // Internal to the slice; these mirror Ollama's own JSON, not anything this API exposes.
 
-internal sealed record OllamaPsResponse(
-    [property: JsonPropertyName("models")] List<OllamaPsModel>? Models);
-
-internal sealed record OllamaPsModel(
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("size_vram")] long SizeVram,
-    [property: JsonPropertyName("size")] long Size);
-
 internal sealed record OllamaTagsResponse(
     [property: JsonPropertyName("models")] List<OllamaTagsModel>? Models);
 

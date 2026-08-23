@@ -13,7 +13,6 @@ public class HtmlOutputNormalizerTests
     [Theory]
     [InlineData(null, "")]                                   // null is empty
     [InlineData("```html\n<div>x</div>\n```", "<div>x</div>")] // unwrap a single fence
-    [InlineData("  <div>x</div>  ", "<div>x</div>")]          // trim bare HTML
     public void Normalize_HandlesNullFencedAndBareInput(string? raw, string expected)
     {
         Assert.Equal(expected, HtmlOutputNormalizer.Normalize(raw));

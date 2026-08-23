@@ -230,7 +230,7 @@ public sealed class FoundryDuelJudge : IDuelJudge
         if (int.TryParse(trimmed, System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture, out var seconds))
         {
-            // Clamp to a minute ceiling so an adversarial 86400 cannot park the demo for a day.
+            // Clamp to a minute ceiling so an adversarial 86400 cannot park the queue for a day.
             return TimeSpan.FromSeconds(Math.Clamp(seconds, 1, 60));
         }
         if (DateTimeOffset.TryParse(trimmed, out var when))

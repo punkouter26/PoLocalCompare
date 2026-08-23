@@ -125,6 +125,68 @@
             background: rgba(248, 113, 113, 0.14);
             border-color: rgba(248, 113, 113, 0.48);
         }
+
+        /* ── Model health ──────────────────────────────────────────────────
+           Moved here from the Home page on 2026-08-23. It is a diagnostic, not part of the
+           duel flow, and it belongs beside the dependency checks it complements. Rebuilt in
+           vanilla JS rather than ported: this is a server-rendered Razor Page on purpose (it
+           has to work when the WASM client is the broken thing), so it cannot host a Blazor
+           component. The probing half already lived in framework-free /js/diag-interop.js. */
+        .mh-env {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.8rem;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 0.8rem;
+            border: 1px solid #1f2a25;
+            border-radius: 6px;
+            background: #0a0f0d;
+        }
+        .mh-env__item { color: #c7d3ce; }
+        .mh-env__item--ok { color: #4ade80; }
+        .mh-env__item--bad { color: #fca5a5; }
+        .mh-env__item--muted { color: #7f8f89; }
+        .mh-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.8rem;
+        }
+        .mh-btn {
+            font: inherit;
+            min-height: 32px;
+            padding: 0.3rem 0.85rem;
+            border-radius: 6px;
+            border: 1px solid #2a3a33;
+            background: #101815;
+            color: #d6e4de;
+            cursor: pointer;
+        }
+        .mh-btn:hover:not(:disabled) { border-color: #40e48e; }
+        .mh-btn:focus-visible { outline: 2px solid #40e48e; outline-offset: 2px; }
+        .mh-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .mh-btn--primary { background: #14361f; border-color: #2f7a4a; color: #b8f5cf; }
+        .mh-prompt {
+            font: inherit;
+            flex: 1 1 18rem;
+            min-width: 0;
+            min-height: 32px;
+            padding: 0.3rem 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #1f2a25;
+            background: #070b09;
+            color: #d6e4de;
+        }
+        .mh-prompt:focus-visible { outline: 2px solid #40e48e; outline-offset: 1px; }
+        .mh-note { color: #8a9b94; font-size: 0.8rem; margin: 0 0 0.8rem; }
+        .mh-st--ok      { color: #4ade80; }
+        .mh-st--bad     { color: #fca5a5; }
+        .mh-st--run     { color: #fbbf24; }
+        .mh-st--idle    { color: #7f8f89; }
+        .mh-st--skip    { color: #7f8f89; }
+        .mh-num { font-variant-numeric: tabular-nums; }
+        .mh-detail { color: #8a9b94; }
     </style>
 </head>
 <body>
@@ -206,26 +268,52 @@
         </section>
 
         <section>
-            <h2>WebGPU</h2>
-            <p id="webgpu-status">Checking...</p>
-            <script>
-                (async () => {
-                    const el = document.getElementById('webgpu-status');
-                    if (typeof navigator.gpu === 'undefined') {
-                        el.textContent = 'Available: No — WebGPU API not present in this browser';
-                        return;
-                    }
-                    try {
-                        const adapter = await navigator.gpu.requestAdapter();
-                        el.textContent = adapter
-                            ? 'Available: Yes — GPU adapter found'
-                            : 'Available: No — API present but no GPU adapter (driver or permission issue)';
-                    } catch (e) {
-                        el.textContent = 'Available: Error — ' + e.message;
-                    }
-                })();
-            </script>
+            <h2 id="diag-models">Model health</h2>
+            <p class="mh-note">
+                Runs one short prompt through every registered model and reports what came back.
+                Remote models are probed server-side; Ollama models run on the local daemon;
+                browser models run on this tab's GPU, so leave the page open while they do.
+            </p>
+
+            <div class="mh-env" id="mh-env">
+                <span class="mh-env__item">Checking environment…</span>
+            </div>
+
+            <div class="mh-actions">
+                <button type="button" class="mh-btn mh-btn--primary" id="mh-run">Test all models</button>
+                <button type="button" class="mh-btn" id="mh-cancel" disabled>Cancel</button>
+                <button type="button" class="mh-btn" id="mh-refresh">Reload catalog</button>
+                <input class="mh-prompt" id="mh-prompt" aria-label="Verification prompt"
+                       value="In one sentence, explain what an API is." />
+            </div>
+
+            <div class="diag-table-wrap" tabindex="0" role="region" aria-labelledby="diag-models">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Model</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Load</th>
+                            <th scope="col">Tok/s</th>
+                            <th scope="col">Note</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mh-rows">
+                        <tr><td colspan="6">Loading catalog…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="mh-note" id="mh-summary" role="status"></p>
         </section>
+
+        @* The probing half of the old Blazor panel: WebGPU/WebNN capability, local-asset
+           resolution and the WebLLM worker runner. Framework-free already, which is why the
+           panel could move to a Razor Page at all. webllm-interop is loaded first because
+           diag-interop's checkModelFile calls its resolveBrowserModelAvailability. *@
+        <script src="/js/webllm-interop.js?v=3"></script>
+        <script src="/js/diag-interop.js?v=5"></script>
+        <script src="/js/diag-models.js?v=1"></script>
     </main>
 </body>
 </html>

@@ -35,7 +35,7 @@ public sealed class DuelApiClient
 
     /// <param name="autoJudgeDelaySeconds">
     /// Per-duel grace window before the AI judge decides. Null keeps the server's configured
-    /// value; demo mode passes 0 so an unattended run never stalls waiting for a human pick.
+    /// value; a tournament passes 0 so an unattended run never stalls waiting for a human pick.
     /// </param>
 /// <param name="challengeKind">
     /// Budget the duel is fought under. <see cref="ChallengeKind.None"/> — the default — is an
@@ -124,11 +124,6 @@ public sealed class DuelApiClient
         {
             StatusCode = statusCode;
         }
-    }
-
-    public async Task<DemoPlanDto?> GetDemoPlanAsync(int rounds = 10)
-    {
-        return await _http.GetFromJsonAsync<DemoPlanDto>($"/api/duels/demo-plan?rounds={rounds}", JsonOptions);
     }
 
     public async Task<VerdictResponseDto?> RecordVerdictAsync(DuelId duelId, VerdictRequestDto request)
@@ -267,18 +262,6 @@ public sealed class DuelApiClient
     {
         return await _http.GetFromJsonAsync<IReadOnlyList<TournamentDto>>(
             $"/api/tournaments?limit={limit}", JsonOptions);
-    }
-
-    // ── Challenges ───────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Models ranked by how reliably they come in under one kind of budget. One kind at a time,
-    /// because "best" is seconds for one and dollars for another.
-    /// </summary>
-    public async Task<IReadOnlyList<ChallengeLeaderboardEntryDto>?> GetChallengeLeaderboardAsync(ChallengeKind kind)
-    {
-        return await _http.GetFromJsonAsync<IReadOnlyList<ChallengeLeaderboardEntryDto>>(
-            $"/api/challenges/leaderboard?kind={kind}", JsonOptions);
     }
 
     // ── Models ───────────────────────────────────────────────────────────────

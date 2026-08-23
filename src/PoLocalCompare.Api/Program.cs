@@ -3,11 +3,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Azure;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
-using Azure.Monitor.OpenTelemetry.Exporter;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
 using Polly;
-using OpenTelemetry.Trace;
 using PoLocalCompare.Api;
 using PoLocalCompare.Api.Auth;
 using Scalar.AspNetCore;
@@ -25,7 +21,7 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // ─── Key Vault (T037) — must be FIRST before Serilog/OTel config ────────
+    // ─── Key Vault (T037) — must be FIRST before Serilog config ────────────
     var keyVaultUri = builder.Configuration["KeyVault:Uri"];
     if (!string.IsNullOrEmpty(keyVaultUri))
     {
@@ -48,8 +44,8 @@ try
             .WriteTo.Console();
 
         // File sinks are Development-only: on the Free (F1) App Service they consume the
-        // limited app filesystem and don't survive restarts/redeploys. In Production all
-        // logs flow to Application Insights via the OTel pipeline below.
+        // limited app filesystem and don't survive restarts/redeploys. In Production the
+        // console sink is what App Service's own log stream picks up.
         if (ctx.HostingEnvironment.IsDevelopment())
         {
             cfg
@@ -63,69 +59,7 @@ try
                     retainedFileCountLimit: 14,
                     restrictedToMinimumLevel: LogEventLevel.Error);
         }
-
-        // Exceptions bypass trace sampling (standards §6.3): Error+ events (with stack traces)
-        // ship to Application Insights at 100% regardless of the trace sampler's verdict.
-        var serilogAiCs = ctx.Configuration["ApplicationInsights:ConnectionString"];
-        if (!string.IsNullOrWhiteSpace(serilogAiCs))
-        {
-            cfg.WriteTo.ApplicationInsights(
-                serilogAiCs,
-                TelemetryConverter.Traces,
-                restrictedToMinimumLevel: LogEventLevel.Error);
-        }
     });
-
-    // ─── OpenTelemetry (T019) — now has KV-provided connection strings ──────
-    var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
-    var aiCs = builder.Configuration["ApplicationInsights:ConnectionString"];
-    // Map cloud_RoleName to the execution assembly (reflection, API project only) so traces never
-    // surface as "unknown_service:dotnet". With OTel this is the resource service.name.
-    var roleName = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name ?? "PoLocalCompare.Api";
-    builder.Services.AddOpenTelemetry()
-        .ConfigureResource(r => r.AddService(roleName, serviceVersion: "1.0.0"))
-        .WithTracing(t =>
-        {
-            // Standards §6.3: 100% sampling outside Production; Production caps traces at
-            // Telemetry:MaxTracesPerSecond (default 10/s). ParentBased keeps full traces together.
-            Sampler rootSampler = builder.Environment.IsProduction()
-                ? new RateLimitedSampler(builder.Configuration.GetValue("Telemetry:MaxTracesPerSecond", 10d))
-                : new AlwaysOnSampler();
-            t.SetSampler(new ParentBasedSampler(rootSampler));
-            t.AddAspNetCoreInstrumentation(o =>
-             {
-                 // Strip high-volume, low-value spans: health/diag pings and static SPA assets.
-                 o.Filter = httpContext =>
-                 {
-                     var path = httpContext.Request.Path.Value ?? string.Empty;
-                     return !(path.StartsWith("/health", StringComparison.OrdinalIgnoreCase)
-                         || path.StartsWith("/api/diag", StringComparison.OrdinalIgnoreCase)
-                         || path.StartsWith("/_framework", StringComparison.OrdinalIgnoreCase)
-                         || path.StartsWith("/_content", StringComparison.OrdinalIgnoreCase)
-                         || path.StartsWith("/css", StringComparison.OrdinalIgnoreCase)
-                         || path.StartsWith("/js", StringComparison.OrdinalIgnoreCase)
-                         || path.EndsWith(".wasm", StringComparison.OrdinalIgnoreCase)
-                         || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
-                         || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase));
-                 };
-             })
-             .AddHttpClientInstrumentation()
-             .AddSource(InferenceTelemetry.Name);
-            if (!string.IsNullOrEmpty(otlpEndpoint))
-                t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
-            if (!string.IsNullOrWhiteSpace(aiCs))
-                t.AddAzureMonitorTraceExporter(o => o.ConnectionString = aiCs);
-        })
-        .WithMetrics(m =>
-        {
-            m.AddAspNetCoreInstrumentation()
-             .AddHttpClientInstrumentation()
-             .AddMeter(InferenceTelemetry.Name);
-            if (!string.IsNullOrEmpty(otlpEndpoint))
-                m.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
-            if (!string.IsNullOrWhiteSpace(aiCs))
-                m.AddAzureMonitorMetricExporter(o => o.ConnectionString = aiCs);
-        });
 
     // In Development, Key Vault holds production storage connection strings.
     // Override them back to Azurite so local runs don't hit the real storage account.
@@ -377,9 +311,13 @@ try
     app.MapLeaderboardEndpoints();
     app.MapOllamaEndpoints();
     app.MapTournamentsEndpoints(allowAnonymousWrites: allowAnonymousWrites);
-    app.MapChallengesEndpoints();
 
     // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
+    // Gated twice on purpose. The Development check keeps these out of a published app, and
+    // RequireAuthorization puts them behind the same session every other write needs — they
+    // were AllowAnonymous until 2026-08-23, which made an unauthenticated table wipe exactly
+    // one ASPNETCORE_ENVIRONMENT slip away from live data. In Development the fake-auth
+    // handler satisfies the policy from a header, so this costs a local caller nothing.
     if (app.Environment.IsDevelopment())
     {
         static async Task ClearTableEntitiesAsync(TableClient tableClient)
@@ -418,12 +356,12 @@ try
                 await mc.UpsertEntityAsync(e, TableUpdateMode.Replace);
             }
             return Results.Ok(new { reset = true, message = "Duels/results/elo cleared; model ELO reset to 1200" });
-        }).AllowAnonymous();
+        }).RequireAuthorization();
 
         // Manual retry for the startup remap. Idempotent — running it twice reports zero
         // orphans the second time.
         app.MapPost("/api/dev/remap-model-ids", async (OrphanModelIdRemapper remapper, CancellationToken ct) =>
-            Results.Ok(await remapper.RunAsync(ct))).AllowAnonymous();
+            Results.Ok(await remapper.RunAsync(ct))).RequireAuthorization();
     }
 
     // ─── Blazor WASM static assets + fallback (T014) ─────────────────────────

@@ -5,7 +5,6 @@ global using PoLocalCompare.Api.Common.Caching;
 global using PoLocalCompare.Api.Common.Inference;
 global using PoLocalCompare.Api.Common.KeyVault;
 global using PoLocalCompare.Api.Common.Persistence;
-global using PoLocalCompare.Api.Common.Telemetry;
 global using PoLocalCompare.Api.Features.Archive;
 global using PoLocalCompare.Api.Features.Challenges;
 global using PoLocalCompare.Api.Features.Diagnostics;

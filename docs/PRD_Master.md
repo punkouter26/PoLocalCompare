@@ -22,15 +22,15 @@ All server code lives in `PoLocalCompare.Api` (VSA). Each slice is flat: endpoin
 | **Leaderboard** | `Features/Leaderboard/` | `EloRecord`, `EloCalculator` (K=32), kill-list + leaderboard handlers, `EloHistoryRepository`, HybridCache tag `leaderboard` |
 | **Models** | `Features/Models/` | `Model` entity, register/delete, `GetModelAvailabilityHandler` probes, `DownloadModelHandler`, `ModelSeeder` |
 | **Tournaments** | `Features/Tournaments/` | `Tournament` aggregate (bracket serialised to one row), `TournamentRunner` (server-side bracket orchestration), `CreateTournamentHandler`, `TournamentRepository` |
-| **Challenges** | `Features/Challenges/` | `ChallengeRecord` (per-model attempt partitions), `ChallengeAdjudicator` (budget forfeits, runs ahead of `AutoJudge`), `GetChallengeLeaderboardHandler` |
+| **Challenges** | `Features/Challenges/` | `ChallengeAdjudicator` only (budget forfeits, runs ahead of `AutoJudge`). The board handler and `ChallengeRecord` were removed — §9 item 23 |
 | **Archive** | `Features/Archive/` | Lab-report export (`ArchiveEndpoints` + `ExportLabReportHandler` + static `HtmlLabReportRenderer`) |
-| **Ollama** | `Features/Ollama/` | GPU status, available-models and benchmark handlers (dev-only value) |
+| **Ollama** | `Features/Ollama/` | Available-models + benchmark handlers (dev-only value) |
 | **Diagnostics** | `Features/Diagnostics/` | `/health`, `/api/diag/*` |
-| *(cross-slice)* | `Common/` | Domain calculators, inference proxies, background queue, Key Vault, Azurite bootstrap, `RateLimitedSampler` |
+| *(cross-slice)* | `Common/` | Inference proxies, background queue, caching tags, Key Vault, Azurite bootstrap |
 | *(cross-slice)* | `Auth/` | BFF cookie session, Microsoft OIDC, `FakeAuthHandler` (non-prod) |
 
 `PoLocalCompare.Shared` holds DTOs, enums, ids **and pure logic reachable by both WASM and API** —
-`Analysis/`, `Prompts/`, `Demo/`, `Presentation/`, `Tournaments/BracketPlanner`, `Blind/BlindPickLedger`,
+`Analysis/`, `Prompts/`, `Presentation/`, `Tournaments/BracketPlanner`, `Blind/BlindPickLedger`,
 `Challenges/ChallengeRules`. The "DTOs and enums only" rule was dropped deliberately: the unit tier
 references only the Api project, so pure logic parked in `PoLocalCompare.Client` is testable by
 E2E-UI alone — the one suite CI never runs. Entities still stay out. `PoLocalCompare.Client` (Blazor WASM) is hosted by the API (single-origin, no CORS).
@@ -43,7 +43,6 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 |---|---|---|
 | `POST /api/duels` | Duels | 202 + Location; enqueues background execution. Optional `autoJudgeDelaySeconds` overrides the grace window for that duel only (clamped 0–3600). Optional `challengeKind` + `challengeThreshold` make it a budgeted challenge duel; a non-positive threshold silently degrades to `None` |
 | `GET /api/duels` | Duels | Archive listing, `limit` clamped 1–100, `before` paging |
-| `GET /api/duels/demo-plan?rounds=&seed=` | Duels | Read-only; resolves the pairings + prompts for a demo run. Remote models only, `rounds` clamped 1–25 |
 | `GET /api/duels/{duelId}` | Duels | Full telemetry DTO |
 | `POST /api/duels/{duelId}/local-result` | Duels | WebLLM browser result ingest + Domain enrichment |
 | `POST /api/duels/{duelId}/verdict` | Duels | Elo update; ETag 412 retry-once; invalidates leaderboard cache |
@@ -53,17 +52,17 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 | `GET /api/leaderboard/{modelId}/profile` | Leaderboard | Model page: standing, full ELO history, kill list, cost/speed, ≤6 winning outputs. **404** for an unknown id (unlike killlist — the page is about a model) |
 | `POST /api/tournaments` | Tournaments | 201 + the drawn bracket; queues `TournamentRunner`. Field must be 2/4/8 distinct server-side models |
 | `GET /api/tournaments` · `/{id}` · `/entrants` | Tournaments | Recent runs (`limit` 1–50), one bracket (404 unknown), eligible models strongest-first |
-| `GET /api/challenges/leaderboard?kind=` | Challenges | Pass-rate ranking for one `ChallengeKind`; shares the `leaderboard` cache tag |
 | `GET /api/models` | Models | LocalService hidden outside Development |
 | `GET /api/models/availability` | Models | Probes Ollama tags + Foundry deployments |
-| `POST /api/models` · `PATCH/DELETE /api/models/{id}` | Models | Registry CRUD |
+| `POST /api/models` · `DELETE /api/models/{id}` | Models | Registry CRUD (no PATCH — removed in §9 item 16) |
 | `GET /api/models/download-status/{webLlmModelId}` | Models | Path-traversal-guarded asset check |
 | `POST /api/models/{webLlmModelId}/download` | Models | 202; detached python HuggingFace download |
-| `GET /api/ollama/gpu-status` · `/available-models` · `POST /benchmark` | Ollama | Local-only value; failures return empty/failure DTOs |
+| `GET /api/ollama/available-models` · `POST /api/ollama/benchmark` | Ollama | Local-only value; failures return empty/failure DTOs |
 | `GET /auth/me` · `/auth/login/microsoft` · `/auth/login/fake`¹ · `POST /auth/logout` | Auth | Anonymous; ¹non-Production only |
 | `GET /health` · `/api/diag/smoke` · `/api/diag/warnings` · `/diag` (Razor) | Diagnostics | Anonymous; no UI links |
 | `/hubs/duel` | SignalR | `RequireAuthorization()`. Client-invokable: `JoinDuel(duelId)`, `JoinLobby()` — both subscribe only. Server→client: `ModelStatusUpdate`, `DuelComplete`, `StartLocalInference`, `VerdictRecorded`, `LobbyEvent` |
-| `POST /api/dev/reset` · `/scalar` · `/openapi` | Dev-only | Development host only |
+| `POST /api/dev/reset` · `/api/dev/remap-model-ids` | Dev-only | Development host **and** `RequireAuthorization()` — §9 item 23 |
+| `/scalar` · `/openapi` | Dev-only | Development host only, anonymous |
 
 ## 4. Data (Azure Table Storage — see DatabaseSchema.mmd)
 
@@ -73,6 +72,7 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 | `DuelResults` | `DuelId` | `ModelId` | Per-model telemetry (2 rows/duel) |
 | `Models` | `"model"` (single partition) | `ModelId` | Registry + denormalized Elo/W-L stats |
 | `EloHistory` | `ModelId` | `{invertedTicks:D19}_{DuelId}` (descending time) | Immutable rating ledger, sparklines |
+| `Tournaments` | `"tournament"` | `TournamentId` (ULID) | One bracket per row, matches serialised to a JSON column |
 
 Write discipline (standards §5.5): creates swallow 409; updates are `If-Match` conditional via carried `ETag`; duel writers re-read + reapply on 412.
 
@@ -185,6 +185,25 @@ Server owns the OIDC code flow (PKCE, authority `login.microsoftonline.com/commo
     **Also added:** a Ctrl/⌘-K command palette (mounted once from `MainLayout`, inert until opened, fetches models on first open rather than per page load, and deliberately does not fire inside a `<textarea>` so it cannot swallow a keystroke in the prompt box); native `@view-transition` route morphs and `animation-timeline: view()` scroll reveals, both pure CSS and therefore safe under the GPU constraint in item 21; and container queries on `TelemetryHud`, which sizes its metric grid against the Arena panel it was placed in rather than the window — a `@media` query asks the wrong question for a component whose slot width varies more than the viewport's does.
 
     **Caveat on record:** none of this was verified in a browser — Docker was unavailable for the integration tiers and the E2E-UI suite is not in CI. The unit tier (171) passes and the solution builds clean, but the visual result of collapsing 31 font sizes onto 9 steps is exactly the kind of change that needs eyes on it. The largest single shift is 1.05rem → 1.25rem on section headings.
+
+23. **Prune pass — features, telemetry, tests and dead assets (2026-08-23):** a deliberate scope reduction, not a refactor. Nine cuts, recorded together because several depend on each other.
+
+    **`/demo` deleted (~1,430 lines).** `Demo.razor`, `DemoPlanner`, `DemoPlanHandler`, `GET /api/duels/demo-plan` and 18 tests across three tiers. It was a second implementation of the Arena's streaming UI whose only distinguishing property was that it ran from the client and died with the tab — `/tournament` does the same job on the background queue and survives a restart. It also wrote real, ELO-moving duels into the leaderboard while presenting itself as a demo. `autoJudgeDelaySeconds: 0` survives it; `TournamentRunner` is now its only caller.
+
+    **The challenge board deleted (~1,450 lines), adjudication kept.** `/challenge`, `ChallengesEndpoints`, `ChallengeRecord`, `ChallengeRecordRepository` and the `ChallengeRecords` table (reversing the table added in item 20) are gone. `ChallengeAdjudicator`, `ChallengeRules` and the Home budget picker stay: adjudication is the part that changes duel outcomes, and the board was a second ranking over the same duels. With no reader, the record partitions were write-only. A forfeit still records `VerdictSource.Constraint` and still moves ELO.
+
+    **Radzen removed again, reversing item 22.** `Radzen.Blazor` cost **1.43 MB gzipped — 11.9% of the app's entire download** — for one grid and one chart. The Archive is a `.po-table` again; the profile chart is inline SVG. Both files carry a comment recording why, and `PublishTrimmed` is back to one blocker (the Router's `NotFoundPage`) rather than two.
+
+    **Observability collapsed to Serilog.** OpenTelemetry (hosting, AspNetCore + HttpClient instrumentation, OTLP exporter), `Azure.Monitor.OpenTelemetry.Exporter` and `Serilog.Sinks.ApplicationInsights` — six packages and ~100 lines of `Program.cs` — were shipping to **one** App Insights resource by **two** independent paths, on a single-instance Free-tier App Service. `Common/Telemetry/RateLimitedSampler` and `Common/Inference/InferenceTelemetry` went with them, as did the App Insights wiring in `infra/main.bicep`. Serilog to console (App Service's log stream) plus Development-only rolling files is what remains. Distributed traces are the real loss; re-add the OTel packages as a set if they are wanted back. OpenAPI/Scalar is untouched.
+
+    **`/api/dev/*` now requires a session.** `POST /api/dev/reset` wipes Duels/DuelResults/EloHistory and resets every model to 1200; it and `/api/dev/remap-model-ids` were `.AllowAnonymous()`. They are now `.RequireAuthorization()` *as well as* `IsDevelopment()`-gated — an unauthenticated table wipe should not be one `ASPNETCORE_ENVIRONMENT` slip from live data. The dev fake-auth handler satisfies the policy from a header, so local callers are unaffected.
+
+    **Tests cut to the §8 contract: 100 / 50 / 25 / 25**, from 171 / 101 / 41 / 25. About a third came free with the deletions above; the rest was thinning near-duplicate `[InlineData]` rows and assertions a neighbouring test already pinned (for example `BracketPlanner.RoundCount`, which `RoundName_CountsBackFromTheFinal` exercises for both field sizes). All three gating tiers pass at exactly their budget. The contract is now a **budget**: a new test in a full tier means retiring one.
+
+    **Dead code and orphan assets.** `GET /api/ollama/gpu-status` and its handler/DTO/wire records (no caller in C# or JS); `window.scrollElementIntoView`; the `.po-reveal` scroll-driven reveal (declared, never applied); `.po-bg--`/`.po-fg--` `warn`/`info`/`met`/`over`/`failed` and every `.po-chip--*` modifier (only `--ok` and `--err` were ever applied); `.po-page--narrow`, `.po-empty__title`, `.telemetry-hud__item--wide`; and the `.rz-grid-table` focus rule left behind by Radzen. Note `GET /api/models/download-status/{id}` and `resolveBrowserModelAvailability` **look** dead to a C#-only search and are not — both are reached by `fetch`/cross-file calls from `diag-interop.js` and `webllm-interop.js`.
+
+    **CI/CD and repo assets.** The `Fetch WebLLM artifacts` workflow, `SCRIPTS/fetch-artifacts.ps1` and `SCRIPTS/receive-artifacts.ps1` — a whole GitHub Actions matrix that packed ~5 GB of model weights into split release assets for networks that block huggingface.co. `docs/20260821/` (six committed HTML reports, 221 KB, whose generator `SCRIPTS/build_html_report.py` was already deleted) and `SCRIPTS/mermaid-validate/`, referenced by no workflow. `deploy.yml` is the only workflow left.
+
 
 ## 10. Diagram Index (this folder)
 

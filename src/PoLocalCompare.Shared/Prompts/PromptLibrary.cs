@@ -12,11 +12,11 @@ public static class PromptRules
 }
 
 /// <summary>One curated starter prompt.</summary>
-/// <param name="Id">Stable slug — used as the demo-mode seed key and the UI element key.</param>
+/// <param name="Id">Stable slug — used as the tournament seed key and the UI element key.</param>
 /// <param name="Emoji">Decorative only; every rendering must mark it <c>aria-hidden</c>.</param>
 /// <param name="SelfRunning">
-/// True when the output animates or plays by itself. Demo mode only picks these — an unattended
-/// screen showing a form nobody types into demonstrates nothing.
+/// True when the output animates or plays by itself. The tournament prompt shortlist draws only
+/// from these — an unattended screen showing a form nobody types into demonstrates nothing.
 /// </param>
 public sealed record PromptTemplate(
     string Id,
@@ -27,7 +27,7 @@ public sealed record PromptTemplate(
     bool SelfRunning);
 
 /// <summary>
-/// The curated prompt set behind the Home prompt picker and demo mode.
+/// The curated prompt set behind the Home prompt picker and the tournament prompt shortlist.
 /// </summary>
 /// <remarks>
 /// Every prompt asks for a single self-contained HTML file, because that is what
@@ -161,7 +161,7 @@ public static class PromptLibrary
     public static IReadOnlyList<string> Categories { get; } =
         All.Select(p => p.Category).Distinct().OrderBy(c => c, StringComparer.Ordinal).ToList();
 
-    /// <summary>The subset demo mode draws from — output that animates without being touched.</summary>
+    /// <summary>The subset a tournament draws from — output that animates without being touched.</summary>
     public static IReadOnlyList<PromptTemplate> SelfRunning { get; } =
         All.Where(p => p.SelfRunning).ToList();
 

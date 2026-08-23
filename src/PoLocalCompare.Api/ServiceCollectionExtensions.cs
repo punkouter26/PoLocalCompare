@@ -17,17 +17,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ExportLabReportHandler>();
         services.AddScoped<GetModelAvailabilityHandler>();
         services.AddScoped<DownloadModelHandler>();
-        services.AddScoped<GetOllamaGpuStatusHandler>();
         services.AddScoped<ListOllamaModelsHandler>();
         services.AddScoped<BenchmarkOllamaModelHandler>();
         services.AddSingleton<DuelExecutionService>();
         services.AddScoped<AutoJudge>();
         services.AddScoped<LobbyNotifier>();
-        services.AddScoped<DemoPlanHandler>();
         services.AddScoped<OrphanModelIdRemapper>();
         services.AddScoped<CreateTournamentHandler>();
         services.AddScoped<ChallengeAdjudicator>();
-        services.AddScoped<GetChallengeLeaderboardHandler>();
         // Singleton like DuelExecutionService, and for the same reason: it is queued from a
         // request but outlives it, so it resolves its own scope per step rather than capturing
         // the request's.

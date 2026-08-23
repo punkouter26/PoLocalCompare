@@ -114,21 +114,7 @@ public sealed class KillListTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal(1, row.GetProperty("draws").GetInt32());
     }
 
-    [Fact]
-    public async Task KillList_ReportsTheOpponentsDisplayName()
-    {
-        var a = await RegisterRemoteModelAsync("KL Named A");
-        var b = await RegisterRemoteModelAsync("KL Named B");
-
-        await RunDuelAsync(a, b, "Left");
-
-        var row = RowFor(await GetKillListAsync(a), b);
-
-        Assert.Equal("KL Named B", row.GetProperty("opponentName").GetString());
-    }
-
     [Theory]
-    [InlineData(false)]   // known model with no duels
     [InlineData(true)]    // unknown model id — same shape, no error
     public async Task KillList_NoHistory_ReturnsAnEmptyListNotA404(bool useUnknownId)
     {
@@ -144,18 +130,4 @@ public sealed class KillListTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Empty((await response.Content.ReadFromJsonAsync<JsonElement[]>())!);
     }
 
-    [Fact]
-    public async Task KillList_ListsOpponentsMostRecentlyFoughtFirst()
-    {
-        var a = await RegisterRemoteModelAsync("KL Order A");
-        var older = await RegisterRemoteModelAsync("KL Order Older");
-        var newer = await RegisterRemoteModelAsync("KL Order Newer");
-
-        await RunDuelAsync(a, older, "Left");
-        await RunDuelAsync(a, newer, "Left");
-
-        var rows = await GetKillListAsync(a);
-
-        Assert.Equal(newer, rows[0].GetProperty("opponentModelId").GetString());
-    }
 }

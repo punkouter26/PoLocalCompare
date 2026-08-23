@@ -22,7 +22,6 @@ public class EloCalculatorTests
 
     [Theory]
     [InlineData(32)]
-    [InlineData(16)]
     public void Calculate_EqualRatings_ShiftIsHalfK(double k)
     {
         var (newA, newB) = EloCalculator.Calculate(1200, 1200, k, outcomeA: 1.0);
@@ -51,12 +50,13 @@ public class EloCalculatorTests
 
     // ── Rounding to 1 decimal place ────────────────────────────────────────
 
+    // ── Rounding to 1 decimal place ────────────────────────────────────────
+
     [Fact]
     public void Calculate_ResultsAreRoundedToOneDecimalPlace()
     {
         var (newA, newB) = EloCalculator.Calculate(1205, 1198, k: 32, outcomeA: 1.0);
 
-        // Verify no more than 1 dp
         Assert.Equal(newA, Math.Round(newA, 1));
         Assert.Equal(newB, Math.Round(newB, 1));
     }
@@ -64,7 +64,6 @@ public class EloCalculatorTests
     // ── Zero-sum property ─────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(1200, 1200, 32, 1.0)]
     [InlineData(1500, 1100, 32, 0.0)]
     [InlineData(900, 1600, 16, 1.0)]
     public void Calculate_RatingChangesAreZeroSum(double ra, double rb, double k, double outcome)

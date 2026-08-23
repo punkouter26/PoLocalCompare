@@ -33,9 +33,9 @@ public sealed record BracketMatch(
 /// Lays out a single-elimination bracket and works out where each winner goes next.
 /// </summary>
 /// <remarks>
-/// Pure and separate from the Tournaments slice for the same reason <see cref="Demo.DemoPlanner"/>
-/// is separate from demo mode: the whole shape of a run has to be decidable — and unit-testable —
-/// before anything is written, because bracket matches are real duels that persist and move ELO.
+/// Pure and separate from the Tournaments slice so the whole shape of a run is decidable — and
+/// unit-testable — before anything is written, because bracket matches are real duels that
+/// persist and move ELO.
 ///
 /// Seeding is standard tournament seeding rather than a shuffle: the top two seeds are placed so
 /// they can only meet in the final. A random draw would routinely knock the two best models out
@@ -43,12 +43,17 @@ public sealed record BracketMatch(
 /// </remarks>
 public static class BracketPlanner
 {
-    /// <summary>Bracket sizes the app offers. 2 is a plain 1v1 run through the same machinery.</summary>
-    public static IReadOnlyList<int> SupportedSizes { get; } = [2, 4, 8];
+    /// <summary>
+    /// Bracket sizes the app offers. 2 is a plain 1v1 run through the same machinery; 8 is the
+    /// real bracket. 4 was removed on 2026-08-23 — it was a strictly worse 8 (a semi-final pair
+    /// tells you less than a quarter-final round) and the middle option nobody reached for.
+    /// The maths below is size-generic, so re-adding it is a one-line change.
+    /// </summary>
+    public static IReadOnlyList<int> SupportedSizes { get; } = [2, 8];
 
     public static bool IsSupportedSize(int size) => SupportedSizes.Contains(size);
 
-    /// <summary>Number of rounds a bracket of this size takes — 2 → 1, 4 → 2, 8 → 3.</summary>
+    /// <summary>Number of rounds a bracket of this size takes — 2 → 1, 8 → 3.</summary>
     public static int RoundCount(int size)
     {
         if (!IsSupportedSize(size))

@@ -139,35 +139,6 @@
     color: var(--text);
 }
 
-/* Entry point to the unattended demo. Deliberately a quiet secondary link: it starts ten real
-   duels that persist and move ELO, so it should not sit next to Compare as an equal option. */
-.home__demo-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-sm);
-    min-height: var(--target-min);
-    padding: var(--space-xs) var(--space-smd);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--accent-cyan);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    text-decoration: none;
-    transition: border-color var(--transition-fast);
-}
-
-.home__demo-link:hover {
-    border-color: var(--accent-cyan);
-    text-decoration: none;
-}
-
-.home__demo-link:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
-
 /* ── Health pill (Finding #1) ───────────────────────────────────────── */
 .home__health {
     display: inline-flex;
@@ -292,11 +263,6 @@
     color: var(--text-dim);
     letter-spacing: 0.15em;
     padding: 0 var(--space-xs);
-}
-
-/* ── Model grid + disabled card overlay (Finding #1/#5) ─────────────── */
-.home__health-panel {
-    margin-bottom: var(--space-md);
 }
 
 .home__filters {
@@ -469,112 +435,6 @@
     font-size: var(--text-md);
 }
 
-/* ── Recent duels (foot of the picker column) ───────────────────────── */
-.home__recent {
-    margin-top: var(--space-lg);
-    padding-top: var(--space-mlg);
-    border-top: 1px solid var(--border);
-}
-
-.home__recent-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: var(--space-smd);
-}
-
-.home__recent-title {
-    margin: 0;
-    font-size: var(--text-sm);
-    font-weight: 700;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-}
-
-.home__recent-link {
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    text-decoration: none;
-    /* Standalone link, so SC 2.5.8's inline-prose exemption does not apply — it was 18px tall. */
-    display: inline-flex;
-    align-items: center;
-    min-block-size: var(--target-min, 24px);
-}
-
-.home__recent-link:hover {
-    color: var(--text);
-}
-
-.home__recent-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-}
-
-.home__recent-item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-1);
-    text-decoration: none;
-    color: inherit;
-    transition: border-color var(--transition-fast);
-}
-
-.home__recent-item:hover {
-    border-color: var(--text-muted);
-}
-
-.home__recent-item--pending {
-    border-left: 3px solid rgba(251, 191, 36, 0.7);
-}
-
-.home__recent-prompt {
-    font-size: var(--text-md);
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1 1 200px;
-    min-width: 0;
-}
-
-.home__recent-meta {
-    font-size: var(--text-sm);
-    color: var(--text-muted);
-    white-space: nowrap;
-}
-
-.home__recent-meta em {
-    font-style: normal;
-    color: var(--text-dim);
-    margin: 0 var(--space-xs);
-}
-
-.home__recent-winner {
-    color: var(--accent-green);
-    font-weight: 600;
-}
-
-.home__recent-tie {
-    color: var(--accent-blue);
-    font-weight: 600;
-}
-
-.home__recent-pending {
-    color: var(--accent-yellow);
-    font-weight: 600;
-}
-
 /* ── Onboarding example (Finding #4) ────────────────────────────────── */
 .home__onboard {
     margin-top: var(--space-lg);
@@ -604,115 +464,6 @@
     height: 6.5rem;
     border-radius: var(--radius-md);
     animation-delay: var(--stagger, 0ms);
-}
-
-/* ── Blind mode ─────────────────────────────────────────────────────────
-   In the console foot, above Compare: the toggle changes what Compare does (it shuffles
-   which model lands on which side), so it belongs with the button rather than with the
-   prompt, and the foot is the half of the console that never scrolls away. */
-.home__blind {
-    margin-bottom: var(--space-smd);
-    padding: var(--space-sm) var(--space-smd);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-1);
-}
-
-.home__blind-toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    cursor: pointer;
-}
-
-.home__blind-name {
-    font-size: var(--text-md);
-    font-weight: 600;
-    color: var(--text);
-}
-
-.home__blind-hint {
-    margin: var(--space-xs) 0 0;
-    font-size: var(--text-sm);
-    line-height: 1.4;
-    color: var(--text-muted);
-}
-
-/* ── Your blind picks ───────────────────────────────────────────────────
-   Foot of the scrolling picker column, beside Recent duels — both are history, and the
-   console has to keep Compare on screen. */
-.home__blindrec {
-    margin-top: var(--space-lg);
-    padding: var(--space-md);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--surface-1);
-}
-
-.home__blindrec-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-sm);
-    margin-bottom: var(--space-sm);
-}
-
-.home__blindrec-title {
-    margin: 0;
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--text);
-}
-
-/* The payoff line: the user's taste contradicting the rating. Given the accent treatment
-   because it is the one thing here that says something the leaderboard cannot. */
-.home__blindrec-diverge {
-    margin: 0 0 var(--space-smd);
-    padding: var(--space-sm) var(--space-smd);
-    list-style: none;
-    border-left: 3px solid var(--accent-green);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-    font-size: var(--text-sm);
-    line-height: 1.5;
-    color: var(--text);
-}
-
-.home__blindrec-diverge li + li {
-    margin-top: var(--space-sm);
-}
-
-.home__blindrec-list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.home__blindrec-item {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-smd);
-    padding: var(--space-xs) 0;
-    font-size: var(--text-md);
-}
-
-.home__blindrec-item + .home__blindrec-item {
-    border-top: 1px solid var(--border);
-}
-
-.home__blindrec-model {
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.home__blindrec-record {
-    flex: 0 0 auto;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
 }
 
 /* ── Challenge budget ───────────────────────────────────────────────────

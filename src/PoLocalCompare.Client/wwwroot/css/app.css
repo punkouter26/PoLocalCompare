@@ -367,7 +367,7 @@ a:hover {
    Styled from the design tokens, so they follow the theme toggle for free.
 
    .po-btn is the ONLY button primitive in the app. Twelve per-surface button
-   classes (home__btn, arena__action-btn, demo__btn, lab__btn, h2h__btn, …) each
+   classes (home__btn, arena__action-btn, lab__btn, h2h__btn, …) each
    reimplemented it locally and drifted apart; they were folded in here. A surface
    that needs a tweak adds a layout-only class ALONGSIDE .po-btn (width, margin,
    grid placement) — it does not restate padding, colour or border. New visual
@@ -878,56 +878,32 @@ body::before {
 /* ── State-modifier primitives ───────────────────────────────────────────
    Pair with `.po-bg--{palette}` (background+border) or `.po-fg--{palette}` (text-only)
    on any element that needs a status colour. The previous design had ~15 per-surface
-   modifiers that each re-stated the same four palettes (`--ok`, `--warn`, `--err`,
-   `--info`) — and they drifted on which token they read from. Centralising means a
-   colour-token rename touches one rule, not twelve.
+   modifiers that each re-stated the same palettes — and they drifted on which token they
+   read from. Centralising means a colour-token rename touches one rule, not twelve.
+
+   Only --ok and --err are declared: the --warn/--info/--met/--over/--failed aliases were
+   added speculatively and nothing ever applied them. Add a modifier back when a surface
+   needs it, rather than keeping a palette nobody reads.
 
    Usage:
-     <span class="po-fg--ok">In budget</span>
-     <div class="po-bg--err po-fg--err">Failed</div>
-
-   Per-surface rules that previously declared these modifiers should drop their copy
-   and apply one of these tokens instead. */
-.po-bg--ok,
-.po-bg--met {
+     <span class="po-fg--ok">Rating up</span>
+     <div class="po-bg--err po-fg--err">Failed</div> */
+.po-bg--ok {
     background: var(--success-surface);
     border: 1px solid var(--success-border);
 }
 
-.po-bg--err,
-.po-bg--over,
-.po-bg--failed {
+.po-bg--err {
     background: var(--danger-surface);
     border: 1px solid var(--danger-border);
 }
 
-.po-bg--warn {
-    background: var(--warn-surface);
-    border: 1px solid var(--warn-border);
-}
-
-.po-bg--info {
-    background: var(--info-surface);
-    border: 1px solid var(--info-border);
-}
-
-.po-fg--ok,
-.po-fg--met {
+.po-fg--ok {
     color: var(--accent-green);
 }
 
-.po-fg--err,
-.po-fg--over,
-.po-fg--failed {
+.po-fg--err {
     color: var(--accent-red);
-}
-
-.po-fg--warn {
-    color: var(--accent-yellow);
-}
-
-.po-fg--info {
-    color: var(--accent-blue);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -971,9 +947,6 @@ body::before {
     margin-inline: auto;
     padding: var(--space-lg) var(--space-md) var(--space-2xl);
 }
-
-/* Reading-width surfaces: forms and prose, where a full 1200px line is too long to track. */
-.po-page--narrow { max-width: 900px; }
 
 /* Data-dense surfaces: wide tables and the tournament bracket. */
 .po-page--wide { max-width: 1400px; }
@@ -1040,13 +1013,6 @@ body::before {
     text-align: center;
 }
 
-.po-empty__title {
-    margin: 0 0 var(--space-xs);
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
-    color: var(--text);
-}
-
 .po-empty__hint {
     margin: 0 0 var(--space-md);
     font-size: var(--text-sm);
@@ -1087,16 +1053,6 @@ body::before {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
-}
-
-.po-chip--ok    { color: var(--accent-green); }
-.po-chip--warn  { color: var(--accent-yellow); }
-.po-chip--error { color: var(--accent-red); }
-
-/* Solid variant for a state that should read as active rather than descriptive. */
-.po-chip--solid {
-    background: var(--accent-green);
-    color: var(--on-accent-green);
 }
 
 /* ── Responsive tables ────────────────────────────────────────────────────
@@ -1232,56 +1188,9 @@ body::before {
     to   { opacity: 1; transform: none; }
 }
 
-/* ── Scroll-driven reveal ─────────────────────────────────────────────────
-   Ties an element's entrance to its own position in the scroller rather than to a timer, so
-   a long page reveals as you read it and a short one is simply already done.
-
-   animation-timeline is the whole point: there is no IntersectionObserver, no scroll handler,
-   and no main-thread work per frame. On a browser without scroll-driven animation support the
-   declaration is ignored and `animation` never runs against a timeline, so the element sits at
-   its final state — visible — which is the correct fallback.
-
-   Opt in per surface with .po-reveal; it is deliberately not applied to everything, because a
-   page where every element fades is slower to read, not nicer. */
-@supports (animation-timeline: view()) {
-    .po-reveal {
-        animation: po-reveal-in linear both;
-        animation-timeline: view();
-        /* Finish well before the element reaches the middle of the screen — an element still
-           animating while you are reading it is a distraction, not an entrance. */
-        animation-range: entry 0% cover 22%;
-
-    }
-
-    /* There is no way to say "only if this element is shorter than the viewport" in CSS — a
-       container query interrogates an ancestor container, not the element itself — so the
-       rule is enforced by where .po-reveal is applied rather than by a guard here.
-
-       Why it matters: `cover 22%` is a proportion of the element's own travel through the
-       scroller, so on a section far taller than the screen that 22% is a very long scroll. A
-       runtime check on the model profile caught two sections (1249px and 2170px on an 844px
-       phone) sitting at opacity 0.09 and 0 immediately below the fold, fading in over hundreds
-       of pixels of scrolling. The animation was behaving exactly as written; the range was
-       calibrated for a card and had been applied to a whole page section.
-
-       So: apply .po-reveal to cards, tiles and short blocks — things taken in at a glance.
-       Never to a section that does not fit on screen. */
-
-    @keyframes po-reveal-in {
-        from { opacity: 0; transform: translateY(12px); }
-        to   { opacity: 1; transform: none; }
-    }
-}
-
 @media (prefers-reduced-motion: reduce) {
     ::view-transition-old(root),
     ::view-transition-new(root) {
         animation: none;
-    }
-
-    .po-reveal {
-        animation: none;
-        opacity: 1;
-        transform: none;
     }
 }

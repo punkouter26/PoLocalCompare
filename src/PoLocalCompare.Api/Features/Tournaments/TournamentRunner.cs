@@ -7,9 +7,8 @@ namespace PoLocalCompare.Api.Features.Tournaments;
 /// Plays a bracket from the draw to the final, one match at a time.
 /// </summary>
 /// <remarks>
-/// Server-side rather than driven from the page, which is the whole difference between this and
-/// demo mode: a bracket is eight models and up to seven duels, and it has to survive the tab
-/// being closed. The runner owns no state — every step re-reads the tournament and writes the
+/// Server-side rather than driven from the page: a bracket is eight models and up to seven
+/// duels, and it has to survive the tab being closed. The runner owns no state — every step re-reads the tournament and writes the
 /// result back — so a process restart mid-bracket resumes rather than losing the run, and
 /// <see cref="Tournament.RecordWinner"/> refusing to decide an already-decided match makes a
 /// replayed step a no-op rather than a double advance.
@@ -25,7 +24,7 @@ public sealed class TournamentRunner(
     /// <summary>
     /// Bracket matches are judged with no grace window: nobody is voting on a run designed to
     /// proceed on its own, and a per-match human countdown would stall the whole bracket on an
-    /// unattended tab. Same reasoning — and same value — as demo mode's.
+    /// unattended tab.
     /// </summary>
     private const int AutoJudgeDelaySeconds = 0;
 

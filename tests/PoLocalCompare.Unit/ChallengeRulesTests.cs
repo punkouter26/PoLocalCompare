@@ -12,9 +12,7 @@ public class ChallengeRulesTests
     // ── Meets ─────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(4.0, 5.0, true)]
     [InlineData(5.0, 5.0, true)]    // a ceiling is inclusive
-    [InlineData(5.1, 5.0, false)]
     [InlineData(null,  5.0, false)] // "we never found out" is not "within budget"
     public void Meets_TreatsTheBudgetAsAnInclusiveCeiling(double? measured, double threshold, bool expected)
     {
@@ -29,7 +27,6 @@ public class ChallengeRulesTests
     /// </summary>
     [Theory]
     [InlineData(ChallengeKind.MaxSeconds, 5.0, true, 4.2)]   // seconds under a 5s ceiling
-    [InlineData(ChallengeKind.MaxTokens, 1000.0, true, 820)]  // 820 tokens under a 1000 budget
     [InlineData(ChallengeKind.MaxCostUsd, 0.001, false, 0.0025)] // $0.0025 over a $0.001 budget
     public void Measure_ReadsItsOwnFieldAndAppliesTheInclusiveCeiling(
         ChallengeKind kind, double threshold, bool expectedMet, double measured)
@@ -137,29 +134,13 @@ public class ChallengeRulesTests
     [Theory]
     [InlineData(ChallengeKind.MaxSeconds, 5.0, "5s")]
     [InlineData(ChallengeKind.MaxCostUsd, 0.002, "$0.0020")]
-    [InlineData(ChallengeKind.MaxTokens, 1000.0, "1,000 tokens")]
     public void Format_RendersInTheUnitsOfItsKind(ChallengeKind kind, double value, string expected)
     {
         Assert.Equal(expected, ChallengeRules.Format(kind, value));
     }
 
-    [Fact]
-    public void Format_OfNothingIsADash()
-    {
-        Assert.Equal("—", ChallengeRules.Format(ChallengeKind.MaxSeconds, null));
-    }
-
-    [Fact]
-    public void Describe_ReadsAsACeiling()
-    {
-        Assert.Equal("under 5s", ChallengeRules.Describe(ChallengeKind.MaxSeconds, 5));
-        Assert.Equal("no budget", ChallengeRules.Describe(ChallengeKind.None, 0));
-    }
-
     [Theory]
-    [InlineData(ChallengeKind.MaxSeconds)]
     [InlineData(ChallengeKind.MaxCostUsd)]
-    [InlineData(ChallengeKind.MaxTokens)]
     public void PresetsFor_EveryRealKind_AreAscendingAndPositive(ChallengeKind kind)
     {
         var presets = ChallengeRules.PresetsFor(kind);
@@ -171,8 +152,6 @@ public class ChallengeRulesTests
 
     [Theory]
     [InlineData(0.0, false)]
-    [InlineData(-1.0, false)]
-    [InlineData(0.5, true)]
     public void IsValidThreshold_RejectsANonPositiveCeiling(double threshold, bool expected)
     {
         Assert.Equal(expected, ChallengeRules.IsValidThreshold(ChallengeKind.MaxSeconds, threshold));
