@@ -238,24 +238,6 @@ public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
     // ── The challenge board ───────────────────────────────────────────────
 
     [Fact]
-    public async Task Board_ReportsAttemptsAndPassesPerModel()
-    {
-        var reliable = await RegisterRemoteModelAsync("CH Board Reliable");
-        var erratic = await RegisterRemoteModelAsync("CH Board Erratic");
-
-        await RunChallengeAsync(reliable, erratic, ChallengeKind.MaxSeconds, 5, 2.0, 9.0);
-        await RunChallengeAsync(reliable, erratic, ChallengeKind.MaxSeconds, 5, 3.0, 8.0);
-
-        var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
-        var row = board.Single(r => r.GetProperty("modelId").GetString() == reliable);
-
-        Assert.Equal(2, row.GetProperty("attempts").GetInt32());
-        Assert.Equal(2, row.GetProperty("met").GetInt32());
-        Assert.Equal(1.0, row.GetProperty("passRate").GetDouble());
-        Assert.Equal(2, row.GetProperty("wins").GetInt32());
-    }
-
-    [Fact]
     public async Task Board_RanksTheMoreReliableModelFirst()
     {
         var reliable = await RegisterRemoteModelAsync("CH Rank Reliable");
@@ -269,15 +251,15 @@ public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
         // Relative order, not absolute position. The board is global and every test class in
         // this collection shares one Azurite, so another test's perfect-record model can
         // legitimately sit at board[0]. Asserting index 0 made this test pass or fail on
-        // execution order; what it actually means to prove is that the reliable model outranks
-        // the erratic one.
-        var reliableRank = board.Single(r => r.GetProperty("modelId").GetString() == reliable)
-            .GetProperty("rank").GetInt32();
-        var erraticRank = board.Single(r => r.GetProperty("modelId").GetString() == erratic)
-            .GetProperty("rank").GetInt32();
+        // execution order.
+        var reliableRow = board.Single(r => r.GetProperty("modelId").GetString() == reliable);
+        var erraticRow = board.Single(r => r.GetProperty("modelId").GetString() == erratic);
 
-        Assert.True(reliableRank < erraticRank,
-            $"expected the reliable model to outrank the erratic one, got {reliableRank} vs {erraticRank}");
+        Assert.Equal(2, reliableRow.GetProperty("attempts").GetInt32());
+        Assert.Equal(2, reliableRow.GetProperty("met").GetInt32());
+        Assert.Equal(1.0, reliableRow.GetProperty("passRate").GetDouble());
+        Assert.Equal(2, reliableRow.GetProperty("wins").GetInt32());
+        Assert.True(reliableRow.GetProperty("rank").GetInt32() < erraticRow.GetProperty("rank").GetInt32());
     }
 
     /// <summary>Every kind is a ceiling, so "best" is always the smallest measurement.</summary>

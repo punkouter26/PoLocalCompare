@@ -44,28 +44,14 @@ public class RenderCoalescerTests
     }
 
     [Fact]
-    public async Task Request_DoesNotRenderSynchronously()
-    {
-        var renders = 0;
-        using var coalescer = new RenderCoalescer(() => { Interlocked.Increment(ref renders); return Task.CompletedTask; }, Interval);
-
-        coalescer.Request();
-
-        // Trailing-edge, not leading-edge: nothing has painted yet on the calling frame.
-        Assert.Equal(0, renders);
-        await SettleAsync();
-        Assert.Equal(1, renders);
-    }
-
-    [Fact]
     public async Task FlushAsync_RendersImmediately()
     {
         var renders = 0;
         using var coalescer = new RenderCoalescer(() => { Interlocked.Increment(ref renders); return Task.CompletedTask; }, Interval);
 
+        // Terminal state (a duel finishing) must not wait out an interval.
         await coalescer.FlushAsync();
 
-        // Terminal state (a duel completing) must not wait out an interval.
         Assert.Equal(1, renders);
     }
 

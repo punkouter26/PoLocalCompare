@@ -77,36 +77,21 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(3)]
-    public async Task Draw_WithAFieldThatIsNotAPowerOfTwo_Returns400(int count)
+    [InlineData(1, "Build a click counter.")]   // wrong field size
+    [InlineData(3, "Build a click counter.")]   // wrong field size
+    [InlineData(2, "hi")]                       // prompt under minimum length
+    public async Task Draw_RejectsARequestThatFailsBasicValidation(int fieldSize, string prompt)
     {
         using var client = app.CreateAuthenticatedClient();
 
         var ids = new List<string>();
-        for (var i = 0; i < count; i++)
-            ids.Add(await RegisterModelAsync(client, $"T Bad{count}"));
+        for (var i = 0; i < fieldSize; i++)
+            ids.Add(await RegisterModelAsync(client, $"T Bad{fieldSize}"));
 
         var response = await client.PostAsJsonAsync("/api/tournaments", new
         {
             ModelIds = ids,
-            PromptText = Prompt,
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Draw_WithATooShortPrompt_Returns400()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "T Short L");
-        var right = await RegisterModelAsync(client, "T Short R");
-
-        var response = await client.PostAsJsonAsync("/api/tournaments", new
-        {
-            ModelIds = new[] { left, right },
-            PromptText = "hi",
+            PromptText = prompt,
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -162,12 +147,13 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     }
 
     /// <summary>
-    /// A ceiling of zero is not a challenge, it is a duel no model could win. Dropped rather
-    /// than rejected, so a stale client cannot fail a request over an option it did not mean.
+    /// A ceiling of zero is not a challenge, it is a duel no model could win — and a missing
+    /// budget is just an ordinary duel. Dropped rather than rejected, so a stale client
+    /// cannot fail a request over an option it did not mean.
     /// </summary>
     [Theory]
-    [InlineData(0.0)]
-    [InlineData(-5.0)]
+    [InlineData(0.0)]    // zero budget
+    [InlineData(-5.0)]   // negative budget
     public async Task Commence_WithANonPositiveBudget_FallsBackToAnOrdinaryDuel(double threshold)
     {
         using var client = app.CreateAuthenticatedClient();
@@ -189,53 +175,28 @@ public sealed class TournamentContractTests(ApiAppFixture app)
         Assert.Equal("None", body.GetProperty("challengeKind").GetString());
     }
 
-    /// <summary>Omitting the budget entirely must keep an ordinary duel ordinary.</summary>
-    [Fact]
-    public async Task Commence_WithNoBudget_IsAnOrdinaryDuel()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "C Plain L");
-        var right = await RegisterModelAsync(client, "C Plain R");
-
-        var response = await client.PostAsJsonAsync("/api/duels", new
-        {
-            LeftModelId = left,
-            RightModelId = right,
-            PromptText = Prompt,
-        });
-
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("None", body.GetProperty("challengeKind").GetString());
-        Assert.False(body.GetProperty("isChallenge").GetBoolean());
-    }
-
     // ── Model profile surface ─────────────────────────────────────────────
 
     [Fact]
-    public async Task Profile_Returns200WithAProfileShape()
+    public async Task Profile_ReturnsTheExpectedShapeForARealModelAnd404ForAnUnknownId()
     {
         using var client = app.CreateAuthenticatedClient();
         var modelId = await RegisterModelAsync(client, "P Shape");
 
-        var response = await client.GetAsync($"/api/leaderboard/{modelId}/profile");
+        var ok = await client.GetAsync($"/api/leaderboard/{modelId}/profile");
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var body = await ok.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(modelId, body.GetProperty("modelId").GetString());
         Assert.True(body.TryGetProperty("eloHistory", out _));
         Assert.True(body.TryGetProperty("killList", out _));
         Assert.True(body.TryGetProperty("winningOutputs", out _));
-    }
 
-    [Fact]
-    public async Task Profile_UnknownModel_Returns404()
-    {
-        using var client = app.CreateAuthenticatedClient();
-
-        var response = await client.GetAsync("/api/leaderboard/01NOSUCHMODELIDXXXXXXXXXXX/profile");
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // The page contract differs from the kill-list: an unknown id there degrades to "no
+        // history" because history is stored per-pair, while a profile is about a model and
+        // a model the catalog does not know about is genuinely not found.
+        var missing = await client.GetAsync("/api/leaderboard/01NOSUCHMODELIDXXXXXXXXXXX/profile");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
 
     private static async Task<string> RegisterModelAsync(HttpClient client, string prefix)

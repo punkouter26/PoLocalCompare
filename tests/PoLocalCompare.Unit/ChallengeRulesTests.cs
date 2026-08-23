@@ -15,27 +15,31 @@ public class ChallengeRulesTests
     [InlineData(4.0, 5.0, true)]
     [InlineData(5.0, 5.0, true)]    // a ceiling is inclusive
     [InlineData(5.1, 5.0, false)]
-    public void Meets_TreatsTheBudgetAsAnInclusiveCeiling(double measured, double threshold, bool expected)
+    [InlineData(null,  5.0, false)] // "we never found out" is not "within budget"
+    public void Meets_TreatsTheBudgetAsAnInclusiveCeiling(double? measured, double threshold, bool expected)
     {
         Assert.Equal(expected, ChallengeRules.Meets(measured, threshold));
     }
 
-    /// <summary>"We never found out" is not "within budget".</summary>
-    [Fact]
-    public void Meets_TreatsAMissingMeasurementAsAMiss()
-    {
-        Assert.False(ChallengeRules.Meets(null, 5.0));
-    }
-
     // ── Measure ───────────────────────────────────────────────────────────
 
-    [Fact]
-    public void Measure_Seconds_ConvertsFromMilliseconds()
+    /// <summary>
+    /// Each kind reads its own field and applies the same inclusive ceiling rule. A failed
+    /// run clears the measurement so the next test's assertion can't be confused by it.
+    /// </summary>
+    [Theory]
+    [InlineData(ChallengeKind.MaxSeconds, 5.0, true, 4.2)]   // seconds under a 5s ceiling
+    [InlineData(ChallengeKind.MaxTokens, 1000.0, true, 820)]  // 820 tokens under a 1000 budget
+    [InlineData(ChallengeKind.MaxCostUsd, 0.001, false, 0.0025)] // $0.0025 over a $0.001 budget
+    public void Measure_ReadsItsOwnFieldAndAppliesTheInclusiveCeiling(
+        ChallengeKind kind, double threshold, bool expectedMet, double measured)
     {
-        var m = Seconds(threshold: 5, measured: 4.2);
+        var m = ChallengeRules.Measure(kind, threshold, failed: false,
+            totalDurationMs: (long)(measured * 1000),
+            apiCostUsd: kind == ChallengeKind.MaxCostUsd ? measured : (double?)null,
+            tokenCount: kind == ChallengeKind.MaxTokens ? (int)measured : 0);
 
-        Assert.Equal(4.2, m.Measured!.Value, precision: 3);
-        Assert.True(m.Met);
+        Assert.Equal(expectedMet, m.Met);
     }
 
     /// <summary>
@@ -82,25 +86,6 @@ public class ChallengeRulesTests
 
         Assert.Null(m.Measured);
         Assert.False(m.Met);
-    }
-
-    [Fact]
-    public void Measure_Cost_ComparesAgainstTheApiCost()
-    {
-        var over = ChallengeRules.Measure(ChallengeKind.MaxCostUsd, 0.001, failed: false,
-            totalDurationMs: 3000, apiCostUsd: 0.0025, tokenCount: 900);
-
-        Assert.False(over.Met);
-    }
-
-    [Fact]
-    public void Measure_Tokens_ComparesAgainstTheTokenCount()
-    {
-        var under = ChallengeRules.Measure(ChallengeKind.MaxTokens, 1000, failed: false,
-            totalDurationMs: 3000, apiCostUsd: null, tokenCount: 820);
-
-        Assert.Equal(820, under.Measured);
-        Assert.True(under.Met);
     }
 
     /// <summary>An ordinary duel carries no budget and must never be reported as failing one.</summary>

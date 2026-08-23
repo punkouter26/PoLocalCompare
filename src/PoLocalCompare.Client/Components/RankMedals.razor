@@ -1,0 +1,57 @@
+@* Shared rank-medal rendering. The same #1 / #2 / #3 / blank shape was being inlined on
+   Leaderboard (gold/silver/bronze chain) and Challenge (gold only), with the emoji glyph
+   and the modifier class written by hand each time. Centralising prevents the three
+   surfaces from drifting on what counts as "gold" (Leaderboard used #1F947, Challenge
+   had its own copy of the same code point, and the difference would only show up in a
+   regression that would never be caught).
+
+   BEM modifier class is namespaced per surface — Leaderboard uses
+   `leaderboard__rank--gold`, Challenge uses `challenge__rank--gold`. Pass the block
+   prefix in rather than picking a global class so each stylesheet keeps its own colour
+   values and we never reach for a single shared rule across two different scopes. *@
+
+@code {
+    /// <summary>
+    /// Renders the medal for a row whose ordinal rank is <paramref name="rank"/>. Anything
+    /// past #3 returns a plain numeric span with no class.
+    /// </summary>
+    /// <param name="rank">One-based ordinal — the displayed rank, not the array index.</param>
+    /// <param name="blockPrefix">
+    /// The BEM block name without the trailing underscore (e.g. <c>leaderboard</c> or
+    /// <c>challenge</c>). Used to build the per-surface modifier class.
+    /// </param>
+    public static RenderFragment Render(int rank, string blockPrefix) => builder =>
+    {
+        if (rank == 1)
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", $"{blockPrefix}__rank {blockPrefix}__rank--gold po-glow");
+            builder.AddAttribute(2, "title", "#1 Ranked");
+            builder.AddContent(3, "\uD83C\uDF47"); // 🥇
+            builder.CloseElement();
+        }
+        else if (rank == 2)
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", $"{blockPrefix}__rank {blockPrefix}__rank--silver");
+            builder.AddAttribute(2, "title", "#2 Ranked");
+            builder.AddContent(3, "\uD83C\uDF48"); // 🥈
+            builder.CloseElement();
+        }
+        else if (rank == 3)
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", $"{blockPrefix}__rank {blockPrefix}__rank--bronze");
+            builder.AddAttribute(2, "title", "#3 Ranked");
+            builder.AddContent(3, "\uD83C\uDF49"); // 🥉
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", $"{blockPrefix}__rank");
+            builder.AddContent(2, rank);
+            builder.CloseElement();
+        }
+    };
+}

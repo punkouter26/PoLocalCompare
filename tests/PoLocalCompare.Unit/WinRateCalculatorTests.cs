@@ -9,38 +9,19 @@ namespace PoLocalCompare.Unit;
 /// </summary>
 public class WinRateCalculatorTests
 {
-    [Fact]
-    public void Calculate_TypicalRecord_ReturnsCorrectRatio()
+    /// <summary>
+    /// Every branch the DTO has to render. The DTO's WinRate is a plain double — NaN would
+    /// print as "NaN%" on the leaderboard, which is why "never competed" must explicitly be 0.
+    /// </summary>
+    [Theory]
+    [InlineData(17, 19, 17.0 / 19.0)]    // typical record
+    [InlineData(12, 12, 1.0)]           // all wins
+    [InlineData(0,  5,  0.0)]           // some losses, no wins
+    [InlineData(0,  0,  0.0)]           // never competed — never NaN
+    [InlineData(0, -1,  0.0)]           // defensive clamp on negative input
+    [InlineData(0,  8,  0.0)]           // all draws are not wins
+    public void Calculate_MapsEveryBranchTheLeaderboardRenders(int wins, int duels, double expected)
     {
-        // 17 wins out of 19 judged duels → 0.8947…
-        Assert.Equal(17.0 / 19.0, WinRateCalculator.Calculate(winCount: 17, duelCount: 19), 10);
-    }
-
-    [Fact]
-    public void Calculate_AllWins_ReturnsOne()
-    {
-        Assert.Equal(1.0, WinRateCalculator.Calculate(winCount: 12, duelCount: 12), 10);
-    }
-
-    [Fact]
-    public void Calculate_NoWins_ReturnsZero()
-    {
-        // 0 wins / 5 duels — common for newly-added models with only losses.
-        Assert.Equal(0.0, WinRateCalculator.Calculate(winCount: 0, duelCount: 5), 10);
-    }
-
-    [Fact]
-    public void Calculate_NeverCompeted_ReturnsZeroNotNaN()
-    {
-        // The DTO's WinRate is rendered directly; NaN would print as "NaN%" on the page.
-        Assert.Equal(0.0, WinRateCalculator.Calculate(winCount: 0, duelCount: 0));
-        Assert.Equal(0.0, WinRateCalculator.Calculate(winCount: 0, duelCount: -1)); // defensive
-    }
-
-    [Fact]
-    public void Calculate_AllDraws_ReturnsZero()
-    {
-        // Draws aren't wins. A model that drew every duel has 0% even though W/L/T reads 0/0/N.
-        Assert.Equal(0.0, WinRateCalculator.Calculate(winCount: 0, duelCount: 8));
+        Assert.Equal(expected, WinRateCalculator.Calculate(winCount: wins, duelCount: duels), 10);
     }
 }

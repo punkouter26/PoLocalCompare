@@ -88,22 +88,7 @@
                            keyboard fallback for a pointer-only row click. *@
                         <tr>
                             <td class="po-cell--bare">
-                                @if (dr == 1)
-                                {
-                                    <span class="leaderboard__rank leaderboard__rank--gold po-glow" title="#1 Ranked">&#x1F947;</span>
-                                }
-                                else if (dr == 2)
-                                {
-                                    <span class="leaderboard__rank leaderboard__rank--silver" title="#2 Ranked">&#x1F948;</span>
-                                }
-                                else if (dr == 3)
-                                {
-                                    <span class="leaderboard__rank leaderboard__rank--bronze" title="#3 Ranked">&#x1F949;</span>
-                                }
-                                else
-                                {
-                                    <span class="leaderboard__rank">@dr</span>
-                                }
+                                @RankMedals.Render(dr, "leaderboard")
                             </td>
                             <td data-label="Model">
                                 @* Opens the model's own page. This used to expand a kill-list

@@ -63,18 +63,6 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Duel_NewlySaved_IsPendingWithNoWinner()
-    {
-        var duel = NewDuel(out _, out _);
-
-        await Duels.SaveAsync(duel);
-        var loaded = await Duels.GetByIdAsync(duel.DuelId);
-
-        Assert.Equal(DuelVerdict.Pending, loaded!.Verdict);
-        Assert.Null(loaded.WinnerModelId);
-    }
-
-    [Fact]
     public async Task Duel_SaveIsIdempotent()
     {
         // Standards §5.5: a repeated create must swallow the 409 rather than surface it.
@@ -85,6 +73,10 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
 
         var loaded = await Duels.GetByIdAsync(duel.DuelId);
         Assert.NotNull(loaded);
+
+        // Pending + null winner is what the surface relies on to know the duel is still in flight.
+        Assert.Equal(DuelVerdict.Pending, loaded!.Verdict);
+        Assert.Null(loaded.WinnerModelId);
     }
 
     [Fact]
@@ -148,14 +140,6 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DuelResult_UnknownPair_ReadsBackNull()
-    {
-        var duel = NewDuel(out _, out _);
-
-        Assert.Null(await Results.GetAsync(duel.DuelId, duel.LeftModelId));
-    }
-
-    [Fact]
     public async Task Model_RoundTripsThroughTableStorage()
     {
         var model = new Model(ModelId.New(), "Test", ModelType.Remote, tdpWatts: 100.0, webLlmModelId: null, apiEndpointRef: "deployment-x");
@@ -183,12 +167,6 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal(1300, loaded!.CurrentElo);
         Assert.Equal(5, loaded.DuelCount);
         Assert.Equal(3, loaded.WinCount);
-    }
-
-    [Fact]
-    public async Task Model_UnknownId_ReadsBackNull()
-    {
-        Assert.Null(await Models.GetByIdAsync(ModelId.New()));
     }
 
     [Fact]

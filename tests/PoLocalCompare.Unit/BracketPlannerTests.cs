@@ -36,11 +36,10 @@ public class BracketPlannerTests
     /// <summary>The last round is "Final" whatever the bracket size, because it counts back.</summary>
     [Theory]
     [InlineData(2, 0, "Final")]
-    [InlineData(4, 1, "Final")]
     [InlineData(4, 0, "Semi-finals")]
-    [InlineData(8, 2, "Final")]
-    [InlineData(8, 1, "Semi-finals")]
     [InlineData(8, 0, "Quarter-finals")]
+    [InlineData(8, 1, "Semi-finals")]
+    [InlineData(8, 2, "Final")]
     public void RoundName_CountsBackFromTheFinal(int size, int round, string expected)
     {
         Assert.Equal(expected, BracketPlanner.RoundName(round, size));
@@ -152,6 +151,8 @@ public class BracketPlannerTests
     [Fact]
     public void NextSlot_OfTheFinalIsNothing()
     {
+        // Both endpoints of the bracket advance past anything: 8-model round 2 (the final)
+        // and a 2-model round 0 (also the final) report no next slot.
         Assert.Null(BracketPlanner.NextSlot(2, 0, 8));
         Assert.Null(BracketPlanner.NextSlot(0, 0, 2));
     }

@@ -132,33 +132,5 @@ public sealed class LeaderboardTests : IAsyncLifetime
             unknownEntries.Select(e => e.GetProperty("displayName").GetString()));
     }
 
-    // ── GET /api/leaderboard/{id}/killlist shows correct win/loss ─────────
-
-    [Fact]
-    public async Task GetKillList_AfterThreeDuels_ShowsCorrectHeadToHeadCounts()
-    {
-        var modelX = await RegisterRemoteModelAsync("Model X kill");
-        var modelY = await RegisterRemoteModelAsync("Model Y kill");
-
-        // X beats Y twice, Y beats X once
-        await RunDuelAsync(modelX, modelY, "Left");   // X wins
-        await RunDuelAsync(modelX, modelY, "Left");   // X wins
-        await RunDuelAsync(modelY, modelX, "Left");   // Y wins
-
-        var response = await _client.GetAsync($"/api/leaderboard/{modelX}/killlist");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        var killList = await response.Content.ReadFromJsonAsync<JsonElement[]>();
-        Assert.NotNull(killList);
-
-        // Find the X vs Y head-to-head entry
-        var vsY = killList.FirstOrDefault(e =>
-            e.GetProperty("opponentModelId").GetString() == modelY);
-
-        // Should show 2 wins and 1 loss for X against Y
-        Assert.True(vsY.ValueKind != JsonValueKind.Undefined,
-            "Kill list should contain an entry for opponent Y.");
-        Assert.Equal(2, vsY.GetProperty("wins").GetInt32());
-        Assert.Equal(1, vsY.GetProperty("losses").GetInt32());
-    }
+    // ── Kill-list row shape is covered by KillListTests; this file stays focused on sort ──
 }

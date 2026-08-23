@@ -88,25 +88,12 @@ public sealed class KillListTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal(1, row.GetProperty("losses").GetInt32());
         Assert.Equal(0, row.GetProperty("draws").GetInt32());
         Assert.Equal(3, row.GetProperty("totalDuels").GetInt32());
-    }
 
-    [Fact]
-    public async Task KillList_FromTheOpponentsSide_MirrorsTheScoreline()
-    {
-        // Every history row is written from one model's perspective, so the mirror image is
-        // derived rather than stored and can silently invert.
-        var a = await RegisterRemoteModelAsync("KL Mirror A");
-        var b = await RegisterRemoteModelAsync("KL Mirror B");
-
-        await RunDuelAsync(a, b, "Left");
-        await RunDuelAsync(a, b, "Left");
-        await RunDuelAsync(a, b, "Right");
-
-        var forward = RowFor(await GetKillListAsync(a), b);
+        // Mirror is derived from the same history; an inversion here means the projection has
+        // silently swapped the two perspectives.
         var reversed = RowFor(await GetKillListAsync(b), a);
-
-        Assert.Equal(forward.GetProperty("wins").GetInt32(), reversed.GetProperty("losses").GetInt32());
-        Assert.Equal(forward.GetProperty("losses").GetInt32(), reversed.GetProperty("wins").GetInt32());
+        Assert.Equal(2, reversed.GetProperty("losses").GetInt32());
+        Assert.Equal(1, reversed.GetProperty("wins").GetInt32());
     }
 
     [Fact]
@@ -140,23 +127,18 @@ public sealed class KillListTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal("KL Named B", row.GetProperty("opponentName").GetString());
     }
 
-    [Fact]
-    public async Task KillList_ModelWithNoDuels_ReturnsAnEmptyListNotAnError()
-    {
-        var a = await RegisterRemoteModelAsync("KL Lonely");
-
-        var response = await _client.GetAsync($"/api/leaderboard/{a}/killlist");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Empty((await response.Content.ReadFromJsonAsync<JsonElement[]>())!);
-    }
-
-    [Fact]
-    public async Task KillList_UnknownModel_ReturnsAnEmptyListNotA404()
+    [Theory]
+    [InlineData(false)]   // known model with no duels
+    [InlineData(true)]    // unknown model id — same shape, no error
+    public async Task KillList_NoHistory_ReturnsAnEmptyListNotA404(bool useUnknownId)
     {
         // Unlike the /h2h endpoint it replaced, this does not resolve the subject model from
         // the catalog, so a retired id degrades to "no history" instead of an error page.
-        var response = await _client.GetAsync("/api/leaderboard/01NOSUCHMODELIDXXXXXXXXXXX/killlist");
+        var id = useUnknownId
+            ? "01NOSUCHMODELIDXXXXXXXXXXX"
+            : await RegisterRemoteModelAsync("KL Lonely");
+
+        var response = await _client.GetAsync($"/api/leaderboard/{id}/killlist");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Empty((await response.Content.ReadFromJsonAsync<JsonElement[]>())!);

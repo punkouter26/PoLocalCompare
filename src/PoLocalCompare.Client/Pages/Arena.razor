@@ -55,10 +55,10 @@
                 </span>
                 @if (_leftResult is not null || _rightResult is not null)
                 {
-                    <span class="arena__budget-side @(MetBudget(_leftResult) ? "arena__budget-side--met" : "arena__budget-side--over")">
+                    <span class="arena__budget-side @(MetBudget(_leftResult) ? "po-fg--ok" : "po-fg--err")">
                         @LeftDisplayName @MeasuredText(_leftResult) @(MetBudget(_leftResult) ? "✓" : "✗")
                     </span>
-                    <span class="arena__budget-side @(MetBudget(_rightResult) ? "arena__budget-side--met" : "arena__budget-side--over")">
+                    <span class="arena__budget-side @(MetBudget(_rightResult) ? "po-fg--ok" : "po-fg--err")">
                         @RightDisplayName @MeasuredText(_rightResult) @(MetBudget(_rightResult) ? "✓" : "✗")
                     </span>
                 }
@@ -74,23 +74,23 @@
             <TokenRace
                 LeftName="@LeftDisplayName"
                 RightName="@RightDisplayName"
-                LeftStatus="@_leftStatus"
-                RightStatus="@_rightStatus"
-                LeftTokenCount="@_leftTokenCount"
-                RightTokenCount="@_rightTokenCount"
-                LeftVelocity="@_leftTokenVelocity"
-                RightVelocity="@_rightTokenVelocity"
-                LeftPeakVelocity="@_leftPeakVelocity"
-                RightPeakVelocity="@_rightPeakVelocity"
-                LeftHistory="_leftVelocityHistory"
-                RightHistory="_rightVelocityHistory" />
+                LeftStatus="@_sides[(int)Side.Left].Status"
+                RightStatus="@_sides[(int)Side.Right].Status"
+                LeftTokenCount="@_sides[(int)Side.Left].TokenCount"
+                RightTokenCount="@_sides[(int)Side.Right].TokenCount"
+                LeftVelocity="@_sides[(int)Side.Left].TokenVelocity"
+                RightVelocity="@_sides[(int)Side.Right].TokenVelocity"
+                LeftPeakVelocity="@_sides[(int)Side.Left].PeakVelocity"
+                RightPeakVelocity="@_sides[(int)Side.Right].PeakVelocity"
+                LeftHistory="_sides[(int)Side.Left].VelocityHistory"
+                RightHistory="_sides[(int)Side.Right].VelocityHistory" />
 
             @* The one diagnostic worth keeping from the old panels: without it, a browser model
                compiling shaders for 30 s is indistinguishable from a hung page. *@
-            @if (_leftStallDetail is not null || _rightStallDetail is not null)
+            @if (_sides[(int)Side.Left].StallDetail is not null || _sides[(int)Side.Right].StallDetail is not null)
             {
                 <div class="arena__stall-note" role="status">
-                    @(_leftStallDetail ?? _rightStallDetail)
+                    @(_sides[(int)Side.Left].StallDetail ?? _sides[(int)Side.Right].StallDetail)
                 </div>
             }
         }
@@ -121,99 +121,33 @@
                banner, and this card repeating the identical message — over a metric grid
                reading 0.0 tok/s / 0ms / 0 tokens / 0 B. *@
             <div class="arena__viewports">
-                <div class="arena__viewport-panel @(_leftResult?.IsFailure == true ? "arena__viewport-panel--failed" : "")">
-                    @if (_leftResult?.IsFailure == true)
-                    {
-                        <div class="arena__failure-card">
-                            <div class="arena__failure-title">❌ @LeftDisplayName failed</div>
-                            <div class="arena__failure-body">@(FirstLine(_leftResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
-                            @* Held back while blind: a runtime failure message routinely names
-                               the deployment or the WebLLM model id, which is the whole secret. *@
-                            @if (!IsMasked)
-                            {
-                                <details class="arena__failure-details">
-                                    <summary>Show technical details</summary>
-                                    <pre class="arena__failure-raw">@_leftResult.FailureReason</pre>
-                                </details>
-                            }
-                            <div class="arena__failure-hint">Retry the duel, or start a new one with a different pairing.</div>
-                        </div>
-                    }
-                    else
-                    {
-                        <SandboxedViewport
-                            HtmlContent="@(_leftStreamingHtml ?? _leftResult?.HtmlOutputRaw ?? string.Empty)"
-                            ModelName="@LeftDisplayName"
-                            IsLoser="@(_loserModelId == _duel.LeftModelId)"
-                            ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.LeftModelId)"
-                            ProbeRuntime="@(!_duelStillRunning)"
-                            OnProbeUpdated="OnLeftProbe"
-                        />
-                        <div class="arena__hud">
-                            <TelemetryHud Result="_leftResult" />
-                        </div>
-                        @if (!string.IsNullOrEmpty(_leftResult?.HtmlOutputRaw))
-                        {
-                            <div>
-                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_leftResult.HtmlOutputRaw, LeftDisplayName)">
-                                    &lt;/&gt; View Source
-                                </button>
-                            </div>
-                        }
-                    }
-                    @if (_eloShiftLeft.HasValue)
-                    {
-                        <div class="arena__elo-badge @(_eloShiftLeft >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
-                            ELO @(_eloDisplayLeft >= 0 ? "+" : "")@FormatElo(_eloDisplayLeft)
-                        </div>
-                    }
-                </div>
+                <ArenaViewportPanel
+                    Result="@_leftResult"
+                    DisplayName="@LeftDisplayName"
+                    StreamingHtml="@_leftStreamingHtml"
+                    PanelModelId="@_duel.LeftModelId"
+                    LoserModelId="@_loserModelId"
+                    WinnerModelId="@_winnerModelId"
+                    IsVerdictRecorded="@_verdictRecorded"
+                    IsDuelStillRunning="@_duelStillRunning"
+                    IsMasked="@IsMasked"
+                    EloShiftDisplay="@(_eloShiftLeft.HasValue ? _eloDisplayLeft : null)"
+                    OnProbeUpdated="OnLeftProbe"
+                    OnViewSource="(html) => OpenSourceAsync(html, LeftDisplayName)" />
 
-                <div class="arena__viewport-panel @(_rightResult?.IsFailure == true ? "arena__viewport-panel--failed" : "")">
-                    @if (_rightResult?.IsFailure == true)
-                    {
-                        <div class="arena__failure-card">
-                            <div class="arena__failure-title">❌ @RightDisplayName failed</div>
-                            <div class="arena__failure-body">@(FirstLine(_rightResult.FailureReason) ?? "No reason provided by the model runtime.")</div>
-                            @if (!IsMasked)
-                            {
-                                <details class="arena__failure-details">
-                                    <summary>Show technical details</summary>
-                                    <pre class="arena__failure-raw">@_rightResult.FailureReason</pre>
-                                </details>
-                            }
-                            <div class="arena__failure-hint">Retry the duel, or start a new one with a different pairing.</div>
-                        </div>
-                    }
-                    else
-                    {
-                        <SandboxedViewport
-                            HtmlContent="@(_rightStreamingHtml ?? _rightResult?.HtmlOutputRaw ?? string.Empty)"
-                            ModelName="@RightDisplayName"
-                            IsLoser="@(_loserModelId == _duel.RightModelId)"
-                            ShowWinner="@(_verdictRecorded && _winnerModelId == _duel.RightModelId)"
-                            ProbeRuntime="@(!_duelStillRunning)"
-                            OnProbeUpdated="OnRightProbe"
-                        />
-                        <div class="arena__hud">
-                            <TelemetryHud Result="_rightResult" />
-                        </div>
-                        @if (!string.IsNullOrEmpty(_rightResult?.HtmlOutputRaw))
-                        {
-                            <div>
-                                <button class="po-btn po-btn--sm" @onclick="() => OpenSourceAsync(_rightResult.HtmlOutputRaw, RightDisplayName)">
-                                    &lt;/&gt; View Source
-                                </button>
-                            </div>
-                        }
-                    }
-                    @if (_eloShiftRight.HasValue)
-                    {
-                        <div class="arena__elo-badge @(_eloShiftRight >= 0 ? "arena__elo-badge--positive" : "arena__elo-badge--negative")">
-                            ELO @(_eloDisplayRight >= 0 ? "+" : "")@FormatElo(_eloDisplayRight)
-                        </div>
-                    }
-                </div>
+                <ArenaViewportPanel
+                    Result="@_rightResult"
+                    DisplayName="@RightDisplayName"
+                    StreamingHtml="@_rightStreamingHtml"
+                    PanelModelId="@_duel.RightModelId"
+                    LoserModelId="@_loserModelId"
+                    WinnerModelId="@_winnerModelId"
+                    IsVerdictRecorded="@_verdictRecorded"
+                    IsDuelStillRunning="@_duelStillRunning"
+                    IsMasked="@IsMasked"
+                    EloShiftDisplay="@(_eloShiftRight.HasValue ? _eloDisplayRight : null)"
+                    OnProbeUpdated="OnRightProbe"
+                    OnViewSource="(html) => OpenSourceAsync(html, RightDisplayName)" />
             </div>
         }
         else
@@ -383,18 +317,11 @@
            already under your cursor. *@
         @if (CanStillVote)
         {
-            <div class="arena__actions arena__actions--vote">
-                <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
-                        disabled="@(_submitting || _retrying)"
-                        @onclick="@(() => RecordVerdictAsync(DuelVerdict.Left))">
-                    👈 Winner: @LeftDisplayName
-                </button>
-                <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
-                        disabled="@(_submitting || _retrying)"
-                        @onclick="@(() => RecordVerdictAsync(DuelVerdict.Right))">
-                    Winner: @RightDisplayName 👉
-                </button>
-            </div>
+            <ArenaVoteButtons
+                LeftDisplayName="@LeftDisplayName"
+                RightDisplayName="@RightDisplayName"
+                Disabled="@(_submitting || _retrying)"
+                OnVote="RecordVerdictAsync" />
         }
 
         @* ── Follow-ups ────────────────────────────────────────────────────
@@ -481,8 +408,8 @@
     private bool _retrying;
     private string? _retryError;
 
-    private string? _winnerModelId;
-    private string? _loserModelId;
+    private ModelId? _winnerModelId;
+    private ModelId? _loserModelId;
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
 
@@ -586,28 +513,11 @@
     private double DuelTotalCost() =>
         (_leftResult?.ApiCostUsd ?? 0) + (_rightResult?.ApiCostUsd ?? 0);
 
-    private static string FormatCost(double? value) =>
-        value.HasValue ? value.Value.ToString("F4") : "0 (no rate)";
-
-    /// <summary>
-    /// ELO deltas are stored with a tenth to leave room for fractional ratings, but a
-    /// typical shift is a whole number (K=32, draw or near-draw outcomes). Showing "16.0"
-    /// instead of "16" was a presentation bug — the badge looked like a remaining-decimal
-    /// continuation, not a finished number. Whole values render as an integer; everything
-    /// else keeps one decimal so the precision of the original record is visible.
-    /// </summary>
-    private static string FormatElo(double value) =>
-        Math.Abs(value - Math.Round(value)) < 0.05
-            ? ((int)Math.Round(value)).ToString()
-            : value.ToString("F1");
-
-    private static string ViewLabel(SourceViewMode mode) => mode switch
-    {
-        SourceViewMode.Rendered => "🖼 Rendered",
-        SourceViewMode.Code => "</> Code",
-        _ => "⇄ Diff",
-    };
-
+    // Formatting helpers live in ArenaFormatting so the share card can render the same
+    // numbers without forking the rules.
+    private static string FormatCost(double? value) => ArenaFormatting.FormatCost(value);
+    private static string FormatElo(double value) => ArenaFormatting.FormatElo(value);
+    private static string ViewLabel(SourceViewMode mode) => ArenaFormatting.ViewLabel(mode);
     private static string? FirstLine(string? reason) => FailureReasonText.FirstLine(reason);
 
     // ── Challenge budget ─────────────────────────────────────────────────────
@@ -662,18 +572,17 @@
     private bool _duelStillRunning;
     private SignalRDuelClient? _signalR;
 
-    private DuelStatus _leftStatus = DuelStatus.Initializing;
-    private DuelStatus _rightStatus = DuelStatus.Initializing;
-    private int _leftTokenCount;
-    private int _rightTokenCount;
-    private double? _leftTokenVelocity;
-    private double? _rightTokenVelocity;
-    private double? _leftPeakVelocity;
-    private double? _rightPeakVelocity;
-    private long? _leftWarmUpMs;
-    private long? _rightWarmUpMs;
-    private string? _leftStallDetail;
-    private string? _rightStallDetail;
+    /// <summary>
+    /// Streaming telemetry per side, indexed by <see cref="Side"/>. Replaces the row of
+    /// parallel <c>_leftXxx</c> / <c>_rightXxx</c> fields that read identically but had to
+    /// be updated through a <c>Side == "Left"</c> branch. Marked non-readonly because the
+    /// side elements are mutated in place; only the array reference itself is fixed.
+    /// </summary>
+    private readonly SideMetrics[] _sides =
+    [
+        new SideMetrics(),
+        new SideMetrics(),
+    ];
 
     private ModelId _leftLocalModelId;
     private ModelId _rightLocalModelId;
@@ -681,6 +590,11 @@
     private bool _rightIsBrowserModel;
     private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
     private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
+    /// <summary>Browser-side warm-up timing captured at the Initializing → Generating edge;
+    /// stays outside SideMetrics because it is set once per run and read in the velocity
+    /// calculation, not surfaced in the markup.</summary>
+    private long? _leftWarmUpMs;
+    private long? _rightWarmUpMs;
     private DateTimeOffset _leftLastTokenAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _rightLastTokenAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _leftLastUpdateAt = DateTimeOffset.UtcNow;
@@ -690,8 +604,6 @@
     // per token batch for the whole run — an unbounded list would grow for 15 minutes and the
     // sparkline only has ~100 horizontal units to draw into anyway.
     private const int VelocityHistoryLength = 60;
-    private readonly List<double> _leftVelocityHistory = [];
-    private readonly List<double> _rightVelocityHistory = [];
 
     private static void PushVelocity(List<double> history, double? velocity)
     {
@@ -945,7 +857,7 @@
         StartAutoJudgeCountdown();
     }
 
-    private void AdoptVerdict(DuelVerdict verdict, string? winner, string? loser, VerdictSource source, string? rationale)
+    private void AdoptVerdict(DuelVerdict verdict, ModelId? winner, ModelId? loser, VerdictSource source, string? rationale)
     {
         var wasAlreadyFinal = _verdictRecorded && !_optimistic;
 
@@ -1082,8 +994,8 @@
                 prompt = _duel.PromptText,
                 leftName = LeftDisplayName,
                 rightName = RightDisplayName,
-                leftStat = FormatShareStat(_leftResult, _eloShiftLeft),
-                rightStat = FormatShareStat(_rightResult, _eloShiftRight),
+                leftStat = ArenaFormatting.FormatShareStat(_leftResult, _eloShiftLeft),
+                rightStat = ArenaFormatting.FormatShareStat(_rightResult, _eloShiftRight),
                 winner = winnerSide,
                 badge = _verdictSource == VerdictSource.Ai ? "⚖ AI-judged" : "👤 Human-judged",
                 footer = $"{_duel.StartedAt:yyyy-MM-dd} · PoLocalCompare",
@@ -1094,22 +1006,6 @@
         {
             _retryError = "Could not render the share card in this browser.";
         }
-    }
-
-    private static string FormatShareStat(DuelResultDto? result, double? eloShift)
-    {
-        if (result is null) return "no result";
-
-        var parts = new List<string>
-        {
-            $"{result.TokenVelocity:F0} tok/s",
-            $"{result.TotalDurationMs / 1000.0:F1}s",
-        };
-
-        if (eloShift.HasValue)
-            parts.Add($"ELO {(eloShift >= 0 ? "+" : "")}{eloShift.Value:F1}");
-
-        return string.Join("  ·  ", parts);
     }
 
     // ── Auto-judge countdown ──────────────────────────────────────────────────
@@ -1235,20 +1131,20 @@
     /// Every path that learns a verdict — human click, SignalR push, or a re-read of the duel —
     /// funnels through here so the badges can't disagree about which side gained.
     /// </summary>
-    private void ApplyEloShifts(string? winnerModelId, double? shiftWinner, double? shiftLoser)
+    private void ApplyEloShifts(ModelId? winnerModelId, double? shiftWinner, double? shiftLoser)
     {
         _eloShiftLeft = _duel?.LeftModelId == winnerModelId ? shiftWinner : shiftLoser;
         _eloShiftRight = _duel?.RightModelId == winnerModelId ? shiftWinner : shiftLoser;
     }
 
-    private string ResolveDisplayName(string? modelId)
+    private string ResolveDisplayName(ModelId? modelId)
     {
-        if (modelId is null || _duel is null) return modelId ?? string.Empty;
+        if (modelId is null || _duel is null) return modelId?.Value ?? string.Empty;
         if (modelId == _duel.LeftModelId)
-            return _leftResult?.ModelName ?? _duel.LeftModelId;
+            return _leftResult?.ModelName ?? _duel.LeftModelName;
         if (modelId == _duel.RightModelId)
-            return _rightResult?.ModelName ?? _duel.RightModelId;
-        return modelId;
+            return _rightResult?.ModelName ?? _duel.RightModelName;
+        return modelId.Value;
     }
 
     private async Task OpenSourceAsync(string htmlContent, string modelName)
@@ -1262,28 +1158,23 @@
     {
         if (update.DuelId != _duelId) return;
 
-        if (update.Side == "Left")
-        {
-            _leftStatus = update.Status;
-            _leftTokenCount = update.TokenCount;
-            if (update.TokenVelocity.HasValue) _leftTokenVelocity = update.TokenVelocity;
-            PushVelocity(_leftVelocityHistory, update.TokenVelocity);
-            if (update.PeakTokenVelocity.HasValue) _leftPeakVelocity = update.PeakTokenVelocity;
-            if (update.WarmUpMs.HasValue) _leftWarmUpMs = update.WarmUpMs;
-            if (!string.IsNullOrEmpty(update.HtmlPreview)) _leftStreamingHtml = update.HtmlPreview;
-            _leftLastTokenAt = DateTimeOffset.UtcNow;
-        }
-        else
-        {
-            _rightStatus = update.Status;
-            _rightTokenCount = update.TokenCount;
-            if (update.TokenVelocity.HasValue) _rightTokenVelocity = update.TokenVelocity;
-            PushVelocity(_rightVelocityHistory, update.TokenVelocity);
-            if (update.PeakTokenVelocity.HasValue) _rightPeakVelocity = update.PeakTokenVelocity;
-            if (update.WarmUpMs.HasValue) _rightWarmUpMs = update.WarmUpMs;
-            if (!string.IsNullOrEmpty(update.HtmlPreview)) _rightStreamingHtml = update.HtmlPreview;
-            _rightLastTokenAt = DateTimeOffset.UtcNow;
-        }
+        var side = ParseSide(update.Side);
+        if (side is null) return;
+
+        var metrics = _sides[(int)side.Value];
+        metrics.Status = update.Status;
+        metrics.TokenCount = update.TokenCount;
+        if (update.TokenVelocity.HasValue) metrics.TokenVelocity = update.TokenVelocity;
+        PushVelocity(metrics.VelocityHistory, update.TokenVelocity);
+        if (update.PeakTokenVelocity.HasValue) metrics.PeakVelocity = update.PeakTokenVelocity;
+        if (update.WarmUpMs.HasValue) metrics.WarmUpMs = update.WarmUpMs;
+        if (side == Side.Left && !string.IsNullOrEmpty(update.HtmlPreview))
+            _leftStreamingHtml = update.HtmlPreview;
+        else if (!string.IsNullOrEmpty(update.HtmlPreview))
+            _rightStreamingHtml = update.HtmlPreview;
+
+        if (side == Side.Left) _leftLastTokenAt = DateTimeOffset.UtcNow;
+        else _rightLastTokenAt = DateTimeOffset.UtcNow;
 
         // Coalesced, not immediate: this fires once per token batch on both sides at once.
         _streamRender?.Request();
@@ -1294,6 +1185,10 @@
         if (update.TokenVelocity is { } velocity && velocity > 0)
             _ = AudioService.PlayTokenBlipAsync(velocity, update.Side);
     }
+
+    /// <summary>Maps a SignalR side name to the <see cref="Side"/> enum, or null if unknown.</summary>
+    private static Side? ParseSide(string side) =>
+        side == "Left" ? Side.Left : side == "Right" ? Side.Right : null;
 
     /// <summary>Records which sides run in the browser so the stall hint can explain the silence.</summary>
     private void NoteBrowserModels(DuelDto duel)
@@ -1327,13 +1222,15 @@
             if (_leftPrevStatus == DuelStatus.Initializing && status == DuelStatus.Generating)
                 _leftWarmUpMs = update.ElapsedMs;
             _leftPrevStatus = status;
-            _leftStatus = status;
-            _leftTokenCount = update.TokenCount;
+
+            var metrics = _sides[(int)Side.Left];
+            metrics.Status = status;
+            metrics.TokenCount = update.TokenCount;
 
             var velocity = GenerationVelocity(update, _leftWarmUpMs);
-            _leftTokenVelocity = velocity;
-            PushVelocity(_leftVelocityHistory, velocity);
-            if (velocity > (_leftPeakVelocity ?? 0)) _leftPeakVelocity = velocity;
+            metrics.TokenVelocity = velocity;
+            PushVelocity(metrics.VelocityHistory, velocity);
+            if (velocity > (metrics.PeakVelocity ?? 0)) metrics.PeakVelocity = velocity;
             if (update.TokenCount > 0) _leftLastTokenAt = DateTimeOffset.UtcNow;
             if (update.HtmlPreview is not null) _leftStreamingHtml = update.HtmlPreview;
         }
@@ -1343,13 +1240,15 @@
             if (_rightPrevStatus == DuelStatus.Initializing && status == DuelStatus.Generating)
                 _rightWarmUpMs = update.ElapsedMs;
             _rightPrevStatus = status;
-            _rightStatus = status;
-            _rightTokenCount = update.TokenCount;
+
+            var metrics = _sides[(int)Side.Right];
+            metrics.Status = status;
+            metrics.TokenCount = update.TokenCount;
 
             var velocity = GenerationVelocity(update, _rightWarmUpMs);
-            _rightTokenVelocity = velocity;
-            PushVelocity(_rightVelocityHistory, velocity);
-            if (velocity > (_rightPeakVelocity ?? 0)) _rightPeakVelocity = velocity;
+            metrics.TokenVelocity = velocity;
+            PushVelocity(metrics.VelocityHistory, velocity);
+            if (velocity > (metrics.PeakVelocity ?? 0)) metrics.PeakVelocity = velocity;
             if (update.TokenCount > 0) _rightLastTokenAt = DateTimeOffset.UtcNow;
             if (update.HtmlPreview is not null) _rightStreamingHtml = update.HtmlPreview;
         }
@@ -1357,7 +1256,9 @@
         // Same reasoning as the hub handler: the WebLLM worker reports per token batch.
         _streamRender?.Request();
 
-        var blipVelocity = isLeft ? _leftTokenVelocity : _rightTokenVelocity;
+        var blipVelocity = isLeft
+            ? _sides[(int)Side.Left].TokenVelocity
+            : _sides[(int)Side.Right].TokenVelocity;
         if (blipVelocity is { } sampled && sampled > 0)
             _ = AudioService.PlayTokenBlipAsync(sampled, isLeft ? "Left" : "Right");
     }
@@ -1376,8 +1277,8 @@
         while (await timer.WaitForNextTickAsync())
         {
             var now = DateTimeOffset.UtcNow;
-            _leftStallDetail = StallDetail(_leftIsBrowserModel, _leftStatus, _leftTokenCount, _leftLastUpdateAt, now, LeftDisplayName);
-            _rightStallDetail = StallDetail(_rightIsBrowserModel, _rightStatus, _rightTokenCount, _rightLastUpdateAt, now, RightDisplayName);
+            _sides[(int)Side.Left].StallDetail = StallDetail(_leftIsBrowserModel, _sides[(int)Side.Left].Status, _sides[(int)Side.Left].TokenCount, _leftLastUpdateAt, now, LeftDisplayName);
+            _sides[(int)Side.Right].StallDetail = StallDetail(_rightIsBrowserModel, _sides[(int)Side.Right].Status, _sides[(int)Side.Right].TokenCount, _rightLastUpdateAt, now, RightDisplayName);
             await InvokeAsync(StateHasChanged);
         }
     }

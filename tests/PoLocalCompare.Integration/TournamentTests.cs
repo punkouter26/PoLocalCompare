@@ -136,20 +136,22 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task Draw_RejectsAPromptThatIsTooShort()
+    /// <summary>
+    /// A short prompt is a length-validation failure and an unknown model id is a catalog
+    /// failure — both pass through the same validation path, so they share the assertion.
+    /// </summary>
+    [Theory]
+    [InlineData("hi", false)]   // prompt under the minimum length
+    [InlineData(null, true)]    // one of the model ids is unknown to the catalog
+    public async Task Draw_RejectsARequestThatFailsBasicValidation(string? badPrompt, bool useUnknownModelId)
     {
-        var field = await RegisterFieldAsync("TE Short", 2);
+        // The model-name suffix is unique per InlineData so a run against a hot Azurite cannot
+        // collide with the other Draw tests that share the "TE Bad" prefix.
+        var suffix = useUnknownModelId ? "Unknown" : "Short";
+        var field = await RegisterFieldAsync($"TE Bad {suffix} {Guid.NewGuid():N}", 2);
+        var ids = useUnknownModelId ? [field[0], "01NOSUCHMODELIDXXXXXXXXXXX"] : field;
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await DrawAsync(field, "hi")).StatusCode);
-    }
-
-    [Fact]
-    public async Task Draw_RejectsAModelThatIsNotInTheCatalog()
-    {
-        var real = await RegisterModelAsync("TE Ghost Real");
-
-        var response = await DrawAsync([real, "01NOSUCHMODELIDXXXXXXXXXXX"]);
+        var response = await DrawAsync(ids, badPrompt ?? Prompt);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

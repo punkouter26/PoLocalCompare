@@ -1,0 +1,33 @@
+@using PoLocalCompare.Shared.Enums
+
+@* The two large "pick a winner" buttons in the Arena. Was duplicated in Arena.razor
+   once per side; the only differences were the side enum value, the emoji arrow direction
+   and the display name. They live here so a future surface (e.g. a quick-pick chip on a
+   model page) can present the same control without forking the markup. *@
+
+<div class="arena__actions arena__actions--vote">
+    <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+            disabled="@Disabled"
+            @onclick="@(() => OnVote.InvokeAsync(DuelVerdict.Left))">
+        👈 Winner: @LeftDisplayName
+    </button>
+    <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+            disabled="@Disabled"
+            @onclick="@(() => OnVote.InvokeAsync(DuelVerdict.Right))">
+        Winner: @RightDisplayName 👉
+    </button>
+</div>
+
+@code {
+    /// <summary>What the page is currently showing for the left side (real or masked name).</summary>
+    [Parameter, EditorRequired] public string LeftDisplayName { get; set; } = string.Empty;
+
+    /// <summary>What the page is currently showing for the right side (real or masked name).</summary>
+    [Parameter, EditorRequired] public string RightDisplayName { get; set; } = string.Empty;
+
+    /// <summary>True while a vote is being submitted or a retry is in flight; gates both buttons.</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>The clicked side — <c>Left</c> or <c>Right</c>.</summary>
+    [Parameter, EditorRequired] public EventCallback<DuelVerdict> OnVote { get; set; }
+}

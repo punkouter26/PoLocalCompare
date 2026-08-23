@@ -33,30 +33,21 @@ public class OutputAnalysisTests
         Assert.Empty(analysis.AccessibilityIssues);
     }
 
-    [Fact]
-    public void Analyze_TruncatedOutput_ReportsUnclosedElements()
+    [Theory]
+    [InlineData("<!DOCTYPE html><html><body><div><p>cut off", "unclosed")]
+    [InlineData("```html\n<div>x</div>\n```",                "fence")]
+    [InlineData("<body><img src='a.png'></body>",           "alt")]
+    [InlineData("<body><h2>a</h2></body>",                 "h2")]
+    public void Analyze_ReportsEachClassOfIssueWithItsOwnKeyword(string html, string keyword)
     {
-        var analysis = OutputAnalysis.Analyze("<!DOCTYPE html><html><body><div><p>cut off");
+        // One assertion per kind of issue rather than one test each — the test name carries
+        // the keyword, and Assert.Contains across both issue lists means a regression in any
+        // bucket fails this row.
+        var analysis = OutputAnalysis.Analyze(html);
 
-        Assert.Contains(analysis.StructuralIssues, i => i.Contains("unclosed", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void Analyze_MarkdownFence_ReportedAsStructuralIssue()
-    {
-        var analysis = OutputAnalysis.Analyze("```html\n<div>x</div>\n```");
-
-        Assert.Contains(analysis.StructuralIssues, i => i.Contains("fence", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void Analyze_ReportsAccessibilityIssues()
-    {
-        var noAlt = OutputAnalysis.Analyze("<body><img src='a.png'></body>");
-        Assert.Contains(noAlt.AccessibilityIssues, i => i.Contains("alt", StringComparison.OrdinalIgnoreCase));
-
-        var badHeadingOrder = OutputAnalysis.Analyze("<body><h2>a</h2></body>");
-        Assert.Contains(badHeadingOrder.AccessibilityIssues, i => i.Contains("h2", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            analysis.StructuralIssues.Concat(analysis.AccessibilityIssues),
+            i => i.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

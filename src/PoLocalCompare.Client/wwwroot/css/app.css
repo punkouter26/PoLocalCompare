@@ -875,6 +875,61 @@ body::before {
     pointer-events: none;
 }
 
+/* ── State-modifier primitives ───────────────────────────────────────────
+   Pair with `.po-bg--{palette}` (background+border) or `.po-fg--{palette}` (text-only)
+   on any element that needs a status colour. The previous design had ~15 per-surface
+   modifiers that each re-stated the same four palettes (`--ok`, `--warn`, `--err`,
+   `--info`) — and they drifted on which token they read from. Centralising means a
+   colour-token rename touches one rule, not twelve.
+
+   Usage:
+     <span class="po-fg--ok">In budget</span>
+     <div class="po-bg--err po-fg--err">Failed</div>
+
+   Per-surface rules that previously declared these modifiers should drop their copy
+   and apply one of these tokens instead. */
+.po-bg--ok,
+.po-bg--met {
+    background: var(--success-surface);
+    border: 1px solid var(--success-border);
+}
+
+.po-bg--err,
+.po-bg--over,
+.po-bg--failed {
+    background: var(--danger-surface);
+    border: 1px solid var(--danger-border);
+}
+
+.po-bg--warn {
+    background: var(--warn-surface);
+    border: 1px solid var(--warn-border);
+}
+
+.po-bg--info {
+    background: var(--info-surface);
+    border: 1px solid var(--info-border);
+}
+
+.po-fg--ok,
+.po-fg--met {
+    color: var(--accent-green);
+}
+
+.po-fg--err,
+.po-fg--over,
+.po-fg--failed {
+    color: var(--accent-red);
+}
+
+.po-fg--warn {
+    color: var(--accent-yellow);
+}
+
+.po-fg--info {
+    color: var(--accent-blue);
+}
+
 @media (prefers-reduced-motion: reduce) {
     body::before {
         animation: none;

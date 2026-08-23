@@ -187,55 +187,44 @@ public class AutoJudgeTests
 
     // ── A one-sided failure is now a walkover (PRD §9 item 20) ───────────────
 
-    [Fact]
-    public async Task RunAsync_OneModelFailed_RecordsWalkoverWithoutCallingJudge()
+    /// <summary>
+    /// A one-sided failure is now a walkover (PRD §9 item 20). The survivor IS the
+    /// model-quality evidence, the judge LLM is never invoked, and the rationale names both
+    /// the survivor and the failure reason. Test both directions to catch a hard-coded
+    /// "Left wins" regression.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]   // Left survives, Right failed
+    [InlineData(false)]  // Right survives, Left failed
+    public async Task RunAsync_OneModelFailed_RecordsWalkoverToTheSurvivor(bool leftSurvives)
     {
-        // Left survived, Right failed — Right gets the L, Left gets the W, ELO moves.
-        // The judge LLM is never invoked because there is nothing to compare (one side has no
-        // output). PRD §9 item 20 reversed the prior "leave it Pending" decision once the
-        // demo surfaced Kimi's failed duels; the survivor IS the model-quality evidence.
+        var leftId = ModelId.From("left-aj");
+        var rightId = ModelId.From("right-aj");
+        var failureReason = leftSurvives ? "Watchdog timeout (900s)" : "HTTP 422";
+        var results = leftSurvives
+            ? new[] { MakeResult(DuelId.New(), leftId, "<p>left</p>"), MakeFailure(DuelId.New(), rightId, failureReason) }
+            : new[] { MakeFailure(DuelId.New(), leftId, failureReason), MakeResult(DuelId.New(), rightId, "<p>right</p>") };
+
         var duel = MakePendingDuel();
-        var harness = BuildHarness(
-            duel,
-            [MakeResult(duel.DuelId, ModelId.From("left-aj"), "<p>left</p>"),
-             MakeFailure(duel.DuelId, ModelId.From("right-aj"), "Watchdog timeout (900s)")],
-            new JudgeDecision(DuelVerdict.Right, "should never be used — walkover synthesises its own"));
+        var harness = BuildHarness(duel, results,
+            new JudgeDecision(leftSurvives ? DuelVerdict.Right : DuelVerdict.Left, "should never be used"));
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
 
-        Assert.Equal(DuelVerdict.Left, duel.Verdict);
-        Assert.Equal(ModelId.From("left-aj"), duel.WinnerModelId);
-        Assert.Equal(ModelId.From("right-aj"), duel.LoserModelId);
+        var expectedVerdict = leftSurvives ? DuelVerdict.Left : DuelVerdict.Right;
+        var expectedWinner = leftSurvives ? leftId : rightId;
+        var expectedLoser = leftSurvives ? rightId : leftId;
+
+        Assert.Equal(expectedVerdict, duel.Verdict);
+        Assert.Equal(expectedWinner, duel.WinnerModelId);
+        Assert.Equal(expectedLoser, duel.LoserModelId);
         Assert.Equal(VerdictSource.Ai, duel.VerdictSource);
         Assert.NotNull(duel.JudgeRationale);
         Assert.Contains("Walkover", duel.JudgeRationale);
-        Assert.Contains("Watchdog timeout (900s)", duel.JudgeRationale);
-        Assert.Null(duel.JudgeStoodDownReason); // walked-over duels do not stand down
+        Assert.Contains(failureReason, duel.JudgeRationale);
+        Assert.Null(duel.JudgeStoodDownReason);
         harness.Llm.Verify(j => j.JudgeAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task RunAsync_LeftFailedRightSurvived_AwardsWalkoverToRight()
-    {
-        // Symmetric case: the failure was on the LEFT side; the survivor is on the RIGHT.
-        // Catches a regression where the walkover path hard-coded "Left wins".
-        var duel = MakePendingDuel();
-        var harness = BuildHarness(
-            duel,
-            [MakeFailure(duel.DuelId, ModelId.From("left-aj"), "HTTP 422"),
-             MakeResult(duel.DuelId, ModelId.From("right-aj"), "<p>right</p>")],
-            new JudgeDecision(DuelVerdict.Left, "should never be used — walkover synthesises its own"));
-
-        await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
-
-        Assert.Equal(DuelVerdict.Right, duel.Verdict);
-        Assert.Equal(ModelId.From("right-aj"), duel.WinnerModelId);
-        Assert.Equal(ModelId.From("left-aj"), duel.LoserModelId);
-        Assert.Equal(VerdictSource.Ai, duel.VerdictSource);
-        Assert.Contains("Walkover", duel.JudgeRationale);
-        Assert.Contains("left", duel.JudgeRationale); // failed-side naming
-        Assert.Contains("HTTP 422", duel.JudgeRationale); // failure reason propagated
     }
 
     // ── The kill switch genuinely restores human-only verdicts ────────────────

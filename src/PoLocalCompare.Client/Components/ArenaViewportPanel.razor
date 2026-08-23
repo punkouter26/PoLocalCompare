@@ -1,0 +1,86 @@
+@using PoLocalCompare.Shared.DTOs
+@using PoLocalCompare.Shared.Ids
+
+@* One side of the Arena's viewports. Was previously inlined twice in Arena.razor with the
+   only differences being the field name on the page (`_leftResult` vs `_rightResult`),
+   the streaming HTML, the ELO shift, and the on-probe callback. Every other branch —
+   failure, telemetry, view-source button, ELO badge — is identical, so it lifts cleanly.
+
+   Two render branches: failure shows an `ArenaFailureCard` instead of the sandboxed
+   viewport, and the ELO badge sits in the panel's foot in both cases. The page passes
+   the panel a single `Result` row; nothing on this component reads sibling state. *@
+
+<div class="arena__viewport-panel @((Result?.IsFailure == true) ? "arena__viewport-panel--failed po-bg--err" : "")">
+    @if (Result?.IsFailure == true)
+    {
+        <ArenaFailureCard DisplayName="@DisplayName"
+                          FailureReason="@Result.FailureReason"
+                          IsMasked="@IsMasked" />
+    }
+    else
+    {
+        <SandboxedViewport
+            HtmlContent="@(StreamingHtml ?? Result?.HtmlOutputRaw ?? string.Empty)"
+            ModelName="@DisplayName"
+            IsLoser="@(LoserModelId == PanelModelId)"
+            ShowWinner="@(IsVerdictRecorded && WinnerModelId == PanelModelId)"
+            ProbeRuntime="@(!IsDuelStillRunning)"
+            OnProbeUpdated="OnProbeUpdated" />
+
+        <div class="arena__hud">
+            <TelemetryHud Result="Result" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(Result?.HtmlOutputRaw))
+        {
+            <div>
+                <button class="po-btn po-btn--sm" @onclick="() => OnViewSourceAsync(Result!.HtmlOutputRaw)">
+                    &lt;/&gt; View Source
+                </button>
+            </div>
+        }
+    }
+
+    <EloShiftBadge Value="EloShiftDisplay" />
+</div>
+
+@code {
+    /// <summary>The result row for this side, or <c>null</c> if the run has not produced one.</summary>
+    [Parameter, EditorRequired] public DuelResultDto? Result { get; set; }
+
+    /// <summary>What this side is called in the UI — already resolved through Blind mode by the page.</summary>
+    [Parameter, EditorRequired] public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>The streaming HTML previewed while inference is running. Null once the run completes.</summary>
+    [Parameter] public string? StreamingHtml { get; set; }
+
+    /// <summary>Id of the loser side, used to dim this viewport when it has lost.</summary>
+    [Parameter] public ModelId? LoserModelId { get; set; }
+
+    /// <summary>Id of the winner side, used to mark this viewport when it has won.</summary>
+    [Parameter] public ModelId? WinnerModelId { get; set; }
+
+    /// <summary>True once a verdict has been recorded — drives the winner / loser treatments.</summary>
+    [Parameter] public bool IsVerdictRecorded { get; set; }
+
+    /// <summary>True while the duel is still running; suppresses runtime probes when stable.</summary>
+    [Parameter] public bool IsDuelStillRunning { get; set; }
+
+    /// <summary>True while the page is masked for Blind mode — suppresses technical details.</summary>
+    [Parameter] public bool IsMasked { get; set; }
+
+    /// <summary>The id of the model that occupies this side — supplied by the page so the panel
+    /// can compare it to the loser / winner ids without holding its own copy.</summary>
+    [Parameter, EditorRequired] public ModelId PanelModelId { get; set; }
+
+    /// <summary>The ELO shift to display (already animated by the page).</summary>
+    [Parameter] public double? EloShiftDisplay { get; set; }
+
+    /// <summary>Probe-report callback raised by the sandboxed viewport after a render-frame probe.</summary>
+    [Parameter] public EventCallback<RuntimeProbeReport> OnProbeUpdated { get; set; }
+
+    /// <summary>View-source click handler. The page opens the raw HTML in a new tab.</summary>
+    [Parameter] public EventCallback<string> OnViewSource { get; set; }
+
+    private Task OnViewSourceAsync(string html) => OnViewSource.InvokeAsync(html);
+}

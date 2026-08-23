@@ -106,9 +106,12 @@
 
 .lab__env-item { color: var(--text-muted); }
 
-.lab__env-item--ok  { color: var(--accent-green); font-weight: 600; }
-
-.lab__env-item--err { color: var(--accent-red); font-weight: 600; }
+/* `--ok` and `--err` read colour from the shared `.po-fg--ok` / `.po-fg--err` palette
+   tokens; the `font-weight` is the only surface-specific rule, and it stays here. */
+.lab__env-item--ok,
+.lab__env-item--err {
+    font-weight: 600;
+}
 
 .lab__env-item--muted { color: var(--text-muted); }
 

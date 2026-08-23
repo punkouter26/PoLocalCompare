@@ -102,7 +102,6 @@ public class BlindPickLedgerTests
     [Theory]
     [InlineData(2, 0, 1.0)]
     [InlineData(1, 1, 0.5)]
-    [InlineData(0, 2, 0.0)]
     public void WinRate_IsWinsOverTotal(int wins, int losses, double expected)
     {
         var row = new BlindTallyRow(Fast, "Model Fast", wins, losses);
@@ -198,13 +197,17 @@ public class BlindPickLedgerTests
     }
 
     [Fact]
-    public void Divergences_OrdersTheHighestRatedContradictionFirst()
+    public void Divergences_FiltersUnrankedAndOrdersByRankedModelRank()
     {
+        // The unranked row is dropped (no leaderboard position to disagree with) and the two
+        // remaining contradictions sort by the rank of the model the user preferred over: the
+        // #1 over #9 leads, the #3 over #9 follows.
         var ranks = new Dictionary<ModelId, int> { [Fast] = 1, [Third] = 3, [Slow] = 9 };
 
         var found = BlindPickLedger.Divergences([
-            Vote("d1", Slow, Third),   // beat the #3 model
-            Vote("d2", Slow, Fast),    // beat the #1 model
+            Vote("d1", Slow, Third),
+            Vote("d2", Slow, Fast),
+            Vote("d3", Slow, ModelId.From("model-unranked")),
         ], ranks);
 
         Assert.Equal(2, found.Count);

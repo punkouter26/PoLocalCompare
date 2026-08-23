@@ -115,6 +115,8 @@
     min-height: 600px;
 }
 
+/* Structural-only override: a failed run needs no iframe height reserve, since the
+   failure card stands in for the viewport. The colour itself comes from `.po-bg--err`. */
 .arena__viewport-panel--failed {
     min-height: 0;
 }
@@ -204,17 +206,9 @@
     to   { opacity: 1; transform: none; }
 }
 
-.arena__elo-badge--positive {
-    background: var(--success-surface);
-    color: var(--accent-green);
-    border: 1px solid var(--success-border);
-}
-
-.arena__elo-badge--negative {
-    background: var(--danger-surface);
-    color: var(--accent-red);
-    border: 1px solid var(--danger-border);
-}
+/* Modifiers `--positive` and `--negative` were single-rule colour pickers. They now
+   read from the shared `.po-fg--ok` / `.po-fg--err` palette tokens in app.css, so a
+   palette rename (e.g. switching the success-green) propagates here automatically. */
 
 .arena__actions {
     display: flex;
@@ -473,12 +467,6 @@
     font-variant-numeric: tabular-nums;
 }
 
-.arena__budget-side--met {
-    color: var(--accent-green);
-}
-
-.arena__budget-side--over {
-    color: var(--accent-red);
-}
+/* `--met` and `--over` are now shared `.po-fg--ok` / `.po-fg--err` text-only modifiers. */
 
 

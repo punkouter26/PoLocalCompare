@@ -22,45 +22,36 @@ public sealed class HealthAndDiagnosticsTests(AzuriteFixture azurite) : IAsyncLi
 
     public async Task DisposeAsync() => await _host.DisposeAsync();
 
-    [Fact]
-    public async Task Health_IsAnonymous()
+    [Theory]
+    [InlineData("/health")]
+    [InlineData("/api/diag/smoke")]
+    public async Task ProbeEndpoints_AreAnonymous(string path)
     {
         // Deny-by-default would otherwise make the platform probe fail on every request.
+        // /diag/smoke has the same expectation — the diagnostics surface has to work
+        // before anyone is signed in.
         using var anonymous = _host.CreateAnonymousClient();
 
-        var response = await anonymous.GetAsync("/health");
+        var response = await anonymous.GetAsync(path);
 
         Assert.NotEqual(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task Health_WithAzuriteUp_Returns200()
+    public async Task Health_WithAzuriteUp_Returns200AndReportsKeyVaultAsNotConfigured()
     {
+        // Combined: the platform probe must return 200 with Azurite up, AND the keyVault
+        // probe must say NotConfigured (not Healthy — that would falsely claim we reached
+        // a vault that was never configured) when the host has empty config.
         var response = await Client.GetAsync("/health");
 
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-    }
 
-    [Fact]
-    public async Task Health_IncludesTableStorageCheck()
-    {
-        var body = await Client.GetFromJsonAsync<JsonElement>("/health");
-
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var checks = body.GetProperty("checks");
-        Assert.True(checks.TryGetProperty("azureTableStorage", out var table));
-        Assert.Equal("Healthy", table.GetProperty("status").GetString());
-    }
 
-    [Fact]
-    public async Task Health_UnconfiguredKeyVault_ReadsAsNotConfiguredNotHealthy()
-    {
-        // The host sets KeyVault:Uri to empty. "Healthy" here would claim we reached a vault
-        // that was never configured, which is exactly the sort of false green /diag exists
-        // to avoid.
-        var body = await Client.GetFromJsonAsync<JsonElement>("/health");
-
-        var keyVault = body.GetProperty("checks").GetProperty("keyVault");
-        Assert.Equal("NotConfigured", keyVault.GetProperty("status").GetString());
+        Assert.Equal("Healthy", checks.GetProperty("azureTableStorage").GetProperty("status").GetString());
+        Assert.Equal("NotConfigured", checks.GetProperty("keyVault").GetProperty("status").GetString());
     }
 
     [Fact]
@@ -69,16 +60,6 @@ public sealed class HealthAndDiagnosticsTests(AzuriteFixture azurite) : IAsyncLi
         var body = await Client.GetFromJsonAsync<JsonElement>("/api/diag/smoke");
 
         Assert.Equal("Development", body.GetProperty("environment").GetString());
-    }
-
-    [Fact]
-    public async Task DiagSmoke_IsAnonymous()
-    {
-        using var anonymous = _host.CreateAnonymousClient();
-
-        var response = await anonymous.GetAsync("/api/diag/smoke");
-
-        Assert.NotEqual(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

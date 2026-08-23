@@ -1,0 +1,21 @@
+@* The ELO-shift badge that lands under each Arena viewport. A whole number renders as
+   "16", anything else as "16.4" — see ArenaFormatting.FormatElo for the precision rule.
+   The two signs (positive / negative) get the colour modifier, so a single component is
+   the whole badge. The display value is separate from the target value because the Arena
+   animates the count-up: the page passes `_eloDisplayLeft` (animated) and the final target
+   is `_eloShiftLeft`. Both reach this component as `Value` (animated display number). *@
+
+@if (Value.HasValue)
+{
+    <div class="arena__elo-badge @(Value.Value >= 0 ? "po-bg--ok po-fg--ok" : "po-bg--err po-fg--err")">
+        ELO @FormatSignedValue(Value.Value)
+    </div>
+}
+
+@code {
+    /// <summary>The animated ELO shift to render. Null hides the badge entirely.</summary>
+    [Parameter, EditorRequired] public double? Value { get; set; }
+
+    private static string FormatSignedValue(double value) =>
+        (value >= 0 ? "+" : "") + ArenaFormatting.FormatElo(value);
+}

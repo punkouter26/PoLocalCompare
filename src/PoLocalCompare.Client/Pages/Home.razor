@@ -35,7 +35,7 @@
                 <h1 class="home__title po-title">Compare two models</h1>
                 @if (_health is not null)
                 {
-                    <span class="home__health @HealthClass()" title="@HealthTooltip()">@HealthLabel()</span>
+                    <span class="home__health @HealthBadgeText.ModifierClass(_healthHasRemotes)" title="@HealthBadgeText.Tooltip(_availability?.Count(a => a.IsAvailable), _models.Count, _health?.Models.CloudMode)">@HealthBadgeText.Label(_healthHasRemotes)</span>
                 }
             </div>
             <p class="po-subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
@@ -316,36 +316,11 @@
                    loses the duel outright however good its output was. That is a different
                    question from "which is better", which is why these results are ranked on
                    their own board rather than folded into the ELO column. *@
-                <div class="home__budget">
-                    <div class="home__budget-kinds" role="group" aria-label="Challenge budget">
-                        <span class="home__budget-label"><span aria-hidden="true">⏱</span> Challenge</span>
-                        @foreach (var kind in _budgetKinds)
-                        {
-                            <button type="button"
-                                    class="po-btn po-btn--sm @(_challengeKind == kind ? "po-btn--success" : "po-btn--secondary")"
-                                    aria-pressed="@(_challengeKind == kind ? "true" : "false")"
-                                    @onclick="() => SetChallengeKind(kind)">
-                                @ChallengeRules.KindLabel(kind)
-                            </button>
-                        }
-                    </div>
-
-                    @if (_challengeKind != ChallengeKind.None)
-                    {
-                        <div class="home__budget-values" role="group" aria-label="Budget ceiling">
-                            @foreach (var preset in ChallengeRules.PresetsFor(_challengeKind))
-                            {
-                                <button type="button"
-                                        class="po-btn po-btn--sm @(Math.Abs(_challengeThreshold - preset) < 1e-9 ? "po-btn--primary" : "po-btn--ghost")"
-                                        aria-pressed="@(Math.Abs(_challengeThreshold - preset) < 1e-9 ? "true" : "false")"
-                                        @onclick="() => _challengeThreshold = preset">
-                                    @ChallengeRules.Format(_challengeKind, preset)
-                                </button>
-                            }
-                        </div>
-                    }
-                    <p class="home__budget-hint">@ChallengeHint</p>
-                </div>
+                <ChallengeBudgetPicker Kind="_challengeKind"
+                                       KindChanged="OnChallengeKindChanged"
+                                       Threshold="_challengeThreshold"
+                                       ThresholdChanged="OnChallengeThresholdChanged"
+                                       Hint="@ChallengeHint" />
 
                 <section class="home__compare" aria-labelledby="home-compare-heading">
                     <div class="home__compare-row">
@@ -412,16 +387,7 @@
     private IReadOnlyList<BlindDivergence> _blindDivergences = [];
 
     // ── Challenge budget ─────────────────────────────────────────────────────
-    // "None" is a real option in the group rather than a separate off switch, so the control
-    // reads as one four-way choice instead of a toggle plus a dependent selector.
-    private static readonly ChallengeKind[] _budgetKinds =
-    [
-        ChallengeKind.None,
-        ChallengeKind.MaxSeconds,
-        ChallengeKind.MaxCostUsd,
-        ChallengeKind.MaxTokens,
-    ];
-
+    // Kind list lives inside ChallengeBudgetPicker; this page only holds the bound state.
     private ChallengeKind _challengeKind = ChallengeKind.None;
     private double _challengeThreshold;
 
@@ -430,12 +396,14 @@
         : $"Any model that goes over {ChallengeRules.Format(_challengeKind, _challengeThreshold)} "
           + "forfeits, however good its output is. Both inside the budget and it is judged normally.";
 
-    private void SetChallengeKind(ChallengeKind kind)
+    private void OnChallengeKindChanged(ChallengeKind kind)
     {
         _challengeKind = kind;
-        // Land on a sensible ceiling immediately: a selected kind with a zero threshold is
-        // dropped server-side, so the control would silently do nothing.
-        _challengeThreshold = ChallengeRules.PresetsFor(kind).FirstOrDefault();
+    }
+
+    private void OnChallengeThresholdChanged(double threshold)
+    {
+        _challengeThreshold = threshold;
     }
 
     private string BlindHint => _blindMode
@@ -803,23 +771,8 @@
         }
     }
 
-    private string HealthLabel() => _healthHasRemotes ? "🟢 Models ready" : "🟡 Remote offline";
-    private string HealthClass() => _healthHasRemotes ? "home__health--ok" : "home__health--warn";
-    private string HealthTooltip()
-    {
-        if (_health is null) return "Health status unavailable";
-        if (_healthHasRemotes)
-        {
-            // Drive both halves of the banner off the per-model availability probe, not the
-            // static catalog count. The prior wording reported "2 local services ready" while
-            // neither Ollama model was actually present on disk — two distinct sources of
-            // truth about the same thing, the catalog winning every time.
-            var ready = _availability?.Count(a => a.IsAvailable) ?? 0;
-            var total = _models.Count;
-            return ready > 0
-                ? $"{ready} of {total} models ready"
-                : $"{total} models available";
-        }
-        return $"Cloud mode: {_health.Models.CloudMode}. Only local models will work right now.";
-    }
+    private string HealthLabel() => HealthBadgeText.Label(_healthHasRemotes);
+    private string HealthClass() => HealthBadgeText.ModifierClass(_healthHasRemotes);
+    private string HealthTooltip() =>
+        HealthBadgeText.Tooltip(_availability?.Count(a => a.IsAvailable), _models.Count, _health?.Models.CloudMode);
 }

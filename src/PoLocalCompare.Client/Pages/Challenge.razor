@@ -77,14 +77,7 @@
                     {
                         <tr @key="entry.ModelId">
                             <td class="po-cell--bare">
-                                @if (entry.Rank == 1)
-                                {
-                                    <span class="challenge__rank challenge__rank--gold po-glow" title="#1 ranked">&#x1F947;</span>
-                                }
-                                else
-                                {
-                                    <span class="challenge__rank">@entry.Rank</span>
-                                }
+                                @RankMedals.Render(entry.Rank, "challenge")
                             </td>
                             <td data-label="Model">
                                 <a class="challenge__model" href="@($"/model/{entry.ModelId}")">@entry.DisplayName</a>

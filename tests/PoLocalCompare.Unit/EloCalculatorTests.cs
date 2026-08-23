@@ -32,20 +32,21 @@ public class EloCalculatorTests
         Assert.Equal(-expectedShift, Math.Round(newB - 1200, 1));
     }
 
-    // ── Expectation weighting: the favourite gains little, the upset gains a lot ──
+    // ── Expectation weighting: a heavy favourite gains little, an upset moves hard ──
 
-    [Fact]
-    public void Calculate_ShiftScalesWithHowUnexpectedTheResultWas()
+    [Theory]
+    [InlineData(2000, 1400, true)]   // expected winner — tiny gain
+    [InlineData(1400, 2000, true)]   // upset — large gain
+    public void Calculate_ShiftScalesWithHowUnexpectedTheResultWas(double ra, double rb, bool aWins)
     {
-        // A is 600 ELO points stronger and wins as expected — a tiny, still-positive shift.
-        var (favourite, _) = EloCalculator.Calculate(ratingA: 2000, ratingB: 1400, k: 32, outcomeA: 1.0);
-        var favouriteShift = favourite - 2000;
-        Assert.True(favouriteShift is > 0.0 and <= 1.0,
-            $"Expected an at-most 1-point shift for a heavy favourite, got {favouriteShift:F1}.");
+        var outcomeA = aWins ? 1.0 : 0.0;
+        var (newA, _) = EloCalculator.Calculate(ra, rb, k: 32, outcomeA);
 
-        // The same 600-point gap the other way round — an upset moves the rating hard.
-        var (underdog, _) = EloCalculator.Calculate(ratingA: 1400, ratingB: 2000, k: 32, outcomeA: 1.0);
-        Assert.True(underdog - 1400 > 20.0, $"Expected a large shift for an upset win, got {underdog - 1400:F1}.");
+        var shift = Math.Abs(newA - ra);
+        if (aWins && ra > rb)
+            Assert.True(shift is > 0.0 and <= 1.0, $"Expected an at-most 1-point shift for a heavy favourite, got {shift:F1}.");
+        else
+            Assert.True(shift > 20.0, $"Expected a large shift for an upset win, got {shift:F1}.");
     }
 
     // ── Rounding to 1 decimal place ────────────────────────────────────────

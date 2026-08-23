@@ -160,7 +160,7 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Profile_EloHistoryIsChronologicalOldestFirst()
+    public async Task Profile_EloHistoryChronologicallyListsEachWinAgainstItsOpponent()
     {
         var a = await RegisterRemoteModelAsync("MP Elo A");
         var b = await RegisterRemoteModelAsync("MP Elo B");
@@ -173,28 +173,20 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
 
         Assert.Equal(3, history.Length);
 
+        // Chronological — the chart reads left to right and the user has to make sense of
+        // it that way. Three wins in a row can only go up; the renderer relies on this to
+        // draw the y-axis correctly.
         var timestamps = history.Select(h => h.GetProperty("at").GetDateTimeOffset()).ToArray();
         Assert.Equal(timestamps.OrderBy(t => t), timestamps);
-
-        // Three wins in a row can only go up.
         var ratings = history.Select(h => h.GetProperty("elo").GetDouble()).ToArray();
         Assert.True(ratings[^1] > ratings[0], "Rating should rise across three wins.");
-    }
 
-    /// <summary>A rating chart with no causes on it is a squiggle; each point names its opponent.</summary>
-    [Fact]
-    public async Task Profile_EloHistoryPointsNameTheirOpponentAndOutcome()
-    {
-        var a = await RegisterRemoteModelAsync("MP Point A");
-        var b = await RegisterRemoteModelAsync("MP Point B");
-
-        await RunDuelAsync(a, b, "Left");
-
-        var point = (await GetProfileAsync(a)).GetProperty("eloHistory").EnumerateArray().Single();
-
-        Assert.Equal("Win", point.GetProperty("outcome").GetString());
-        Assert.Equal("MP Point B", point.GetProperty("opponentName").GetString());
-        Assert.Equal(b, point.GetProperty("opponentModelId").GetString());
+        // Each point names its opponent and outcome — a squiggle with no causes on it tells
+        // the user nothing about why the rating moved.
+        var last = history[^1];
+        Assert.Equal("Win", last.GetProperty("outcome").GetString());
+        Assert.Equal("MP Elo B", last.GetProperty("opponentName").GetString());
+        Assert.Equal(b, last.GetProperty("opponentModelId").GetString());
     }
 
     [Fact]
@@ -213,31 +205,22 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
 
     /// <summary>
     /// Each gallery item carries a whole HTML document, so the cap is load-bearing rather than
-    /// cosmetic — without it the response grows without bound as a model wins more duels.
+    /// cosmetic — and the loser's page must not show the winner's artifacts as its own.
     /// </summary>
     [Fact]
-    public async Task Profile_GalleryIsCappedEvenAfterManyWins()
+    public async Task Profile_GalleryHoldsOnlyThisModelsWinsAndIsCapped()
     {
-        var a = await RegisterRemoteModelAsync("MP Gallery A");
-        var b = await RegisterRemoteModelAsync("MP Gallery B");
+        var winner = await RegisterRemoteModelAsync("MP Gallery A");
+        var loser = await RegisterRemoteModelAsync("MP Gallery B");
 
         for (var i = 0; i < 8; i++)
-            await RunDuelAsync(a, b, "Left");
+            await RunDuelAsync(winner, loser, "Left");
 
-        var gallery = (await GetProfileAsync(a)).GetProperty("winningOutputs").EnumerateArray().ToArray();
+        var winnerGallery = (await GetProfileAsync(winner)).GetProperty("winningOutputs").EnumerateArray().ToArray();
+        Assert.True(winnerGallery.Length <= 6, $"Gallery should be capped at 6, got {winnerGallery.Length}.");
 
-        Assert.True(gallery.Length <= 6, $"Gallery should be capped at 6, got {gallery.Length}.");
-    }
-
-    /// <summary>The loser's page must not show the winner's artifacts as its own.</summary>
-    [Fact]
-    public async Task Profile_GalleryHoldsOnlyDuelsThisModelWon()
-    {
-        var winner = await RegisterRemoteModelAsync("MP Won A");
-        var loser = await RegisterRemoteModelAsync("MP Won B");
-
-        await RunDuelAsync(winner, loser, "Left");
-
+        // A model that never won this duel cannot surface the other model's artifacts on its
+        // own profile — that is the row-level permission boundary the gallery enforces.
         Assert.Empty((await GetProfileAsync(loser)).GetProperty("winningOutputs").EnumerateArray());
     }
 }

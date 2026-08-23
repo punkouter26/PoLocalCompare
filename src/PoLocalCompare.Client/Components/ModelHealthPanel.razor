@@ -46,13 +46,13 @@
                     }
                     else if (_webGpu.Supported)
                     {
-                        <span class="lab__env-item lab__env-item--ok">✅ WebGPU supported</span>
+                        <span class="lab__env-item lab__env-item--ok po-fg--ok">✅ WebGPU supported</span>
                         <span class="lab__env-sep">·</span>
                         <span class="lab__env-item">🖥 @(string.IsNullOrEmpty(_webGpu.Vendor) ? "WebGPU Device" : _webGpu.Vendor)@(string.IsNullOrEmpty(_webGpu.Architecture) ? "" : " · " + _webGpu.Architecture)</span>
                     }
                     else
                     {
-                        <span class="lab__env-item lab__env-item--err">❌ WebGPU unavailable</span>
+                        <span class="lab__env-item lab__env-item--err po-fg--err">❌ WebGPU unavailable</span>
                         <span class="lab__env-sep">·</span>
                         <span class="lab__env-item lab__env-item--muted">@_webGpu.Reason</span>
                     }
@@ -65,7 +65,7 @@
                     }
                     else if (_webNn.Supported)
                     {
-                        <span class="lab__env-item lab__env-item--ok">🧠 NPU (@_webNn.DeviceType.ToUpperInvariant())</span>
+                        <span class="lab__env-item lab__env-item--ok po-fg--ok">🧠 NPU (@_webNn.DeviceType.ToUpperInvariant())</span>
                     }
                     else
                     {

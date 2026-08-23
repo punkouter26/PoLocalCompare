@@ -63,7 +63,7 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task Commence_EchoesTheSubmittedModelsAndPrompt()
+    public async Task Commence_EchoesTheSubmittedFieldAndStartsPending()
     {
         using var client = app.CreateAuthenticatedClient();
         var (duelId, left, right) = await CommenceAsync(client);
@@ -73,50 +73,27 @@ public sealed class DuelContractTests(ApiAppFixture app)
         Assert.Equal(left, duel.GetProperty("leftModelId").GetString());
         Assert.Equal(right, duel.GetProperty("rightModelId").GetString());
         Assert.Contains("kanban", duel.GetProperty("promptText").GetString()!, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task Commence_StartsPending()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, _, _) = await CommenceAsync(client);
-
-        var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
-
         Assert.Equal("Pending", duel.GetProperty("verdict").GetString());
     }
 
-    [Fact]
-    public async Task Commence_EmptyPrompt_Returns400()
+    [Theory]
+    [InlineData("", HttpStatusCode.BadRequest)]                    // empty prompt
+    [InlineData("Build an HTML calculator.", HttpStatusCode.NotFound)] // unknown opponent
+    public async Task Commence_RejectsTheRequestWhenValidationOrCatalogFails(
+        string promptText, HttpStatusCode expectedStatus)
     {
         using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "Empty Left");
-        var right = await RegisterModelAsync(client, "Empty Right");
+        var left = await RegisterModelAsync(client, "Left For Reject");
+        var right = await RegisterModelAsync(client, "Right For Reject");
 
         var response = await client.PostAsJsonAsync("/api/duels", new
         {
             LeftModelId = left,
-            RightModelId = right,
-            PromptText = "",
+            RightModelId = promptText == string.Empty ? right : "01NOTAREALMODELID00000000",
+            PromptText = promptText,
         });
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Commence_UnknownModel_Returns404()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "Known Left");
-
-        var response = await client.PostAsJsonAsync("/api/duels", new
-        {
-            LeftModelId = left,
-            RightModelId = "01NOTAREALMODELID00000000",
-            PromptText = "Build an HTML calculator.",
-        });
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(expectedStatus, response.StatusCode);
     }
 
     [Fact]
@@ -204,8 +181,11 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task Verdict_NamesTheWinnerAndLoser()
+    public async Task Verdict_NamesTheSidesAndIsRecordedAsHuman()
     {
+        // Standards invariant: every verdict carries a source, and one submitted over the
+        // verdict endpoint is by definition a person's. The winner / loser ids are the
+        // dominant the human picked, mirrored into the response so the client can refresh.
         using var client = app.CreateAuthenticatedClient();
         var (duelId, left, right) = await CommenceAsync(client);
 
@@ -214,19 +194,8 @@ public sealed class DuelContractTests(ApiAppFixture app)
 
         Assert.Equal(right, body.GetProperty("winnerModelId").GetString());
         Assert.Equal(left, body.GetProperty("loserModelId").GetString());
-    }
 
-    [Fact]
-    public async Task Verdict_IsRecordedAsAHumanDecision()
-    {
-        // Standards invariant: every verdict carries a source, and one submitted over the
-        // verdict endpoint is by definition a person's.
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, _, _) = await CommenceAsync(client);
-
-        await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Left" });
         var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
-
         Assert.Equal("Human", duel.GetProperty("verdictSource").GetString());
     }
 
@@ -289,34 +258,11 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task LocalResult_IsAcceptedAndAppearsOnTheDuel()
+    public async Task LocalResult_AppearsOnTheDuelAndIsNormalizedBeforeStorage()
     {
-        // This is the browser-inference path: the server never saw the tokens, the client
-        // POSTs the finished output. It has to converge with the server-side path.
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, left, _) = await CommenceAsync(client);
-
-        var response = await client.PostAsJsonAsync($"/api/duels/{duelId}/local-result", new
-        {
-            ModelId = left,
-            HtmlOutputRaw = "```html\n<html><body>Local</body></html>\n```",
-            TokenCount = 55,
-            TotalDurationMs = 900L,
-            WarmUpDurationMs = 100L,
-            IsFailure = false,
-        });
-        response.EnsureSuccessStatusCode();
-
-        var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
-        var results = duel.GetProperty("results").EnumerateArray().ToList();
-        Assert.Contains(results, r => r.GetProperty("modelId").GetString() == left);
-    }
-
-    [Fact]
-    public async Task LocalResult_IsNormalizedBeforeStorage()
-    {
-        // The markdown fence must be stripped server-side, so a browser model is scored on
-        // the same basis as a server-side one.
+        // Browser-inference path: the server never saw the tokens, the client POSTs the
+        // finished output. It has to converge with the server-side path — and the markdown
+        // fence has to be stripped so the browser model is scored on the same basis.
         using var client = app.CreateAuthenticatedClient();
         var (duelId, left, _) = await CommenceAsync(client);
 
