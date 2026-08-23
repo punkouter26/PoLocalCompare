@@ -548,10 +548,25 @@
     private bool CanStillVote => !_verdictRecorded && !BothSidesFailed() && !_duelStillRunning;
 
     /// <summary>The model's actual name, whether or not the duel is currently masked.</summary>
-    private string LeftRealName => _leftResult?.ModelName ?? _duel?.LeftModelId ?? "Left";
+    /// <remarks>
+    /// Resolution order: result row's <c>ModelName</c> (only present once inference has
+    /// landed), then the snapshotted <c>LeftModelName</c> on the duel DTO (always present for
+    /// duels created after the snapshot was added; the server resolves through the catalog
+    /// too), then the id as a last-ditch fallback so the page never renders a ULID on its own
+    /// for a side whose name the user has no way to look up.
+    /// </remarks>
+    private string LeftRealName =>
+        _leftResult?.ModelName
+        ?? (string.IsNullOrEmpty(_duel?.LeftModelName) ? null : _duel!.LeftModelName)
+        ?? _duel?.LeftModelId.ToString()
+        ?? "Left";
 
     /// <inheritdoc cref="LeftRealName"/>
-    private string RightRealName => _rightResult?.ModelName ?? _duel?.RightModelId ?? "Right";
+    private string RightRealName =>
+        _rightResult?.ModelName
+        ?? (string.IsNullOrEmpty(_duel?.RightModelName) ? null : _duel!.RightModelName)
+        ?? _duel?.RightModelId.ToString()
+        ?? "Right";
 
     /// <summary>
     /// Whether identity is currently hidden. Every surface that names a side — viewport

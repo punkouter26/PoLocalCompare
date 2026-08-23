@@ -31,12 +31,6 @@ try
     builder.Services.AddScoped<PromptHistoryService>();
     builder.Services.AddScoped<BlindModeService>();
     builder.Services.AddScoped<FxService>();
-
-    // Radzen is scoped to exactly two components — RadzenDataGrid on the Archive and
-    // RadzenChart on the model profile. It is NOT a general adoption: .po-btn remains the
-    // only button in the app, and the twelve per-surface button classes that were folded
-    // into it stay folded. See the note in PoLocalCompare.Client.csproj about trimming.
-    Radzen.ServiceCollectionExtensions.AddRadzenComponents(builder.Services);
     // Scoped, which under a WebAssembly host is one instance for the whole app session: the
     // ticker holds a single lobby SignalR connection that must survive page navigation rather
     // than reconnect on each one. (Singleton is not an option — it depends on HttpClient.)

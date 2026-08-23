@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace PoLocalCompare.Api.Features.Duels;
+namespace PoLocalCompare.Api.Features.Scoring;
 
 public static class HtmlOutputNormalizer
 {

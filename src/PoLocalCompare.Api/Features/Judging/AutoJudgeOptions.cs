@@ -1,4 +1,4 @@
-namespace PoLocalCompare.Api.Features.Duels;
+namespace PoLocalCompare.Api.Features.Judging;
 
 /// <summary>
 /// Configuration for the auto-judge (config section <c>AiJudge</c>).

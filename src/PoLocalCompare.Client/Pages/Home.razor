@@ -4,6 +4,7 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Challenges
 @using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Shared.Prompts
 @using Microsoft.JSInterop
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
@@ -444,19 +445,26 @@
     private bool HasModels => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
     private bool SameModelSelected => _leftModel is not null && _rightModel is not null && _leftModel.ModelId == _rightModel.ModelId;
     private bool HasPrompt => !string.IsNullOrWhiteSpace(_prompt);
-    private bool CanCompare => HasModels && HasPrompt;
-    private bool _promptLongWarning => _prompt.Length > 4000 * 0.8;
+    // Length check shared with the API so a too-short prompt never reaches the network and the
+    // 400 comes back as a raw `net_http_message_not_success_statuscode_reason`. The threshold
+    // is sourced from PromptRules (re-exported by CommenceDuelCommand) — keeping both in lock-
+    // step means a change to the server's minimum is reflected in the UI automatically.
+    private bool PromptMeetsMinimum => _prompt.Trim().Length >= PromptRules.MinPromptLength;
+    private bool PromptWithinMaximum => _prompt.Length <= PromptRules.MaxPromptLength;
+    private bool CanCompare => HasModels && HasPrompt && PromptMeetsMinimum && PromptWithinMaximum;
+    private bool _promptLongWarning => _prompt.Length > PromptRules.MaxPromptLength * 0.8;
 
-    private string CompareHint => (HasModels, SameModelSelected, HasPrompt) switch
+    private string CompareHint => (HasModels, SameModelSelected, HasPrompt, PromptMeetsMinimum) switch
     {
         // Same-model case must come before the "no models" arm: both slots are filled and
         // `HasModels` short-circuits to false when they are the same model, so checking it
         // first would mis-label the page as "Pick two models above" when the user has in
         // fact picked two — just the same one twice.
-        (_, true, _) => "Pick two different models — a duel against the same model twice is not a duel.",
-        (false, _, _) => "Pick two models above to enable Compare.",
-        (true, false, false) => "Write a prompt above to enable Compare.",
-        _ => $"Ready: {_leftModel!.DisplayName} vs {_rightModel!.DisplayName}."
+        (_, true, _, _) => "Pick two different models — a duel against the same model twice is not a duel.",
+        (false, _, _, _) => "Pick two models above to enable Compare.",
+        (true, false, false, _) => "Write a prompt above to enable Compare.",
+        (true, false, true, false) => $"Prompt must be at least {PromptRules.MinPromptLength} characters.",
+        (true, false, true, _) => $"Ready: {_leftModel!.DisplayName} vs {_rightModel!.DisplayName}."
     };
 
     // ── Model-type filter for the picker (keeps the mobile list scannable) ──

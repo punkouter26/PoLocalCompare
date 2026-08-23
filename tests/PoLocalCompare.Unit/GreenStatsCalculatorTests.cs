@@ -1,4 +1,5 @@
 using PoLocalCompare.Api.Features.Duels;
+using PoLocalCompare.Api.Features.Scoring;
 
 namespace PoLocalCompare.Unit;
 

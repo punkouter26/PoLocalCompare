@@ -1,5 +1,5 @@
 // SOLID: Single Responsibility
-namespace PoLocalCompare.Api.Features.Duels;
+namespace PoLocalCompare.Api.Features.Scoring;
 
 /// <summary>
 /// Pure arithmetic energy calculator — no I/O, no external dependencies.

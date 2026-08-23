@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 using PoLocalCompare.Api.Common.Inference;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Api.Features.Duels;
+namespace PoLocalCompare.Api.Features.Judging;
 
 internal static partial class JudgeLog
 {

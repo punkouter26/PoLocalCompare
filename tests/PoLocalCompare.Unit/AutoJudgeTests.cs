@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using PoLocalCompare.Api.Common.Background;
 using PoLocalCompare.Api.Features.Duels;
+using PoLocalCompare.Api.Features.Judging;
 using PoLocalCompare.Api.Features.Leaderboard;
 using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.Enums;

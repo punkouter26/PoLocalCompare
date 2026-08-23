@@ -10,6 +10,8 @@ global using PoLocalCompare.Api.Features.Archive;
 global using PoLocalCompare.Api.Features.Challenges;
 global using PoLocalCompare.Api.Features.Diagnostics;
 global using PoLocalCompare.Api.Features.Duels;
+global using PoLocalCompare.Api.Features.Judging;
+global using PoLocalCompare.Api.Features.Scoring;
 global using PoLocalCompare.Api.Features.Leaderboard;
 global using PoLocalCompare.Api.Features.Models;
 global using PoLocalCompare.Api.Features.Ollama;

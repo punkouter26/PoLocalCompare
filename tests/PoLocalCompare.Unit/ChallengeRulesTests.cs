@@ -57,13 +57,31 @@ public class ChallengeRulesTests
     /// cost challenge.
     /// </summary>
     [Fact]
-    public void Measure_AnUnpricedModelCountsAsZeroSpend()
+    public void Measure_AnUnmeteredModelWithNoCostSpendsNothing()
     {
+        // A browser or Ollama model runs on the user's own hardware, so a null cost genuinely
+        // means zero and it passes any budget. This is what lets local models compete in a
+        // cost challenge at all.
         var m = ChallengeRules.Measure(ChallengeKind.MaxCostUsd, 0.002, failed: false,
-            totalDurationMs: 3000, apiCostUsd: null, tokenCount: 900);
+            totalDurationMs: 3000, apiCostUsd: null, tokenCount: 900, isMetered: false);
 
         Assert.Equal(0, m.Measured);
         Assert.True(m.Met);
+    }
+
+    [Fact]
+    public void Measure_AMeteredModelWithNoRateIsAMissNotFree()
+    {
+        // The counterpart, and the one that actually bites: a remote model billed us something,
+        // we just have no price on file for it. Reading that as zero is how the most expensive
+        // deployments in the catalog win cost challenges outright — which is exactly what
+        // happened while seven of eleven remote models carried no pricing. A budget that cannot
+        // be verified has not been met.
+        var m = ChallengeRules.Measure(ChallengeKind.MaxCostUsd, 0.002, failed: false,
+            totalDurationMs: 3000, apiCostUsd: null, tokenCount: 900, isMetered: true);
+
+        Assert.Null(m.Measured);
+        Assert.False(m.Met);
     }
 
     [Fact]

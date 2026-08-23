@@ -59,8 +59,71 @@ public sealed class DuelApiClient
             challengeThreshold,
         };
         var response = await _http.PostAsJsonAsync("/api/duels", body);
-        response.EnsureSuccessStatusCode();
+        // Surface the validation body rather than the raw `net_http_message_not_success…` reason
+        // string. The endpoint returns RFC 7807 ProblemDetails; the per-field message is what the
+        // user actually needs to read (e.g. "PromptText must be at least 10 characters.").
+        if (!response.IsSuccessStatusCode)
+        {
+            var problem = await TryReadProblemAsync(response);
+            throw new DuelStartException(response.StatusCode, problem);
+        }
         return await response.Content.ReadFromJsonAsync<DuelDto>(JsonOptions);
+    }
+
+    /// <summary>
+    /// Best-effort parse of an RFC 7807 ProblemDetails body. Returns null if the body is empty
+    /// or not in the expected shape, so callers fall back to the status code's reason phrase.
+    /// </summary>
+    private static async Task<ProblemDetailsLite?> TryReadProblemAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<ProblemDetailsLite>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Subset of <c>Microsoft.AspNetCore.Mvc.ProblemDetails</c> we care about.</summary>
+    public sealed class ProblemDetailsLite
+    {
+        public string? Title { get; init; }
+        public string? Detail { get; init; }
+        // ASP.NET's ValidationProblemDetails nests per-field errors here.
+        public Dictionary<string, string[]>? Errors { get; init; }
+
+        /// <summary>
+        /// First non-empty field error if present (this is what the API surfaces for the
+        /// PromptText length check), else <see cref="Detail"/>, else <see cref="Title"/>.
+        /// </summary>
+        public string? FirstMessage()
+        {
+            if (Errors is { Count: > 0 })
+            {
+                var first = Errors.Values.SelectMany(v => v).FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
+                if (first is not null) return first;
+            }
+            return Detail ?? Title;
+        }
+    }
+
+    /// <summary>
+    /// Thrown by <see cref="CommenceDuelAsync"/> when the server rejects the request. The
+    /// message comes from the parsed <c>ProblemDetails</c> body so the user sees the actual
+    /// reason — "PromptText must be at least 10 characters." — rather than the framework's
+    /// "BadRequest" reason phrase.
+    /// </summary>
+    public sealed class DuelStartException : Exception
+    {
+        public System.Net.HttpStatusCode StatusCode { get; }
+
+        public DuelStartException(System.Net.HttpStatusCode statusCode, ProblemDetailsLite? problem)
+            : base(problem?.FirstMessage() ?? $"{statusCode} ({(int)statusCode})")
+        {
+            StatusCode = statusCode;
+        }
     }
 
     public async Task<DemoPlanDto?> GetDemoPlanAsync(int rounds = 10)
@@ -245,21 +308,6 @@ public sealed class DuelApiClient
     }
 
     // ── Ollama & diagnostics ─────────────────────────────────────────────────
-
-    public async Task<IReadOnlyList<OllamaGpuStatusDto>> GetOllamaGpuStatusAsync()
-    {
-        try
-        {
-            return await _http.GetFromJsonAsync<IReadOnlyList<OllamaGpuStatusDto>>(
-                "/api/ollama/gpu-status", JsonOptions)
-                ?? [];
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Ollama GPU status unavailable");
-            return [];
-        }
-    }
 
     public async Task<IReadOnlyList<string>> GetOllamaAvailableModelsAsync()
     {

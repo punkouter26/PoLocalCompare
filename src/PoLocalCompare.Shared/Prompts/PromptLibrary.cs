@@ -1,5 +1,16 @@
 namespace PoLocalCompare.Shared.Prompts;
 
+/// <summary>
+/// Bounds shared by the API and the client for a duel prompt. The API enforces these on the
+/// server; the client reads them so the prompt picker can flag a too-short prompt before the
+/// user clicks Compare (which would otherwise surface as a raw 400 from the API).
+/// </summary>
+public static class PromptRules
+{
+    public const int MinPromptLength = 10;
+    public const int MaxPromptLength = 10000;
+}
+
 /// <summary>One curated starter prompt.</summary>
 /// <param name="Id">Stable slug — used as the demo-mode seed key and the UI element key.</param>
 /// <param name="Emoji">Decorative only; every rendering must mark it <c>aria-hidden</c>.</param>

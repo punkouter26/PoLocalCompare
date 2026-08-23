@@ -6,7 +6,7 @@ using PoLocalCompare.Api.Common.Background;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Api.Features.Duels;
+namespace PoLocalCompare.Api.Features.Judging;
 
 internal static partial class AutoJudgeLog
 {

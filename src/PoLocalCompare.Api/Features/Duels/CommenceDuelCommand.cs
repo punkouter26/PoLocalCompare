@@ -1,5 +1,6 @@
 // SOLID: Single Responsibility
 using PoLocalCompare.Shared.Enums;
+using PoLocalCompare.Shared.Prompts;
 
 namespace PoLocalCompare.Api.Features.Duels;
 
@@ -27,6 +28,8 @@ public sealed record CommenceDuelCommand(
     ChallengeKind ChallengeKind = ChallengeKind.None,
     double ChallengeThreshold = 0)
 {
-    public const int MaxPromptLength = 10000;
-    public const int MinPromptLength = 10;
+    // Re-exported from PromptRules so existing call-sites keep their `CommenceDuelCommand.MinPromptLength`
+    // shape — the canonical location is the shared one because the client also reads it.
+    public const int MaxPromptLength = PromptRules.MaxPromptLength;
+    public const int MinPromptLength = PromptRules.MinPromptLength;
 }

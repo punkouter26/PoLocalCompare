@@ -162,6 +162,22 @@
     gap: var(--space-md);
 }
 
+/* Below the 15rem minimum the grid collapses to one column, which on a phone turned twelve
+   thumbnails into twelve full-width rows — 2116px, more than half of a 4073px page, for a
+   section that is meant to be skimmed. Two columns halves that, and a 4:3 thumbnail at ~170px
+   wide is still perfectly legible as a preview. Explicit 1fr columns rather than auto-fill,
+   because auto-fill honours the 15rem minimum and would keep giving one column. */
+@media (max-width: 640px) {
+    .profile__gallery {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-sm);
+    }
+
+    .profile__gallery-item {
+        padding: var(--space-xs);
+    }
+}
+
 .profile__gallery-item {
     display: flex;
     flex-direction: column;

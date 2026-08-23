@@ -7,13 +7,28 @@
     <!-- Standards §6.6: the assembly is trim-annotated (IsTrimmable + analyzer), but the app
          publishes untrimmed: the Router's NotFoundPage instantiates components via reflection,
          which the IL trimmer strips in Release publish (CtorNotLocated at runtime → the Blazor
-         view tree fails to mount). Radzen.Blazor was re-added on 2026-08-22 for two
-         components (RadzenDataGrid on the Archive, RadzenChart on the model profile), which
-         restores a second reflective-instantiation blocker on top of the Router's. Nothing
-         regressed because PublishTrimmed was already false, but flipping it on now needs
-         both resolved rather than one. -->
+         view tree fails to mount).
+
+         MEASURED 2026-08-23 (Release publish, gzipped — what a browser actually downloads):
+           untrimmed  11.99 MB across 219 files
+           trimmed     6.18 MB across  96 files   -> 48% smaller
+         A runtime audit measured 3.9-11.7 s to first heading across the app's routes, and that
+         payload is the reason.
+
+         Radzen.Blazor was added on 2026-08-22 for two components and removed again on
+         2026-08-23: it was 1.43 MB gzipped, 11.9% of the entire download, and the second thing
+         blocking trimming. The Archive is a semantic .po-table again and the model profile's
+         rating curve is inline SVG.
+
+         So the Router's NotFoundPage is now the ONLY blocker. A trimmed publish builds and
+         boots — the shell mounts, routing works, the nav renders live API data — but the
+         authenticated surface has not been exercised under trimming, and NotFoundPage is
+         exactly the kind of thing that fails there. Resolve it (a DynamicDependency attribute
+         or an explicit TrimmerRootDescriptor), verify a signed-in session against a trimmed
+         build, then flip this on. Do not flip it on the strength of the publish succeeding —
+         it succeeds either way. -->
     <IsTrimmable>true</IsTrimmable>
-    <PublishTrimmed>true</PublishTrimmed>
+    <PublishTrimmed>false</PublishTrimmed>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
     <!-- Surface trim diagnostics as warnings without failing the build: Blazor-generated Razor code
@@ -28,7 +43,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
-    <PackageReference Include="Radzen.Blazor" />
   </ItemGroup>
 
   <ItemGroup>

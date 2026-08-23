@@ -10,6 +10,18 @@ public sealed class DuelDto
     public string PromptFull { get; init; } = string.Empty;
     public ModelId LeftModelId { get; init; }
     public ModelId RightModelId { get; init; }
+
+    /// <summary>
+    /// Display name of the left model, snapshotted on the duel row when it was created. Falls
+    /// back to <see cref="LeftModelId"/> when the duel predates the snapshot. The Arena uses
+    /// this rather than the id so a duel that has not produced any result rows yet (which
+    /// means the model name is not on the result DTOs) still renders something human-readable
+    /// on the race lanes and the failure card.
+    /// </summary>
+    public string LeftModelName { get; init; } = string.Empty;
+
+    /// <inheritdoc cref="LeftModelName"/>
+    public string RightModelName { get; init; } = string.Empty;
     public DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }
     public DuelVerdict Verdict { get; init; }

@@ -123,7 +123,7 @@ public sealed class TournamentRunner(
 
         // ── Phase 1: start each match. Serial, because each one saves the aggregate. ──
         foreach (var match in batch)
-            await StartMatchAsync(services, repository, tournament, match);
+            await StartMatchAsync(services, repository, tournament, match, cancellationToken);
 
         // ── Phase 2: wait for all of them at once. No writes happen in here. ──
         var duels = await Task.WhenAll(batch.Select(m =>
@@ -138,12 +138,25 @@ public sealed class TournamentRunner(
         await repository.UpdateAsync(tournament);
     }
 
-    /// <summary>Creates and enqueues the duel behind a match, if it does not already have one.</summary>
+    /// <summary>Creates the duel behind a match and runs it inline, if it does not already have one.</summary>
+    /// <remarks>
+    /// The duel is executed on a thread-pool task (<see cref="DuelExecutionService.RunAsync"/>)
+    /// rather than via <c>EnqueueAsync</c>: <c>BackgroundTaskService</c> is single-consumer and
+    /// awaits each work item before dequeuing the next, and the runner is itself holding that
+    /// slot, so a re-queued duel would sit behind its own runner forever. The runner caps
+    /// concurrency at <see cref="MaxConcurrentMatches"/> so the lack of a separate queue is
+    /// intentional, not an oversight.
+    /// </remarks>
+    /// <param name="cancellationToken">
+    /// Host/queue shutdown signal — fans into the detached duel so a host restart cancels
+    /// in-flight matches instead of leaking them until the duel's own 15-minute watchdog trips.
+    /// </param>
     private async Task StartMatchAsync(
         IServiceProvider services,
         ITournamentRepository repository,
         Tournament tournament,
-        TournamentMatch match)
+        TournamentMatch match,
+        CancellationToken cancellationToken)
     {
         // A tournament re-read after a restart can find a match that already has a duel — that
         // one is waited on rather than re-run.
@@ -164,7 +177,24 @@ public sealed class TournamentRunner(
                 tournament.Status = TournamentStatus.Running;
 
             await repository.UpdateAsync(tournament);
-            await execution.EnqueueAsync(dto.DuelId, AutoJudgeDelaySeconds);
+
+            // Fire-and-forget on the thread pool: PlayBatchAsync then awaits the match's
+            // WaitForVerdictAsync by DuelId, so the completion signal we wait on is the
+            // persisted verdict, not this Task. The cancellationToken fans into the duel so
+            // a host shutdown also cancels in-flight inference.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await execution.RunAsync(dto.DuelId, AutoJudgeDelaySeconds, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Tournament {TournamentId} duel {DuelId} failed during execution.",
+                        tournament.TournamentId, dto.DuelId);
+                }
+            }, cancellationToken);
 
             logger.LogInformation(
                 "Tournament {TournamentId} round {Round} match {Index}: {Left} vs {Right} as duel {DuelId}.",

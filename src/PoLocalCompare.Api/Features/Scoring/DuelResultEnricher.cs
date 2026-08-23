@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using PoLocalCompare.Shared.Enums;
 
-namespace PoLocalCompare.Api.Features.Duels;
+namespace PoLocalCompare.Api.Features.Scoring;
 
 /// <summary>
 /// Centralizes post-inference enrichment of a <see cref="DuelResult"/>: character density,

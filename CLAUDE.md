@@ -329,6 +329,27 @@ without that, every render re-emitted `srcdoc` and the browser tore down and rel
 mid-generation. Terminal events (`DuelComplete`, verdicts) still paint immediately; don't route
 those through the coalescer.
 
+**The verdict write order is load-bearing.** `RecordVerdictHandler` writes the *duel* first,
+then the model aggregates, then the ELO history — and that order is a bug fix, not an accident.
+Both the decisive path and `RecordTieAsync` used to update the two model rows first. An
+optimistic-concurrency 412 on either model write then left one already incremented, and the
+retry in `HandleWithRetryAsync` re-ran the whole method and incremented it a second time. The
+duel write is the idempotency guard: once it lands, a second pass hits the "verdict already
+recorded" check and stops. What hid the bug for so long is that `EloHistoryRepository.SaveAsync`
+swallows a 409 as an idempotent append, so history stayed *correct* while `DuelCount` and
+`WinCount` silently doubled — three duels reporting `duelCount=6, winCount=4, eloHistoryRows=3`.
+`VerdictWriteOrderTests` pins it by asserting the counters against the history they derive from.
+The residual risk is deliberately the mirror image: a model write failing after the duel is
+written means that rating does not move, which is visible and rebuildable from history, rather
+than inventing rating that was never earned.
+
+**Integration tests share one Azurite, so global assertions are order-dependent.** Every class in
+the `Integration` collection builds its own `IntegrationHost` against the *same* container. A test
+that asserts on a global projection — `board[0]`, `Assert.Empty(board)`, a leaderboard position —
+passes or fails on execution order, because sibling tests legitimately contribute rows. Scope
+assertions to the models the test created (`board.Single(r => r.ModelId == a)`) and assert
+*relative* order rather than absolute position.
+
 **Persistence details that bite.** Table Storage writes are idempotent and ETag-safe: creates swallow
 409, updates are If-Match conditional, and duel writers re-read and reapply on 412. `HybridCache`
 (30s TTL, tag-invalidated on verdict) fronts leaderboard and model-availability reads — invalidate it

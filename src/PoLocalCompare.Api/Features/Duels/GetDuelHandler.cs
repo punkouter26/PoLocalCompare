@@ -71,6 +71,17 @@ public sealed class GetDuelHandler
             PromptFull = duel.PromptFull,
             LeftModelId = duel.LeftModelId,
             RightModelId = duel.RightModelId,
+            // Resolve through the catalog so a duel whose left/right model was retired still
+            // resolves to a real name. Falls back to the snapshot on the duel row, then to the
+            // id, mirroring ModelDisplayName.Resolve for the result-row path above.
+            LeftModelName = ModelDisplayName.Resolve(
+                (await _modelRepository.GetByIdAsync(duel.LeftModelId))?.DisplayName,
+                duel.LeftModelName,
+                duel.LeftModelId),
+            RightModelName = ModelDisplayName.Resolve(
+                (await _modelRepository.GetByIdAsync(duel.RightModelId))?.DisplayName,
+                duel.RightModelName,
+                duel.RightModelId),
             StartedAt = duel.StartedAt,
             CompletedAt = duel.CompletedAt,
             Verdict = (DuelVerdict)duel.Verdict,

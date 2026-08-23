@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using PoLocalCompare.Api.Common.Inference;
 using PoLocalCompare.Api.Features.Duels;
+using PoLocalCompare.Api.Features.Judging;
 using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.Ids;
 

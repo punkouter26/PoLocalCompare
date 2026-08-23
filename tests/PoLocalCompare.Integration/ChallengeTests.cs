@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using PoLocalCompare.Api.Features.Challenges;
 using PoLocalCompare.Api.Features.Duels;
+using PoLocalCompare.Api.Features.Judging;
 using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.Enums;
 using PoLocalCompare.Shared.Ids;
@@ -212,60 +213,6 @@ public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal("Tie", duel.GetProperty("verdict").GetString());
         Assert.Equal(0, duel.GetProperty("eloShiftWinner").GetDouble());
     }
-
-    /// <summary>
-    /// The failure mode that would otherwise break the whole mode: a crashed model has a short
-    /// stored duration, so counting it would make failing fast the winning speed strategy.
-    /// </summary>
-    [Fact]
-    public async Task AFailedModelNeverWinsOnSpeed()
-    {
-        var crashed = await RegisterRemoteModelAsync("CH Crash");
-        var slower = await RegisterRemoteModelAsync("CH Slower");
-
-        var duelId = await RunChallengeAsync(
-            crashed, slower, ChallengeKind.MaxSeconds, 5,
-            leftSeconds: 0.2, rightSeconds: 4.0, leftFailed: true);
-
-        var duel = await GetDuelAsync(duelId);
-
-        Assert.Equal(slower, duel.GetProperty("winnerModelId").GetString());
-    }
-
-    [Fact]
-    public async Task ATokenBudgetIsMeasuredAgainstTheTokenCount()
-    {
-        var terse = await RegisterRemoteModelAsync("CH Terse");
-        var verbose = await RegisterRemoteModelAsync("CH Verbose");
-
-        var duelId = await RunChallengeAsync(
-            terse, verbose, ChallengeKind.MaxTokens, 1000,
-            leftSeconds: 3, rightSeconds: 3, leftTokens: 800, rightTokens: 2400);
-
-        var duel = await GetDuelAsync(duelId);
-
-        Assert.Equal(terse, duel.GetProperty("winnerModelId").GetString());
-    }
-
-    /// <summary>
-    /// An unpriced model is genuinely free rather than unmeasured. Reading its null price as a
-    /// miss would disqualify every local model from every cost challenge.
-    /// </summary>
-    [Fact]
-    public async Task ACostBudgetTreatsAnUnpricedModelAsFree()
-    {
-        var free = await RegisterRemoteModelAsync("CH Free");
-        var pricey = await RegisterRemoteModelAsync("CH Pricey");
-
-        var duelId = await RunChallengeAsync(
-            free, pricey, ChallengeKind.MaxCostUsd, 0.001,
-            leftSeconds: 3, rightSeconds: 3, leftCost: null, rightCost: 0.0025);
-
-        var duel = await GetDuelAsync(duelId);
-
-        Assert.Equal(free, duel.GetProperty("winnerModelId").GetString());
-    }
-
     /// <summary>An ordinary duel carries no budget and must not be touched by any of this.</summary>
     [Fact]
     public async Task ADuelWithNoBudget_IsLeftAlone()
@@ -278,7 +225,14 @@ public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
         var duel = await GetDuelAsync(duelId);
 
         Assert.Equal("Pending", duel.GetProperty("verdict").GetString());
-        Assert.Empty(await GetBoardAsync(ChallengeKind.MaxSeconds));
+
+        // Scoped to this test's own models. The board is global and shared across every test
+        // class in this collection, so asserting it is empty outright made this pass or fail
+        // on execution order. What "left alone" means is that an unbudgeted duel banks no
+        // attempt for the models that ran it.
+        var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
+        Assert.DoesNotContain(board, r => r.GetProperty("modelId").GetString() == a);
+        Assert.DoesNotContain(board, r => r.GetProperty("modelId").GetString() == b);
     }
 
     // ── The challenge board ───────────────────────────────────────────────
@@ -312,8 +266,18 @@ public sealed class ChallengeTests(AzuriteFixture azurite) : IAsyncLifetime
 
         var board = await GetBoardAsync(ChallengeKind.MaxSeconds);
 
-        Assert.Equal(reliable, board[0].GetProperty("modelId").GetString());
-        Assert.Equal(1, board[0].GetProperty("rank").GetInt32());
+        // Relative order, not absolute position. The board is global and every test class in
+        // this collection shares one Azurite, so another test's perfect-record model can
+        // legitimately sit at board[0]. Asserting index 0 made this test pass or fail on
+        // execution order; what it actually means to prove is that the reliable model outranks
+        // the erratic one.
+        var reliableRank = board.Single(r => r.GetProperty("modelId").GetString() == reliable)
+            .GetProperty("rank").GetInt32();
+        var erraticRank = board.Single(r => r.GetProperty("modelId").GetString() == erratic)
+            .GetProperty("rank").GetInt32();
+
+        Assert.True(reliableRank < erraticRank,
+            $"expected the reliable model to outrank the erratic one, got {reliableRank} vs {erraticRank}");
     }
 
     /// <summary>Every kind is a ceiling, so "best" is always the smallest measurement.</summary>

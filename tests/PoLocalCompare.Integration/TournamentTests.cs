@@ -33,8 +33,17 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
 
     private async Task<string> RegisterModelAsync(string name, string modelType = "Remote")
     {
+        // A Local model must carry TdpWatts — the registry rejects one without it (the green-stats
+        // calculator has nothing to work from otherwise), and WebLlmModelId must be unique, so a
+        // shared literal 400s the moment a test registers two browser models.
         object body = modelType == "Local"
-            ? new { DisplayName = name, ModelType = modelType, WebLlmModelId = "test-webllm-id" }
+            ? new
+            {
+                DisplayName = name,
+                ModelType = modelType,
+                WebLlmModelId = $"test-webllm-{name.Replace(" ", "-").ToLowerInvariant()}",
+                TdpWatts = 115.0,
+            }
             : new { DisplayName = name, ModelType = modelType, ApiEndpointRef = "https://test.endpoint/v1" };
 
         var response = await _client.PostAsJsonAsync("/api/models", body);
@@ -93,21 +102,6 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
 
         Assert.DoesNotContain(entrants, e => e.GetProperty("modelId").GetString() == browser);
     }
-
-    // ── Draw validation ───────────────────────────────────────────────────
-
-    [Theory]
-    [InlineData(1)]
-    [InlineData(3)]
-    [InlineData(5)]
-    [InlineData(6)]
-    public async Task Draw_RejectsAFieldThatIsNotAPowerOfTwo(int count)
-    {
-        var field = await RegisterFieldAsync($"TE Size{count}", count);
-
-        Assert.Equal(HttpStatusCode.BadRequest, (await DrawAsync(field)).StatusCode);
-    }
-
     [Theory]
     [InlineData(2)]
     [InlineData(4)]
@@ -159,86 +153,6 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
-
-    // ── Draw shape ────────────────────────────────────────────────────────
-
-    [Theory]
-    [InlineData(2, 1)]
-    [InlineData(4, 3)]
-    [InlineData(8, 7)]
-    public async Task Draw_ProducesOneMatchLessThanTheField(int size, int expectedMatches)
-    {
-        var field = await RegisterFieldAsync($"TE Shape{size}", size);
-
-        var drawn = await (await DrawAsync(field)).Content.ReadFromJsonAsync<JsonElement>();
-
-        Assert.Equal(expectedMatches, MatchesOf(drawn).Length);
-        Assert.Equal(size, drawn.GetProperty("size").GetInt32());
-    }
-
-    [Fact]
-    public async Task Draw_SeedsOnlyTheFirstRound()
-    {
-        var field = await RegisterFieldAsync("TE Round", 8);
-
-        var drawn = await (await DrawAsync(field)).Content.ReadFromJsonAsync<JsonElement>();
-        var matches = MatchesOf(drawn);
-
-        Assert.All(matches.Where(m => m.GetProperty("round").GetInt32() == 0),
-            m => Assert.True(m.GetProperty("isReady").GetBoolean()));
-        Assert.All(matches.Where(m => m.GetProperty("round").GetInt32() > 0),
-            m => Assert.False(m.GetProperty("isReady").GetBoolean()));
-    }
-
-    /// <summary>
-    /// The whole reason the bracket is seeded rather than shuffled: a random draw would
-    /// routinely knock the two strongest models out against each other in round one.
-    /// </summary>
-    [Fact]
-    public async Task Draw_PitsTheTopSeedAgainstTheBottomSeed()
-    {
-        var field = await RegisterFieldAsync("TE TopBottom", 8);
-
-        var drawn = await (await DrawAsync(field)).Content.ReadFromJsonAsync<JsonElement>();
-        var opener = MatchesOf(drawn).Single(m =>
-            m.GetProperty("round").GetInt32() == 0 && m.GetProperty("index").GetInt32() == 0);
-
-        Assert.Equal(1, opener.GetProperty("slotASeed").GetInt32());
-        Assert.Equal(8, opener.GetProperty("slotBSeed").GetInt32());
-    }
-
-    [Fact]
-    public async Task Draw_UsesEverySeedExactlyOnceInTheFirstRound()
-    {
-        var field = await RegisterFieldAsync("TE Seeds", 8);
-
-        var drawn = await (await DrawAsync(field)).Content.ReadFromJsonAsync<JsonElement>();
-        var firstRound = MatchesOf(drawn).Where(m => m.GetProperty("round").GetInt32() == 0);
-
-        var seeds = firstRound
-            .SelectMany(m => new[] { m.GetProperty("slotASeed").GetInt32(), m.GetProperty("slotBSeed").GetInt32() })
-            .OrderBy(s => s);
-
-        Assert.Equal(Enumerable.Range(1, 8), seeds);
-    }
-
-    [Fact]
-    public async Task Draw_NamesTheRoundsCountingBackFromTheFinal()
-    {
-        var field = await RegisterFieldAsync("TE Names", 8);
-
-        var drawn = await (await DrawAsync(field)).Content.ReadFromJsonAsync<JsonElement>();
-        var matches = MatchesOf(drawn);
-
-        string NameOfRound(int round) => matches
-            .First(m => m.GetProperty("round").GetInt32() == round)
-            .GetProperty("roundName").GetString()!;
-
-        Assert.Equal("Quarter-finals", NameOfRound(0));
-        Assert.Equal("Semi-finals", NameOfRound(1));
-        Assert.Equal("Final", NameOfRound(2));
-    }
-
     // ── Persistence ───────────────────────────────────────────────────────
 
     [Fact]

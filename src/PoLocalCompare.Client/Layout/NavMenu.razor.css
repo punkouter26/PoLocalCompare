@@ -317,6 +317,11 @@
     gap: var(--space-xs);
     flex: 0 0 auto;
     max-width: 100%;
+    /* min-height, not more padding: a runtime check measured this at 151x23 — one pixel under
+       the WCAG 2.2 SC 2.5.8 minimum of 24x24. It is a real link (it navigates to the archive),
+       so it has to clear the bar; padding alone would also widen it, which the nav bar cannot
+       spare on a narrow viewport. */
+    min-height: 1.5rem;
     padding: var(--space-2xs) var(--space-sm);
     border-radius: 9999px;
     font-weight: 700;

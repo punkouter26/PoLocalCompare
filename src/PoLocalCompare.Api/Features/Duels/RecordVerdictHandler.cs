@@ -66,11 +66,49 @@ public sealed class RecordVerdictHandler
         }
         catch (RequestFailedException ex) when (ex.Status == 412)
         {
-            // Lost an optimistic-concurrency race (standards §5.5) — HandleAsync re-reads
-            // everything, so one retry resolves against the fresh state.
+            // Lost an optimistic-concurrency race (standards §5.5). The naive retry —
+            // "HandleAsync re-reads everything, so one retry resolves against the fresh
+            // state" — was wrong, and wrong in a way that corrupts ratings.
+            //
+            // HandleAsync updates the winner model, then the loser model, and only THEN the
+            // duel. A 412 comes from that third write, by which point both models have
+            // already banked a DuelCount (and the winner a WinCount, and both an ELO shift).
+            // Re-running from the top increments all of it a second time. An integration test
+            // that ran three duels saw a duelCount of six.
+            //
+            // The race is real and got more likely when AiJudge:DelaySeconds dropped from 60
+            // to 10: DuelExecutionService stamps CompletedAt on the duel at almost the moment
+            // a verdict is being written against it.
+            //
+            // So: re-read first. If a verdict actually landed, the work is done — report it
+            // rather than doing it again. Only a genuinely still-Pending duel is retried.
+            var settled = await _duelRepository.GetByIdAsync(command.DuelId);
+            if (settled is not null && settled.Verdict != DuelVerdict.Pending)
+                return DescribeAlreadyRecorded(settled);
+
             return await HandleAsync(command);
         }
     }
+
+    /// <summary>
+    /// Reports a verdict that is already on the duel, without touching ratings again.
+    /// </summary>
+    /// <remarks>
+    /// Used only on the 412 path above. The counters and ELO were applied by the attempt that
+    /// won the race, so this reconstructs the response from what was stored rather than
+    /// recomputing anything.
+    /// </remarks>
+    private static VerdictResponseDto DescribeAlreadyRecorded(Duel duel) => new()
+    {
+        DuelId = duel.DuelId,
+        Verdict = duel.Verdict,
+        WinnerModelId = duel.WinnerModelId,
+        LoserModelId = duel.LoserModelId,
+        EloShiftWinner = duel.EloShiftWinner,
+        EloShiftLoser = duel.EloShiftLoser,
+        Source = duel.VerdictSource,
+        JudgeRationale = duel.JudgeRationale,
+    };
 
     /// <summary>
     /// Returns null if duel not found.
@@ -126,18 +164,25 @@ public sealed class RecordVerdictHandler
         var eloShiftWinner = Math.Round(newWinnerElo - winnerEloBefore, 1);
         var eloShiftLoser = Math.Round(newLoserElo - loserEloBefore, 1);
 
-        // Update winner model
-        winner.CurrentElo = newWinnerElo;
-        winner.DuelCount++;
-        winner.WinCount++;
-        await _modelRepository.UpdateAsync(winner);
-
-        // Update loser model
-        loser.CurrentElo = newLoserElo;
-        loser.DuelCount++;
-        await _modelRepository.UpdateAsync(loser);
-
-        // Persist duel verdict
+        // ── Write order matters, and this order is the fix for a real corruption bug ──
+        //
+        // The duel goes FIRST, before either model. It is the idempotency guard: a duel accepts
+        // exactly one verdict, so once it is written, any second pass through this method hits
+        // the "already recorded" check at the top and stops.
+        //
+        // It used to be last, after both model updates. That meant an optimistic-concurrency
+        // 412 on either model write left one model already incremented, and the retry in
+        // HandleWithRetryAsync re-ran the whole method and incremented it a second time. The
+        // symptom was subtle because EloHistoryRepository.SaveAsync swallows a 409 as an
+        // idempotent append: history stayed correct while DuelCount and WinCount silently
+        // doubled. An integration test running three duels measured duelCount=6, winCount=4,
+        // eloHistoryRows=3 — the history column is what gives the mechanism away.
+        //
+        // The residual risk is the mirror image and is deliberately preferred: if a model write
+        // fails after the duel is written, that model's rating does not move. That is visible
+        // (the duel names a winner whose rating did not change), it is recoverable — the
+        // remapper's recompute-from-history rebuilds aggregates — and it under-reports rather
+        // than inventing rating that was never earned. A doubled rating is silent and permanent.
         duel.Verdict = command.Verdict;
         duel.VerdictSource = command.Source;
         duel.JudgeRationale = command.JudgeRationale;
@@ -152,6 +197,17 @@ public sealed class RecordVerdictHandler
         if (command.Source == VerdictSource.Human)
             duel.VerdictBy = command.Actor ?? IdentityResolver.AnonymousActor;
         await _duelRepository.UpdateAsync(duel);
+
+        // Now the aggregates. Reaching here means the duel is terminal and this is the only
+        // pass that will ever apply them.
+        winner.CurrentElo = newWinnerElo;
+        winner.DuelCount++;
+        winner.WinCount++;
+        await _modelRepository.UpdateAsync(winner);
+
+        loser.CurrentElo = newLoserElo;
+        loser.DuelCount++;
+        await _modelRepository.UpdateAsync(loser);
 
         // Persist EloRecord snapshots for both models
         var winnerRecord = new EloRecord(
@@ -224,14 +280,12 @@ public sealed class RecordVerdictHandler
         var leftElo = leftModel.CurrentElo;
         var rightElo = rightModel.CurrentElo;
 
-        leftModel.DuelCount++;
-        leftModel.DrawCount++;
-        await _modelRepository.UpdateAsync(leftModel);
-
-        rightModel.DuelCount++;
-        rightModel.DrawCount++;
-        await _modelRepository.UpdateAsync(rightModel);
-
+        // Duel first, for the same reason as the decisive path above: it is the idempotency
+        // guard, and writing the model rows ahead of it meant a 412 on either one left a
+        // partial increment that the retry then applied a second time. A tie touches
+        // DuelCount and DrawCount but not ELO, so the corruption showed up purely as inflated
+        // counts — one duel short of a doubling per tie, which is exactly how it was found.
+        //
         // No winner, no loser, no shift. The nullable winner/loser fields on the duel stay null
         // so nothing downstream can mistake one side for having won.
         duel.Verdict = DuelVerdict.Tie;
@@ -246,6 +300,15 @@ public sealed class RecordVerdictHandler
         if (command.Source == VerdictSource.Human)
             duel.VerdictBy = command.Actor ?? IdentityResolver.AnonymousActor;
         await _duelRepository.UpdateAsync(duel);
+
+        // Aggregates after the guard. Both models bank a duel and a draw; neither rating moves.
+        leftModel.DuelCount++;
+        leftModel.DrawCount++;
+        await _modelRepository.UpdateAsync(leftModel);
+
+        rightModel.DuelCount++;
+        rightModel.DrawCount++;
+        await _modelRepository.UpdateAsync(rightModel);
 
         await _eloHistoryRepository.SaveAsync(new EloRecord(
             leftModel.ModelId, command.DuelId,

@@ -59,6 +59,26 @@ public sealed class DuelExecutionService
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Runs the duel end-to-end on the calling thread, without going through the background
+    /// task queue. Used by the tournament runner, which already owns a long-lived wait loop
+    /// and would otherwise deadlock: <see cref="BackgroundTaskService"/> is single-consumer
+    /// and awaits each work item before dequeuing the next, so a runner that queues a duel
+    /// behind itself stalls forever.
+    /// </summary>
+    /// <remarks>
+    /// The runner used to share the queue with everything else and stalled at the first
+    /// match; running inline keeps the bracket on its own thread but lets the duel inference
+    /// finish, which is the whole point. The runner is responsible for its own concurrency
+    /// limit (<see cref="Tournaments.TournamentRunner"/> caps it at two), so the single-
+    /// threaded queue is not a bottleneck here.
+    /// </remarks>
+    public async Task RunAsync(DuelId duelId, int? autoJudgeDelaySecondsOverride, CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        await ExecuteAsync(scope.ServiceProvider, duelId, autoJudgeDelaySecondsOverride, cancellationToken);
+    }
+
     private async Task ExecuteAsync(
         IServiceProvider services,
         DuelId duelId,
@@ -133,6 +153,8 @@ public sealed class DuelExecutionService
                     PromptFull = duel.PromptFull,
                     LeftModelId = duel.LeftModelId,
                     RightModelId = duel.RightModelId,
+                    LeftModelName = leftModel.DisplayName,
+                    RightModelName = rightModel.DisplayName,
                     StartedAt = duel.StartedAt,
                     CompletedAt = duel.CompletedAt,
                     Verdict = DuelVerdict.Pending,

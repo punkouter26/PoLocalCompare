@@ -66,6 +66,8 @@ public sealed class CommenceDuelHandler(
             PromptFull = duel.PromptFull,
             LeftModelId = duel.LeftModelId,
             RightModelId = duel.RightModelId,
+            LeftModelName = leftModel.DisplayName,
+            RightModelName = rightModel.DisplayName,
             StartedAt = duel.StartedAt,
             Verdict = DuelVerdict.Pending,
             TimeLimitSeconds = 300,
