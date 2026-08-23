@@ -137,7 +137,6 @@ public sealed class DuelRepository : IDuelRepository
             ["LoserModelId"] = duel.LoserModelId?.Value,
             ["EloShiftWinner"] = duel.EloShiftWinner,
             ["EloShiftLoser"] = duel.EloShiftLoser,
-            ["VerdictDeadline"] = duel.VerdictDeadline,
             ["IsPartial"] = duel.IsPartial,
             ["ChallengeKind"] = duel.ChallengeKind.ToString(),
             ["ChallengeThreshold"] = duel.ChallengeThreshold,
@@ -171,7 +170,6 @@ public sealed class DuelRepository : IDuelRepository
             LoserModelId = ModelId.FromOrNull(entity.GetString("LoserModelId")),
             EloShiftWinner = entity.GetDouble("EloShiftWinner"),
             EloShiftLoser = entity.GetDouble("EloShiftLoser"),
-            VerdictDeadline = entity.GetDateTimeOffset("VerdictDeadline") ?? DateTimeOffset.MinValue,
             IsPartial = entity.GetBoolean("IsPartial") ?? false,
             // Absent on every row written before challenge mode existed, which is correct:
             // those duels were fought under no budget.

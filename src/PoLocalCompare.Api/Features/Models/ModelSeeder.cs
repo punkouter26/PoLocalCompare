@@ -33,6 +33,14 @@ public static class ModelSeeder
         // change if a future WebGPU or MLC release fixes them.
 
         // ── Ollama local service ───────────────────────────────────────────
+        // NOTE on the `:latest` tags. These are deliberately unpinned, and that is a real
+        // trade-off rather than an oversight: this app does not pull models, it uses whatever
+        // the developer already has locally, and pinning to a specific size/quant (say
+        // `gemma4:4b-instruct-q4_K_M`) would make the entry resolve to nothing on most
+        // machines. The cost is that two developers can run the same seeded "Gemma 4 (Ollama)"
+        // against different weights and pool the results into one ELO row. Ollama models seed
+        // in Development only, so this never affects the deployed leaderboard — but it does
+        // mean local Ollama ratings are not comparable between machines.
         new Model(ModelId.From("01SEED000000000000000000A"), "Gemma 4 (Ollama)",  ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "gemma4:latest"),
         new Model(ModelId.From("01SEED000000000000000000B"), "Qwen 3.5 (Ollama)", ModelType.LocalService, tdpWatts: 115, apiEndpointRef: "qwen3.5:latest"),
 

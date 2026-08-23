@@ -93,11 +93,16 @@ public sealed class LobbyTickerService(HttpClient http) : IAsyncDisposable
     {
         try
         {
-            var recent = await http.GetFromJsonAsync<IReadOnlyList<DuelSummaryDto>>("/api/duels?limit=25");
-            if (recent is null) return;
+            // Ids only. This used to pull `/api/duels?limit=25` — twenty-five full summaries,
+            // prompt text included — purely to count the pending ones, and it duplicated the
+            // list Home fetches on the same load. A runtime trace showed both requests firing
+            // on every cold start, with the larger one costing about 0.9s of the slowest part
+            // of the boot.
+            var pending = await http.GetFromJsonAsync<IReadOnlyList<DuelId>>("/api/duels/awaiting-verdict");
+            if (pending is null) return;
 
-            foreach (var duel in recent.Where(d => d.Verdict == DuelVerdict.Pending && d.CompletedAt.HasValue))
-                _awaitingVerdict.Add(duel.DuelId);
+            foreach (var duelId in pending)
+                _awaitingVerdict.Add(duelId);
 
             OnChanged?.Invoke();
         }

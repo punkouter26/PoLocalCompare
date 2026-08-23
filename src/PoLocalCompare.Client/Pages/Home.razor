@@ -271,13 +271,16 @@
                     </div>
 
                     <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
+                              aria-labelledby="home-prompt-heading"
+                              aria-describedby="home-prompt-counter"
                               placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
                               rows="5"
                               maxlength="4000"
                               @bind="_prompt"
                               @bind:event="oninput"></textarea>
                     <div class="home__textarea-meta">
-                        <span class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
+                        <span id="home-prompt-counter"
+                              class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
                             @_prompt.Length / 4000
                         </span>
                         @if (_promptLongWarning)

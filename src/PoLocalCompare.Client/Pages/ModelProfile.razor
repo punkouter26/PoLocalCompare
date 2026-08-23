@@ -149,7 +149,7 @@
         @* ── Kill list ─────────────────────────────────────────────────────
            Moved from the leaderboard's drawer. Rematch is kept: it was the one thing the
            deleted /h2h page offered that the table did not. *@
-        <section class="po-section po-reveal" aria-labelledby="profile-killlist-heading">
+        <section class="po-section" aria-labelledby="profile-killlist-heading">
             <h2 id="profile-killlist-heading" class="po-section-title">Kill list</h2>
 
             @if (_profile.KillList.Count == 0)
@@ -181,7 +181,7 @@
                                     </td>
                                     <td data-label="W/L/T">@row.Wins/@row.Losses@(row.Draws > 0 ? $"/{row.Draws}" : "")</td>
                                     <td data-label="Win %">@(total > 0 ? $"{pct:F0}%" : "-")</td>
-                                    <td data-label="Last duel">@(row.LastDuelAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                    <td class="po-cell--secondary" data-label="Last duel">@(row.LastDuelAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                                     <td class="po-cell--bare">
                                         <a class="po-btn po-btn--sm po-btn--secondary"
                                            href="@RematchHref(row)"
@@ -205,7 +205,7 @@
            rendering a 1200px design into a 300px frame would show its mobile breakpoint. *@
         @if (_profile.WinningOutputs.Count > 0)
         {
-            <section class="po-section po-reveal" aria-labelledby="profile-gallery-heading">
+            <section class="po-section" aria-labelledby="profile-gallery-heading">
                 <h2 id="profile-gallery-heading" class="po-section-title">Winning outputs</h2>
                 <p class="po-hint">
                     The most recent @_profile.WinningOutputs.Count duel@(_profile.WinningOutputs.Count == 1 ? "" : "s") this model won.

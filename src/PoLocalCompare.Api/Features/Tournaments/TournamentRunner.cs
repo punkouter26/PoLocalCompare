@@ -29,6 +29,18 @@ public sealed class TournamentRunner(
     /// </summary>
     private const int AutoJudgeDelaySeconds = 0;
 
+    /// <summary>
+    /// How many independent matches may be in flight at once.
+    /// </summary>
+    /// <remarks>
+    /// Two, not four. Each match is a duel, and each duel calls two models — so a batch of two
+    /// is already four concurrent inference streams plus their judges. Fanning out a whole
+    /// round of four would be eight, which on a shared Foundry resource finds the rate limit
+    /// rather than the finish line, and a 429 mid-bracket abandons the run. Two roughly halves
+    /// the wall-clock of an 8-model bracket while staying well inside the quota.
+    /// </remarks>
+    private const int MaxConcurrentMatches = 2;
+
     /// <summary>How long a single match may take before the run gives up on it.</summary>
     private static readonly TimeSpan MatchTimeout = TimeSpan.FromMinutes(12);
 
@@ -58,8 +70,13 @@ public sealed class TournamentRunner(
                 if (tournament.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
                     return;
 
-                var match = tournament.NextPlayable();
-                if (match is null)
+                // Matches playable at the same moment are independent of one another — round
+                // 1's quarter-finals share no state — so several run at once instead of each
+                // waiting out the one before it. An 8-model bracket was 7 strictly serial
+                // matches; this makes the first round finish in roughly the time of its
+                // slowest match rather than the sum of all four.
+                var batch = tournament.AllPlayable().Take(MaxConcurrentMatches).ToList();
+                if (batch.Count == 0)
                 {
                     // Nothing playable and no champion: a match failed and the bracket cannot be
                     // seeded any further. Bracket rounds depend on each other, so there is no
@@ -69,7 +86,7 @@ public sealed class TournamentRunner(
                     return;
                 }
 
-                await PlayMatchAsync(scope.ServiceProvider, repository, tournament, match, cancellationToken);
+                await PlayBatchAsync(scope.ServiceProvider, repository, tournament, batch, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -84,17 +101,52 @@ public sealed class TournamentRunner(
         }
     }
 
-    private async Task PlayMatchAsync(
+    /// <summary>
+    /// Plays a set of independent matches: start them all, wait for all of them, then apply
+    /// the results.
+    /// </summary>
+    /// <remarks>
+    /// The phase split is what makes concurrency safe here. Every match in the batch mutates
+    /// the same <see cref="Tournament"/> aggregate, and Table Storage writes are ETag-guarded,
+    /// so running whole matches in parallel would have them clobber each other's saves. Instead
+    /// only the *waiting* overlaps — which is where all the time goes, since each match is a
+    /// full duel plus a judge — while every write stays on this one sequential path.
+    /// </remarks>
+    private async Task PlayBatchAsync(
         IServiceProvider services,
         ITournamentRepository repository,
         Tournament tournament,
-        TournamentMatch match,
+        IReadOnlyList<TournamentMatch> batch,
         CancellationToken cancellationToken)
     {
         var duelRepository = services.GetRequiredService<IDuelRepository>();
 
-        // Start the match if it has not been started. A tournament re-read after a restart can
-        // find a match that already has a duel — that one is waited on rather than re-run.
+        // ── Phase 1: start each match. Serial, because each one saves the aggregate. ──
+        foreach (var match in batch)
+            await StartMatchAsync(services, repository, tournament, match);
+
+        // ── Phase 2: wait for all of them at once. No writes happen in here. ──
+        var duels = await Task.WhenAll(batch.Select(m =>
+            WaitForVerdictAsync(duelRepository, m.DuelId!.Value, cancellationToken)));
+
+        // ── Phase 3: apply results in bracket order, then save once. ──
+        for (var i = 0; i < batch.Count; i++)
+        {
+            if (!ApplyResult(tournament, batch[i], duels[i])) break;   // bracket abandoned
+        }
+
+        await repository.UpdateAsync(tournament);
+    }
+
+    /// <summary>Creates and enqueues the duel behind a match, if it does not already have one.</summary>
+    private async Task StartMatchAsync(
+        IServiceProvider services,
+        ITournamentRepository repository,
+        Tournament tournament,
+        TournamentMatch match)
+    {
+        // A tournament re-read after a restart can find a match that already has a duel — that
+        // one is waited on rather than re-run.
         if (match.DuelId is null)
         {
             var commence = services.GetRequiredService<CommenceDuelHandler>();
@@ -118,15 +170,19 @@ public sealed class TournamentRunner(
                 "Tournament {TournamentId} round {Round} match {Index}: {Left} vs {Right} as duel {DuelId}.",
                 tournament.TournamentId, match.Round, match.Index, match.SlotAName, match.SlotBName, dto.DuelId);
         }
+    }
 
-        var duel = await WaitForVerdictAsync(duelRepository, match.DuelId.Value, cancellationToken);
-
+    /// <summary>
+    /// Folds one finished duel into the bracket. Returns false when the bracket was abandoned
+    /// and the rest of the batch should not be applied.
+    /// </summary>
+    private static bool ApplyResult(Tournament tournament, TournamentMatch match, Duel? duel)
+    {
         if (duel is null)
         {
             match.FailureReason = "The match did not finish in time.";
             tournament.Abandon($"{match.SlotAName} vs {match.SlotBName} did not finish in time.");
-            await repository.UpdateAsync(tournament);
-            return;
+            return false;
         }
 
         switch (duel.Verdict)
@@ -149,16 +205,16 @@ public sealed class TournamentRunner(
 
             default:
             {
-                // Pending after the wait, or Expired: the judge stood down and there is no
-                // evidence to advance on. The bracket stops rather than picking a winner.
+                // Still Pending after the wait: the judge stood down and there is no evidence
+                // to advance on. The bracket stops rather than picking a winner.
                 match.FailureReason = duel.JudgeStoodDownReason
                     ?? "The judge could not decide this match.";
                 tournament.Abandon($"{match.SlotAName} vs {match.SlotBName} could not be judged.");
-                break;
+                return false;
             }
         }
 
-        await repository.UpdateAsync(tournament);
+        return true;
     }
 
     /// <summary>

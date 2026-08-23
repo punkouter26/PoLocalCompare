@@ -121,12 +121,6 @@ public sealed class AutoJudge
                 return;
             }
 
-            if (duel.IsExpired)
-            {
-                AutoJudgeLog.StoodDown(_logger, duelId, "past its verdict deadline");
-                return;
-            }
-
             var results = await _duelResultRepository.GetByDuelIdAsync(duelId);
             var left = results.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
             var right = results.FirstOrDefault(r => r.ModelId == duel.RightModelId);

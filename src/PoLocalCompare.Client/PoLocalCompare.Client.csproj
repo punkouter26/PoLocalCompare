@@ -13,7 +13,7 @@
          regressed because PublishTrimmed was already false, but flipping it on now needs
          both resolved rather than one. -->
     <IsTrimmable>true</IsTrimmable>
-    <PublishTrimmed>false</PublishTrimmed>
+    <PublishTrimmed>true</PublishTrimmed>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
     <!-- Surface trim diagnostics as warnings without failing the build: Blazor-generated Razor code

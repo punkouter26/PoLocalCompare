@@ -35,5 +35,20 @@ public sealed class LeaderboardEntryDto
     /// Ollama, or any model that has not yet run a priced duel). Higher = more bang per buck.
     /// </summary>
     public double? Value { get; init; }
+    /// <summary>
+    /// Mean time to first token, in milliseconds, across every non-failed duel this model has
+    /// run. Null until it has one.
+    /// </summary>
+    /// <remarks>
+    /// This is the number that actually predicts how fast a model *feels*: total duration is
+    /// dominated by how much the model chose to write, and tok/s says nothing about the wait
+    /// before anything appears at all. The app has been capturing it since the streaming reader
+    /// existed — <c>DuelResult.WarmUpDurationMs</c> is set from first-token latency — but it was
+    /// only ever shown per-duel in the Arena's telemetry, never aggregated or ranked. Failed
+    /// runs are excluded: a run that crashed before first token would otherwise record a
+    /// flatteringly small wait.
+    /// </remarks>
+    public double? AvgFirstTokenMs { get; init; }
+
     public double[]? EloSparkline { get; init; }
 }

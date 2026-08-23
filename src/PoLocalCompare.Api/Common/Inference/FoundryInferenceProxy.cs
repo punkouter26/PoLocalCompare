@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
@@ -17,6 +18,24 @@ public sealed class FoundryInferenceProxy(
     IConfiguration configuration,
     ILogger<FoundryInferenceProxy> logger) : IRemoteInferenceProxy
 {
+    /// <summary>
+    /// Which of the two Foundry chat routes a deployment actually answers on.
+    /// </summary>
+    /// <remarks>
+    /// Foundry exposes the same model at <c>/openai/deployments/{name}/chat/completions</c> and
+    /// at <c>/models/chat/completions</c>, and which one works depends on how the model was
+    /// provisioned. The proxy discovers that by trying the first and falling back on a 404 —
+    /// correct, but nothing remembered the answer, so every single call to a fallback-route
+    /// model paid a wasted round-trip (and its full latency) before the real request even
+    /// started. On a duel that is two wasted trips, and on an eight-model bracket, fourteen.
+    ///
+    /// Static because the answer is a property of the deployment, not of a scoped proxy
+    /// instance — the proxy is transient and is resolved fresh for every side of every duel.
+    /// Keyed by deployment name; the set of names is the seeded catalog, so this cannot grow
+    /// unboundedly. A wrong entry is self-correcting: the request 404s and the flag is cleared.
+    /// </remarks>
+    private static readonly ConcurrentDictionary<string, bool> UsesModelInferenceRoute = new(StringComparer.Ordinal);
+
     private readonly HttpClient _http = http;
     private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<FoundryInferenceProxy> _logger = logger;
@@ -124,10 +143,13 @@ public sealed class FoundryInferenceProxy(
             }
         }
 
+        // Skip straight to the route this deployment is already known to answer on.
+        var knownModelInferenceRoute = UsesModelInferenceRoute.TryGetValue(deploymentName, out var known) && known;
+
         var (deploymentResponse, deploymentTransportError) = await SendWithRetryAsync(
-            deploymentUrl,
-            deploymentJson,
-            $"deployment '{deploymentName}'",
+            knownModelInferenceRoute ? modelInferenceUrl : deploymentUrl,
+            knownModelInferenceRoute ? modelInferenceJson : deploymentJson,
+            knownModelInferenceRoute ? $"model '{deploymentName}'" : $"deployment '{deploymentName}'",
             cancellationToken);
 
         if (deploymentResponse is null)
@@ -140,7 +162,15 @@ public sealed class FoundryInferenceProxy(
 
         var response = deploymentResponse;
 
-        if (!response.IsSuccessStatusCode && response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        // A 404 on the remembered route means the deployment moved or the memo was wrong; drop
+        // it so the next call rediscovers rather than pinning a broken answer forever.
+        if (knownModelInferenceRoute && response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            UsesModelInferenceRoute.TryRemove(deploymentName, out _);
+
+        if (!knownModelInferenceRoute && response.IsSuccessStatusCode)
+            UsesModelInferenceRoute[deploymentName] = false;
+
+        if (!knownModelInferenceRoute && !response.IsSuccessStatusCode && response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             var deploymentNotFoundBody = await response.Content.ReadAsStringAsync(cancellationToken);
             response.Dispose();
@@ -164,6 +194,12 @@ public sealed class FoundryInferenceProxy(
             }
 
             response = modelInferenceResponse;
+
+            // Discovered: this deployment lives on the model-inference route. Remembering it
+            // is the whole point of the memo — every later call skips the 404 probe.
+            if (response.IsSuccessStatusCode)
+                UsesModelInferenceRoute[deploymentName] = true;
+
             if (!response.IsSuccessStatusCode)
             {
                 var fallbackBody = await response.Content.ReadAsStringAsync(cancellationToken);

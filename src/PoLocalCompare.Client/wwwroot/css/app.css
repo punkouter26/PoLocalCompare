@@ -1082,7 +1082,7 @@ body::before {
     }
 
     .po-table--cards tr {
-        margin-bottom: var(--space-smd);
+        margin-bottom: var(--space-sm);
         padding: var(--space-sm) var(--space-smd);
         border: 1px solid var(--border);
         border-radius: var(--radius-md);
@@ -1094,8 +1094,14 @@ body::before {
         align-items: baseline;
         justify-content: space-between;
         gap: var(--space-md);
-        padding: var(--space-xs) 0;
+        /* 2xs, not xs. One card per row times one row per column adds up fast: a ten-opponent
+           kill list was 2170px tall on a phone, and the model profile as a whole came to
+           4292px — mostly whitespace between label and value. Halving the vertical padding and
+           tightening the line height below takes roughly a third off without making the rows
+           hard to separate, because the card border already does that work. */
+        padding: var(--space-2xs) 0;
         border-bottom: 1px solid var(--border);
+        line-height: var(--leading-snug);
         text-align: right;
     }
 
@@ -1115,6 +1121,13 @@ body::before {
         text-transform: uppercase;
         letter-spacing: 0.04em;
         text-align: left;
+    }
+
+    /* Cells the surface marks as secondary are dropped entirely at card size rather than
+       stacked. On a phone a kill list wants opponent, record and win rate; the exact timestamp
+       of the last meeting is available on the row's own page. */
+    .po-table--cards td.po-cell--secondary {
+        display: none;
     }
 
     /* Cells where a label adds nothing — an actions row, a rank badge. */
@@ -1182,7 +1195,22 @@ body::before {
         /* Finish well before the element reaches the middle of the screen — an element still
            animating while you are reading it is a distraction, not an entrance. */
         animation-range: entry 0% cover 22%;
+
     }
+
+    /* There is no way to say "only if this element is shorter than the viewport" in CSS — a
+       container query interrogates an ancestor container, not the element itself — so the
+       rule is enforced by where .po-reveal is applied rather than by a guard here.
+
+       Why it matters: `cover 22%` is a proportion of the element's own travel through the
+       scroller, so on a section far taller than the screen that 22% is a very long scroll. A
+       runtime check on the model profile caught two sections (1249px and 2170px on an 844px
+       phone) sitting at opacity 0.09 and 0 immediately below the fold, fading in over hundreds
+       of pixels of scrolling. The animation was behaving exactly as written; the range was
+       calibrated for a card and had been applied to a whole page section.
+
+       So: apply .po-reveal to cards, tiles and short blocks — things taken in at a glance.
+       Never to a section that does not fit on screen. */
 
     @keyframes po-reveal-in {
         from { opacity: 0; transform: translateY(12px); }

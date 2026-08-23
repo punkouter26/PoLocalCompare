@@ -54,7 +54,13 @@ public sealed class OllamaInferenceProxy(
             },
             stream = true,
             max_tokens = 4096,
-            temperature = 0.7
+            // 0.2, matching FoundryInferenceProxy. The task is a fixed output format — "return
+            // valid HTML5 with inline CSS" — so sampling variance buys nothing but longer,
+            // more meandering documents, and these outputs are judged and move a persistent
+            // rating, so reproducibility is worth more here than in a typical app. Keeping the
+            // two proxies on the same value also means a remote-vs-Ollama duel is not quietly
+            // comparing two different decoding settings.
+            temperature = 0.2
         };
 
         var json = JsonSerializer.Serialize(requestBody);

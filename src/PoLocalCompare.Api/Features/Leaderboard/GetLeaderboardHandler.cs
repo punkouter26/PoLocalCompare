@@ -59,6 +59,13 @@ public sealed class GetLeaderboardHandler(
                 OutputQualityAvg = modelResults.Count > 0
                     ? modelResults.Average(r => r.OutputQualityScore)
                     : null,
+                // Only runs that actually produced a token. A failure records a short duration,
+                // so counting one would make crashing look like the fastest possible start.
+                AvgFirstTokenMs = modelResults.Any(r => !r.IsFailure && r.WarmUpDurationMs > 0)
+                    ? Math.Round(modelResults
+                        .Where(r => !r.IsFailure && r.WarmUpDurationMs > 0)
+                        .Average(r => (double)r.WarmUpDurationMs))
+                    : null,
                 EloSparkline = sparkline,
             };
         })).ToList();
@@ -80,6 +87,13 @@ public sealed class GetLeaderboardHandler(
                 .ThenByDescending(x => x.CurrentElo)
                 .ThenBy(x => x.DisplayName)
                 .ToList()
+            // Ascending: unlike every other dimension here, lower is better.
+            : string.Equals(sortBy, "Speed", StringComparison.OrdinalIgnoreCase)
+                ? rows
+                    .OrderByDescending(x => x.AvgFirstTokenMs.HasValue)
+                    .ThenBy(x => x.AvgFirstTokenMs ?? double.MaxValue)
+                    .ThenByDescending(x => x.CurrentElo)
+                    .ToList()
             : string.Equals(sortBy, "Value", StringComparison.OrdinalIgnoreCase)
             ? rows
                 .OrderByDescending(x => x.Value.HasValue)

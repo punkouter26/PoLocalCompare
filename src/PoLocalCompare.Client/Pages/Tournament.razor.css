@@ -374,3 +374,19 @@
         grid-template-columns: repeat(var(--rounds, 3), minmax(11rem, 1fr));
     }
 }
+
+
+/* Reserves vertical space for the entrant list so the prompt box and Start button below it do
+   not slide down the page when the models resolve. Sized to a typical eight-model list rather
+   than to the maximum — overshooting would leave a visible gap on a short list, which trades a
+   layout shift for dead space. */
+.tourney__entrants-slot {
+    min-height: 18rem;
+}
+
+@media (max-width: 640px) {
+    .tourney__entrants-slot {
+        /* Rows stack taller on a phone, which is where the 0.289 shift was measured. */
+        min-height: 26rem;
+    }
+}

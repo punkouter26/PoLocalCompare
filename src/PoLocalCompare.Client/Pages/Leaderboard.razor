@@ -22,6 +22,9 @@
                 disabled="@(!_entries.Any(e => e.Value.HasValue))"
                 title="Sort by ELO earned per dollar of API spend (higher = more bang per buck)"
                 @onclick="@(() => SetSortAsync("Value"))">💎 Value</button>
+        <button type="button" class="po-btn leaderboard__sort-btn @(IsSpeedSort ? "po-btn--primary" : "")"
+                title="Mean time to first token — the wait before anything appears, which is what actually makes a model feel fast. Lower is better."
+                aria-pressed="@Pressed(IsSpeedSort)" @onclick="@(() => SetSortAsync("Speed"))">⚡ Speed</button>
         <button type="button" class="po-btn leaderboard__sort-btn @(IsQualitySort ? "po-btn--primary" : "")"
                 aria-pressed="@Pressed(IsQualitySort)"
                 disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
@@ -71,6 +74,7 @@
                         <th scope="col">Rank</th>
                         <th scope="col">Model Name</th>
                         <th scope="col">ELO</th>
+                        <th scope="col" title="Mean time to first token across this model's duels. Lower is better; local models with no measured run show &mdash;.">⚡ First token</th>
                         <th scope="col" title="ELO earned per dollar of API spend (CurrentElo / AvgApiCostPerDuel, divisor floored at $0.0001). Higher = more bang per buck. Local/Ollama and unpriced remotes show &mdash;.">💎 Value</th>
                     </tr>
                 </thead>
@@ -119,6 +123,16 @@
                                 </a>
                             </td>
                             <td data-label="ELO">@((int)Math.Round(entry.CurrentElo))</td>
+                            <td data-label="First token">
+                                @if (entry.AvgFirstTokenMs is { } ttft)
+                                {
+                                    <span class="leaderboard__ttft">@FormatFirstToken(ttft)</span>
+                                }
+                                else
+                                {
+                                    <span class="leaderboard__no-data" title="No completed run has recorded a first-token time yet.">&#8212;</span>
+                                }
+                            </td>
                             <td data-label="Value">
                                 @* Value = ELO earned per dollar of API spend, with the divisor
                                    floored at $0.0001 server-side. Reads as a big number, hence the
@@ -162,15 +176,20 @@
 
     private string _sortBy = "Elo";
     private bool IsQualitySort => string.Equals(_sortBy, "Quality", StringComparison.OrdinalIgnoreCase);
+    private bool IsSpeedSort => string.Equals(_sortBy, "Speed", StringComparison.OrdinalIgnoreCase);
     private bool IsCostSort => string.Equals(_sortBy, "Cost", StringComparison.OrdinalIgnoreCase);
     private bool IsValueSort => string.Equals(_sortBy, "Value", StringComparison.OrdinalIgnoreCase);
-    private bool IsEloSort => !IsQualitySort && !IsCostSort && !IsValueSort;
+    private bool IsEloSort => !IsQualitySort && !IsCostSort && !IsValueSort && !IsSpeedSort;
 
     /// <summary>aria-pressed needs the lowercase JS-style literal, not .NET's "True"/"False".</summary>
     private static string Pressed(bool on) => on ? "true" : "false";
 
     /// <summary>Headline label mirrors the active sort — "Top ELO" / "Cheapest" /
     /// "Highest quality" / "Best Value" — so a sorted-by-cost view doesn't claim the leader is the top.</summary>
+    /// <summary>Sub-second waits read better in ms; past that, seconds.</summary>
+    private static string FormatFirstToken(double ms) =>
+        ms < 1000 ? $"{ms:F0} ms" : $"{ms / 1000.0:F1} s";
+
     private string TopLabel => _sortBy switch
     {
         "Quality"    => "Highest quality",

@@ -139,12 +139,23 @@ public sealed class Tournament
     /// The next match to run: the earliest undecided one with both contestants known. Null when
     /// the bracket is finished or is waiting on a result that has not landed yet.
     /// </summary>
-    public TournamentMatch? NextPlayable() =>
+    public TournamentMatch? NextPlayable() => AllPlayable().FirstOrDefault();
+
+    /// <summary>
+    /// Every match that could be played right now, in bracket order.
+    /// </summary>
+    /// <remarks>
+    /// Within a round these are genuinely independent — round 1's four quarter-finals share no
+    /// state and neither depends on another's result — so the runner can have several in flight
+    /// at once instead of waiting out each in turn. Rounds still gate on each other, and that
+    /// falls out of <c>IsReady</c> rather than needing a check here: a semi-final has no
+    /// contestants until both its feeder matches have decided, so it simply is not playable yet.
+    /// </remarks>
+    public IEnumerable<TournamentMatch> AllPlayable() =>
         Matches
             .Where(m => !m.IsDecided && m.FailureReason is null && m.IsReady)
             .OrderBy(m => m.Round)
-            .ThenBy(m => m.Index)
-            .FirstOrDefault();
+            .ThenBy(m => m.Index);
 
     /// <summary>
     /// Records a winner and moves it into the next round. Returns false when the match is

@@ -29,9 +29,6 @@ public sealed class Duel
     public ModelId? LoserModelId { get; set; }
     public double? EloShiftWinner { get; set; }
     public double? EloShiftLoser { get; set; }
-    /// <summary>Absolute deadline for verdict submission (VerdictDeadlineHours from config).</summary>
-    public DateTimeOffset VerdictDeadline { get; init; }
-
     /// <summary>
     /// Who decided this duel. Defaults to <see cref="VerdictSource.Human"/> so duels recorded
     /// before the auto-judge existed read back as human-judged, which is what they were.
@@ -89,8 +86,7 @@ public sealed class Duel
         string promptText,
         string promptFull,
         ModelId leftModelId,
-        ModelId rightModelId,
-        int verdictDeadlineHours = 24)
+        ModelId rightModelId)
     {
         if (string.IsNullOrWhiteSpace(promptText))
             throw new ArgumentException("PromptText cannot be empty.", nameof(promptText));
@@ -104,7 +100,6 @@ public sealed class Duel
         LeftModelId = leftModelId;
         RightModelId = rightModelId;
         StartedAt = DateTimeOffset.UtcNow;
-        VerdictDeadline = StartedAt.AddHours(verdictDeadlineHours);
         Verdict = DuelVerdict.Pending;
     }
 
@@ -114,7 +109,4 @@ public sealed class Duel
         PromptText = string.Empty;
         PromptFull = string.Empty;
     }
-
-    /// <summary>Returns true if the verdict deadline has passed.</summary>
-    public bool IsExpired => Verdict == DuelVerdict.Pending && DateTimeOffset.UtcNow > VerdictDeadline;
 }

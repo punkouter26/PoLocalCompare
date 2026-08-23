@@ -10,8 +10,7 @@ namespace PoLocalCompare.Api.Features.Duels;
 public sealed class CommenceDuelHandler(
     IModelRepository modelRepository,
     IDuelRepository duelRepository,
-    IOptions<AutoJudgeOptions> autoJudgeOptions,
-    int verdictDeadlineHours = CommenceDuelCommand.DefaultVerdictDeadlineHours)
+    IOptions<AutoJudgeOptions> autoJudgeOptions)
 {
     private const string CdnSuffix =
         "\n\nIMPORTANT: Use public CDN links (e.g., cdnjs.cloudflare.com, unpkg.com) for all external libraries. Do not reference npm packages, local paths, or unpublished modules.";
@@ -43,8 +42,7 @@ public sealed class CommenceDuelHandler(
             command.PromptText,
             promptFull,
             command.LeftModelId,
-            command.RightModelId,
-            verdictDeadlineHours)
+            command.RightModelId)
         {
             // Snapshotted at creation so the duel stays readable if either model is later
             // retired from the catalog — see Duel.LeftModelName.

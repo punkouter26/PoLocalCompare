@@ -11,6 +11,13 @@
 
 .profile__back {
     grid-column: 1 / -1;
+    /* inline-flex + min-height so the hit area clears the WCAG 2.2 SC 2.5.8 minimum of
+       24x24. As a bare inline link this was 19px tall — the text box, with nothing around
+       it — which is a miss on a control that is the page's only way back. */
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
+    padding-block: var(--space-2xs);
     color: var(--text-muted);
     font-size: var(--text-md);
     text-decoration: none;
@@ -114,6 +121,11 @@
 }
 
 .profile__opponent {
+    /* Same SC 2.5.8 reasoning as .profile__back: 18px tall as bare inline text. These are the
+       links that make the kill list navigable, so they are worth the extra few pixels. */
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
     color: var(--text);
     text-decoration: none;
     border-bottom: 1px dotted var(--border);

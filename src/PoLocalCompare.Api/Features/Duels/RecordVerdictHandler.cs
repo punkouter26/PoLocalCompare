@@ -82,25 +82,11 @@ public sealed class RecordVerdictHandler
         if (command.Verdict == DuelVerdict.Pending)
             throw new ArgumentException("Verdict cannot be Pending.", nameof(command));
 
-        if (command.Verdict == DuelVerdict.Expired)
-            throw new ArgumentException("Verdict cannot be Expired — use the expiration workflow instead.", nameof(command));
-
         var duel = await _duelRepository.GetByIdAsync(command.DuelId);
         if (duel is null) return null;
 
-        if (duel.Verdict == DuelVerdict.Expired)
-            throw new InvalidOperationException("This duel has expired and cannot accept a verdict.");
-
         if (duel.Verdict != DuelVerdict.Pending)
             throw new InvalidOperationException("Verdict has already been recorded for this duel.");
-
-        // Check deadline
-        if (duel.IsExpired)
-        {
-            duel.Verdict = DuelVerdict.Expired;
-            await _duelRepository.UpdateAsync(duel);
-            throw new InvalidOperationException("This duel has expired and cannot accept a verdict.");
-        }
 
         await GuardAgainstNoEvidenceAsync(duel);
 
