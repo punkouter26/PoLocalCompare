@@ -480,17 +480,6 @@ a:hover {
     color: var(--accent-yellow);
 }
 
-.po-btn--danger {
-    background: var(--danger-surface);
-    border-color: var(--danger-border);
-    color: var(--accent-red);
-}
-
-.po-btn--danger:hover:not(:disabled) {
-    filter: brightness(1.08);
-    color: var(--accent-red);
-}
-
 /* Data table — semantic <table>, horizontally scrollable inside .po-table-wrap. */
 .po-table-wrap {
     width: 100%;

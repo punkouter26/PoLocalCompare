@@ -206,7 +206,8 @@ that payload decision. Buttons and tables are `.po-btn` and `.po-table` in
 [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens. Twelve
 per-surface button classes (`wizard__btn`, `h2h__btn`, `lab__btn`, `source-compare__btn`
 …) had each reimplemented the same thing locally and drifted apart; they were folded into `.po-btn`
-plus modifiers (`--sm --lg --block --primary --success --secondary --ghost --warn --danger`). A
+plus modifiers (`--sm --lg --block --primary --success --secondary --ghost --warn`; `--danger`
+went with the model-health panel's Cancel button on 2026-08-23, its only caller). A
 surface that needs a tweak adds a **layout-only** class alongside `.po-btn` — `arena__action-btn`,
 `archive__btn`, `leaderboard__sort-btn` and `lab-card__icon-btn` are the pattern. New *visual*
 variants go in `app.css` as a modifier, never in a `.razor.css`. The two exceptions are deliberate:
@@ -216,10 +217,10 @@ instantiation except the Router's `NotFoundPage`, which is the only remaining re
 `PublishTrimmed` is off.
 
 **Every surface owns exactly one BEM block, named after its file.** `NavMenu` → `navmenu__`,
-`Login` → `login__`, `Home` → `home__`, `LabModelCard` → `lab-card__`, `ModelHealthPanel` → `lab__`.
-This is enforced by nothing, and it has broken twice: `Leaderboard.razor.css` carried both `lb__`
-and `leaderboard__`, and `LabModelCard` shared `lab__` with its parent panel — which is exactly the
-scope-id trap below waiting to happen. Do not introduce a second block into a stylesheet.
+`Login` → `login__`, `Home` → `home__`, `Tournament` → `tourney__`. This is enforced by nothing,
+and it has broken twice: `Leaderboard.razor.css` carried both `lb__` and `leaderboard__`, and the
+old `LabModelCard` shared `lab__` with its parent panel — which is exactly the scope-id trap below
+waiting to happen. Do not introduce a second block into a stylesheet.
 
 **Classes in markup with no rule anywhere are a recurring defect.** The nav bar carried
 `nav-item`, `btn-sm` and `btn-outline-warning` long after Bootstrap was gone, and
@@ -227,12 +228,12 @@ scope-id trap below waiting to happen. Do not introduce a second block into a st
 `scorecard__findings-col` all styled nothing. Nothing warns. To check the whole app, diff the
 classes used in `.razor` markup against the selectors defined in any `.css`.
 
-**Scoped CSS is per-`.razor`-file, and nothing warns when it isn't.** `ModelHealthPanel.razor.css`
-had spent a long time styling `LabModelCard`'s markup, which silently matched nothing because
-Blazor stamps each stylesheet with its own component's scope id. If you move markup into a child
+**Scoped CSS is per-`.razor`-file, and nothing warns when it isn't.** The since-deleted
+`ModelHealthPanel.razor.css` spent a long time styling `LabModelCard`'s markup, which silently
+matched nothing because Blazor stamps each stylesheet with its own component's scope id. If you move markup into a child
 component, move its rules into that component's own `.razor.css` (or use `::deep` — which is why
 `navmenu__link` rules need it, since `NavLink` renders the anchor outside the component's scope).
-A class that is built by interpolation — `lab-card__vram-badge--@State.VramTier`,
+A class that is built by interpolation — `tourney__status--@_tournament.Status`,
 `leaderboard__type-badge--@ModelTypeGroup.CssModifier(t)` — will also read as dead to any text
 scan, so check for those before deleting a rule.
 
@@ -251,23 +252,27 @@ not retroactively change a stored duel. Likewise, the runtime probe injects a re
 the sandboxed *preview* only; the raw output is what gets persisted, analysed, diffed and shown by
 "View Source", so nothing a person judges or exports contains it.
 
-**Tournaments run on the server.** `/tournament` draws a seeded single-elimination bracket over
-2 (a plain 1v1), 4 or 8 models and `TournamentRunner` plays it to the final on the background
-queue — so closing the tab does not stop the run. Seeding is standard tournament seeding (`1,8,4,5,2,7,3,6`), not a
-shuffle: a random draw routinely knocks the two best models out against each other in round one.
-Browser models are excluded — WebGPU inference needs a foreground tab. Two invariants: a bracket
-that cannot finish is **Abandoned, never Complete** (naming the last model standing as champion
-would invent an outcome), and a drawn match advances the **better seed**, which is why
-`BracketSlot` carries a seed number at all. The runner holds no state — every step re-reads the
-tournament — so a restart resumes rather than losing the run.
+**Tournaments run on the server, except the browser matches.** `/tournament` draws a seeded
+single-elimination bracket over 2 (a plain 1v1) or 8 models and `TournamentRunner` plays it to
+the final on the background queue. Seeding is standard tournament seeding (`1,8,4,5,2,7,3,6`),
+not a shuffle: a random draw routinely knocks the two best models out against each other in
+round one. Two invariants: a bracket that cannot finish is **Abandoned, never Complete** (naming
+the last model standing as champion would invent an outcome), and a drawn match advances the
+**better seed**, which is why `BracketSlot` carries a seed number at all. The runner holds no
+state — every step re-reads the tournament — so a restart resumes rather than losing the run.
 
-**Blind mode never reaches the server.** The Home toggle shuffles which chosen model gets which
-Arena panel and masks both until a verdict lands. It is `localStorage` only, which is also what
-makes a *shared* Arena link behave correctly: the recipient sees the names, because the duel was
-never blind for them. The side shuffle is load-bearing — without it "left is the one I picked
-first" is a perfect tell. The mask is total by construction: every surface that names a side
-resolves through `Arena.LeftDisplayName`/`RightDisplayName`, so adding a new one that reads
-`_leftResult.ModelName` directly silently defeats the feature.
+**Browser models may enter a bracket, and that is why `Tournament.razor` holds a hub
+connection.** They were excluded until 2026-08-23 because a bracket outlives the tab and WebGPU
+inference does not. They are allowed now, and the page pays for it: on every poll it points a
+`SignalRDuelClient` at the *running match's* duel group and answers `StartLocalInference` with
+`LocalInferenceDriver`, exactly as the Arena does for one duel. The connection follows the match
+rather than the tournament, because the server addresses that signal to `duel:{duelId}` and a
+bracket is seven different duels; the server re-sends it every 5 s, so joining late still works.
+The consequence is real and stated on the page — close the tab during a browser match and it
+stalls until the duel's 15-minute watchdog fails it, handing the walkover to its opponent. A
+bracket of remote/Ollama models still finishes with nothing open. **The 4-model bracket was
+dropped** in the same pass; `BracketPlanner.SupportedSizes` is `[2, 8]` and the maths is
+size-generic, so re-adding it is a one-line change.
 
 **Challenge budgets are adjudicated before the judge.** A duel can carry a `ChallengeKind` +
 threshold; `ChallengeAdjudicator` runs ahead of `AutoJudge` in `DuelExecutionService`, because a
@@ -365,6 +370,23 @@ and EloHistory and resets every model to 1200. It and `/api/dev/remap-model-ids`
 which put an unauthenticated table wipe one `ASPNETCORE_ENVIRONMENT` slip from live data. In
 Development the fake-auth handler satisfies the policy from a header, so this costs nothing
 locally — don't "simplify" it back.
+
+**Model health lives on `/diag`, in vanilla JS, and that is forced.** The Home page carried a
+Blazor `ModelHealthPanel` (plus `LabModelCard`) until 2026-08-23. It is now a section of
+[Diag.cshtml](src/PoLocalCompare.Api/Pages/Diag.cshtml) driven by
+[diag-models.js](src/PoLocalCompare.Client/wwwroot/js/diag-models.js): one **Test all models**
+button and a row per model. It could not be moved as a component — `/diag` is a server-rendered
+Razor Page precisely so it works when the WASM client is the broken thing, which is what
+`index.html`'s boot-timeout fallback links there for. What made the move cheap is that the
+probing half already lived in framework-free `diag-interop.js`; `runModelDiag` still calls back
+through something shaped like a .NET object reference because `diag-models.js` hands it a
+duck-typed stand-in rather than forking it. The three model types are tested three different
+ways, and that is not incidental: **remote** goes through `GET /api/models/availability`, which
+already sends a real 16-token completion to each Foundry deployment; **Ollama** posts the prompt
+to `/api/ollama/benchmark`; **browser** runs `runModelDiag` in the tab, strictly one at a time,
+because they share one GPU and two at once produces "Device was lost" instead of a result. Note
+`/diag` is anonymous but `/api/models` is not — the table says "not signed in" rather than
+rendering empty.
 
 **Persistence details that bite.** Table Storage writes are idempotent and ETag-safe: creates swallow
 409, updates are If-Match conditional, and duel writers re-read and reapply on 412. `HybridCache`

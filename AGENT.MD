@@ -98,7 +98,8 @@ PoLocalCompare.slnx
 │   │   │                                 comparison logic; lives here so PoLocalCompare.Unit
 │   │   │                                 can test it without referencing the WASM project
 │   │   ├── Prompts/                    ← PromptLibrary (curated starter prompts)
-│   │   ├── Tournaments/                ← BracketPlanner (pure, seeded bracket layout)
+│   │   ├── Tournaments/                ← BracketPlanner (pure, seeded bracket layout; sizes 2/8)
+│   │   ├── Challenges/                 ← ChallengeRules (pure budget arithmetic)
 │   │   └── Presentation/               ← view-models, enums and helpers the .razor files lean
 │   │                                     on (ModelDiagState, ModelTypeGroup, SourceViewMode,
 │   │                                     RuntimeProbeReport, FailureReasonText,
@@ -107,6 +108,7 @@ PoLocalCompare.slnx
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
 │       ├── Pages/                      ← Home, Arena, Leaderboard, Archive, Tournament,
 │       │                                 ModelProfile, Login, NotFound
+│       │                                 (model health moved to the /diag Razor Page 2026-08-23)
 │       │                                 (model-health is a Home section; Arena both
 │       │                                  streams a running duel and judges it)
 │       ├── Components/                 ← incl. OutputScorecard, SourceCompare, TokenRace,

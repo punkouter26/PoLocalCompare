@@ -30,8 +30,7 @@ All server code lives in `PoLocalCompare.Api` (VSA). Each slice is flat: endpoin
 | *(cross-slice)* | `Auth/` | BFF cookie session, Microsoft OIDC, `FakeAuthHandler` (non-prod) |
 
 `PoLocalCompare.Shared` holds DTOs, enums, ids **and pure logic reachable by both WASM and API** —
-`Analysis/`, `Prompts/`, `Presentation/`, `Tournaments/BracketPlanner`, `Blind/BlindPickLedger`,
-`Challenges/ChallengeRules`. The "DTOs and enums only" rule was dropped deliberately: the unit tier
+`Analysis/`, `Prompts/`, `Presentation/`, `Tournaments/BracketPlanner`, `Challenges/ChallengeRules`. The "DTOs and enums only" rule was dropped deliberately: the unit tier
 references only the Api project, so pure logic parked in `PoLocalCompare.Client` is testable by
 E2E-UI alone — the one suite CI never runs. Entities still stay out. `PoLocalCompare.Client` (Blazor WASM) is hosted by the API (single-origin, no CORS).
 
@@ -50,7 +49,7 @@ All groups `RequireAuthorization()` (deny-by-default fallback policy); anonymous
 | `GET /api/leaderboard?sortBy=` | Leaderboard | HybridCache, tag-invalidated |
 | `GET /api/leaderboard/{modelId}/killlist` | Leaderboard | Head-to-head aggregates (wins/losses/draws per opponent); empty list, never 404, for unknown ids |
 | `GET /api/leaderboard/{modelId}/profile` | Leaderboard | Model page: standing, full ELO history, kill list, cost/speed, ≤6 winning outputs. **404** for an unknown id (unlike killlist — the page is about a model) |
-| `POST /api/tournaments` | Tournaments | 201 + the drawn bracket; queues `TournamentRunner`. Field must be 2/4/8 distinct server-side models |
+| `POST /api/tournaments` | Tournaments | 201 + the drawn bracket; queues `TournamentRunner`. Field must be 2 or 8 distinct models — any type, browser included since §9 item 24 |
 | `GET /api/tournaments` · `/{id}` · `/entrants` | Tournaments | Recent runs (`limit` 1–50), one bracket (404 unknown), eligible models strongest-first |
 | `GET /api/models` | Models | LocalService hidden outside Development |
 | `GET /api/models/availability` | Models | Probes Ollama tags + Foundry deployments |
@@ -203,6 +202,19 @@ Server owns the OIDC code flow (PKCE, authority `login.microsoftonline.com/commo
     **Dead code and orphan assets.** `GET /api/ollama/gpu-status` and its handler/DTO/wire records (no caller in C# or JS); `window.scrollElementIntoView`; the `.po-reveal` scroll-driven reveal (declared, never applied); `.po-bg--`/`.po-fg--` `warn`/`info`/`met`/`over`/`failed` and every `.po-chip--*` modifier (only `--ok` and `--err` were ever applied); `.po-page--narrow`, `.po-empty__title`, `.telemetry-hud__item--wide`; and the `.rz-grid-table` focus rule left behind by Radzen. Note `GET /api/models/download-status/{id}` and `resolveBrowserModelAvailability` **look** dead to a C#-only search and are not — both are reached by `fetch`/cross-file calls from `diag-interop.js` and `webllm-interop.js`.
 
     **CI/CD and repo assets.** The `Fetch WebLLM artifacts` workflow, `SCRIPTS/fetch-artifacts.ps1` and `SCRIPTS/receive-artifacts.ps1` — a whole GitHub Actions matrix that packed ~5 GB of model weights into split release assets for networks that block huggingface.co. `docs/20260821/` (six committed HTML reports, 221 KB, whose generator `SCRIPTS/build_html_report.py` was already deleted) and `SCRIPTS/mermaid-validate/`, referenced by no workflow. `deploy.yml` is the only workflow left.
+
+
+24. **Home stripped back, model health moved to /diag, browser models in brackets (2026-08-23):** four changes on one surface pass, recorded together because three of them reverse earlier entries.
+
+    **Blind mode is gone, reversing item 13's whole feature.** The Home toggle, the side shuffle, the `Model A / Model B` masking in the Arena, the localStorage ledger (`BlindPickLedger`, `BlindModeService`, `BlindLabels`) and the "Your blind picks" divergence panel are all deleted, along with 8 unit tests. Model names are now shown throughout, unconditionally. `Arena.LeftDisplayName` / `RightDisplayName` survive as an indirection — they no longer mask anything, but they keep the result → duel-snapshot → id fallback chain in one place instead of restated at every call site, and every surface that names a side still goes through them.
+
+    **The Home "Recent duels" list is gone.** Five rows of history at the foot of the picker column, duplicating the Archive it linked to. Its empty-state sibling — the "Try a starter duel" button — was kept, now shown only while both model slots are empty, because that is an onboarding affordance rather than the card that was removed.
+
+    **Model health moved from a Home panel to a /diag section.** `ModelHealthPanel.razor` and `LabModelCard.razor` (~48 KB with their stylesheets) are deleted; `/diag` gained a **Test all models** button and a row-per-model table, driven by the new `wwwroot/js/diag-models.js`. It is vanilla JS rather than a ported component because `/diag` is a server-rendered Razor Page on purpose — it has to work when the WASM client is the broken thing (item 12's boot-timeout fallback links there). The move was cheap because the probing half already lived in framework-free `diag-interop.js`; `runModelDiag` is handed a duck-typed stand-in for a .NET object reference rather than being forked, so the Arena and /diag stay on one code path. The three model types are tested three different ways: remote through `GET /api/models/availability` (which already sends a real 16-token completion per deployment), Ollama through `POST /api/ollama/benchmark`, browser through `runModelDiag` in the tab **one at a time**, because they share one GPU. Three now-unreferenced helpers went with the panel: `saveLabResult`, `loadLabResults` and the per-model `cancelModelDiag`.
+
+    **Browser models may enter a bracket, reversing item 21; the 4-model bracket is dropped.** The exclusion was correct about the mechanism — a bracket outlives the tab and WebGPU inference does not — and wrong about the remedy. `Tournament.razor` now does for a bracket what the Arena does for a duel: on each poll it points a `SignalRDuelClient` at the *running match's* duel group and answers `StartLocalInference` with `LocalInferenceDriver`. The connection follows the match rather than the tournament, because the server addresses that signal to `duel:{duelId}` and a bracket is seven different duels; the server's 5-second resend means joining a match already in flight still picks it up. The cost is stated on the page rather than hidden: close the tab during a browser match and it stalls until the duel's 15-minute watchdog fails it, handing the walkover to its opponent. A field of remote/Ollama models still finishes with nothing open. `BracketPlanner.SupportedSizes` went `[2, 4, 8]` → `[2, 8]` — 4 was a strictly worse 8 (a semi-final pair says less than a quarter-final round) and the middle option nobody chose. The maths is size-generic, so re-adding it is a one-line change.
+
+    **Tests stayed on the §8 contract at 100 / 50 / 25 / 25.** The blind deletions took the unit tier to 92; it was refilled with real coverage of the changes above (`TournamentFieldTests` pins that all three model types are eligible and that the supported sizes are exactly `[2, 8]`) plus four cases restored from the item-23 trim that had been cut for budget rather than for value — the ULID time-ordering guard, the ELO rounding contract, the external-resource count and the bracket parity rule. Two fixtures that assumed a 4-model bracket were rewritten against the 8.
 
 
 ## 10. Diagram Index (this folder)
