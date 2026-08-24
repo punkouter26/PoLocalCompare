@@ -45,79 +45,53 @@
     max-inline-size: 46rem;
 }
 
-/* ── Rendered / Code / Diff switcher ──────────────────────────────────────── */
-
-.arena__view-toggle {
-    display: inline-flex;
-    gap: 2px;
-    padding: 2px;
-    margin-bottom: var(--space-smd);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-}
-
-.arena__view-btn {
-    min-height: var(--target-min);
-    padding: var(--space-xs) var(--space-md);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--text-muted);
-    background: transparent;
-    border: none;
-    border-radius: calc(var(--radius-md) - 3px);
-    cursor: pointer;
-    transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.arena__view-btn:hover {
-    color: var(--text);
-}
-
-.arena__view-btn--active {
-    background: var(--surface-1);
-    color: var(--accent-blue);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-}
-
-.arena__view-btn:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
-
 .arena__viewports {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* Sized to the content, not to the page. The preview is a fixed 320px card, so a 1fr 1fr
+       grid across a desktop width left each card marooned in the middle of a 672px column with
+       the telemetry strip stretched twice as wide as the thing it describes. The cap keeps the
+       metric grid readable without letting the panel run away from the preview. */
+    grid-template-columns: repeat(2, minmax(0, 22rem));
+    justify-content: center;
+    /* start, not the default stretch: the panels are content-height now, and stretching them
+       to match each other is what left a tall empty region under the shorter one. */
+    align-items: start;
     gap: var(--space-md);
     margin-bottom: var(--space-md);
 }
 
-@media (max-width: 1024px) {
-    .arena__viewports {
-        grid-template-columns: 1fr;
-        scroll-snap-type: y mandatory;
-        overflow-y: auto;
-        max-height: 80vh;
-    }
+/* Side by side is the whole point of the page — the two outputs only mean anything read
+   against each other — so the panels stay in one row down to the app's small breakpoint
+   rather than the 1024 this used to collapse at. That figure was calibrated when a preview
+   filled its column; at 320px a pair needs about 700px, so 1024 was stacking them on any
+   window narrower than full screen, which is most of them.
 
-    .arena__viewport-panel {
-        scroll-snap-align: start;
+   The inner scroller went with it: it existed because two full-height previews could not fit
+   on a phone, and at 180px tall they now can. An `overflow-y: auto; max-height: 80vh` region
+   nested inside the page scroller is a trap on touch anyway — the outer page stops moving
+   when your thumb happens to land inside it. */
+@media (max-width: 640px) {
+    .arena__viewports {
+        grid-template-columns: minmax(0, 22rem);
     }
 }
 
-/* The 600px floor reserves room for a rendered preview so the two sides line up while they
-   stream. A failed side has no preview — it is one small card — so the floor would leave a
-   half-screen of empty space above the verdict. */
+/* No height floor. The preview inside sizes itself (see SandboxedViewport's --preview-h),
+   and the two sides line up because both frames resolve to the same box — a floor here just
+   pushed the verdict below the fold. A failed side is one small card and needs no reserve. */
 .arena__viewport-panel {
     display: flex;
     flex-direction: column;
+    /* Pack to the top and let every child keep its own height. Without this the children
+       stretch to fill the taller of the two panels, which is how the HUD came to overlap
+       the preview when one side finished before the other. */
+    align-items: stretch;
+    justify-content: flex-start;
     gap: var(--space-sm);
-    min-height: 600px;
 }
 
-/* Structural-only override: a failed run needs no iframe height reserve, since the
-   failure card stands in for the viewport. The colour itself comes from `.po-bg--err`. */
-.arena__viewport-panel--failed {
+.arena__viewport-panel > * {
+    flex: 0 0 auto;
     min-height: 0;
 }
 
@@ -246,28 +220,6 @@
 
 .arena__actions--secondary .arena__action-btn {
     min-width: 0;
-}
-
-/* Exports are available, not advertised: a disclosure keeps them off the same visual tier as
-   the two exits without hiding them from anyone who wants them. */
-.arena__export {
-    margin-top: var(--space-sm, 0.5rem);
-    text-align: center;
-}
-
-.arena__export-summary {
-    display: inline-block;
-    font-size: var(--text-sm);
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: var(--space-xs) var(--space-sm);
-    min-block-size: var(--target-min, 24px);
-}
-
-.arena__export-summary:focus-visible {
-    outline: 2px solid var(--accent-blue);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm);
 }
 
 .arena__verdict-recorded {

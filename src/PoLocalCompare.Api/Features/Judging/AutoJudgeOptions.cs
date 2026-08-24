@@ -35,17 +35,34 @@ public sealed class AutoJudgeOptions
     /// Foundry resource; it does not have to be one of the seeded duelling models.
     /// </summary>
     /// <remarks>
-    /// <c>gpt-5-nano</c> rather than <c>gpt-5.4-nano</c>: the judge does a constrained
-    /// comparison of two documents and returns structured JSON against a fixed schema, which
-    /// is not a task the newer nano does better. It is roughly four times cheaper per input
-    /// token and three times cheaper per output token, and with <see cref="DelaySeconds"/> at
-    /// 10 it decides very nearly every duel — so this is the most-executed model call in the
-    /// app, not an occasional one.
+    /// Raised from <c>gpt-5-nano</c> on 2026-08-23. The cheap-nano argument was that judging is
+    /// a constrained comparison returning JSON against a fixed schema, and that the judge is the
+    /// most-executed model call in the app. Both are still true — but a duel asking for a
+    /// rotating cube was won by a document that rendered a flat plane, and reading two HTML
+    /// documents closely enough to tell those apart is not a task the cheapest model in the
+    /// catalog does adequately. The judge decides where every ELO point goes; it is the one
+    /// call in the app where being wrong is permanent.
     /// </remarks>
-    public string Deployment { get; set; } = "gpt-5-nano";
+    public string Deployment { get; set; } = "gpt-5.4-mini";
 
     /// <summary>Ceiling on the judge call itself, so a hung judge cannot pin the duel queue.</summary>
     public int TimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Show the judge a screenshot of each rendered page as well as its source.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and deliberately: it needs headless Chromium on the host, which the
+    /// Free-tier App Service does not have and has no room for. Turn it on where a browser
+    /// exists — locally it is already installed for the E2E-UI suite. When it is on but a
+    /// screenshot cannot be produced, the judge silently reads source only; a duel is never
+    /// left unjudged because a render failed.
+    ///
+    /// The deployment named by <see cref="Deployment"/> must accept image input. If it does not,
+    /// the call fails and <see cref="AutoJudge"/> leaves the duel Pending rather than guessing —
+    /// so change both together, or leave this off.
+    /// </remarks>
+    public bool VisionEnabled { get; set; }
 
     /// <summary>
     /// Characters of each model's HTML given to the judge, per side.
@@ -55,13 +72,14 @@ public sealed class AutoJudgeOptions
     /// visible near the head and tail — which is why <c>FoundryDuelJudge.Truncate</c> keeps
     /// both ends and elides the middle rather than simply cutting off.
     ///
-    /// Halved from 6,000 on 2026-08-22. Two sides at 6,000 characters was roughly 3,000 input
-    /// tokens on every judged duel, and at a 10-second grace window that is nearly every duel.
-    /// The head-and-tail shape means the discriminating parts of both documents still reach
-    /// the judge at 3,000. If judgements look worse after this, raise it back — the value is
-    /// configuration precisely because it is a quality/cost dial rather than a constant.
+    /// Was 6,000, halved to 3,000 on 2026-08-22 to cut tokens, and raised to 12,000 on
+    /// 2026-08-23 because that saving had a cost nobody had measured: at 3,000 the elided
+    /// middle is where the substance of a generated page lives, and a cube-versus-plane duel
+    /// was decided by a judge that had probably never seen the geometry code. Judging is the
+    /// one call where cheapness buys a wrong permanent answer, so this dial is set for accuracy
+    /// now. Lower it if judged-duel cost becomes the binding constraint.
     /// </remarks>
-    public int MaxOutputChars { get; set; } = 3000;
+    public int MaxOutputChars { get; set; } = 12_000;
 
     /// <summary>
     /// Maximum number of times a single duel may be re-queued after a transient HTTP 429.

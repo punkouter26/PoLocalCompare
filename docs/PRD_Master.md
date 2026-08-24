@@ -217,6 +217,17 @@ Server owns the OIDC code flow (PKCE, authority `login.microsoftonline.com/commo
     **Tests stayed on the §8 contract at 100 / 50 / 25 / 25.** The blind deletions took the unit tier to 92; it was refilled with real coverage of the changes above (`TournamentFieldTests` pins that all three model types are eligible and that the supported sizes are exactly `[2, 8]`) plus four cases restored from the item-23 trim that had been cut for budget rather than for value — the ULID time-ordering guard, the ELO rounding contract, the external-resource count and the bracket parity rule. Two fixtures that assumed a 4-model bracket were rewritten against the 8.
 
 
+25. **Vision judging, a stronger judge model, and a consolidated scorecard (2026-08-23):** one reported bug and its fix.
+
+    **The bug:** a duel asking for a rotating cube was won by a document that rendered a flat plane. Three causes compounded. The judge reads HTML **source** and never sees the rendering, so telling a cube from a plane means mentally executing the projection maths. `MaxOutputChars` was 3,000 with the middle elided (halved from 6,000 on 2026-08-22 to save tokens), so the geometry code — which lives in the middle of a generated file — very likely never reached the judge at all. And the judge was `gpt-5-nano`, the cheapest model in the catalog, doing that simulation.
+
+    **Fixes, in order of leverage.** `AiJudge:Deployment` → `gpt-5.4-mini` and `MaxOutputChars` → 12,000: the judge is the one call in the app where cheapness buys a *wrong permanent answer*, since it decides where every ELO point goes. Then **vision judging**: `Common/Rendering/HtmlScreenshotRenderer` renders each output in headless Chromium at the same 320×180 frame `InferencePrompt` tells the models to design for, and `FoundryDuelJudge` attaches both PNGs as image content parts with an explicit instruction to believe the screenshot over the source. Verified on the reported prompt — the judge now rejects the plane in its own words: *"Document B fails in the screenshot: it appears as a thin flat plane/sliver."*
+
+    **Why it is off by default.** `AiJudge:VisionEnabled` is false in `appsettings.json` and true only in Development. Headless Chromium is a few hundred MB of browser and a process per render; the deploy target is a Free (F1) App Service with neither the disk nor the memory for it. Three degradation rules make that safe: any render failure falls back to source-only judging, **both** screenshots are dropped if **either** fails (judging one document by its picture and the other by its source would be unfair rather than partial), and a failed browser launch is remembered so a host without one pays the cost once rather than per duel. The renderer also aborts all network from the rendered page — a generated page's dead CDN reference must not become an outbound request from the server.
+
+    **The Arena scorecard went from 14 metric rows to 6.** Eight were descriptive rather than directional — size, elements, distinct tags, nesting depth, CSS rules, script length, interactive count, a11y issues — and carried no winner mark, because a bigger document or a deeper tree is a difference, not an improvement. They filled the table with facts that could not help anyone pick a side. What remains is one score (Completeness) and five ways a page is measurably broken or fragile. Per-issue findings paragraphs collapsed to one line per side.
+
+
 ## 10. Diagram Index (this folder)
 
 Each `.mmd` has a `*_simplified.mmd` twin and a rendered `.svg`.

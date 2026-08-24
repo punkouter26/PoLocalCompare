@@ -24,8 +24,7 @@
             ModelName="@DisplayName"
             IsLoser="@(LoserModelId == PanelModelId)"
             ShowWinner="@(IsVerdictRecorded && WinnerModelId == PanelModelId)"
-            ProbeRuntime="@(!IsDuelStillRunning)"
-            OnProbeUpdated="OnProbeUpdated" />
+            />
 
         <div class="arena__hud">
             <TelemetryHud Result="Result" />
@@ -63,8 +62,6 @@
     /// <summary>True once a verdict has been recorded — drives the winner / loser treatments.</summary>
     [Parameter] public bool IsVerdictRecorded { get; set; }
 
-    /// <summary>True while the duel is still running; suppresses runtime probes when stable.</summary>
-    [Parameter] public bool IsDuelStillRunning { get; set; }
 
 
     /// <summary>The id of the model that occupies this side — supplied by the page so the panel
@@ -74,8 +71,6 @@
     /// <summary>The ELO shift to display (already animated by the page).</summary>
     [Parameter] public double? EloShiftDisplay { get; set; }
 
-    /// <summary>Probe-report callback raised by the sandboxed viewport after a render-frame probe.</summary>
-    [Parameter] public EventCallback<RuntimeProbeReport> OnProbeUpdated { get; set; }
 
     /// <summary>View-source click handler. The page opens the raw HTML in a new tab.</summary>
     [Parameter] public EventCallback<string> OnViewSource { get; set; }

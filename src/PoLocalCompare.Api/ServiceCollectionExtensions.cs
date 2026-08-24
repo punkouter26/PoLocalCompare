@@ -24,6 +24,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<LobbyNotifier>();
         services.AddScoped<OrphanModelIdRemapper>();
         services.AddScoped<CreateTournamentHandler>();
+        // Singleton: it owns a Chromium process, launched lazily on first use and reused.
+        services.AddSingleton<HtmlScreenshotRenderer>();
         services.AddScoped<ChallengeAdjudicator>();
         // Singleton like DuelExecutionService, and for the same reason: it is queued from a
         // request but outlives it, so it resolves its own scope per step rather than capturing

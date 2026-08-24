@@ -48,7 +48,7 @@ public sealed class OllamaInferenceProxy(
             model = modelName,
             messages = new[]
             {
-                new { role = "system", content = "You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS. No markdown, no explanation, no code fences." },
+                new { role = "system", content = InferencePrompt.System },
                 new { role = "user", content = promptFull }
             },
             stream = true,

@@ -110,3 +110,20 @@ window.unregisterPaletteHotkey = () => {
     }
     paletteRef = null;
 };
+
+/**
+ * Best-effort haptic tap. Desktop browsers and iOS Safari have no Vibration API, and a browser
+ * may refuse without a prior user gesture — a verdict click is a gesture, so this fires there.
+ *
+ * Moved here from compare.js on 2026-08-23, when that file's other five helpers (the sandbox
+ * runtime probe, synced scroll panes, the clipboard copy and the share-card canvas renderer)
+ * lost their callers along with the Objective scorecard, the Code/Diff views and the duel
+ * export. One function did not justify its own script tag.
+ */
+window.hapticPulse = function (pattern) {
+    try {
+        if (navigator.vibrate) navigator.vibrate(pattern);
+    } catch {
+        /* vibration is decoration — never let it surface as an error */
+    }
+};

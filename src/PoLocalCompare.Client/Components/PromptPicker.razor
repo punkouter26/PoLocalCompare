@@ -1,41 +1,10 @@
-@using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.Prompts
 
-@* Prompt sourcing for the Compare page: prompts you have actually run, plus a curated set.
-   Everything here is local — the recent list lives in localStorage and the library is compiled
-   in — so picking a prompt costs no network round-trip. *@
+@* Prompt sourcing for the Compare page: a curated set, compiled in, so picking a prompt
+   costs no network round-trip. The "your recent prompts" list that sat above the library
+   was removed on 2026-08-23 along with its localStorage service. *@
 
 <div class="prompt-picker">
-    @if (Recent.Count > 0)
-    {
-        <div class="prompt-picker__section">
-            <div class="prompt-picker__section-head">
-                <h3 class="prompt-picker__section-title">Your recent prompts</h3>
-                <button type="button" class="prompt-picker__link" @onclick="OnClearRecent">Clear all</button>
-            </div>
-            <ul class="prompt-picker__recent">
-                @foreach (var entry in Recent)
-                {
-                    <li class="prompt-picker__recent-item @(IsCurrent(entry.Text) ? "prompt-picker__recent-item--active" : "")">
-                        <button type="button"
-                                class="prompt-picker__recent-btn"
-                                title="@entry.Text"
-                                @onclick="() => SelectAsync(entry.Text)">
-                            <span class="prompt-picker__recent-text">@entry.Summary</span>
-                            <span class="prompt-picker__recent-age">@RelativeAge(entry.UsedAt)</span>
-                        </button>
-                        <button type="button"
-                                class="prompt-picker__recent-remove"
-                                aria-label="@($"Forget prompt: {entry.Summary}")"
-                                @onclick="() => OnForgetRecent.InvokeAsync(entry.Text)">
-                            <span aria-hidden="true">✕</span>
-                        </button>
-                    </li>
-                }
-            </ul>
-        </div>
-    }
-
     @* The library is a disclosure, not a wall. Eighteen cards rendered unconditionally sat
        between the textarea and the Compare button and were about half the page on both
        viewports — the textarea is the primary input, so the catalogue waits to be asked for. *@
@@ -99,10 +68,7 @@
     private const string AllCategories = "All";
 
     [Parameter] public string? CurrentPrompt { get; set; }
-    [Parameter] public IReadOnlyList<RecentPrompt> Recent { get; set; } = [];
     [Parameter] public EventCallback<string> OnPromptSelected { get; set; }
-    [Parameter] public EventCallback<string> OnForgetRecent { get; set; }
-    [Parameter] public EventCallback OnClearRecent { get; set; }
 
     private string _category = AllCategories;
     private bool _libraryOpen;
@@ -121,20 +87,4 @@
 
     private static string Excerpt(string text) =>
         text.Length <= 120 ? text : text[..120].TrimEnd() + "…";
-
-    /// <summary>
-    /// Coarse on purpose: the list is ordered most-recent-first, so the age only has to say
-    /// roughly how stale an entry is, and an exact timestamp would be noise at chip size.
-    /// </summary>
-    private static string RelativeAge(DateTimeOffset usedAt)
-    {
-        var elapsed = DateTimeOffset.UtcNow - usedAt;
-
-        if (elapsed < TimeSpan.Zero) return "just now";
-        if (elapsed.TotalMinutes < 1) return "just now";
-        if (elapsed.TotalHours < 1) return $"{(int)elapsed.TotalMinutes}m ago";
-        if (elapsed.TotalDays < 1) return $"{(int)elapsed.TotalHours}h ago";
-        if (elapsed.TotalDays < 30) return $"{(int)elapsed.TotalDays}d ago";
-        return usedAt.ToString("MMM yyyy");
-    }
 }

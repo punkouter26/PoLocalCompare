@@ -227,7 +227,8 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `AiJudge:Enabled` | `appsettings.json` | — (default `false` in code, `true` in appsettings) |
 | `AiJudge:DelaySeconds` | `appsettings.json` | — (**10**; code default also 10) |
 | `Duel` challenge budget | per-request | `challengeKind` + `challengeThreshold` on `POST /api/duels`; non-positive threshold degrades to `None` |
-| `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-nano`) |
+| `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-mini`; must accept image input when vision judging is on) |
+| `AiJudge:VisionEnabled` | `appsettings.json` | — (false; true in Development — needs headless Chromium) |
 
 ---
 

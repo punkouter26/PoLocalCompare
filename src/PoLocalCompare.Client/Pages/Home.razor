@@ -2,7 +2,6 @@
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
-@using PoLocalCompare.Shared.Challenges
 @using PoLocalCompare.Shared.Enums
 @using PoLocalCompare.Shared.Prompts
 @using Microsoft.JSInterop
@@ -10,7 +9,6 @@
 @inject AudioService AudioService
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@inject PromptHistoryService PromptHistory
 @inject WebGpuCapability WebGpu
 
 <PageTitle>Compare — PoLocalCompare</PageTitle>
@@ -215,24 +213,11 @@
                     </div>
 
                     <PromptPicker CurrentPrompt="@_prompt"
-                                  Recent="_recentPrompts"
-                                  OnPromptSelected="ApplyPromptAsync"
-                                  OnForgetRecent="ForgetRecentAsync"
-                                  OnClearRecent="ClearRecentAsync" />
+                                  OnPromptSelected="ApplyPromptAsync" />
                 </section>
             </div>
 
             <div class="home__console-foot">
-                @* Challenge budget. A hard ceiling, not a scoring tweak: a model that blows it
-                   loses the duel outright however good its output was. That is a different
-                   question from "which is better", which is why these results are ranked on
-                   their own board rather than folded into the ELO column. *@
-                <ChallengeBudgetPicker Kind="_challengeKind"
-                                       KindChanged="OnChallengeKindChanged"
-                                       Threshold="_challengeThreshold"
-                                       ThresholdChanged="OnChallengeThresholdChanged"
-                                       Hint="@ChallengeHint" />
-
                 <section class="home__compare" aria-labelledby="home-compare-heading">
                     <div class="home__compare-row">
                         <div class="home__compare-copy">
@@ -279,27 +264,6 @@
     private ModelDto? _replacePopoverModel;
     private bool? _webGpuSupported;   // null = not yet probed
 
-    private IReadOnlyList<RecentPrompt> _recentPrompts = [];
-
-    // ── Challenge budget ─────────────────────────────────────────────────────
-    // Kind list lives inside ChallengeBudgetPicker; this page only holds the bound state.
-    private ChallengeKind _challengeKind = ChallengeKind.None;
-    private double _challengeThreshold;
-
-    private string ChallengeHint => _challengeKind == ChallengeKind.None
-        ? "No budget — the duel is judged on the output alone."
-        : $"Any model that goes over {ChallengeRules.Format(_challengeKind, _challengeThreshold)} "
-          + "forfeits, however good its output is. Both inside the budget and it is judged normally.";
-
-    private void OnChallengeKindChanged(ChallengeKind kind)
-    {
-        _challengeKind = kind;
-    }
-
-    private void OnChallengeThresholdChanged(double threshold)
-    {
-        _challengeThreshold = threshold;
-    }
 
     private bool HasModels => _leftModel is not null && _rightModel is not null && _leftModel.ModelId != _rightModel.ModelId;
     private bool SameModelSelected => _leftModel is not null && _rightModel is not null && _leftModel.ModelId == _rightModel.ModelId;
@@ -377,22 +341,12 @@
     protected override async Task OnInitializedAsync()
     {
         _prompt = Prompt ?? string.Empty;
-        _recentPrompts = await PromptHistory.GetAsync();
         await LoadAsync();
     }
 
     // ── Prompt sourcing ──────────────────────────────────────────────────────
 
     private void ApplyPromptAsync(string text) => _prompt = text;
-
-    private async Task ForgetRecentAsync(string text) =>
-        _recentPrompts = await PromptHistory.RemoveAsync(text);
-
-    private async Task ClearRecentAsync()
-    {
-        await PromptHistory.ClearAsync();
-        _recentPrompts = [];
-    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -564,17 +518,10 @@
 
         try
         {
-            // Remembered before the request, not after: navigation to the Arena follows
-            // immediately on success, and a prompt worth re-running is worth keeping even if
-            // the duel itself fails to start.
-            _recentPrompts = await PromptHistory.RememberAsync(_prompt);
-
             await AudioService.PlaySnareRollAsync();
 
             var dto = await ApiClient.CommenceDuelAsync(
-                _leftModel!.ModelId, _rightModel!.ModelId, _prompt,
-                challengeKind: _challengeKind,
-                challengeThreshold: _challengeThreshold);
+                _leftModel!.ModelId, _rightModel!.ModelId, _prompt);
             if (dto is not null)
                 Nav.NavigateTo($"/arena/{dto.DuelId}");
             else

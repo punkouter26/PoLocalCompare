@@ -97,6 +97,22 @@ second verdict). A judge that cannot decide — unreachable, unparseable reply, 
 leaves the duel `Pending` rather than guessing; ELO must never move on no evidence. And
 `AiJudge:Enabled=false` genuinely restores the old human-only behaviour.
 
+**The judge looks at rendered screenshots, not just source.** A duel asking for a rotating cube
+was won by a document that drew a flat plane: nothing in the source says "this is a plane" — the
+shape only exists once the projection maths has run — so a text-only judge has to simulate the
+script in its head, and does it badly. `HtmlScreenshotRenderer` (Common/Rendering) renders each
+output in headless Chromium at the same 320×180 the models were told to design for, and
+`FoundryDuelJudge` attaches both PNGs as image content parts with an instruction to **believe the
+screenshot over the source**. Three things about it are load-bearing: it is **off by default**
+(`AiJudge:VisionEnabled`, on only in Development) because the Free-tier App Service has no browser
+and no room for one; **either side failing to render drops both**, since judging one document by
+its picture and the other by its source is not a fair comparison; and **every failure degrades to
+source-only** rather than throwing, because a duel must never go unjudged because a screenshot did
+not render. The renderer is a singleton (Chromium takes ~1s to launch) and blocks all network from
+the rendered page — a generated page's dead CDN reference must not become an outbound request from
+the server, nor eat the settle window in timeouts. The judge deployment must accept image input;
+`AiJudge:Deployment` is `gpt-5.4-mini` for that reason as well as for accuracy.
+
 This reverses the original human-only rule; PRD §9 item 7 records why it was that way and item 9 why
 it changed. **`AiJudge:DelaySeconds` is 10** (PRD §9 item 21) — short on purpose, so a duel resolves
 while you are still looking at it. At that width the judge decides nearly every duel and the human

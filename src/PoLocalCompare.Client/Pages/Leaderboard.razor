@@ -12,39 +12,6 @@
 <div class="leaderboard">
     <h1 class="leaderboard__title po-title">Leaderboard</h1>
 
-    <div class="leaderboard__controls">
-        <span class="leaderboard__sort-label">Sort by:</span>
-        @* aria-pressed carries the active sort to assistive tech; the colour alone would not. *@
-        <button type="button" class="po-btn leaderboard__sort-btn @(IsEloSort ? "po-btn--primary" : "")"
-                aria-pressed="@Pressed(IsEloSort)" @onclick="@(() => SetSortAsync("Elo"))">ELO</button>
-        <button type="button" class="po-btn leaderboard__sort-btn @(IsValueSort ? "po-btn--primary" : "")"
-                aria-pressed="@Pressed(IsValueSort)"
-                disabled="@(!_entries.Any(e => e.Value.HasValue))"
-                title="Sort by ELO earned per dollar of API spend (higher = more bang per buck)"
-                @onclick="@(() => SetSortAsync("Value"))">💎 Value</button>
-        <button type="button" class="po-btn leaderboard__sort-btn @(IsSpeedSort ? "po-btn--primary" : "")"
-                title="Mean time to first token — the wait before anything appears, which is what actually makes a model feel fast. Lower is better."
-                aria-pressed="@Pressed(IsSpeedSort)" @onclick="@(() => SetSortAsync("Speed"))">⚡ Speed</button>
-        <button type="button" class="po-btn leaderboard__sort-btn @(IsQualitySort ? "po-btn--primary" : "")"
-                aria-pressed="@Pressed(IsQualitySort)"
-                disabled="@(!_entries.Any(e => e.OutputQualityAvg.HasValue))"
-                title="Sort by persisted HTML output quality score"
-                @onclick="@(() => SetSortAsync("Quality"))">🧪 Output Quality</button>
-        <button type="button" class="po-btn leaderboard__sort-btn @(IsCostSort ? "po-btn--primary" : "")"
-                aria-pressed="@Pressed(IsCostSort)"
-                disabled="@(!_entries.Any(e => e.AvgApiCostPerDuel.HasValue))"
-                title="Sort by average API cost per duel (cheapest first)"
-                @onclick="@(() => SetSortAsync("Cost"))">💰 Avg $/duel</button>
-        <span class="leaderboard__divider" aria-hidden="true">|</span>
-        @* A checkbox, not a button. The button labelled the current state in one position
-           ("Active ✓") and the pending action in the other ("Show All"), so its label never
-           told you what pressing it would do. *@
-        <label class="leaderboard__filter">
-            <input type="checkbox" checked="@_activeOnly" @onchange="ToggleActiveOnly" />
-            Hide models with no duels
-        </label>
-    </div>
-
     @if (_loading)
     {
         <p class="po-status">Loading leaderboard...</p>
@@ -74,6 +41,9 @@
                         <th scope="col">Rank</th>
                         <th scope="col">Model Name</th>
                         <th scope="col">ELO</th>
+                        <th scope="col" title="Duels won.">W</th>
+                        <th scope="col" title="Duels lost — total duels minus wins minus draws. A model that failed to produce output lost that duel.">L</th>
+                        <th scope="col" title="Mean API cost per duel across every priced result this model has. Local and Ollama models run on your own hardware and show &mdash;.">💰 Avg $/duel</th>
                         <th scope="col" title="Mean time to first token across this model's duels. Lower is better; local models with no measured run show &mdash;.">⚡ First token</th>
                         <th scope="col" title="ELO earned per dollar of API spend (CurrentElo / AvgApiCostPerDuel, divisor floored at $0.0001). Higher = more bang per buck. Local/Ollama and unpriced remotes show &mdash;.">💎 Value</th>
                     </tr>
@@ -108,6 +78,25 @@
                                 </a>
                             </td>
                             <td data-label="ELO">@((int)Math.Round(entry.CurrentElo))</td>
+                            @* W/L rather than "17-2 (89%)" in one cell: they sort and scan as
+                               numbers, and the draw count is deliberately not a third column —
+                               it is recoverable from DuelCount and is near-always zero. *@
+                            <td data-label="W" class="leaderboard__record">@entry.WinCount</td>
+                            <td data-label="L" class="leaderboard__record">@Losses(entry)</td>
+                            <td data-label="Avg $/duel">
+                                @* Four decimals: a duel on a nano model costs a few ten-thousandths
+                                   of a dollar, and rounding to cents renders the whole column as
+                                   $0.00. Suppressed rather than zeroed for unpriced models — free
+                                   and unmeasured are different facts. *@
+                                @if (entry.AvgApiCostPerDuel is { } cost)
+                                {
+                                    <span class="leaderboard__record">$@cost.ToString("F4")</span>
+                                }
+                                else
+                                {
+                                    <span class="leaderboard__no-data" title="No priced duels yet — local and Ollama models have no per-token rate.">&#8212;</span>
+                                }
+                            </td>
                             <td data-label="First token">
                                 @if (entry.AvgFirstTokenMs is { } ttft)
                                 {
@@ -155,33 +144,37 @@
     private List<LeaderboardEntryDto> _entries = [];
     private List<LeaderboardEntryDto> _displayedEntries = [];
     private Dictionary<ModelId, ModelType> _modelTypes = [];
-    private bool _activeOnly = true; // default: hide unplayed models
+    /// <summary>
+    /// Models that have never duelled are hidden. This was a checkbox next to the sort bar and
+    /// went with it on 2026-08-23 — it defaulted to on, and an unplayed model is a 1200 with no
+    /// record, which is a catalog entry rather than a ranking.
+    /// </summary>
+    private const bool ActiveOnly = true;
     private bool _loading = true;
     private string? _error;
 
-    private string _sortBy = "Elo";
-    private bool IsQualitySort => string.Equals(_sortBy, "Quality", StringComparison.OrdinalIgnoreCase);
-    private bool IsSpeedSort => string.Equals(_sortBy, "Speed", StringComparison.OrdinalIgnoreCase);
-    private bool IsCostSort => string.Equals(_sortBy, "Cost", StringComparison.OrdinalIgnoreCase);
-    private bool IsValueSort => string.Equals(_sortBy, "Value", StringComparison.OrdinalIgnoreCase);
-    private bool IsEloSort => !IsQualitySort && !IsCostSort && !IsValueSort && !IsSpeedSort;
+    /// <summary>
+    /// The board is ranked by ELO and nothing else. The five-way sort bar (Value / Speed /
+    /// Output Quality / Avg $ per duel) was removed on 2026-08-23: the rating is the thing the
+    /// app exists to produce, the alternate orderings restated columns already on the row, and
+    /// two of the five silently disabled themselves whenever no duel had recorded the metric.
+    /// The API still takes a `sortBy`, so a view can be added back without a server change.
+    /// </summary>
+    private const string SortBy = "Elo";
 
-    /// <summary>aria-pressed needs the lowercase JS-style literal, not .NET's "True"/"False".</summary>
-    private static string Pressed(bool on) => on ? "true" : "false";
+    /// <summary>
+    /// Losses are not stored — they are whatever is left after wins and draws, which is the
+    /// same derivation <see cref="LeaderboardEntryDto.DrawCount"/> documents. Floored at zero
+    /// so a partially-written aggregate can never render a negative record.
+    /// </summary>
+    private static int Losses(LeaderboardEntryDto e) =>
+        Math.Max(0, e.DuelCount - e.WinCount - e.DrawCount);
 
-    /// <summary>Headline label mirrors the active sort — "Top ELO" / "Cheapest" /
-    /// "Highest quality" / "Best Value" — so a sorted-by-cost view doesn't claim the leader is the top.</summary>
     /// <summary>Sub-second waits read better in ms; past that, seconds.</summary>
     private static string FormatFirstToken(double ms) =>
         ms < 1000 ? $"{ms:F0} ms" : $"{ms / 1000.0:F1} s";
 
-    private string TopLabel => _sortBy switch
-    {
-        "Quality"    => "Highest quality",
-        "Cost"       => "Cheapest",
-        "Value"      => "Best Value",
-        _            => "Top ELO",
-    };
+    private const string TopLabel = "Top ELO";
 
     protected override async Task OnInitializedAsync()
     {
@@ -192,28 +185,6 @@
             _modelTypes = models.ToDictionary(m => m.ModelId, m => m.ModelType);
     }
 
-    private async Task SetSortAsync(string sortBy)
-    {
-        if (string.Equals(_sortBy, sortBy, StringComparison.OrdinalIgnoreCase))
-            return;
-        if (sortBy == "Quality" && !_entries.Any(e => e.OutputQualityAvg.HasValue))
-            return; // button is disabled; guard in case of race condition
-        if (sortBy == "Cost" && !_entries.Any(e => e.AvgApiCostPerDuel.HasValue))
-            return; // button is disabled; guard in case of race condition
-        if (sortBy == "Value" && !_entries.Any(e => e.Value.HasValue))
-            return; // button is disabled; guard in case of race condition
-        _sortBy = sortBy;
-        await LoadLeaderboardAsync();
-    }
-
-    private void ToggleActiveOnly()
-    {
-        _activeOnly = !_activeOnly;
-        _displayedEntries = _activeOnly
-            ? _entries.Where(e => e.DuelCount > 0).ToList()
-            : _entries;
-    }
-
     private async Task LoadLeaderboardAsync()
     {
         _loading = true;
@@ -221,9 +192,9 @@
 
         try
         {
-            var rows = await ApiClient.GetLeaderboardAsync(_sortBy);
+            var rows = await ApiClient.GetLeaderboardAsync(SortBy);
             _entries = rows?.ToList() ?? [];
-            _displayedEntries = _activeOnly
+            _displayedEntries = ActiveOnly
                 ? _entries.Where(e => e.DuelCount > 0).ToList()
                 : _entries;
         }

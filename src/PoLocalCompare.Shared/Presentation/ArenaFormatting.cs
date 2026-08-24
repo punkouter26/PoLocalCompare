@@ -31,30 +31,4 @@ public static class ArenaFormatting
             : value.ToString("F1");
 
     /// <summary>The label painted on each view-mode button in the Arena's view switcher.</summary>
-    public static string ViewLabel(SourceViewMode mode) => mode switch
-    {
-        SourceViewMode.Rendered => "🖼 Rendered",
-        SourceViewMode.Code => "</> Code",
-        _ => "⇄ Diff",
-    };
-
-    /// <summary>
-    /// Stats rendered into the Arena share card. Lines: <c>tok/s</c>, <c>total seconds</c>,
-    /// and (when known) the ELO delta. A <c>null</c> result short-circuits to <c>"no result"</c>.
-    /// </summary>
-    public static string FormatShareStat(DuelResultDto? result, double? eloShift)
-    {
-        if (result is null) return "no result";
-
-        var parts = new List<string>
-        {
-            $"{result.TokenVelocity:F0} tok/s",
-            $"{result.TotalDurationMs / 1000.0:F1}s",
-        };
-
-        if (eloShift.HasValue)
-            parts.Add($"ELO {(eloShift >= 0 ? "+" : "")}{eloShift.Value:F1}");
-
-        return string.Join("  ·  ", parts);
-    }
 }

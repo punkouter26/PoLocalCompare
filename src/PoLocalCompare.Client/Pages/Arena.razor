@@ -94,33 +94,17 @@
             }
         }
 
-        @* ── View switcher ────────────────────────────────────────────────
-           Rendered is what the models built; Code and Diff are for deciding *why* one is
-           better. Only offered once both outputs exist — there is nothing to diff mid-stream. *@
-        @if (BothOutputsPresent())
-        {
-            <div class="arena__view-toggle" role="group" aria-label="Output view">
-                @foreach (var mode in new[] { SourceViewMode.Rendered, SourceViewMode.Code, SourceViewMode.Diff })
-                {
-                    <button type="button"
-                            class="arena__view-btn @(_viewMode == mode ? "arena__view-btn--active" : "")"
-                            aria-pressed="@(_viewMode == mode ? "true" : "false")"
-                            @onclick="() => _viewMode = mode">
-                        @ViewLabel(mode)
-                    </button>
-                }
-            </div>
-        }
+        @* The Arena shows the rendered result and nothing else. The Code and Diff views, and
+           the switcher that reached them, were removed on 2026-08-23 — the per-panel
+           "View Source" button still opens either document in full when you want the source.
 
-        @if (_viewMode == SourceViewMode.Rendered || !BothOutputsPresent())
-        {
-            @* A failed side renders its failure card INSTEAD of the viewport and telemetry, not
+           A failed side renders its failure card INSTEAD of the viewport and telemetry, not
                on top of them. The same failure used to be stated three times per side — the
                viewport's "produced no renderable output" placeholder, the HUD's red FAILED
                banner, and this card repeating the identical message — over a metric grid
                reading 0.0 tok/s / 0ms / 0 tokens / 0 B. *@
-            <div class="arena__viewports">
-                <ArenaViewportPanel
+        <div class="arena__viewports">
+            <ArenaViewportPanel
                     Result="@_leftResult"
                     DisplayName="@LeftDisplayName"
                     StreamingHtml="@_leftStreamingHtml"
@@ -128,9 +112,7 @@
                     LoserModelId="@_loserModelId"
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
-                    IsDuelStillRunning="@_duelStillRunning"
                     EloShiftDisplay="@(_eloShiftLeft.HasValue ? _eloDisplayLeft : null)"
-                    OnProbeUpdated="OnLeftProbe"
                     OnViewSource="(html) => OpenSourceAsync(html, LeftDisplayName)" />
 
                 <ArenaViewportPanel
@@ -141,21 +123,9 @@
                     LoserModelId="@_loserModelId"
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
-                    IsDuelStillRunning="@_duelStillRunning"
                     EloShiftDisplay="@(_eloShiftRight.HasValue ? _eloDisplayRight : null)"
-                    OnProbeUpdated="OnRightProbe"
                     OnViewSource="(html) => OpenSourceAsync(html, RightDisplayName)" />
-            </div>
-        }
-        else
-        {
-            <SourceCompare
-                LeftHtml="@_leftResult?.HtmlOutputRaw"
-                RightHtml="@_rightResult?.HtmlOutputRaw"
-                LeftName="@LeftDisplayName"
-                RightName="@RightDisplayName"
-                Mode="_viewMode" />
-        }
+        </div>
 
         @* ── Duel cost summary ─────────────────────────────────────────
            Sums the two sides' API costs once both have a value. Shown above the scorecard so
@@ -169,19 +139,6 @@
                 <span class="arena__cost-total-value">$@DuelTotalCost().ToString("F4")</span>
                 <span class="arena__cost-total-breakdown">(@LeftDisplayName $@FormatCost(_leftResult?.ApiCostUsd) + @RightDisplayName $@FormatCost(_rightResult?.ApiCostUsd))</span>
             </div>
-        }
-
-        @* ── Objective scorecard ──────────────────────────────────────────
-           Placed above the verdict buttons: it is evidence for the vote, not a summary of it. *@
-        @if (BothOutputsPresent())
-        {
-            <OutputScorecard
-                LeftHtml="@_leftResult?.HtmlOutputRaw"
-                RightHtml="@_rightResult?.HtmlOutputRaw"
-                LeftName="@LeftDisplayName"
-                RightName="@RightDisplayName"
-                LeftProbe="_leftProbe"
-                RightProbe="_rightProbe" />
         }
 
         @if (_verdictRecorded)
@@ -339,30 +296,6 @@
                 }
             </div>
 
-            @if (_duel is not null)
-            {
-                <details class="arena__export">
-                    <summary class="arena__export-summary">Export this duel</summary>
-                    <div class="arena__actions arena__actions--secondary">
-                        @if (_verdictRecorded && !_optimistic)
-                        {
-                            <button type="button" class="po-btn po-btn--sm arena__action-btn"
-                                    @onclick="ShareResultAsync">
-                                🖼 Share result
-                            </button>
-                        }
-                        @* Plain anchor rather than a fetch + blob: the endpoint already sets
-                           Content-Disposition, and a same-origin GET carries the BFF session
-                           cookie, so the browser does the whole download without any interop. *@
-                        <a class="po-btn po-btn--sm arena__action-btn"
-                           href="@($"/api/duels/{_duelId}/report")"
-                           download="@($"lab-report-{_duelId}.html")"
-                           title="Download a self-contained HTML lab report for this duel">
-                            ⬇ Lab report
-                        </a>
-                    </div>
-                </details>
-            }
         }
 
         @if (_retryError is not null)
@@ -398,9 +331,6 @@
     private double? _eloShiftRight;
 
     // ── Comparison views ──────────────────────────────────────────────────────
-    private SourceViewMode _viewMode = SourceViewMode.Rendered;
-    private RuntimeProbeReport? _leftProbe;
-    private RuntimeProbeReport? _rightProbe;
 
     // ── Optimistic verdict ────────────────────────────────────────────────────
     // The click flips the UI immediately and the server confirms afterwards. _optimistic marks
@@ -491,7 +421,6 @@
     // numbers without forking the rules.
     private static string FormatCost(double? value) => ArenaFormatting.FormatCost(value);
     private static string FormatElo(double value) => ArenaFormatting.FormatElo(value);
-    private static string ViewLabel(SourceViewMode mode) => ArenaFormatting.ViewLabel(mode);
     private static string? FirstLine(string? reason) => FailureReasonText.FirstLine(reason);
 
     // ── Challenge budget ─────────────────────────────────────────────────────
@@ -523,18 +452,6 @@
 
     private string MeasuredText(DuelResultDto? result) =>
         _duel is null ? string.Empty : ChallengeRules.Format(_duel.ChallengeKind, Measure(result)?.Measured);
-
-    private void OnLeftProbe(RuntimeProbeReport report)
-    {
-        _leftProbe = report;
-        StateHasChanged();
-    }
-
-    private void OnRightProbe(RuntimeProbeReport report)
-    {
-        _rightProbe = report;
-        StateHasChanged();
-    }
 
     // ── Live duel state ───────────────────────────────────────────────────────
     // The streaming half of this page used to be the /processing page. It lives here because a
@@ -920,36 +837,6 @@
         catch (JSException)
         {
             // No Vibration API here — the sound and the visual flip already carry the feedback.
-        }
-    }
-
-    // ── Share card ────────────────────────────────────────────────────────────
-
-    private async Task ShareResultAsync()
-    {
-        if (_duel is null || _winnerModelId is null) return;
-
-        var winnerSide = _winnerModelId == _duel.LeftModelId ? "left" : "right";
-
-        try
-        {
-            await JS.InvokeVoidAsync("renderShareCard", new
-            {
-                kind = "Duel result",
-                prompt = _duel.PromptText,
-                leftName = LeftDisplayName,
-                rightName = RightDisplayName,
-                leftStat = ArenaFormatting.FormatShareStat(_leftResult, _eloShiftLeft),
-                rightStat = ArenaFormatting.FormatShareStat(_rightResult, _eloShiftRight),
-                winner = winnerSide,
-                badge = _verdictSource == VerdictSource.Ai ? "⚖ AI-judged" : "👤 Human-judged",
-                footer = $"{_duel.StartedAt:yyyy-MM-dd} · PoLocalCompare",
-                fileName = $"duel-{_duel.DuelId}",
-            });
-        }
-        catch (JSException)
-        {
-            _retryError = "Could not render the share card in this browser.";
         }
     }
 

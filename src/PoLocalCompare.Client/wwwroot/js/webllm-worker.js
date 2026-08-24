@@ -251,12 +251,27 @@ self.onmessage = async (event) => {
         const REP_WINDOW_CHARS = 200;
         const PREVIEW_MAX_CHARS = 5000;
 
-        // Same HTML-forcing system prompt the Foundry/Ollama proxies use — without it,
-        // small local models answer conversationally ("I'm sorry, but as an AI…") instead
-        // of emitting a page.
+        // Must stay identical to InferencePrompt.System on the server (see
+        // Api/Common/Inference/InferencePrompt.cs) — a duel is only fair if all three runners
+        // brief the model the same way. Bump this worker's ?v= in its callers when it changes.
+        // The HTML-forcing half is load-bearing for small local models, which otherwise answer
+        // conversationally ("I'm sorry, but as an AI…") instead of emitting a page.
         const stream = await engine.chat.completions.create({
             messages: [
-                { role: 'system', content: 'You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS. No markdown, no explanation, no code fences.' },
+                { role: 'system', content: [
+                    'You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS.',
+                    'No markdown, no explanation, no code fences.',
+                    '',
+                    'The page is displayed in a fixed 320x180 pixel frame that cannot scroll.',
+                    'Design for exactly that canvas:',
+                    '- Start the stylesheet with html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}',
+                    '- Every element must fit inside 320x180. Nothing may overflow in either',
+                    '  direction, and no scrollbar may appear.',
+                    '- Scale type and spacing to suit it: small font sizes, tight padding, no large',
+                    '  fixed widths or heights, and no min-width or min-height that exceeds the frame.',
+                    '- Prefer a single screen of content. Drop anything that will not fit rather than',
+                    '  letting it spill.',
+                ].join('\n') },
                 { role: 'user', content: prompt },
             ],
             stream: true,

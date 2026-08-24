@@ -13,24 +13,6 @@
     gap: var(--space-sm);
 }
 
-.prompt-picker__section-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-    margin-bottom: var(--space-sm);
-}
-
-.prompt-picker__section-title {
-    font-size: var(--text-sm);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
-    margin: 0;
-}
-
 .prompt-picker__section-hint {
     font-size: var(--text-xs);
     color: var(--text-dim);
@@ -42,103 +24,6 @@
    the textarea above it. */
 .prompt-picker__disclosure {
     margin-top: var(--space-xs);
-}
-
-.prompt-picker__link {
-    background: none;
-    border: none;
-    padding: var(--space-xs) var(--space-xs);
-    font-size: var(--text-xs);
-    color: var(--text-dim);
-    cursor: pointer;
-    text-decoration: underline;
-}
-
-.prompt-picker__link:hover {
-    color: var(--accent-red);
-}
-
-.prompt-picker__link:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-    border-radius: var(--radius-sm);
-}
-
-/* ── Recent prompts ───────────────────────────────────────────────────────── */
-
-.prompt-picker__recent {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-}
-
-.prompt-picker__recent-item {
-    display: flex;
-    align-items: stretch;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    overflow: hidden;
-    max-width: 100%;
-}
-
-.prompt-picker__recent-item--active {
-    border-color: var(--accent-blue);
-    background: var(--surface-accent);
-}
-
-.prompt-picker__recent-btn {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    min-height: var(--target-min);
-    padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md);
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    min-width: 0;
-}
-
-.prompt-picker__recent-text {
-    font-size: var(--text-sm);
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 26ch;
-}
-
-.prompt-picker__recent-age {
-    font-size: var(--text-2xs);
-    color: var(--text-dim);
-    white-space: nowrap;
-}
-
-.prompt-picker__recent-remove {
-    min-width: var(--target-min);
-    min-height: var(--target-min);
-    padding-inline: var(--space-sm);
-    background: none;
-    border: none;
-    border-left: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-}
-
-.prompt-picker__recent-remove:hover {
-    color: var(--accent-red);
-    background: var(--surface-1);
-}
-
-.prompt-picker__recent-btn:focus-visible,
-.prompt-picker__recent-remove:focus-visible {
-    outline: none;
-    box-shadow: inset var(--focus-ring);
 }
 
 /* ── Category filters ─────────────────────────────────────────────────────── */

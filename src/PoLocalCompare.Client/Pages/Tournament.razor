@@ -154,88 +154,87 @@
         <header class="po-header">
             <h1 class="po-title">Run a tournament</h1>
             <p class="po-subtitle">
-                One prompt, a seeded bracket, every match judged automatically. Remote and
-                Ollama matches run on the server, so you can close this tab and come back to the
-                result. Browser models run in this tab — see the note under the field.
+                Write a prompt and start. Eight models are drawn for you and every match is
+                judged automatically — re-draw if the field is not what you wanted.
             </p>
         </header>
 
-        <section class="po-section" aria-labelledby="tourney-size-heading">
-            <h2 id="tourney-size-heading" class="po-section-title">Bracket size</h2>
-            <div class="tourney__sizes" role="group" aria-label="Bracket size">
-                @foreach (var size in BracketPlanner.SupportedSizes)
-                {
-                    <button type="button"
-                            class="po-btn @(_size == size ? "po-btn--success" : "po-btn--secondary")"
-                            aria-pressed="@(_size == size ? "true" : "false")"
-                            @onclick="() => SetSize(size)">
-                        @SizeLabel(size)
-                    </button>
-                }
-            </div>
-            <p class="po-hint">@SizeHint(_size)</p>
-        </section>
-
         <section class="po-section" aria-labelledby="tourney-field-heading">
             <div class="tourney__section-head">
-                <h2 id="tourney-field-heading" class="po-section-title">
-                    Field — @_selected.Count of @_size chosen
-                </h2>
+                <h2 id="tourney-field-heading" class="po-section-title">The field — 8 models</h2>
                 <p class="po-hint">
-                    Seeded by rating, so the top two seeds can only meet in the final. Remote,
-                    Ollama and browser models can all enter.
+                    Drawn at random from the remote models, then seeded by rating so the top two
+                    seeds can only meet in the final. Quarter-finals, semis and a final — seven duels.
                 </p>
-                @if (_selected.Any(id => _entrants.FirstOrDefault(e => e.ModelId == id)?.ModelType == ModelType.Local))
-                {
-                    <p class="po-hint po-fg--err">
-                        ⚠ Your field includes a browser (WebGPU) model. Those run in this tab, so
-                        leave it open while the bracket is running — closing it stalls that match
-                        until the duel's watchdog fails it and hands the walkover to its opponent.
-                    </p>
-                }
             </div>
 
-            @* The slot reserves height for the entrant list while it loads. Without it this block
-               was one line of status text that became a list of eight rows, and a runtime trace
-               measured the jump at CLS 0.289 on a phone — past the 0.1 "needs improvement" mark,
-               and the only route in the app that shifted at all. Everything below (the prompt
-               box, the Start button) slid down the page as the models arrived. *@
+            @* The slot reserves the field's height while it loads. Without it this block was one
+               line of status text that became a list of eight rows, and a runtime trace measured
+               the jump at CLS 0.289 on a phone — past the 0.1 "needs improvement" mark, and the
+               only route in the app that shifted at all. *@
             <div class="tourney__entrants-slot">
                 @if (_loadingEntrants)
                 {
-                    <p class="po-status">Loading models…</p>
+                    <p class="po-status">Drawing the field…</p>
                 }
-                else if (_entrants.Count < _size)
+                else if (_entrants.Count == 0)
+                {
+                    @* Distinguished from "not enough models" on purpose: a failed request used to
+                       render as "0 models are registered", which is a different problem with a
+                       different fix and sent you looking in the wrong place. *@
+                    <p class="po-error">
+                        Could not reach the model catalog. Check that the app is running and that
+                        you are signed in, then reload.
+                    </p>
+                }
+                else if (_selected.Count < FieldSize)
                 {
                     <p class="po-error">
-                    Only @_entrants.Count model@(_entrants.Count == 1 ? " is" : "s are") registered —
-                    a @SizeLabel(_size).ToLowerInvariant() needs @_size.
+                        Only @_entrants.Count model@(_entrants.Count == 1 ? " is" : "s are") registered —
+                        a bracket needs @FieldSize.
                     </p>
                 }
                 else
                 {
-                <ul class="tourney__entrants">
-                    @foreach (var entrant in _entrants)
-                    {
-                        var index = _selected.IndexOf(entrant.ModelId);
-                        var chosen = index >= 0;
-                        <li @key="entrant.ModelId">
-                            <button type="button"
-                                    class="tourney__entrant @(chosen ? "tourney__entrant--chosen" : "")"
-                                    aria-pressed="@(chosen ? "true" : "false")"
-                                    @onclick="() => ToggleEntrant(entrant.ModelId)">
-                                <span class="tourney__entrant-check" aria-hidden="true">@(chosen ? "✓" : "")</span>
-                                <span class="tourney__entrant-name">@entrant.DisplayName</span>
-                                <span class="po-chip">@ModelTypeGroup.ShortLabel(entrant.ModelType)</span>
-                                <span class="tourney__entrant-elo">@((int)Math.Round(entrant.CurrentElo))</span>
-                            </button>
-                        </li>
-                    }
-                </ul>
+                    @* Mirrored, four a side, converging on the final — the shape a bracket is
+                       normally read in. The flat numbered list it replaced showed the same eight
+                       models but hid the only thing the seeding is *for*: who actually meets whom,
+                       and how far apart the top two seeds are. Pairings come from the same
+                       BracketPlanner the server draws with, so this is the real first round
+                       rather than a picture of one. *@
+                    <div class="tourney__draw" role="group" aria-label="First-round pairings">
+                        <div class="tourney__draw-half">
+                            @foreach (var pair in FirstRoundPairs.Take(2))
+                            {
+                                @RenderPair(pair)
+                            }
+                        </div>
 
-                <button type="button" class="po-btn po-btn--sm po-btn--ghost" @onclick="AutoFillTopSeeds">
-                    ⚡ Fill with the top @_size
-                </button>
+                        <div class="tourney__draw-centre" aria-hidden="true">
+                            <span class="tourney__draw-final">Final</span>
+                        </div>
+
+                        <div class="tourney__draw-half tourney__draw-half--right">
+                            @foreach (var pair in FirstRoundPairs.Skip(2))
+                            {
+                                @RenderPair(pair)
+                            }
+                        </div>
+                    </div>
+
+                    <button type="button" class="po-btn po-btn--sm po-btn--ghost" @onclick="DrawField">
+                        <span aria-hidden="true">↺</span> Re-draw the field
+                    </button>
+
+                    @if (DrawnField.Any(e => e.ModelType != ModelType.Remote))
+                    {
+                        <p class="po-hint po-fg--err">
+                            ⚠ Fewer than @FieldSize remote models are available, so the field was
+                            topped up with local ones. A browser (WebGPU) model runs in this tab —
+                            leave it open while the bracket runs, or that match stalls until the
+                            duel's watchdog fails it.
+                        </p>
+                    }
                 }
             </div>
         </section>
@@ -313,7 +312,13 @@
     [Parameter] public string? TournamentIdText { get; set; }
 
     // ── Draw state ───────────────────────────────────────────────────────────
-    private int _size = 8;
+    /// <summary>
+    /// The only bracket the page offers. The API still accepts 2 (a plain 1v1) — see
+    /// <see cref="BracketPlanner.SupportedSizes"/> — but picking a size was a decision nobody
+    /// wanted to make before writing a prompt, so the page draws a full bracket and gets on
+    /// with it.
+    /// </summary>
+    private const int FieldSize = 8;
     private List<TournamentEntrantDto> _entrants = [];
     private readonly List<ModelId> _selected = [];
     private string _prompt = string.Empty;
@@ -345,16 +350,60 @@
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
-    private bool CanStart => _selected.Count == _size
+    private bool CanStart => _selected.Count == FieldSize
         && _prompt.Trim().Length >= 10
         && !_starting;
 
-    private string StartHint => (_selected.Count == _size, _prompt.Trim().Length >= 10) switch
+    private string StartHint => (_selected.Count == FieldSize, _prompt.Trim().Length >= 10) switch
     {
-        (false, _) => $"Choose {_size - _selected.Count} more model{(_size - _selected.Count == 1 ? "" : "s")}.",
+        (false, _) => "Not enough models registered to fill a bracket.",
         (true, false) => "Write a prompt for the bracket.",
-        _ => $"{_size} models · {_size - 1} duels · judged automatically.",
+        _ => $"{FieldSize} models · {FieldSize - 1} duels · judged automatically.",
     };
+
+    /// <summary>The drawn field, in draw order, resolved back to entrant rows.</summary>
+    private IEnumerable<TournamentEntrantDto> DrawnField =>
+        _selected.Select(id => _entrants.First(e => e.ModelId == id));
+
+    /// <summary>One first-round pairing: the two entrants and their seed numbers.</summary>
+    private sealed record Pairing(
+        int SeedA, TournamentEntrantDto A,
+        int SeedB, TournamentEntrantDto B);
+
+    /// <summary>
+    /// The four first-round matches, in bracket order.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors what <c>CreateTournamentHandler</c> will do on the server: seed the field by
+    /// rating, strongest first, then lay it out through <see cref="BracketPlanner.SeedOrder"/>.
+    /// Reusing the planner rather than hard-coding 1v8/4v5/2v7/3v6 is the point — if the seeding
+    /// convention ever changes, this preview cannot drift away from the bracket it previews.
+    /// </remarks>
+    private IReadOnlyList<Pairing> FirstRoundPairs
+    {
+        get
+        {
+            if (_selected.Count < FieldSize) return [];
+
+            var seeded = DrawnField
+                .OrderByDescending(e => e.CurrentElo)
+                .ThenBy(e => e.DisplayName, StringComparer.Ordinal)
+                .ToList();
+
+            var order = BracketPlanner.SeedOrder(FieldSize);
+            var pairs = new List<Pairing>(FieldSize / 2);
+
+            for (var i = 0; i < order.Count; i += 2)
+            {
+                // SeedOrder is 1-based; the seeded list is 0-based.
+                var seedA = order[i];
+                var seedB = order[i + 1];
+                pairs.Add(new Pairing(seedA, seeded[seedA - 1], seedB, seeded[seedB - 1]));
+            }
+
+            return pairs;
+        }
+    }
 
     private int RoundCount => _tournament is null ? 0 : BracketPlanner.RoundCount(_tournament.Size);
 
@@ -364,12 +413,6 @@
     {
         2 => "1v1",
         _ => $"{size}-model bracket",
-    };
-
-    private static string SizeHint(int size) => size switch
-    {
-        2 => "A single match, run and judged through the same machinery as a full bracket.",
-        _ => "Quarter-finals, semis and a final — seven duels.",
     };
 
     private static string StatusLabel(TournamentDto tournament) => tournament.Status switch
@@ -494,6 +537,7 @@
 
             _entrants = (await entrantsTask)?.ToList() ?? [];
             _recent = (await recentTask)?.ToList() ?? [];
+            DrawField();
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
@@ -505,26 +549,36 @@
         }
     }
 
-    private void SetSize(int size)
-    {
-        _size = size;
-
-        // Trim rather than clear: shrinking from 8 to 4 keeps the first four picks, which is
-        // almost always what someone reducing the size meant.
-        while (_selected.Count > _size) _selected.RemoveAt(_selected.Count - 1);
-    }
-
-    private void ToggleEntrant(ModelId modelId)
-    {
-        if (_selected.Remove(modelId)) return;
-        if (_selected.Count >= _size) return;
-        _selected.Add(modelId);
-    }
-
-    private void AutoFillTopSeeds()
+    /// <summary>Draws eight models at random, preferring remote ones.</summary>
+    /// <remarks>
+    /// Remote first because they are the only type that needs nothing from this machine — no
+    /// GPU, no daemon, no tab left open — so a random draw over them is a bracket that will
+    /// actually finish. Ollama and browser models only top the field up when there are not
+    /// eight remotes to draw from, and the page says so when that happens. Random rather than
+    /// top-eight-by-rating: the seeding already decides who meets whom, so taking the top eight
+    /// every time would just mean the same bracket over and over.
+    /// </remarks>
+    private void DrawField()
     {
         _selected.Clear();
-        _selected.AddRange(_entrants.Take(_size).Select(e => e.ModelId));
+        if (_entrants.Count == 0) return;
+
+        var remote = _entrants.Where(e => e.ModelType == ModelType.Remote).ToList();
+        var rest = _entrants.Where(e => e.ModelType != ModelType.Remote).ToList();
+
+        Shuffle(remote);
+        Shuffle(rest);
+
+        _selected.AddRange(remote.Concat(rest).Take(FieldSize).Select(e => e.ModelId));
+    }
+
+    private static void Shuffle<T>(IList<T> items)
+    {
+        for (var i = items.Count - 1; i > 0; i--)
+        {
+            var j = Random.Shared.Next(i + 1);
+            (items[i], items[j]) = (items[j], items[i]);
+        }
     }
 
     private async Task StartAsync()
@@ -689,6 +743,24 @@
         _pollTimer?.Dispose();
         _pollTimer = null;
     }
+
+    /// <summary>
+    /// One match box: two seeded competitors and the tie that joins them. A local template
+    /// rather than a component because it is markup with no state and is used twice on one page.
+    /// </summary>
+    private RenderFragment RenderPair(Pairing pair) =>
+        @<div class="tourney__draw-match">
+            <div class="tourney__draw-slot">
+                <span class="tourney__draw-seed">@pair.SeedA</span>
+                <span class="tourney__draw-name">@pair.A.DisplayName</span>
+                <span class="tourney__draw-elo">@((int)Math.Round(pair.A.CurrentElo))</span>
+            </div>
+            <div class="tourney__draw-slot">
+                <span class="tourney__draw-seed">@pair.SeedB</span>
+                <span class="tourney__draw-name">@pair.B.DisplayName</span>
+                <span class="tourney__draw-elo">@((int)Math.Round(pair.B.CurrentElo))</span>
+            </div>
+        </div>;
 
     public void Dispose()
     {

@@ -1,7 +1,15 @@
 /* Extracted from a <style> block inside SandboxedViewport.razor — scoped, so these rules
    no longer leak to every component on the page. */
 
+/* --preview-w / --preview-h are the one knob for how big a rendered result is. Both frames
+   read them, so the two Arena panels are always the same size as each other. Fixed pixels
+   rather than a viewport fraction: the frame is a canvas the model's own HTML lays itself out
+   against, so a size that moves with the window would render a different page on every
+   screen. Previously `flex: 1` with a 500px floor, which made each side taller than the
+   viewport and put the verdict below the fold on every duel. */
 .sandboxed-viewport {
+    --preview-w: 320px;
+    --preview-h: 180px;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border);
@@ -9,7 +17,13 @@
     overflow: hidden;
     background: var(--surface-1);
     transition: filter 0.4s ease, opacity 0.4s ease;
-    height: 100%;
+    /* Sized by its contents, and exactly as wide as the frame. It used to be `height: 100%`,
+       which resolves against an auto-height parent and stretched the card well past the
+       320x180 frame inside it — the empty remainder is what the telemetry HUD ended up
+       drawn over. Nothing here should stretch; the frame's fixed box is the whole size. */
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
 }
 
 /* The losing side is marked, not hidden.
@@ -81,7 +95,11 @@
     color: var(--text-muted);
     font-size: var(--text-md);
     font-style: italic;
-    min-height: 200px;
+    /* Matches the frame's box so the panel does not resize when a result arrives. */
+    width: var(--preview-w);
+    height: var(--preview-h);
+    max-width: 100%;
+    margin-inline: auto;
 }
 
 .sandboxed-viewport__diagnostics {
@@ -107,11 +125,18 @@
     opacity: 0.4;
 }
 
+/* A fixed 320x180 card rather than a stretched panel, so both results and the verdict fit
+   in one screen without scrolling. */
 .sandboxed-viewport__frame {
-    width: 100%;
-    flex: 1;
+    /* Block, not the iframe default of inline: an inline replaced element sits on the text
+       baseline and leaves a descender gap under it inside the bordered card. */
+    display: block;
+    flex: 0 0 auto;
+    width: var(--preview-w);
+    height: var(--preview-h);
+    max-width: 100%;
+    margin-inline: auto;
     border: none;
-    min-height: 500px;
     /* Stays white in both themes on purpose: this frame renders a model's own HTML
        document, which brings its own background and assumes a white canvas. */
     background: #fff;

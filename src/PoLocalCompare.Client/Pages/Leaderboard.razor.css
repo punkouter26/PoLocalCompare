@@ -12,26 +12,6 @@
     color: var(--text);
 }
 
-.leaderboard__controls {
-    margin-bottom: var(--space-md);
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-    justify-content: flex-start;
-}
-
-.leaderboard__sort-label {
-    font-size: var(--text-md);
-    color: var(--text-muted);
-    font-weight: 500;
-}
-
-.leaderboard__sort-btn {
-    min-width: 6rem;
-    min-height: 40px;   /* ≥40px touch target on mobile */
-}
-
 /* Layout-only, per the .po-btn convention: the disclosure button has to read as the table
    cell it replaced, not as a button sitting inside one. */
 .leaderboard__row-btn {
@@ -46,37 +26,10 @@
     text-align: start;
 }
 
-.leaderboard__divider {
-    color: var(--border-strong);
-    padding: 0 4px;
-}
-
 .leaderboard__rank { font-size: var(--text-xl); }
 .leaderboard__rank--gold   { filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.7)); }
 .leaderboard__rank--silver { filter: drop-shadow(0 0 4px rgba(180, 180, 180, 0.6)); }
 .leaderboard__rank--bronze { filter: drop-shadow(0 0 4px rgba(180, 100, 40, 0.5)); }
-
-/* Filter checkbox: says what ticking it does, which the old state/action button could not. */
-.leaderboard__filter {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-sm);
-    min-height: var(--target-min);
-    font-size: var(--text-md);
-    color: var(--text-muted);
-    cursor: pointer;
-}
-
-.leaderboard__filter input {
-    width: 1rem;
-    height: 1rem;
-    accent-color: var(--accent-green);
-    cursor: pointer;
-}
-
-.leaderboard__filter:hover {
-    color: var(--text);
-}
 
 .leaderboard__type-badge {
     display: inline-block;
@@ -174,4 +127,11 @@
 
 .leaderboard__ttft {
     font-variant-numeric: tabular-nums;
+}
+
+/* W / L read as figures to compare down the column, so they get tabular figures and sit
+   right-aligned against each other rather than ragged. */
+.leaderboard__record {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
 }

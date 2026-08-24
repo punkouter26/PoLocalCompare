@@ -465,39 +465,3 @@
     border-radius: var(--radius-md);
     animation-delay: var(--stagger, 0ms);
 }
-
-/* ── Challenge budget ───────────────────────────────────────────────────
-   Beside blind mode in the console foot, for the same reason: it changes what Compare does. */
-.home__budget {
-    margin-bottom: var(--space-smd);
-    padding: var(--space-sm) var(--space-smd);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-1);
-}
-
-.home__budget-kinds,
-.home__budget-values {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-xs);
-}
-
-.home__budget-values {
-    margin-top: var(--space-sm);
-}
-
-.home__budget-label {
-    margin-right: var(--space-xs);
-    font-size: var(--text-md);
-    font-weight: 600;
-    color: var(--text);
-}
-
-.home__budget-hint {
-    margin: var(--space-sm) 0 0;
-    font-size: var(--text-sm);
-    line-height: 1.4;
-    color: var(--text-muted);
-}

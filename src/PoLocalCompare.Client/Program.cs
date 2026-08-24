@@ -28,7 +28,6 @@ try
     // ─── Phase 3 client services ─────────────────────────────────────────────────
     builder.Services.AddScoped<AudioService>();
     builder.Services.AddScoped<ThemeService>();
-    builder.Services.AddScoped<PromptHistoryService>();
     builder.Services.AddScoped<FxService>();
     // Scoped, which under a WebAssembly host is one instance for the whole app session: the
     // ticker holds a single lobby SignalR connection that must survive page navigation rather
