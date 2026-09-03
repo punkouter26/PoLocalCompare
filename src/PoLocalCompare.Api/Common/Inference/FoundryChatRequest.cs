@@ -38,16 +38,26 @@ public static class FoundryChatRequest
 
     /// <summary>
     /// Per-deployment, per-route JSON body template cache. The first call to
-    /// <see cref="GetCachedBody"/> serializes the body once with a stable placeholder for the
-    /// user prompt; every later call returns the cached prefix/suffix and only the placeholder
-    /// region is replaced. Cuts the JsonSerializer + Dictionary allocation per duel side —
-    /// the only thing that varies per call is the user prompt itself.
+    /// <see cref="GetCachedBody"/> serializes the body once with stable placeholders for the
+    /// user prompt and the model field; every later call returns the cached prefix/suffix and
+    /// only the placeholder regions are replaced. Cuts the JsonSerializer + Dictionary
+    /// allocation per duel side — the only thing that varies per call is the user prompt.
     /// </summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Prefix, string Suffix)> BodyTemplateCache = new(StringComparer.Ordinal);
 
-    private const string UserPromptSentinel = "\"<<<USER_PROMPT_SENTINEL>>>\"";
-    private const string ModelFieldKey = "\"model\":";
-    private const string ModelFieldSentinel = "\"<<<MODEL_SENTINEL>>>\"";
+    // Placeholders are bare tokens, and the form searched for in the serialized body is
+    // produced by the serializer itself rather than written out by hand. Two things make a
+    // hand-written literal wrong, and the original had both: a token that already carries its
+    // own quotes comes out double-escaped, and STJ's default encoder escapes < and > to
+    // < / >, so "<<<X>>>" never appears literally in the body. Either one makes the
+    // substitution search miss, which is what threw "User-prompt sentinel missing from cached
+    // body template." on every Foundry duel. Serializing the token here means the search
+    // string is escaped exactly the way the body is, whatever the encoder does.
+    private const string UserPromptToken = "<<<USER_PROMPT_SENTINEL>>>";
+    private const string ModelFieldToken = "<<<MODEL_SENTINEL>>>";
+
+    private static readonly string UserPromptTokenJson = JsonSerializer.Serialize(UserPromptToken);
+    private static readonly string ModelFieldTokenJson = JsonSerializer.Serialize(ModelFieldToken);
 
     /// <summary>
     /// Returns the ready-to-send JSON body for a (deployment, route, stream) triple, with
@@ -56,49 +66,63 @@ public static class FoundryChatRequest
     /// <remarks>
     /// The system prompt, max_tokens / max_completion_tokens, stream_options and reasoning
     /// effort are deployment-fixed and live in the cached prefix. Model and user-prompt bytes
-    /// are substituted into the cached suffix region. Model+Route+Stream identity is the cache
-    /// key — wrong-route vs. right-route hits two different entries; the same deployment on
-    /// the same route on different stream shapes does too.
+    /// are substituted into the cached suffix region. Everything that shapes the template is
+    /// in the cache key — route, stream shape, reasoning shape, token budget, temperature and
+    /// the system prompt — so a caller that varies any of them cannot be served another
+    /// caller's body.
     /// </remarks>
     public static string GetCachedBody(
         string deploymentName,
+        string systemPrompt,
         string userPrompt,
         int maxTokens,
         double temperature,
         bool stream,
         bool includeModelField)
     {
-        var cacheKey = $"{deploymentName}|{(includeModelField ? "mi" : "dep")}|{(stream ? "s" : "n")}|{(IsReasoningModel(deploymentName) ? "r" : "c")}";
+        var cacheKey = string.Join(
+            '|',
+            deploymentName,
+            includeModelField ? "mi" : "dep",
+            stream ? "s" : "n",
+            maxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            temperature.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            systemPrompt.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            systemPrompt.GetHashCode(StringComparison.Ordinal).ToString(System.Globalization.CultureInfo.InvariantCulture));
+
         var template = BodyTemplateCache.GetOrAdd(cacheKey, _ =>
         {
-            var sentinel = new { role = "user", content = userPromptSentinelPlaceholder() };
-            var dictionary = Build(deploymentName, sentinel, maxTokens, temperature, stream, includeModelField: includeModelField);
-            // Force the model field to the same sentinel when it is present, so the cached
-            // suffix includes it as a literal token that the substitution replaces cleanly.
+            // Same message shape as the uncached path: a real two-element array with the
+            // system prompt first. Handing Build a single message object instead drops the
+            // system prompt and sends "messages" as an object, which Foundry rejects.
+            var messages = new[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = UserPromptToken },
+            };
+            var dictionary = Build(deploymentName, messages, maxTokens, temperature, stream, includeModelField: includeModelField);
             if (includeModelField)
             {
-                dictionary["model"] = ModelFieldSentinelValue();
+                // Force the model field to a token as well, so the cached suffix carries it as
+                // a literal the per-call substitution replaces cleanly.
+                dictionary["model"] = ModelFieldToken;
             }
+
             var serialized = JsonSerializer.Serialize(dictionary);
-            var idx = serialized.IndexOf(UserPromptSentinel, StringComparison.Ordinal);
+            var idx = serialized.IndexOf(UserPromptTokenJson, StringComparison.Ordinal);
             if (idx < 0) throw new InvalidOperationException("User-prompt sentinel missing from cached body template.");
             var prefix = serialized[..idx];
-            var suffix = serialized[(idx + UserPromptSentinel.Length)..];
+            var suffix = serialized[(idx + UserPromptTokenJson.Length)..];
             return (prefix, suffix);
         });
-        var userJson = JsonSerializer.Serialize(userPrompt);
-        var body = template.Prefix + userJson + template.Suffix;
+
+        var body = template.Prefix + JsonSerializer.Serialize(userPrompt) + template.Suffix;
         if (includeModelField)
         {
-            body = body.Replace(ModelFieldSentinelValue(), JsonSerializer.Serialize(deploymentName));
+            body = body.Replace(ModelFieldTokenJson, JsonSerializer.Serialize(deploymentName), StringComparison.Ordinal);
         }
         return body;
     }
-
-    private static readonly string ModelFieldSentinelCached = ModelFieldSentinelValue();
-    private static string ModelFieldSentinelValue() => ModelFieldSentinel;
-
-    private static string userPromptSentinelPlaceholder() => UserPromptSentinel;
 
     public static bool IsReasoningModel(string? deploymentName)
     {

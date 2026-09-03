@@ -64,12 +64,6 @@ public sealed class FoundryInferenceProxy(
         var deploymentUrl = FoundryChatRequest.DeploymentUrl(endpoint, deploymentName);
         var modelInferenceUrl = FoundryChatRequest.ModelInferenceUrl(endpoint);
 
-        var messages = new[]
-        {
-            new { role = "system", content = InferencePrompt.System },
-            new { role = "user", content = promptFull }
-        };
-
         // Reasoning tokens are drawn from max_completion_tokens before visible output, so a
         // reasoning model still needs headroom above the classic budget — but far less of it
         // now that FoundryChatRequest pins reasoning_effort to minimal. 16,384 existed to
@@ -87,18 +81,16 @@ public sealed class FoundryInferenceProxy(
         // FoundryChatRequest omits the field for them).
         const double GenerationTemperature = 0.2;
 
-        var deploymentRequestBody = FoundryChatRequest.GetCachedBody(
-            deploymentName, promptFull, maxTokens, GenerationTemperature, stream: true, includeModelField: false);
+        // The cached body returns ready-to-send JSON — system prompt, budget and stream shape
+        // baked into a cached prefix/suffix, with only the user prompt (and, on the
+        // model-inference route, the model name) spliced in per call.
+        var deploymentJson = FoundryChatRequest.GetCachedBody(
+            deploymentName, InferencePrompt.System, promptFull, maxTokens, GenerationTemperature,
+            stream: true, includeModelField: false);
 
-        var modelInferenceRequestBody = FoundryChatRequest.GetCachedBody(
-            deploymentName, promptFull, maxTokens, GenerationTemperature, stream: true, includeModelField: true);
-
-        // The cached body returns ready-to-send JSON; the previous Dictionary + JsonSerializer
-        // path allocated a 2 KB Dictionary, a Dictionary enumerator, and a string every duel
-        // side. The new path slices a cached string and reuses it for every call to the same
-        // (deployment, route, stream, reasoning-shape) tuple.
-        var deploymentJson = deploymentRequestBody;
-        var modelInferenceJson = modelInferenceRequestBody;
+        var modelInferenceJson = FoundryChatRequest.GetCachedBody(
+            deploymentName, InferencePrompt.System, promptFull, maxTokens, GenerationTemperature,
+            stream: true, includeModelField: true);
 
         async Task<(HttpResponseMessage? Response, string? TransportError)> SendWithRetryAsync(
             string url,

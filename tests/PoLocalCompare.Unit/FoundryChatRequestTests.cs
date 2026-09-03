@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PoLocalCompare.Api.Common.Inference;
 
 namespace PoLocalCompare.Unit;
@@ -52,5 +53,68 @@ public class FoundryChatRequestTests
 
         Assert.Equal(16_384, body["max_completion_tokens"]);
         Assert.False(body.ContainsKey("temperature"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetCachedBody_ProducesTheSameShapeAsBuild(bool includeModelField)
+    {
+        // The template cache shipped with the sentinel pre-quoted, so the serialized body
+        // carried an *escaped* token the substitution search never matched — every Foundry
+        // duel died on "User-prompt sentinel missing from cached body template." before a
+        // request went out. It also handed Build a single message object, which dropped the
+        // system prompt and made "messages" an object rather than an array. Parsing the body
+        // back catches both: a shape defect cannot hide behind a string compare.
+        const string system = "You are a \"strict\" HTML generator.\nNo prose.";
+        const string user = "Build a stopwatch — \"one screen\", 100ms ticks.\backslash";
+
+        var json = FoundryChatRequest.GetCachedBody(
+            "gpt-5-nano", system, user, 8_192, 0.2, stream: true, includeModelField: includeModelField);
+
+        using var parsed = JsonDocument.Parse(json);
+        var messages = parsed.RootElement.GetProperty("messages");
+        Assert.Equal(JsonValueKind.Array, messages.ValueKind);
+        Assert.Equal(2, messages.GetArrayLength());
+        Assert.Equal("system", messages[0].GetProperty("role").GetString());
+        Assert.Equal(system, messages[0].GetProperty("content").GetString());
+        Assert.Equal("user", messages[1].GetProperty("role").GetString());
+        Assert.Equal(user, messages[1].GetProperty("content").GetString());
+
+        if (includeModelField)
+        {
+            Assert.Equal("gpt-5-nano", parsed.RootElement.GetProperty("model").GetString());
+        }
+        else
+        {
+            Assert.False(parsed.RootElement.TryGetProperty("model", out _));
+        }
+    }
+
+    [Fact]
+    public void GetCachedBody_ReusedTemplate_SwapsOnlyTheUserPrompt()
+    {
+        // Second call for the same deployment is served from the cached prefix/suffix — the
+        // path that matters in production, where every duel after the first hits it.
+        const string system = "system prompt";
+        _ = FoundryChatRequest.GetCachedBody("phi-4", system, "first", 4_096, 0.2, stream: true, includeModelField: false);
+        var second = FoundryChatRequest.GetCachedBody("phi-4", system, "second", 4_096, 0.2, stream: true, includeModelField: false);
+
+        using var parsed = JsonDocument.Parse(second);
+        Assert.Equal(system, parsed.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+        Assert.Equal("second", parsed.RootElement.GetProperty("messages")[1].GetProperty("content").GetString());
+        Assert.Equal(4_096, parsed.RootElement.GetProperty("max_tokens").GetInt32());
+    }
+
+    [Fact]
+    public void GetCachedBody_DifferentSystemPrompts_DoNotShareATemplate()
+    {
+        // The cache key covers everything baked into the prefix; a caller that varies the
+        // system prompt (or the budget) must not be served another caller's body.
+        var a = FoundryChatRequest.GetCachedBody("phi-4", "prompt A", "u", 4_096, 0.2, stream: false, includeModelField: false);
+        var b = FoundryChatRequest.GetCachedBody("phi-4", "prompt B", "u", 4_096, 0.2, stream: false, includeModelField: false);
+
+        Assert.Equal("prompt A", JsonDocument.Parse(a).RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+        Assert.Equal("prompt B", JsonDocument.Parse(b).RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
     }
 }
