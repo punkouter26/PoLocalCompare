@@ -213,7 +213,38 @@ public static class ModelSeeder
             logger.LogInformation("ModelSeeder: Pricing backfill complete — {Count} model(s) updated.", updated);
         if (added > 0)
             logger.LogInformation("ModelSeeder: Catalog reconciled — {Count} new model(s) added.", added);
+
+        // Default price book — fills rows that were added before their retail rate was known
+        // (e.g. the 2026-09-02 catalog expansion shipped with null pricing because the Azure
+        // retail-prices API returned no rows for those meters). Without this, the seeded
+        // flagship would have empty Cost UI everywhere AND win every MaxCost challenge by
+        // default (ChallengeAdjudicator treats unpriced models as zero spend). The price
+        // book is curated manually — see DefaultPriceBook.cs for the table.
+        var defaultBackfilled = DefaultPriceBook.Backfill(
+            await repo.GetAllAsync(),
+            services.GetRequiredService<ILogger<DefaultPriceBookMarker>>());
+        foreach (var model in defaultBackfilled)
+        {
+            try
+            {
+                await repo.UpdateAsync(model);
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 412)
+            {
+                logger.LogInformation(
+                    "ModelSeeder: Lost optimistic-concurrency race backfilling '{DisplayName}' from the default price book — deferred to next startup.",
+                    model.DisplayName);
+            }
+        }
+        if (defaultBackfilled.Count > 0)
+            logger.LogInformation("ModelSeeder: Default price book backfill — {Count} model(s) updated.", defaultBackfilled.Count);
     }
+
+    /// <summary>
+    /// Marker type used as a generic parameter for the seed logger so log scopes from
+    /// <see cref="DefaultPriceBook"/> do not attach to the same category as the seeder.
+    /// </summary>
+    private sealed class DefaultPriceBookMarker;
 
     /// <summary>
     /// Matches a stored row to a seed entry by deployment name (remote / Ollama) or WebLLM

@@ -10,6 +10,14 @@
     <ProjectReference Include="..\PoLocalCompare.Client\PoLocalCompare.Client.csproj" />
   </ItemGroup>
 
+  <!-- SseChatStreamReader is internal on purpose (a helper the proxies own, not a service),
+       but it is also the one piece of inference code with no HTTP of its own — it takes an
+       already-connected response — so it is unit-testable and worth testing. Prefer this over
+       widening the type to public just to reach it from a test. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PoLocalCompare.Unit" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" />
     <PackageReference Include="NUlid" />

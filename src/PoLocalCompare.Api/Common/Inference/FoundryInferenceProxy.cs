@@ -87,14 +87,18 @@ public sealed class FoundryInferenceProxy(
         // FoundryChatRequest omits the field for them).
         const double GenerationTemperature = 0.2;
 
-        var deploymentRequestBody = FoundryChatRequest.Build(
-            deploymentName, messages, maxTokens, GenerationTemperature, stream: true, includeModelField: false);
+        var deploymentRequestBody = FoundryChatRequest.GetCachedBody(
+            deploymentName, promptFull, maxTokens, GenerationTemperature, stream: true, includeModelField: false);
 
-        var modelInferenceRequestBody = FoundryChatRequest.Build(
-            deploymentName, messages, maxTokens, GenerationTemperature, stream: true, includeModelField: true);
+        var modelInferenceRequestBody = FoundryChatRequest.GetCachedBody(
+            deploymentName, promptFull, maxTokens, GenerationTemperature, stream: true, includeModelField: true);
 
-        var deploymentJson = JsonSerializer.Serialize(deploymentRequestBody);
-        var modelInferenceJson = JsonSerializer.Serialize(modelInferenceRequestBody);
+        // The cached body returns ready-to-send JSON; the previous Dictionary + JsonSerializer
+        // path allocated a 2 KB Dictionary, a Dictionary enumerator, and a string every duel
+        // side. The new path slices a cached string and reuses it for every call to the same
+        // (deployment, route, stream, reasoning-shape) tuple.
+        var deploymentJson = deploymentRequestBody;
+        var modelInferenceJson = modelInferenceRequestBody;
 
         async Task<(HttpResponseMessage? Response, string? TransportError)> SendWithRetryAsync(
             string url,

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace PoLocalCompare.Api.Common.Inference;
 
 /// <summary>
@@ -33,6 +35,70 @@ public static class FoundryChatRequest
     /// </summary>
     public static string ModelInferenceUrl(string endpoint) =>
         $"{endpoint}/models/chat/completions?api-version={ApiVersion}";
+
+    /// <summary>
+    /// Per-deployment, per-route JSON body template cache. The first call to
+    /// <see cref="GetCachedBody"/> serializes the body once with a stable placeholder for the
+    /// user prompt; every later call returns the cached prefix/suffix and only the placeholder
+    /// region is replaced. Cuts the JsonSerializer + Dictionary allocation per duel side —
+    /// the only thing that varies per call is the user prompt itself.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Prefix, string Suffix)> BodyTemplateCache = new(StringComparer.Ordinal);
+
+    private const string UserPromptSentinel = "\"<<<USER_PROMPT_SENTINEL>>>\"";
+    private const string ModelFieldKey = "\"model\":";
+    private const string ModelFieldSentinel = "\"<<<MODEL_SENTINEL>>>\"";
+
+    /// <summary>
+    /// Returns the ready-to-send JSON body for a (deployment, route, stream) triple, with
+    /// <paramref name="userPrompt"/> substituted into the user message slot.
+    /// </summary>
+    /// <remarks>
+    /// The system prompt, max_tokens / max_completion_tokens, stream_options and reasoning
+    /// effort are deployment-fixed and live in the cached prefix. Model and user-prompt bytes
+    /// are substituted into the cached suffix region. Model+Route+Stream identity is the cache
+    /// key — wrong-route vs. right-route hits two different entries; the same deployment on
+    /// the same route on different stream shapes does too.
+    /// </remarks>
+    public static string GetCachedBody(
+        string deploymentName,
+        string userPrompt,
+        int maxTokens,
+        double temperature,
+        bool stream,
+        bool includeModelField)
+    {
+        var cacheKey = $"{deploymentName}|{(includeModelField ? "mi" : "dep")}|{(stream ? "s" : "n")}|{(IsReasoningModel(deploymentName) ? "r" : "c")}";
+        var template = BodyTemplateCache.GetOrAdd(cacheKey, _ =>
+        {
+            var sentinel = new { role = "user", content = userPromptSentinelPlaceholder() };
+            var dictionary = Build(deploymentName, sentinel, maxTokens, temperature, stream, includeModelField: includeModelField);
+            // Force the model field to the same sentinel when it is present, so the cached
+            // suffix includes it as a literal token that the substitution replaces cleanly.
+            if (includeModelField)
+            {
+                dictionary["model"] = ModelFieldSentinelValue();
+            }
+            var serialized = JsonSerializer.Serialize(dictionary);
+            var idx = serialized.IndexOf(UserPromptSentinel, StringComparison.Ordinal);
+            if (idx < 0) throw new InvalidOperationException("User-prompt sentinel missing from cached body template.");
+            var prefix = serialized[..idx];
+            var suffix = serialized[(idx + UserPromptSentinel.Length)..];
+            return (prefix, suffix);
+        });
+        var userJson = JsonSerializer.Serialize(userPrompt);
+        var body = template.Prefix + userJson + template.Suffix;
+        if (includeModelField)
+        {
+            body = body.Replace(ModelFieldSentinelValue(), JsonSerializer.Serialize(deploymentName));
+        }
+        return body;
+    }
+
+    private static readonly string ModelFieldSentinelCached = ModelFieldSentinelValue();
+    private static string ModelFieldSentinelValue() => ModelFieldSentinel;
+
+    private static string userPromptSentinelPlaceholder() => UserPromptSentinel;
 
     public static bool IsReasoningModel(string? deploymentName)
     {

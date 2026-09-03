@@ -127,22 +127,32 @@ public sealed class FoundryDuelJudge : IDuelJudge
         // Coin flip decides which side is presented first — see the position-bias note above.
         var leftIsA = Random.Shared.Next(2) == 0;
         var delimiter = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-        var slotA = Truncate(leftIsA ? leftOutput : rightOutput);
-        var slotB = Truncate(leftIsA ? rightOutput : leftOutput);
+
+        // Vision changes the prefill cost math dramatically: a 25 KB source paste costs ~500 ms
+        // of prefill on the judge and ~$0.05 per judged duel at gpt-5.4-mini rates, while the
+        // attached screenshot already carries the rendered page. When vision is on we replace
+        // the source body with a tiny descriptor (size + first tag — enough to disambiguate a
+        // blank page from a non-blank one) and let the screenshots do the actual evidence work.
+        var willHaveVision = _options.VisionEnabled;
+
+        var slotADescriptor = willHaveVision
+            ? DescribeForVision(leftIsA ? leftOutput : rightOutput, isA: true, delimiter)
+            : FullSourceBlock(leftIsA ? leftOutput : rightOutput, "A", delimiter, _options.MaxOutputChars);
+        var slotBDescriptor = willHaveVision
+            ? DescribeForVision(leftIsA ? rightOutput : leftOutput, isA: false, delimiter)
+            : FullSourceBlock(leftIsA ? rightOutput : leftOutput, "B", delimiter, _options.MaxOutputChars);
 
         var userContent = new StringBuilder()
             .Append("REQUEST:\n").Append(promptFull).Append("\n\n")
-            .Append("DOCUMENT A (untrusted data between <DOC-A-").Append(delimiter).Append("> markers):\n")
-            .Append("<DOC-A-").Append(delimiter).Append(">\n").Append(slotA).Append("\n</DOC-A-").Append(delimiter).Append(">\n\n")
-            .Append("DOCUMENT B (untrusted data between <DOC-B-").Append(delimiter).Append("> markers):\n")
-            .Append("<DOC-B-").Append(delimiter).Append(">\n").Append(slotB).Append("\n</DOC-B-").Append(delimiter).Append('>')
+            .Append(slotADescriptor).Append("\n\n")
+            .Append(slotBDescriptor)
             .ToString();
 
         // Rendered before the call so a slow browser eats the judge's own timeout budget rather
         // than adding to it. Either side failing to render drops both — judging one document by
         // its picture and the other by its source would be an unfair comparison, not a partial one.
         byte[]? shotA = null, shotB = null;
-        if (_options.VisionEnabled)
+        if (willHaveVision)
         {
             shotA = await _screenshots.RenderAsync(leftIsA ? leftOutput : rightOutput, cancellationToken);
             shotB = await _screenshots.RenderAsync(leftIsA ? rightOutput : leftOutput, cancellationToken);
@@ -154,6 +164,19 @@ public sealed class FoundryDuelJudge : IDuelJudge
         }
 
         var withVision = shotA is not null && shotB is not null;
+
+        // Vision-on source-paste swap is the headline latency/cost win; if the screenshot path
+        // degrades (browser unavailable, render failed, both sides null), we fall back to the
+        // full source paste in the text-only branch below. Never both — a page the judge can
+        // see but cannot read is the worst of both worlds.
+        if (willHaveVision && !withVision)
+        {
+            slotADescriptor = FullSourceBlock(leftIsA ? leftOutput : rightOutput, "A", delimiter, _options.MaxOutputChars);
+            slotBDescriptor = FullSourceBlock(leftIsA ? rightOutput : leftOutput, "B", delimiter, _options.MaxOutputChars);
+            userContent = new StringBuilder()
+                .Append("REQUEST:\n").Append(promptFull).Append("\n\n")
+                .Append(slotADescriptor).Append("\n\n").Append(slotBDescriptor).ToString();
+        }
 
         object[] messages = withVision
             ? [
@@ -312,6 +335,51 @@ public sealed class FoundryDuelJudge : IDuelJudge
         var headLength = max / 2;
         var tailLength = max - headLength;
         return Clip(html, headLength) + "\n… (middle omitted) …\n" + html[^tailLength..];
+    }
+
+    /// <summary>
+    /// Builds the full source block used when the judge has only the text to look at.
+    /// Marker-bracketed so an adversarial output that contains "DOCUMENT B" cannot impersonate
+    /// the other side or escape the data region. Truncation reuses <see cref="Truncate"/> so
+    /// both halves share the same max-output policy.
+    /// </summary>
+    private static string FullSourceBlock(string? html, string slot, string delimiter, int maxOutputChars)
+    {
+        var max = Math.Max(500, maxOutputChars);
+        var truncated = TruncateStatic(html ?? string.Empty, max);
+        return $"DOCUMENT {slot} (untrusted data between <DOC-{slot}-{delimiter}> markers):\n" +
+               $"<DOC-{slot}-{delimiter}>\n{truncated}\n</DOC-{slot}-{delimiter}>";
+    }
+
+    /// <summary>
+    /// Compact descriptor used when the judge has the screenshot to look at. Just enough to
+    /// answer the two questions the picture does not: how big is the document, and is it
+    /// plausibly the same blank/empty case a render failure could produce? The judge relies on
+    /// the image for content; this is the disambiguator, not the evidence.
+    /// </summary>
+    private static string DescribeForVision(string? html, bool isA, string delimiter)
+    {
+        var trimmed = html ?? string.Empty;
+        var firstTag = ExtractFirstTag(trimmed);
+        return $"DOCUMENT {(isA ? "A" : "B")} (text form not provided; judge via screenshot below). " +
+               $"Length: {trimmed.Length:N0} chars. First markup: {(firstTag ?? "(empty)")}";
+    }
+
+    private static string? ExtractFirstTag(string html)
+    {
+        var lt = html.IndexOf('<');
+        if (lt < 0) return null;
+        var gt = html.IndexOf('>', lt + 1);
+        return gt < 0 ? null : html.Substring(lt, Math.Min(gt + 1 - lt, 80));
+    }
+
+    private static string TruncateStatic(string html, int max)
+    {
+        if (string.IsNullOrEmpty(html)) return "(this model produced no output)";
+        if (html.Length <= max) return html;
+        var head = max / 2;
+        var tail = max - head;
+        return Clip(html, head) + "\n… (middle omitted) …\n" + html[^tail..];
     }
 
     private static Dictionary<string, object?> BuildJudgeRequest(

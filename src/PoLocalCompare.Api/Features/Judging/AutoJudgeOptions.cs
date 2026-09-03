@@ -45,6 +45,19 @@ public sealed class AutoJudgeOptions
     /// </remarks>
     public string Deployment { get; set; } = "gpt-5.4-mini";
 
+    /// <summary>
+    /// Optional override: a cheaper judge used when vision is off. Set to a small, fast model
+    /// (e.g. <c>gpt-4.1-nano</c>) for the source-only path to cut judge cost and latency per
+    /// duel. When null, <see cref="Deployment"/> is used for both branches. The vision path
+    /// always uses <see cref="Deployment"/> because the image-input shape requires a
+    /// vision-capable deployment.
+    /// </summary>
+    public string? TextOnlyDeployment { get; set; }
+
+    /// <summary>Effective deployment given the current vision flag.</summary>
+    public string EffectiveDeployment(bool visionEnabled) =>
+        visionEnabled || string.IsNullOrWhiteSpace(TextOnlyDeployment) ? Deployment : TextOnlyDeployment!;
+
     /// <summary>Ceiling on the judge call itself, so a hung judge cannot pin the duel queue.</summary>
     public int TimeoutSeconds { get; set; } = 30;
 

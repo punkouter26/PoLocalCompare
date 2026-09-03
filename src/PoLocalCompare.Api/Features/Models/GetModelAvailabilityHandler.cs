@@ -24,7 +24,16 @@ public sealed class GetModelAvailabilityHandler(
     IConfiguration configuration,
     IHttpClientFactory httpClientFactory)
 {
+    /// <summary>Per-probe timeout. The whole poll has its own shorter deadline in the endpoint.</summary>
     private const int ProbeTimeoutSeconds = 6;
+
+    /// <summary>
+    /// Caps simultaneous Foundry probes per poll. Foundry is one resource with one rate-limit
+    /// bucket; firing 17 probes at once on a 17-model catalog burns the bucket for everyone
+    /// else in the process. 8 is small enough to stay well under any tier limit and large enough
+    /// to keep the wall-clock under 1.5 s for a healthy resource.
+    /// </summary>
+    private const int MaxConcurrentProbes = 8;
 
     public async Task<IReadOnlyList<ModelAvailabilityDto>> HandleAsync(CancellationToken ct = default)
     {
@@ -34,8 +43,30 @@ public sealed class GetModelAvailabilityHandler(
         var foundry = new FoundryProbeContext(
             configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/'),
             configuration["AzureAiFoundry:ApiKey"],
-            httpClientFactory.CreateClient("Foundry"));
+            httpClientFactory.CreateClient("Foundry"),
+            new SemaphoreSlim(MaxConcurrentProbes, MaxConcurrentProbes));
 
+        // Hoisted probe-body strings — the deployment-route and model-inference-route bodies
+        // are identical across every model (same probe prompt, same budget, same fields).
+        // Building them once instead of JsonSerializer.Serialize'ing per model removes an
+        // allocation per model per poll: 17 saves per call, every refresh.
+        var probeMessages = new[] { new { role = "user", content = "Say OK." } };
+        // Reasoning models (gpt-5*, o-series) reject max_tokens/temperature with HTTP 400, and
+        // reasoning tokens count against the budget. Probe a representative model to learn the
+        // shape — Foundry is single-shape today; revisit if/when reasoning probes start
+        // diverging per deployment.
+        var representativeDeployment = models.FirstOrDefault(m => m.ModelType != ModelType.Local && m.ModelType != ModelType.LocalService)
+            ?.ApiEndpointRef;
+        var (deploymentBody, inferenceBody) = string.IsNullOrWhiteSpace(representativeDeployment)
+            ? (null, null)
+            : (JsonSerializer.Serialize(FoundryChatRequest.Build(representativeDeployment, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: false)),
+               JsonSerializer.Serialize(FoundryChatRequest.Build(representativeDeployment, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: true)));
+
+        foundry.DeploymentProbeBody = deploymentBody;
+        foundry.InferenceProbeBody = inferenceBody;
+
+        // Task.WhenAll already runs the per-model checks concurrently; the semaphore inside
+        // each Foundry probe prevents the catalog from saturating the HTTP pool.
         return await Task.WhenAll(models.Select(model => CheckAsync(model, ollama, foundry, ct)));
     }
 
@@ -63,20 +94,41 @@ public sealed class GetModelAvailabilityHandler(
 
     // ── Foundry ───────────────────────────────────────────────────────────────
 
-    private sealed record FoundryProbeContext(string? Endpoint, string? ApiKey, HttpClient Client);
+    /// <summary>Open connections to Foundry, throttled per probe to honour rate limits.</summary>
+    private sealed record FoundryProbeContext(string? Endpoint, string? ApiKey, HttpClient Client, SemaphoreSlim Throttle)
+    {
+        /// <summary>Identical probe body for the deployment route, reused across every model.</summary>
+        public string? DeploymentProbeBody { get; set; }
+
+        /// <summary>Identical probe body for the model-inference route, reused across every model.</summary>
+        public string? InferenceProbeBody { get; set; }
+    }
 
     private static async Task<(HttpStatusCode StatusCode, string Body)> SendProbeAsync(
-        HttpClient client, string url, string apiKey, string body, CancellationToken ct)
+        HttpClient client,
+        string url,
+        string apiKey,
+        string body,
+        SemaphoreSlim throttle,
+        CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("api-key", apiKey);
-        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        await throttle.WaitAsync(ct);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("api-key", apiKey);
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(ProbeTimeoutSeconds));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(ProbeTimeoutSeconds));
 
-        var response = await client.SendAsync(request, cts.Token);
-        return (response.StatusCode, await response.Content.ReadAsStringAsync(cts.Token));
+            var response = await client.SendAsync(request, cts.Token);
+            return (response.StatusCode, await response.Content.ReadAsStringAsync(cts.Token));
+        }
+        finally
+        {
+            throttle.Release();
+        }
     }
 
     // ── Per-model dispatch ────────────────────────────────────────────────────
@@ -117,20 +169,17 @@ public sealed class GetModelAvailabilityHandler(
             return Unavailable(model, "ApiEndpointRef is empty.");
 
         var deploymentName = model.ApiEndpointRef;
-        var probeMessages = new[] { new { role = "user", content = "Say OK." } };
 
-        // Reasoning models (gpt-5*, o-series) reject max_tokens/temperature with HTTP 400.
-        // Reasoning tokens count against the budget, so probe with enough headroom to return a token.
-        var deploymentBody = JsonSerializer.Serialize(FoundryChatRequest.Build(
-            deploymentName, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: false));
-        var inferenceBody = JsonSerializer.Serialize(FoundryChatRequest.Build(
-            deploymentName, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: true));
+        // Empty body strings are the "no remote models in this poll" signal — every probe
+        // is short-circuited as Unavailable, with the same diagnostic as the missing endpoint.
+        if (string.IsNullOrWhiteSpace(foundry.DeploymentProbeBody) || string.IsNullOrWhiteSpace(foundry.InferenceProbeBody))
+            return Unavailable(model, "AzureAiFoundry endpoint or API key is missing.");
 
         try
         {
             var (deploymentStatus, _) = await SendProbeAsync(
                 foundry.Client, FoundryChatRequest.DeploymentUrl(foundry.Endpoint, deploymentName),
-                foundry.ApiKey, deploymentBody, ct);
+                foundry.ApiKey, foundry.DeploymentProbeBody, foundry.Throttle, ct);
 
             if ((int)deploymentStatus is >= 200 and < 300)
                 return Available(model);
@@ -141,7 +190,7 @@ public sealed class GetModelAvailabilityHandler(
             {
                 var (inferenceStatus, _) = await SendProbeAsync(
                     foundry.Client, FoundryChatRequest.ModelInferenceUrl(foundry.Endpoint),
-                    foundry.ApiKey, inferenceBody, ct);
+                    foundry.ApiKey, foundry.InferenceProbeBody, foundry.Throttle, ct);
 
                 if ((int)inferenceStatus is >= 200 and < 300)
                     return Available(model);

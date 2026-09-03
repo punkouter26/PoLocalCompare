@@ -65,51 +65,64 @@ internal static class SseChatStreamReader
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
-            // Reuse one rented buffer across frames. Largest frame we've seen in production is
-            // ~10 KB; 32 KB is comfortable headroom. Larger frames grow the array once.
+            // Reuse one buffer across frames. Largest frame we've seen in production is
+            // ~10 KB; 32 KB is comfortable headroom. Larger frames grow the array.
             var buffer = new byte[32 * 1024];
 
-            int frameStart = 0;
-            int frameEnd = 0;
+            // Bytes in [scanPos, writePos) have arrived but are not yet parsed: a read appends
+            // at writePos, the scanner advances scanPos past each complete line, and whatever
+            // partial line is left gets compacted back to index 0 before the next read.
+            //
+            // Both counters have to move. An earlier version reset the scan to 0 after every
+            // read and never advanced the compaction cursor, so each read re-parsed every frame
+            // already seen — duplicating output — and never freed buffer space, which meant a
+            // response longer than the buffer ended up reading into a zero-length destination
+            // and stopping silently at 32 KB as if the stream had reached EOF.
+            int scanPos = 0;
             int writePos = 0;
 
-            while (!cancellationToken.IsCancellationRequested)
+            while (true)
             {
+                // Throw rather than exit the loop quietly. Cancellation here is the duel
+                // watchdog or a user abort, and falling out of the loop would land on the
+                // empty-output path below and report a timeout as "Inference completed without
+                // output" — a model failure, attributed to the wrong thing.
+                cancellationToken.ThrowIfCancellationRequested();
+
                 // Compact: discard already-parsed bytes.
-                if (frameStart > 0)
+                if (scanPos > 0)
                 {
-                    var remaining = frameEnd - frameStart;
+                    var remaining = writePos - scanPos;
                     if (remaining > 0)
-                        Buffer.BlockCopy(buffer, frameStart, buffer, 0, remaining);
-                    frameStart = 0;
-                    frameEnd = remaining;
+                        Buffer.BlockCopy(buffer, scanPos, buffer, 0, remaining);
+                    scanPos = 0;
                     writePos = remaining;
                 }
+
+                // A single frame larger than the whole buffer leaves nowhere to read into, and
+                // a zero-length read is indistinguishable from EOF. Grow instead of truncating.
+                if (writePos == buffer.Length)
+                    Array.Resize(ref buffer, buffer.Length * 2);
 
                 var read = await stream.ReadAsync(buffer.AsMemory(writePos), cancellationToken);
                 if (read == 0) break; // EOF
                 writePos += read;
 
-                frameEnd = 0;
                 while (true)
                 {
-                    var nl = IndexOfByte(buffer, (byte)'\n', frameEnd, writePos);
-                    if (nl < 0)
-                    {
-                        frameEnd = writePos;
-                        break;
-                    }
+                    var nl = IndexOfByte(buffer, (byte)'\n', scanPos, writePos);
+                    if (nl < 0) break; // partial line — wait for the rest of it
 
-                    var lineEnd = nl > frameEnd && buffer[nl - 1] == (byte)'\r' ? nl - 1 : nl;
-                    var lineLen = lineEnd - frameEnd;
+                    var lineEnd = nl > scanPos && buffer[nl - 1] == (byte)'\r' ? nl - 1 : nl;
+                    var lineLen = lineEnd - scanPos;
 
-                    if (lineLen > 0 && StartsWithDataPrefix(buffer, frameEnd, lineLen))
+                    if (lineLen > 0 && StartsWithDataPrefix(buffer, scanPos, lineLen))
                     {
-                        var payloadStart = frameEnd + 6;
+                        var payloadStart = scanPos + 6;
                         var payloadLen = lineLen - 6;
                         if (payloadLen == 6 && IsDoneMarker(buffer, payloadStart))
                         {
-                            frameEnd = nl + 1;
+                            scanPos = nl + 1;
                             goto endOfStream;
                         }
 
@@ -119,7 +132,7 @@ internal static class SseChatStreamReader
                             state, sw);
                     }
 
-                    frameEnd = nl + 1;
+                    scanPos = nl + 1;
                 }
             }
         endOfStream:;
@@ -243,30 +256,56 @@ internal static class SseChatStreamReader
         {
             var reader = new Utf8JsonReader(payload);
             // Look for { "choices": [ { "delta": { "content": "..." } } ] } in a single pass:
-            // we walk the property names, skip past `choices`, then read into `delta`, then read
-            // `content`. Anything else is irrelevant.
-            var state = 0; // 0 = before choices, 1 = inside choices, 2 = inside delta, 3 = content read
-            while (state < 3 && reader.Read())
+            // walk to `choices`, then into the first element's `delta`, then read `content`.
+            //
+            // Both containers are tracked by their own depth rather than by a flat scan of
+            // property names. A frame carries sibling objects at the same level as `delta`
+            // (`content_filter_results`, `logprobs`, and whatever a provider adds next), so a
+            // bare name match can land on the wrong `content`; and only the `choices` array's
+            // own EndArray means "no delta here", not a nested one. An earlier version tracked
+            // this with an int state that nothing ever advanced past `choices` — the content
+            // branch was unreachable, so every delta read as null and every remote duel
+            // finished with empty output and no error.
+            var choicesDepth = -1;
+
+            while (reader.Read())
             {
-                if (reader.TokenType == JsonTokenType.PropertyName)
+                if (choicesDepth >= 0
+                    && reader.TokenType == JsonTokenType.EndArray
+                    && reader.CurrentDepth == choicesDepth)
                 {
-                    if (reader.ValueSpan.SequenceEqual("choices"u8)) state = 1;
-                    else if (state == 2 && reader.ValueSpan.SequenceEqual("content"u8))
-                    {
-                        // Advance past content to the string token.
-                        if (!reader.Read()) return null;
-                        if (reader.TokenType == JsonTokenType.String)
-                        {
-                            var s = reader.GetString();
-                            state = 3;
-                            return s;
-                        }
-                        return null;
-                    }
+                    // Past choices without ever finding a delta — keep-alive or terminal frame.
+                    return null;
                 }
-                else if (reader.TokenType == JsonTokenType.EndArray && state == 1)
+
+                if (reader.TokenType != JsonTokenType.PropertyName) continue;
+
+                if (choicesDepth < 0 && reader.ValueSpan.SequenceEqual("choices"u8))
                 {
-                    // Past choices without ever finding a delta.content — keep-alive or role frame.
+                    if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray) return null;
+                    choicesDepth = reader.CurrentDepth;
+                }
+                else if (choicesDepth >= 0 && reader.ValueSpan.SequenceEqual("delta"u8))
+                {
+                    if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return null;
+                    var deltaDepth = reader.CurrentDepth;
+
+                    while (reader.Read())
+                    {
+                        // Role-only delta, a refusal, or a terminal `"delta":{}`: no visible token.
+                        if (reader.TokenType == JsonTokenType.EndObject && reader.CurrentDepth == deltaDepth)
+                            return null;
+
+                        if (reader.TokenType == JsonTokenType.PropertyName
+                            && reader.CurrentDepth == deltaDepth + 1
+                            && reader.ValueSpan.SequenceEqual("content"u8))
+                        {
+                            // Advance past content to the string token.
+                            if (!reader.Read()) return null;
+                            return reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+                        }
+                    }
+
                     return null;
                 }
             }
@@ -282,6 +321,16 @@ internal static class SseChatStreamReader
     /// Reads <c>finish_reason</c>, <c>usage.prompt_tokens</c>, <c>usage.completion_tokens</c>,
     /// and <c>usage.completion_tokens_details.reasoning_tokens</c> from a terminal frame.
     /// </summary>
+    /// <remarks>
+    /// Depth-anchored for the same reason as <see cref="TryReadContentDelta"/>. Walking the
+    /// token stream flat looks equivalent and is not: the terminal frame's <c>choices[0]</c>
+    /// opens with <c>"content_filter_results":{}</c>, and a scan that stops at the first
+    /// EndObject it sees stops on *that* one — before ever reaching <c>finish_reason</c>. The
+    /// usage frame fails the mirror way, its empty <c>choices</c> array letting the scan run on
+    /// and swallow the <c>usage</c> object it was looking for. Both left every duel with a null
+    /// finish reason and no provider token counts, which is invisible until something downstream
+    /// (WasTruncated, cost, tok/s) quietly reads zero.
+    /// </remarks>
     private static void TryReadTerminalMetadata(
         ReadOnlySpan<byte> payload,
         FrameState state)
@@ -289,78 +338,94 @@ internal static class SseChatStreamReader
         try
         {
             var reader = new Utf8JsonReader(payload);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return;
+            var rootDepth = reader.CurrentDepth;
+
             while (reader.Read())
             {
-                if (reader.TokenType != JsonTokenType.PropertyName) continue;
-                var name = reader.GetString();
+                if (reader.TokenType == JsonTokenType.EndObject && reader.CurrentDepth == rootDepth)
+                    return;
 
-                switch (name)
+                // Only the frame's own top-level keys are interesting; the depth check is what
+                // keeps a nested `usage` or `choices` from being mistaken for the real one.
+                if (reader.TokenType != JsonTokenType.PropertyName || reader.CurrentDepth != rootDepth + 1)
+                    continue;
+
+                if (reader.ValueSpan.SequenceEqual("choices"u8))
                 {
-                    case "choices":
-                        // Look for finish_reason inside choices[0].
-                        if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
-                        {
-                            reader.Skip();
-                            break;
-                        }
-                        if (!reader.Read()) return;
-                        while (reader.TokenType != JsonTokenType.EndObject && reader.Read())
-                        {
-                            if (reader.TokenType == JsonTokenType.PropertyName &&
-                                reader.ValueSpan.SequenceEqual("finish_reason"u8) &&
-                                reader.Read() && reader.TokenType == JsonTokenType.String)
-                            {
-                                state.FinishReason = reader.GetString();
-                            }
-                        }
-                        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray) reader.Skip();
-                        break;
-
-                    case "usage":
-                        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) { reader.Skip(); break; }
-                        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
-                        {
-                            if (reader.TokenType != JsonTokenType.PropertyName) continue;
-                            var usageName = reader.GetString();
-                            switch (usageName)
-                            {
-                                case "prompt_tokens":
-                                    if (reader.Read() && reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var pt))
-                                        state.ProviderPromptTokens = pt;
-                                    break;
-                                case "completion_tokens":
-                                    if (reader.Read() && reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var ct))
-                                        state.ProviderCompletionTokens = ct;
-                                    break;
-                                case "completion_tokens_details":
-                                    if (!reader.Read()) return;
-                                    while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
-                                    {
-                                        if (reader.TokenType == JsonTokenType.PropertyName &&
-                                            reader.ValueSpan.SequenceEqual("reasoning_tokens"u8) &&
-                                            reader.Read() && reader.TokenType == JsonTokenType.Number &&
-                                            reader.TryGetInt32(out var rt))
-                                        {
-                                            state.ProviderReasoningTokens = rt;
-                                        }
-                                    }
-                                    break;
-                                default:
-                                    reader.Skip();
-                                    break;
-                            }
-                        }
-                        break;
-
-                    default:
-                        reader.Skip();
-                        break;
+                    if (!reader.Read()) return;
+                    if (reader.TokenType == JsonTokenType.StartArray) ReadFinishReason(ref reader, state);
+                }
+                else if (reader.ValueSpan.SequenceEqual("usage"u8))
+                {
+                    // `"usage":null` on every non-terminal frame — only the object form counts.
+                    if (!reader.Read()) return;
+                    if (reader.TokenType == JsonTokenType.StartObject) ReadUsage(ref reader, state);
                 }
             }
         }
         catch (JsonException)
         {
             // Malformed frame — skip it, the stream is still good.
+        }
+    }
+
+    /// <summary>Reads <c>choices[].finish_reason</c>; the reader starts on the array's StartArray.</summary>
+    private static void ReadFinishReason(ref Utf8JsonReader reader, FrameState state)
+    {
+        var arrayDepth = reader.CurrentDepth;
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray && reader.CurrentDepth == arrayDepth)
+                return;
+
+            // Depth + 2 is an element's own key: choices[N] sits one level in, its keys another.
+            if (reader.TokenType == JsonTokenType.PropertyName
+                && reader.CurrentDepth == arrayDepth + 2
+                && reader.ValueSpan.SequenceEqual("finish_reason"u8))
+            {
+                if (!reader.Read()) return;
+                if (reader.TokenType == JsonTokenType.String) state.FinishReason = reader.GetString();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>prompt_tokens</c>, <c>completion_tokens</c> and
+    /// <c>completion_tokens_details.reasoning_tokens</c>; the reader starts on usage's StartObject.
+    /// </summary>
+    private static void ReadUsage(ref Utf8JsonReader reader, FrameState state)
+    {
+        var usageDepth = reader.CurrentDepth;
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject && reader.CurrentDepth == usageDepth)
+                return;
+
+            if (reader.TokenType != JsonTokenType.PropertyName) continue;
+
+            if (reader.CurrentDepth == usageDepth + 1)
+            {
+                if (reader.ValueSpan.SequenceEqual("prompt_tokens"u8))
+                {
+                    if (reader.Read() && reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var pt))
+                        state.ProviderPromptTokens = pt;
+                }
+                else if (reader.ValueSpan.SequenceEqual("completion_tokens"u8))
+                {
+                    if (reader.Read() && reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var ct))
+                        state.ProviderCompletionTokens = ct;
+                }
+            }
+            // One level deeper: inside completion_tokens_details.
+            else if (reader.CurrentDepth == usageDepth + 2
+                     && reader.ValueSpan.SequenceEqual("reasoning_tokens"u8))
+            {
+                if (reader.Read() && reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var rt))
+                    state.ProviderReasoningTokens = rt;
+            }
         }
     }
 
