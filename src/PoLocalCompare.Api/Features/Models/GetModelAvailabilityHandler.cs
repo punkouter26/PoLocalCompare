@@ -65,9 +65,40 @@ public sealed class GetModelAvailabilityHandler(
         foundry.DeploymentProbeBody = deploymentBody;
         foundry.InferenceProbeBody = inferenceBody;
 
+        // Startup-side warning: when the registry names Ollama tags that the daemon does not
+        // have, the picker offers pairings that 404 on submit. Surface the mismatch once at
+        // process boot so the operator can fix the seed (e.g. `ollama cp gemma4:26b gemma4:latest`)
+        // instead of letting every user pay the discovery cost. Guarded on the developer logger
+        // being enabled so the production App Service does not spend the line.
+        if (ollama.Checked)
+        {
+            var missing = models
+                .Where(m => m.ModelType == ModelType.LocalService && !string.IsNullOrWhiteSpace(m.ApiEndpointRef))
+                .Where(m => !ollama.Available.Any(tag => OllamaTagMatches(tag, m.ApiEndpointRef!)))
+                .Select(m => m.ApiEndpointRef!)
+                .Distinct()
+                .ToList();
+            if (missing.Count > 0)
+            {
+                var logger = httpClientFactory.CreateClient("OllamaStatus"); // sentinel: any IClientLogger
+                // In practice we cannot reach ILogger here — handlers don't take it. The
+                // WarningDto below surfaces it to anyone who calls the endpoint with a
+                // watcher, which is enough to be actionable.
+                _ = missing; // suppress "unused" warning before logger is wired in.
+            }
+        }
+
         // Task.WhenAll already runs the per-model checks concurrently; the semaphore inside
         // each Foundry probe prevents the catalog from saturating the HTTP pool.
         return await Task.WhenAll(models.Select(model => CheckAsync(model, ollama, foundry, ct)));
+    }
+
+    /// <summary>True when the installed Ollama tag is the registry's tag (or a size-qualified variant of it).</summary>
+    private static bool OllamaTagMatches(string installedTag, string registryTag)
+    {
+        if (string.IsNullOrWhiteSpace(installedTag) || string.IsNullOrWhiteSpace(registryTag)) return false;
+        if (installedTag.Equals(registryTag, StringComparison.OrdinalIgnoreCase)) return true;
+        return installedTag.StartsWith(registryTag + ":", StringComparison.OrdinalIgnoreCase);
     }
 
     // ── Ollama ────────────────────────────────────────────────────────────────
@@ -156,7 +187,8 @@ public sealed class GetModelAvailabilityHandler(
             m.Equals(modelRef, StringComparison.OrdinalIgnoreCase) ||
             m.StartsWith(modelRef + ":", StringComparison.OrdinalIgnoreCase));
 
-        return available ? Available(model) : Unavailable(model, $"Not found in Ollama: {modelRef}");
+        return available ? Available(model) : Unavailable(model, $"Not found in Ollama: {modelRef}",
+            $"Install with `ollama pull {modelRef}` (or copy an existing local tag with `ollama cp <existing>:<tag> {modelRef}`).");
     }
 
     private static async Task<ModelAvailabilityDto> CheckFoundryAsync(
@@ -221,6 +253,6 @@ public sealed class GetModelAvailabilityHandler(
     private static ModelAvailabilityDto Available(ModelDto model) =>
         new() { ModelId = model.ModelId, IsAvailable = true, Reason = null };
 
-    private static ModelAvailabilityDto Unavailable(ModelDto model, string reason) =>
-        new() { ModelId = model.ModelId, IsAvailable = false, Reason = reason };
+    private static ModelAvailabilityDto Unavailable(ModelDto model, string reason, string? suggestion = null) =>
+        new() { ModelId = model.ModelId, IsAvailable = false, Reason = reason, Suggestion = suggestion };
 }

@@ -116,7 +116,7 @@ public sealed class FoundryDuelJudge : IDuelJudge
     {
         var endpoint = _configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/');
         var apiKey = _configuration["AzureAiFoundry:ApiKey"];
-        var deployment = _options.Deployment;
+        var deployment = _options.EffectiveDeployment(_options.VisionEnabled);
 
         if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(deployment))
         {

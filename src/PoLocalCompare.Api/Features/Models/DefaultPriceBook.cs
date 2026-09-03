@@ -43,7 +43,7 @@ public static class DefaultPriceBook
 
         // Microsoft first-party
         ("phi-4",              new Rate(0.125m,  0.50m)),
-        ("phi-4-mini",         new Rate(0.075m,  0.30m)),
+        ("phi-4-mini-instruct",new Rate(0.075m,  0.30m)),
 
         // Meta on Azure
         ("llama-3.3-70b",      new Rate(0.71m,   0.71m)),
@@ -81,28 +81,32 @@ public static class DefaultPriceBook
     }
 
     /// <summary>
-    /// Backfills null prices on the supplied model list and returns the rows that actually
-    /// changed. Logs each substitution through the supplied logger so an operator running with
-    /// the seed can see exactly which entries were filled by the price book rather than the
-    /// Azure retail API.
+    /// Reconciles the supplied model list against the price book and returns the rows that
+    /// should be re-saved. Two cases write back:
+    /// <list type="bullet">
+    ///   <item><description>The row has null pricing — fill it from the price book (the original behaviour).</description></item>
+    ///   <item><description>The price book has a rate that differs from the stored one — operator updated the table, refresh.</description></item>
+    /// </list>
+    /// Logs every substitution. Rate rows the price book does not recognise are left alone.
     /// </summary>
     public static IReadOnlyList<Model> Backfill(IEnumerable<Model> models, ILogger logger)
     {
         var updated = new List<Model>();
         foreach (var model in models)
         {
-            if (model.InputTokenPricePerMillion.HasValue && model.OutputTokenPricePerMillion.HasValue)
-                continue;
-
             var rate = Resolve(model.ApiEndpointRef);
             if (rate is null) continue;
+
+            var storedIn = model.InputTokenPricePerMillion;
+            var storedOut = model.OutputTokenPricePerMillion;
+            if (storedIn == rate.InputPerMillion && storedOut == rate.OutputPerMillion) continue;
 
             var patched = model.WithPricing(rate.InputPerMillion, rate.OutputPerMillion);
             updated.Add(patched);
             logger.LogInformation(
-                "Backfilled pricing for {Model} ({Endpoint}): ${Input}/M in, ${Output}/M out (from default price book).",
+                "Pricing reconciled for {Model} ({Endpoint}): ${OldIn}/M → ${NewIn}/M in, ${OldOut}/M → ${NewOut}/M out (default price book).",
                 model.DisplayName, model.ApiEndpointRef,
-                rate.InputPerMillion, rate.OutputPerMillion);
+                storedIn, rate.InputPerMillion, storedOut, rate.OutputPerMillion);
         }
         return updated;
     }

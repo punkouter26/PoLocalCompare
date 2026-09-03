@@ -59,7 +59,13 @@ public sealed class OllamaInferenceProxy(
             // rating, so reproducibility is worth more here than in a typical app. Keeping the
             // two proxies on the same value also means a remote-vs-Ollama duel is not quietly
             // comparing two different decoding settings.
-            temperature = 0.2
+            temperature = 0.2,
+            // Pin the model in memory for an hour across requests. The Ollama default is 5 min,
+            // which sounds generous until a tournament's first round loads a 17 GB model for
+            // 30 s, runs inference, and gets unloaded before round two — paying the 30 s load
+            // tax again. One hour covers every realistic tournament bracket; longer sessions
+            // also win, at the cost of more VRAM held.
+            keep_alive = "1h"
         };
 
         var json = JsonSerializer.Serialize(requestBody);

@@ -23,6 +23,17 @@ namespace PoLocalCompare.Api.Common.Inference;
 /// so the app cannot reach inside it to suppress scrollbars — the only way a result fits
 /// without them is for the model to have been told the canvas size up front.
 /// </para>
+///
+/// <para>
+/// <b>This string is now <c>const</c> on purpose.</b> Azure AI Foundry (and every other
+/// vendor that exposes an OpenAI-compatible chat endpoint) keys prompt-cache hits on prefix
+/// equality — a chat call whose first N tokens match a cached call gets to skip the prefill on
+/// them. The system prompt is the prefix that varies the least in this app (it is byte-equal
+/// across every duel side), so a stable system prompt is the foundation of the cache working
+/// at all. Keeping the whole string in one place and <c>const</c>-folding it guarantees the
+/// compiler cannot emit a divergent copy under any code path. Edit with care: a whitespace
+/// change here invalidates the cache for every cached call.
+/// </para>
 /// </remarks>
 public static class InferencePrompt
 {
@@ -33,25 +44,19 @@ public static class InferencePrompt
     public const int PreviewHeight = 180;
 
     /// <summary>
-    /// Not <c>const</c>: it interpolates the two size constants above so the numbers live in
-    /// one place, and C# will not fold an <c>int</c> into a compile-time string.
+    /// Compile-time constant so the JIT can fold it into the cached body and the string
+    /// reference is byte-identical across every call. Changing this string requires bumping
+    /// the <c>?v=</c> cache-buster on the worker copy in <c>webllm-worker.js</c> as well.
     /// </summary>
-    /// <summary>
-    /// Not <c>const</c>: it interpolates the two size constants above so the numbers live in
-    /// one place, and C# will not fold an <c>int</c> into a compile-time string. The <c>$$</c>
-    /// raw-string prefix makes <c>{{ }}</c> the interpolation delimiter, which leaves the CSS
-    /// braces below as literal text.
-    /// </summary>
-    public static readonly string System =
-        $$"""
+    public const string System = """
         You are an expert HTML/CSS coder. Return only valid HTML5 with inline CSS.
         No markdown, no explanation, no code fences.
 
-        The page is displayed in a fixed {{PreviewWidth}}x{{PreviewHeight}} pixel frame that
-        cannot scroll. Design for exactly that canvas:
+        The page is displayed in a fixed 320x180 pixel frame that cannot scroll. Design for
+        exactly that canvas:
         - Start the stylesheet with html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
-        - Every element must fit inside {{PreviewWidth}}x{{PreviewHeight}}. Nothing may overflow
-          in either direction, and no scrollbar may appear.
+        - Every element must fit inside 320x180. Nothing may overflow in either direction,
+          and no scrollbar may appear.
         - Scale type and spacing to suit it: small font sizes, tight padding, no large fixed
           widths or heights, and no min-width or min-height that exceeds the frame.
         - Prefer a single screen of content. Drop anything that will not fit rather than
