@@ -34,7 +34,7 @@ public sealed class ArenaUiTests : UiTestBase
 
     [Theory]
     [MemberData(nameof(Viewports))]
-    public async Task Arena_LoadsTheRequestedDuel_AndOffersTheLabReport(int width, int height)
+    public async Task Arena_LoadsTheRequestedDuel_AndTheArchiveOffersTheLabReport(int width, int height)
     {
         var page = await SignedInPageAsync(width, height, "/archive");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
@@ -43,6 +43,14 @@ public sealed class ArenaUiTests : UiTestBase
         // Stated rather than silently skipped: a green run that asserted nothing would be
         // worse than a red one that says what is missing.
         Assert.True(duelId is not null, "No duels recorded — run a duel or a tournament before this suite.");
+
+        // The export slice has no UI of its own, so the anchor is the only thing making that
+        // endpoint reachable — it just lives on the Archive row rather than in the Arena, where
+        // the export disclosure was dropped in the 2026-08-23 control-count pass. Asserted here
+        // while the Archive is on screen, before navigating away to the duel itself.
+        var report = page.Locator($"a[href='/api/duels/{duelId}/report']");
+        await Assertions.Expect(report).ToHaveAttributeAsync(
+            "download", $"lab-report-{duelId}.html", new() { Timeout = width < 768 ? 30_000 : 10_000 });
 
         await page.GotoAsync($"/arena/{duelId}");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
@@ -59,11 +67,5 @@ public sealed class ArenaUiTests : UiTestBase
         // The prompt only renders once the duel itself deserialized, so it is the real signal
         // that the right id reached the API.
         await Assertions.Expect(page.Locator(".arena__prompt-label")).ToBeVisibleAsync(new() { Timeout = timeout });
-
-        // The export slice had no UI at all until it was wired up here; the anchor is the
-        // only thing making that endpoint reachable.
-        var report = page.Locator($"a[href='/api/duels/{duelId}/report']");
-        await Assertions.Expect(report).ToHaveAttributeAsync(
-            "download", $"lab-report-{duelId}.html", new() { Timeout = timeout });
     }
 }

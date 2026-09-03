@@ -349,8 +349,10 @@
            somewhere. The old row carried five same-weight buttons (Retry / Share / Head-to-head
            / Lab report / New duel) plus the two vote buttons above it: eleven controls on a
            decided duel. Head-to-head is gone with the page it opened; Retry now appears only
-           when a side actually failed, which is what it is for; and the two export actions —
-           which are not exits — sit behind a disclosure instead of competing with them. *@
+           when a side actually failed, which is what it is for; and the export actions — which
+           are not exits — went with the Archive row, which is where a duel is looked up after
+           the fact. GET /api/duels/{id}/report is reachable from there and nowhere else, so
+           ArenaUiTests asserts that anchor on the Archive page. *@
         @if (!_duelStillRunning)
         {
             <div class="arena__actions arena__actions--secondary">
