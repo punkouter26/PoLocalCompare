@@ -26,9 +26,34 @@ public sealed class DuelContractTests(ApiAppFixture app)
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
     }
 
-    private static async Task<(string DuelId, string Left, string Right)> CommenceAsync(HttpClient client)
+    /// <summary>
+    /// A browser (WebLLM) model — the only kind allowed to post its own result, since it is the
+    /// only kind that runs in the client. <c>/local-result</c> checks the type, so the local-result
+    /// tests need one of these rather than the Remote default above.
+    /// </summary>
+    private static async Task<string> RegisterLocalModelAsync(HttpClient client, string prefix)
     {
-        var left = await RegisterModelAsync(client, "Left");
+        var response = await client.PostAsJsonAsync("/api/models", new
+        {
+            DisplayName = $"{prefix} {Guid.NewGuid():N}",
+            ModelType = "Local",
+            TdpWatts = 45.0,
+            WebLlmModelId = "contract-webllm-model",
+        });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
+    }
+
+    private static async Task<(string DuelId, string Left, string Right)> CommenceAsync(HttpClient client)
+        => await CommenceAsync(client, leftIsLocal: false);
+
+    private static async Task<(string DuelId, string Left, string Right)> CommenceAsync(
+        HttpClient client,
+        bool leftIsLocal)
+    {
+        var left = leftIsLocal
+            ? await RegisterLocalModelAsync(client, "Left")
+            : await RegisterModelAsync(client, "Left");
         var right = await RegisterModelAsync(client, "Right");
 
         var response = await client.PostAsJsonAsync("/api/duels", new
@@ -41,6 +66,21 @@ public sealed class DuelContractTests(ApiAppFixture app)
         var duelId = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("duelId").GetString()!;
         return (duelId, left, right);
     }
+
+    private static Task<HttpResponseMessage> PostLocalResultAsync(
+        HttpClient client,
+        string duelId,
+        string modelId,
+        string html = "<html><body>Local</body></html>") =>
+        client.PostAsJsonAsync($"/api/duels/{duelId}/local-result", new
+        {
+            ModelId = modelId,
+            HtmlOutputRaw = html,
+            TokenCount = 55,
+            TotalDurationMs = 900L,
+            WarmUpDurationMs = 100L,
+            IsFailure = false,
+        });
 
     // ── Commence ───────────────────────────────────────────────────────────
 
@@ -202,17 +242,9 @@ public sealed class DuelContractTests(ApiAppFixture app)
         // finished output. It has to converge with the server-side path — and the markdown
         // fence has to be stripped so the browser model is scored on the same basis.
         using var client = app.CreateAuthenticatedClient();
-        var (duelId, left, _) = await CommenceAsync(client);
+        var (duelId, left, _) = await CommenceAsync(client, leftIsLocal: true);
 
-        await client.PostAsJsonAsync($"/api/duels/{duelId}/local-result", new
-        {
-            ModelId = left,
-            HtmlOutputRaw = "```html\n<html><body>Local</body></html>\n```",
-            TokenCount = 55,
-            TotalDurationMs = 900L,
-            WarmUpDurationMs = 100L,
-            IsFailure = false,
-        });
+        await PostLocalResultAsync(client, duelId, left, "```html\n<html><body>Local</body></html>\n```");
 
         var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
         var result = duel.GetProperty("results").EnumerateArray()
@@ -222,12 +254,69 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task LocalResult_Anonymous_IsAlwaysAllowed()
+    public async Task LocalResult_ForAModelNotInTheDuel_Returns400()
     {
-        // The browser WebLLM worker posts without an auth cookie, so /local-result is always
-        // anonymous — the duel's owner is whoever created the duel, not whoever posts the
-        // HTML back. The endpoint returns 400 here because ModelId is empty; the salient
-        // assertion is that the response is not 401.
+        // The (duelId, modelId) pair is the storage key. Unchecked, a caller picks both and can
+        // write a result row into any duel for any model — which is what DuelExecutionService
+        // hands to the judge, so it decides duels the caller is not part of.
+        using var client = app.CreateAuthenticatedClient();
+        var (duelId, _, _) = await CommenceAsync(client, leftIsLocal: true);
+        var outsider = await RegisterLocalModelAsync(client, "Outsider");
+
+        var response = await PostLocalResultAsync(client, duelId, outsider);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LocalResult_ForAServerSideModel_Returns400()
+    {
+        // Only browser models run in the client, so only they may report their own output. A
+        // Remote/Ollama model's result must come from the server that actually produced it.
+        using var client = app.CreateAuthenticatedClient();
+        var (duelId, _, right) = await CommenceAsync(client, leftIsLocal: true);
+
+        var response = await PostLocalResultAsync(client, duelId, right);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LocalResult_PostedTwice_Returns409()
+    {
+        // The repository upserts with Replace, so a second post used to silently overwrite the
+        // output the duel is being judged on — including after the fact, rewriting the archive.
+        using var client = app.CreateAuthenticatedClient();
+        var (duelId, left, _) = await CommenceAsync(client, leftIsLocal: true);
+
+        var first = await PostLocalResultAsync(client, duelId, left);
+        var second = await PostLocalResultAsync(client, duelId, left, "<html><body>Forged</body></html>");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task LocalResult_ForAnUnknownDuel_Returns404()
+    {
+        // It carried an unconditional AllowAnonymous() and never loaded the duel at all, so any
+        // caller could mint rows under a duel id of their choosing.
+        using var client = app.CreateAuthenticatedClient();
+        var model = await RegisterLocalModelAsync(client, "Orphan");
+
+        var response = await PostLocalResultAsync(client, "01AAAAAAAAAAAAAAAAAAAAAAAA", model);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LocalResult_FollowsTheSameAnonymousGateAsTheOtherWrites()
+    {
+        // It used to opt out of authorization entirely, on the premise that the WebLLM worker
+        // called it. The client posts it from the app origin with the session cookie attached,
+        // so it now honours Features:AllowAnonymousWrites like POST /api/duels and /verdict —
+        // which is true in dev/test, hence "not 401" rather than "401" here. The endpoint
+        // returns 400 because ModelId is empty; the gate is the salient assertion.
         using var client = app.CreateAnonymousClient();
 
         var response = await client.PostAsJsonAsync(

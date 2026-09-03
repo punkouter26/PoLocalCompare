@@ -180,3 +180,48 @@
     cursor: pointer;
 }
 
+
+/* ── Responsive ──────────────────────────────────────────────────────────────
+   This file had no media query at all. The table itself degraded (.po-table--cards
+   in app.css turns each cell into a labelled row below 640px), but nothing around
+   it did — the filter chip row, the row-action buttons and the timestamp column all
+   kept their desktop shape inside a card that is now a third of the width. */
+
+/* Tablet: the page is a single table, so it only needs the chips to stop competing
+   with the title for one line. */
+@media (max-width: 1024px) {
+    .archive__filters {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 640px) {
+    /* Inside a card row, right-aligning the actions strands them against an edge with
+       the label on the far side. Left-align so they read as part of their own row. */
+    .archive__row-actions {
+        text-align: left;
+        white-space: normal;
+        padding-inline: 0;
+    }
+
+    /* The action buttons wrap rather than overflow. --target-min is already 44px here
+       (pointer: coarse), so they are finger-sized without any per-file sizing. */
+    .archive__row-actions,
+    .archive__empty-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+    }
+
+    /* "Judge" is two syllables; letting it wrap mid-word to save 8px is the trade
+       nobody wants. It keeps nowrap — the row it sits in is what wraps now. */
+    .archive__judge-btn {
+        flex: 0 0 auto;
+    }
+
+    /* The timezone suffix is the least important glyph on a phone and the one most
+       likely to force a second line in a card cell. */
+    .archive__tz {
+        display: none;
+    }
+}

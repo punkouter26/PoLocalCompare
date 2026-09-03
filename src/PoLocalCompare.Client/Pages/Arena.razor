@@ -103,7 +103,36 @@
                viewport's "produced no renderable output" placeholder, the HUD's red FAILED
                banner, and this card repeating the identical message — over a metric grid
                reading 0.0 tok/s / 0ms / 0 tokens / 0 B. *@
-        <div class="arena__viewports">
+        @* ── Mobile panel focus ────────────────────────────────────────────
+           Shown only below 640px (CSS-hidden above), where the two panels stack and a
+           phone screen holds roughly one and a half of them — so comparing means
+           scrolling, on the one page whose entire purpose is reading the two outputs
+           against each other.
+
+           Additive on purpose: "Both" is the default and preserves exactly the stacked
+           behaviour the .arena__viewports rules argue for. This only lets you collapse
+           to one side when you want the whole viewport for it. It is a filter over
+           presentation, not over the DOM — both panels stay mounted and streaming, so
+           switching never restarts a preview or drops a token batch. *@
+        <div class="arena__focus" role="group" aria-label="Which output to show">
+            @foreach (var (value, label) in MobileFocusOptions)
+            {
+                <button type="button"
+                        class="po-btn po-btn--sm arena__focus-btn @(_mobileFocus == value ? "arena__focus-btn--active" : "")"
+                        aria-pressed="@(_mobileFocus == value)"
+                        @onclick="() => _mobileFocus = value">
+                    @(value switch
+                    {
+                        "left" => LeftDisplayName,
+                        "right" => RightDisplayName,
+                        _ => label
+                    })
+                </button>
+            }
+        </div>
+
+        <div class="arena__viewports arena__viewports--focus-@_mobileFocus">
+            <div class="arena__viewport-slot arena__viewport-slot--left">
             <ArenaViewportPanel
                     Result="@_leftResult"
                     DisplayName="@LeftDisplayName"
@@ -114,7 +143,9 @@
                     IsVerdictRecorded="@_verdictRecorded"
                     EloShiftDisplay="@(_eloShiftLeft.HasValue ? _eloDisplayLeft : null)"
                     OnViewSource="(html) => OpenSourceAsync(html, LeftDisplayName)" />
+            </div>
 
+            <div class="arena__viewport-slot arena__viewport-slot--right">
                 <ArenaViewportPanel
                     Result="@_rightResult"
                     DisplayName="@RightDisplayName"
@@ -125,6 +156,7 @@
                     IsVerdictRecorded="@_verdictRecorded"
                     EloShiftDisplay="@(_eloShiftRight.HasValue ? _eloDisplayRight : null)"
                     OnViewSource="(html) => OpenSourceAsync(html, RightDisplayName)" />
+            </div>
         </div>
 
         @* ── Duel cost summary ─────────────────────────────────────────
@@ -322,6 +354,27 @@
     private bool _loading = true;
     private bool _submitting;
     private bool _verdictRecorded;
+
+    /// <summary>
+    /// Which output the mobile focus switcher is showing: "both" (default), "left" or "right".
+    /// Purely presentational — it drives a modifier class that hides a slot below 640px and has
+    /// no effect at all on wider screens, where both panels always render side by side. Both
+    /// panels stay mounted in every state so switching cannot interrupt a stream.
+    /// </summary>
+    private string _mobileFocus = "both";
+
+    /// <summary>
+    /// Options for the focus switcher. The two model buttons take their label from the live
+    /// display name rather than "Left"/"Right", which is what a person is actually choosing
+    /// between — except in Blind mode, where the display names are masked and the labels
+    /// mask with them for free.
+    /// </summary>
+    private static readonly (string Value, string Label)[] MobileFocusOptions =
+    [
+        ("both", "Both"),
+        ("left", "Left"),
+        ("right", "Right"),
+    ];
     private bool _retrying;
     private string? _retryError;
 

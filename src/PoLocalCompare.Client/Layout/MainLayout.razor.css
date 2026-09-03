@@ -2,7 +2,9 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    /* dvh so the layout matches the visible viewport on mobile, where the collapsing
+       browser toolbar is counted inside 100vh. */
+    min-height: 100dvh;
 }
 
 /* Transparent, not a colour: html/body already paint --surface-base plus the page
@@ -27,3 +29,16 @@ article.app-content {
 }
 
 
+
+/* ── Responsive ──────────────────────────────────────────────────────────────
+   The layout itself is a single column, so there is no breakpoint to add — what it
+   needs is the safe-area guarantee. The sticky nav sits at the top inset and the
+   page content runs to the bottom one; on a notched phone in landscape the left and
+   right insets are what would otherwise clip the first and last controls in a row.
+
+   The inset goes on the CONTENT, not on .page. Putting it on .page indents the sticky
+   nav's background with it, so the page gradient shows as two bars down the outside of
+   a bar that is meant to be full-bleed. NavMenu insets its own inner row instead. */
+article.content {
+    padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+}

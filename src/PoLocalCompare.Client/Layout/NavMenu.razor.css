@@ -21,7 +21,10 @@
     width: 100%;
     max-width: 1400px;
     margin: 0 auto;
-    padding: 0;
+    /* Safe-area insets go on this inner row, not on the bar or on .page: the bar's
+       background must stay full-bleed edge to edge, while the CONTROLS inside it must
+       clear a landscape notch and the curved corners. env() is 0px everywhere else. */
+    padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -242,8 +245,31 @@
     flex: 0 1 auto;
     min-width: 0;
     max-width: clamp(120px, 22vw, 260px);
+    /* Ellipsis is the LAST resort now, not the first. The badge sheds its domain span
+       (below) before it clips, so an identity that used to render as
+       "punkouter26@gmail…." now renders as "punkouter26" — a whole word, and the half
+       that identifies the account. The full value is in the title attribute regardless. */
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* The '@domain' half. Present on wide screens, dropped when the bar gets tight — dropping
+   a complete token reads as a deliberate short form, where a mid-string ellipsis reads as
+   a bug. Guest identities have no '@' and render nothing here. */
+.navmenu__user-badge-domain {
+    opacity: 0.75;
+}
+
+@media (max-width: 1024px) {
+    .navmenu__user-badge-domain {
+        display: none;
+    }
+
+    /* With the domain gone the badge no longer needs a viewport-proportional cap — a local
+       part is short, so let it size to its content and stop competing for the row. */
+    .navmenu__user-badge {
+        max-width: none;
+    }
 }
 
 .navmenu__user-badge--guest {

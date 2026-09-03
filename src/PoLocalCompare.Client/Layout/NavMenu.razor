@@ -92,9 +92,17 @@
 
                 @if (_identity is not null)
                 {
+                    @* Split at the '@' so the badge can drop the DOMAIN on a narrow screen instead
+                       of ellipsising mid-string. "punkouter26@gmail…." told you nothing the local
+                       part alone doesn't, while looking like a rendering bug; the local part is
+                       the identifying half. The full value stays in the title either way, so
+                       nothing is actually lost — see the --domain rule in the stylesheet. *@
                     <span class="navmenu__user-badge @(_isGuest ? "navmenu__user-badge--guest" : "navmenu__user-badge--oauth")"
-                          title="@(_isGuest ? "Guest session" : "Signed in via Microsoft")">
-                        @_identity
+                          title="@(_identity + (_isGuest ? " (guest session)" : " (signed in via Microsoft)"))">
+                        <span class="navmenu__user-badge-local">@IdentityLocalPart</span>@if (IdentityDomain is not null)
+                        {
+                            <span class="navmenu__user-badge-domain">@IdentityDomain</span>
+                        }
                     </span>
                     <button class="po-btn po-btn--sm po-btn--secondary" @onclick="LogoutAsync">Logout</button>
                 }
@@ -133,6 +141,25 @@
     private bool collapseNavMenu = true;
     private string? _identity;
     private bool _isGuest;
+
+    /// <summary>
+    /// The identity up to and excluding the first '@' — the whole value when there is none
+    /// (a guest name, or a UPN that is not email-shaped). This is the half worth keeping when
+    /// the badge has to shed width.
+    /// </summary>
+    private string IdentityLocalPart =>
+        _identity is null ? string.Empty
+        : _identity.IndexOf('@') is var at && at > 0 ? _identity[..at]
+        : _identity;
+
+    /// <summary>
+    /// The '@domain' remainder, or null when the identity has no '@'. Rendered in its own span
+    /// so CSS can hide it on a narrow screen without the string being cut mid-word.
+    /// </summary>
+    private string? IdentityDomain =>
+        _identity is not null && _identity.IndexOf('@') is var at && at > 0 && at < _identity.Length - 1
+            ? _identity[at..]
+            : null;
     private bool _usingMockData;
     private bool _allowGuest;
     private AppTheme _theme = AppTheme.System;

@@ -300,11 +300,13 @@ try
 
     // ─── API endpoints ────────────────────────────────────────────────────────
     app.MapModelsEndpoints();
-    // Features:AllowAnonymousWrites opens the three write endpoints (POST /api/duels,
-    // POST /api/duels/{id}/verdict) for un-authenticated callers — see DuelsEndpoints.cs.
-    // POST /api/duels/{id}/local-result is always anonymous (the browser WebLLM worker is
-    // not authenticated). Reads stay authenticated so the leaderboard and archive can't
-    // be scraped anonymously. Production keeps the flag at its false default.
+    // Features:AllowAnonymousWrites opens the write endpoints (POST /api/duels,
+    // POST /api/duels/{id}/verdict, POST /api/duels/{id}/local-result) for un-authenticated
+    // callers — see DuelsEndpoints.cs. local-result was unconditionally anonymous until
+    // 2026-09-02; the Blazor client posts it from the app origin with the session cookie
+    // attached, so nothing needed the exemption and it now honours the flag like the rest.
+    // Reads stay authenticated so the leaderboard and archive can't be scraped anonymously.
+    // Production keeps the flag at its false default.
     var allowAnonymousWrites = builder.Configuration.GetValue("Features:AllowAnonymousWrites", false);
     app.MapDuelsEndpoints(allowAnonymousWrites: allowAnonymousWrites);
     app.MapArchiveEndpoints();

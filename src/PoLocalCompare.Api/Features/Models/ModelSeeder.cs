@@ -68,6 +68,49 @@ public static class ModelSeeder
         new Model(ModelId.From("01SEED000000000000000000X"), "Codestral 2501", ModelType.Remote, apiEndpointRef: "Codestral-2501"),
         new Model(ModelId.From("01SEED000000000000000000Y"), "Kimi K2.7 Code", ModelType.Remote, apiEndpointRef: "Kimi-K2.7-Code"),
         new Model(ModelId.From("01SEED000000000000000000Z"), "Grok 4.1 Fast",  ModelType.Remote, apiEndpointRef: "grok-4-1-fast-non-reasoning"),
+
+        // Added 2026-09-02 to spread the catalog across a real price range. Before this the
+        // roster topped out at GPT-5.4 Mini ($0.75/$4.50) — a cheap shelf and a middle shelf
+        // with no flagship tier at all, so a duel could never ask whether paying an order of
+        // magnitude more buys better HTML. These fill the ends and add two vendors (DeepSeek,
+        // and Anthropic once the entries below are unblocked).
+        //
+        // The point of the selection is *ladders*, not variety for its own sake: OpenAI now runs
+        // nano → mini → standard → pro with vendor held constant, which is the only arrangement
+        // in which the ELO difference is attributable to tier rather than to house style.
+        //
+        // Pricing is null for the same reason as the 2026-08-13 batch — the Foundry list rates
+        // could not be verified (the retail-prices API returns no rows for AI meters, the model
+        // metadata carries `cost: null`, and the price sheet is client-rendered). Note the
+        // consequence is worse for this batch than the last: ChallengeAdjudicator treats an
+        // unpriced model as ZERO spend, so GPT-5.4 Pro currently wins every MaxCost challenge
+        // outright. Fill the two pricing arguments and the reconcile loop backfills the stored
+        // rows on the next startup.
+        new Model(ModelId.From("01SEED000000000000000000C"), "GPT-4.1 Nano",      ModelType.Remote, apiEndpointRef: "gpt-4.1-nano"),
+        new Model(ModelId.From("01SEED000000000000000000D"), "GPT-OSS 120B",      ModelType.Remote, apiEndpointRef: "gpt-oss-120b"),
+        new Model(ModelId.From("01SEED000000000000000000E"), "DeepSeek V4 Flash", ModelType.Remote, apiEndpointRef: "DeepSeek-V4-Flash"),
+        new Model(ModelId.From("01SEED000000000000000000F"), "GPT-5.5",           ModelType.Remote, apiEndpointRef: "gpt-5.5"),
+        new Model(ModelId.From("01SEED000000000000000000G"), "Grok 4.6",          ModelType.Remote, apiEndpointRef: "grok-4.6"),
+
+        // GPT-5.4 Pro was the intended flagship and is NOT seeded, though the deployment exists.
+        // Pro-tier models are Responses-API only: POST /openai/deployments/gpt-5.4-pro/chat/completions
+        // returns {"error":{"message":"The requested operation is unsupported."}} on every
+        // api-version, while POST /openai/responses with model=gpt-5.4-pro answers normally.
+        // FoundryChatRequest builds the chat/completions path unconditionally, so seeding it
+        // would put a permanently-failing model in the picker. GPT-5.5 stands in as the flagship.
+        // Adding a Responses-API branch to IRemoteInferenceProxy would unlock gpt-5.4-pro and
+        // gpt-5-pro (both already have quota); until then, don't re-add them.
+        //
+        // Grok 4.6 IS seeded and works, but note it fails the availability probe with
+        // "Probe timed out" — it spent 211 reasoning tokens answering "say hi" and took 18.8 s.
+        // Phi-4 has always shown the same way. Duels are fine (RemoteTimeoutSeconds is 120), but
+        // it will lose most MaxSeconds challenges on thinking time rather than on output.
+
+        // Anthropic: ids H, J and K are RESERVED for claude-haiku-4-5, claude-sonnet-4-6 and
+        // claude-opus-5 — deployment is blocked on Azure's InvalidModelProviderData, which
+        // demands an industry / organizationName / countryCode declaration the CLI cannot pass.
+        // Note claude-sonnet-5 is unavailable regardless: its GlobalStandard quota is 0 on this
+        // account, which is why 4-6 is the intended middle rung.
     ];
 
     public static async Task SeedAsync(IServiceProvider services)

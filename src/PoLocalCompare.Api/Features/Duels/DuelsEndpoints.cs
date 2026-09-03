@@ -13,7 +13,8 @@ public static class DuelsEndpoints
 {
     /// <summary>
     /// Reads (GET /api/duels, GET /api/duels/{id}) stay authenticated
-    /// so the leaderboard and archive can't be scraped anonymously. Writes are opened when
+    /// so the leaderboard and archive can't be scraped anonymously. Writes — including
+    /// <c>local-result</c>, which used to opt out entirely — are opened only when
     /// <c>Features:AllowAnonymousWrites</c> is true (Development default). The flag is read
     /// once at startup; flipping it requires a restart.
     /// </summary>
@@ -108,12 +109,21 @@ public static class DuelsEndpoints
         .Produces<DuelDto>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status404NotFound);
 
-        // Called by the Blazor client after local (WebLLM) inference completes. Always anonymous:
-        // the browser worker invoking this endpoint is not authenticated, and the duel's owner
-        // is whoever created the duel — not whoever posts the HTML back.
-        group.MapPost("/{duelId}/local-result", async (
+        // Called by the Blazor client after local (WebLLM) inference completes. It carried an
+        // unconditional AllowAnonymous() until 2026-09-02, on the premise that "the browser worker
+        // invoking this endpoint is not authenticated" — which was never true: the POST comes from
+        // DuelApiClient on the app origin, so the BFF session cookie rides along exactly as it does
+        // for POST /api/duels. It now follows the same gate as the other writes.
+        //
+        // Authorization alone would not be enough. The row this writes is what
+        // DuelExecutionService returns as the model's official result, and ChallengeAdjudicator
+        // and AutoJudge decide the duel — and move persistent ELO — from it. So the submission is
+        // also checked against the duel it claims to belong to: without that, the (duelId, modelId)
+        // key is caller-chosen and any row in the table can be written or overwritten.
+        OpenIf(allowAnonymousWrites, group.MapPost("/{duelId}/local-result", async (
             DuelId duelId,
             [FromBody] LocalResultRequest request,
+            [FromServices] IDuelRepository duelRepo,
             [FromServices] IDuelResultRepository duelResultRepo,
             [FromServices] IModelRepository modelRepo,
             [FromServices] IConfiguration configuration) =>
@@ -123,6 +133,36 @@ public static class DuelsEndpoints
                 {
                     ["ModelId"] = ["ModelId is required."]
                 });
+
+            var duel = await duelRepo.GetByIdAsync(duelId);
+            if (duel is null)
+                return Results.NotFound(new { error = $"Duel '{duelId}' not found." });
+
+            // Only the two models actually fighting this duel may report into it.
+            if (request.ModelId != duel.LeftModelId && request.ModelId != duel.RightModelId)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["ModelId"] = ["ModelId is not one of this duel's models."]
+                });
+
+            // Only browser models run client-side, so only they legitimately report their own
+            // result. A server-side model's output must come from the server that produced it.
+            var model = await modelRepo.GetByIdAsync(request.ModelId);
+            if (model is null || model.ModelType != ModelType.Local)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["ModelId"] = ["Only browser (Local) models report their result from the client."]
+                });
+
+            // A finished duel's record is the evidence its verdict was based on; reopening it for
+            // writes would let the archive be rewritten after the fact.
+            if (duel.CompletedAt is not null || duel.Verdict != DuelVerdict.Pending)
+                return Results.Conflict(new { error = $"Duel '{duelId}' is no longer accepting results." });
+
+            // One result per model per duel. The repository upserts with Replace, so without this
+            // a second post would silently overwrite the output the duel is being judged on.
+            if (await duelResultRepo.GetAsync(duelId, request.ModelId) is not null)
+                return Results.Conflict(new { error = $"A result for model '{request.ModelId}' is already recorded." });
 
             var normalizedHtml = HtmlOutputNormalizer.Normalize(request.HtmlOutputRaw);
             var isEmptyOutput = string.IsNullOrWhiteSpace(normalizedHtml);
@@ -142,23 +182,20 @@ public static class DuelsEndpoints
                 FailureReason = request.FailureReason ?? (isEmptyOutput ? "Browser inference completed without output." : null),
             };
 
-            // Apply the shared Domain enrichment policy (density, quality, GreenStats) when the model is known.
-            var model = await modelRepo.GetByIdAsync(request.ModelId);
-            if (model is not null)
-            {
-                var electricityRate = configuration.GetValue("GreenStats:ElectricityRateUsd", 0.12);
-                DuelResultEnricher.Enrich(result, model, electricityRate);
-            }
+            // Apply the shared Domain enrichment policy (density, quality, GreenStats).
+            var electricityRate = configuration.GetValue("GreenStats:ElectricityRateUsd", 0.12);
+            DuelResultEnricher.Enrich(result, model, electricityRate);
 
             await duelResultRepo.SaveAsync(result);
 
             return Results.Ok();
         })
-        .AllowAnonymous()
         .WithName("PostLocalResult")
         .WithSummary("Receives the HTML output from a client-side (WebLLM) local model inference.")
         .Produces(StatusCodes.Status200OK)
-        .ProducesValidationProblem();
+        .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status409Conflict)
+        .ProducesValidationProblem());
 
         var recordVerdict = OpenIf(allowAnonymousWrites, group.MapPost("/{duelId}/verdict", async (
             DuelId duelId,

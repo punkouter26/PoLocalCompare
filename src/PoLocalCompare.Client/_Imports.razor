@@ -16,6 +16,11 @@
 @using PoLocalCompare.Shared.Ids
 @using PoLocalCompare.Shared.Models
 
+@* Radzen.Blazor — re-added 2026-09-02 for the Archive data grid and the model-profile
+   rating chart. See PoLocalCompare.Client.csproj for the payload it costs. *@
+@using Radzen
+@using Radzen.Blazor
+
 @* Require an authenticated session for every routable page (BFF cookie). *@
 @* Non-routed components ignore this; the Login view is rendered via NotAuthorized. *@
 @attribute [Authorize]

@@ -207,3 +207,59 @@
 .model-card--disabled {
     cursor: not-allowed;
 }
+
+/* ── Container queries ───────────────────────────────────────────────────────
+   This card renders at three very different widths: the Home picker's grid column,
+   the Arena and Tournament slot summaries, and the ModelProfile gallery. It had no
+   responsive handling of any kind, and a media query would be the wrong tool anyway
+   — it measures the WINDOW, when what varies here is the box the card was handed.
+   A 1400px desktop showing a narrow picker column and a 640px phone showing a
+   full-bleed card are the same layout problem and the opposite media query.
+
+   Same reasoning and the same mechanism as TelemetryHud, which documents it at
+   length. The card declares itself a container; the rules below ask its own width. */
+.model-card {
+    container-type: inline-size;
+    container-name: modelcard;
+}
+
+/* Narrow column: the header is `name ......... badges` on one line, which is where
+   a long display name ("Llama-4-Maverick-17B-128E-Instruct-FP8") collides with the
+   REMOTE pill. Stack them so the name gets the full width and wraps instead. */
+@container modelcard (max-width: 260px) {
+    .model-card__header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-2xs);
+    }
+
+    .model-card__badges {
+        flex-wrap: wrap;
+    }
+
+    .model-card__name {
+        font-size: var(--text-md);
+    }
+}
+
+/* Wide slot: the card has room to put the rating and the price on one line rather
+   than stacking them, which closes the dead space under a two-line card. */
+@container modelcard (min-width: 420px) {
+    .model-card__stats {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-md);
+        flex-wrap: wrap;
+    }
+
+    .model-card__pricing {
+        margin-top: 0;
+    }
+}
+
+/* A long model name must never be clipped or ellipsised — it is the only thing that
+   identifies the row, and two of the catalog's names differ only in their suffix. */
+.model-card__name {
+    overflow-wrap: anywhere;
+    hyphens: auto;
+}

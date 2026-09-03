@@ -135,3 +135,36 @@
     font-variant-numeric: tabular-nums;
     text-align: right;
 }
+
+/* ── Responsive ──────────────────────────────────────────────────────────────
+   No media query existed here either. The board is one wide table plus a summary
+   strip; .po-table--cards handles the table below 640px, but the summary strip was
+   built as a single flex row with a --space-xl gap, which on a phone produces one
+   item per line separated by 2rem of nothing. */
+
+@media (max-width: 1024px) {
+    .leaderboard__summary {
+        gap: var(--space-lg);
+    }
+}
+
+@media (max-width: 640px) {
+    /* Two columns rather than one: these are short "label value" pairs, so a single
+       column wastes half the width and makes the strip taller than the first table row. */
+    .leaderboard__summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-sm) var(--space-md);
+        padding: var(--space-sm) var(--space-smd);
+    }
+
+    /* The medal glyph is the row's anchor in card mode — keep it at heading size while
+       everything around it shrinks. */
+    .leaderboard__rank {
+        font-size: var(--text-2xl);
+    }
+
+    .leaderboard__empty-actions {
+        gap: var(--space-smd);
+    }
+}

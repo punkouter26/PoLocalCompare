@@ -1,20 +1,40 @@
 // Utility helpers used by Blazor JS interop
 
 /**
+ * Escapes a string for interpolation into HTML markup.
+ *
+ * Everything that reaches the source viewer below is untrusted: the model output by definition,
+ * and the model name too — it is Model.DisplayName, which any signed-in user can set through
+ * POST /api/models with no character restrictions. The viewer builds a document that
+ * window.open()s from a blob: URL, and a blob: URL inherits this app's origin, so an unescaped
+ * name would run script with the victim's BFF session (the app's only CSP directive is
+ * frame-ancestors, which does not restrict script). modelName went unescaped until 2026-09-02.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
  * Opens the given HTML string in a new browser tab so the user can inspect the source.
  * @param {string} html - The raw HTML output from the model.
  * @param {string} modelName - Used as the page title and tab label.
  */
 window.openHtmlSource = function (html, modelName) {
-    const escaped = html
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    const escaped = escapeHtml(html);
+    const escapedName = escapeHtml(modelName);
     const page = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Source — ${modelName}</title>
+  <title>Source — ${escapedName}</title>
   <style>
     body { background: #0d1117; color: #e6edf3; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; margin: 0; }
     header { background: #161b22; padding: 10px 18px; border-bottom: 1px solid #30363d; display:flex; align-items:center; gap:12px; position:sticky; top:0; }
@@ -26,7 +46,7 @@ window.openHtmlSource = function (html, modelName) {
 <body>
   <header>
     <h1>&#60;/&#62; HTML Source</h1>
-    <span>${modelName} • ${html.length.toLocaleString()} chars</span>
+    <span>${escapedName} • ${html.length.toLocaleString()} chars</span>
   </header>
   <pre>${escaped}</pre>
 </body>

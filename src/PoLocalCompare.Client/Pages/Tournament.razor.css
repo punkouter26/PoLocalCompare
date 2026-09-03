@@ -338,9 +338,39 @@
     font-weight: 600;
 }
 
+/* Tablet and small laptop — the missing middle. An 8-model bracket is 3 rounds at 13rem,
+   so about 42rem plus gaps, which fits; the ENTRANT list above it does not, because
+   auto-fill at minmax(15rem, 1fr) puts four cards on a 1024px page and each one then holds
+   a model name at a width that forces a wrap. Two roomier columns read better than four
+   cramped ones. */
+@media (max-width: 1024px) {
+    .tourney__entrants {
+        grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    }
+}
+
 @media (max-width: 640px) {
     .tourney__bracket {
         grid-template-columns: repeat(var(--rounds, 3), minmax(11rem, 1fr));
+    }
+
+    /* One entrant per row on a phone. auto-fill would still try to fit two at 11rem on a
+       390px screen and clip the names; a single column lets each one wrap in full. */
+    .tourney__entrants {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* The bracket is the one thing on the page that legitimately scrolls sideways — three
+       rounds cannot be stacked without destroying the shape that makes it a bracket. Make
+       that scroll discoverable and finger-friendly rather than accidental. */
+    .tourney__bracket-wrap {
+        scroll-snap-type: x proximity;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: var(--space-xs);
+    }
+
+    .tourney__round {
+        scroll-snap-align: start;
     }
 }
 

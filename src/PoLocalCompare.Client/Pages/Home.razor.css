@@ -53,7 +53,9 @@
 .home__console {
     position: sticky;
     top: 4.5rem;
-    height: calc(100vh - 6.5rem);
+    /* dvh — this is the sticky console's height, so with vh the Compare button it exists
+       to keep on screen was pushed below the fold by exactly the mobile toolbar height. */
+    height: calc(100dvh - 6.5rem);
     /* border-box, because there is no global reset: without it the 1.25rem padding and the
        border are added to the height and the foot hangs 42px below the fold. */
     box-sizing: border-box;

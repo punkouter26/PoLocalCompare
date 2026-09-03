@@ -6,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PoLocalCompare</title>
     <base href="/" />
+    <!-- Radzen base stylesheet. `default-base.css` is the STRUCTURAL sheet only (layout,
+         grid mechanics, focus behaviour) with no colour theme, so the components inherit
+         this app's design tokens instead of shipping a competing palette. Loading a full
+         Radzen theme here would override --surface-*/--text-* on every control and undo the
+         token system. It is loaded BEFORE app.css so our rules win on specificity ties. -->
+    <link rel="stylesheet" href="_content/Radzen.Blazor/css/default-base.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="PoLocalCompare.Client.styles.css" rel="stylesheet" />
@@ -128,7 +134,8 @@
         });
     </script>
     <script src="/js/diag-interop.js?v=4"></script>
-    <script src="/js/util.js?v=6"></script>
+    <script src="/js/util.js?v=7"></script>
+    <script src="_content/Radzen.Blazor/Radzen.Blazor.js?v=1"></script>
 </body>
 
 </html>

@@ -16,10 +16,13 @@
     --border-strong: #c2c9d6;
     --text: #10141c;
     --text-muted: #55607a;
-    /* Was #78829a — 3.84:1 on --surface-1 and 3.69:1 on the near-white panel surfaces, so
-       every use of it failed SC 1.4.3. #646d82 is 5.2:1 on white and 4.8:1 on #f6f7f9, and
-       still reads a step dimmer than --text-muted. */
-    --text-dim: #646d82;
+    /* Was #78829a — 3.84:1 on --surface-1, so every use of it failed SC 1.4.3. #646d82 fixed
+       that for white but was measured only against --surface-1 and --surface-base: on
+       --surface-accent (#e8edf8) it lands at 4.42:1 and still failed. #5c6478 is the first
+       value that clears 4.5:1 on ALL FOUR surface tokens (5.92 / 5.57 / 5.23 / 5.04) while
+       still reading a step dimmer than --text-muted. Re-measure against every surface, not
+       just white, if this changes again. */
+    --text-dim: #5c6478;
     --surface-accent: #e8edf8;
 
     /* Accents are darkened for light mode: the dark-theme values sit near 2:1 on
@@ -101,10 +104,13 @@
     --border-strong: #c2c9d6;
     --text: #10141c;
     --text-muted: #55607a;
-    /* Was #78829a — 3.84:1 on --surface-1 and 3.69:1 on the near-white panel surfaces, so
-       every use of it failed SC 1.4.3. #646d82 is 5.2:1 on white and 4.8:1 on #f6f7f9, and
-       still reads a step dimmer than --text-muted. */
-    --text-dim: #646d82;
+    /* Was #78829a — 3.84:1 on --surface-1, so every use of it failed SC 1.4.3. #646d82 fixed
+       that for white but was measured only against --surface-1 and --surface-base: on
+       --surface-accent (#e8edf8) it lands at 4.42:1 and still failed. #5c6478 is the first
+       value that clears 4.5:1 on ALL FOUR surface tokens (5.92 / 5.57 / 5.23 / 5.04) while
+       still reading a step dimmer than --text-muted. Re-measure against every surface, not
+       just white, if this changes again. */
+    --text-dim: #5c6478;
     --surface-accent: #e8edf8;
 
     --accent-green: #0f7a45;
@@ -200,10 +206,19 @@
     --text-sm:  0.8125rem;   /* 13px — secondary body, hints, table cells */
     --text-md:  0.875rem;    /* 14px — body default */
     --text-lg:  1rem;        /* 16px — emphasised body, section titles */
-    --text-xl:  1.25rem;     /* 20px — card and panel headings */
-    --text-2xl: 1.625rem;    /* 26px — page titles */
-    --text-3xl: 2.25rem;     /* 36px — hero */
-    --text-4xl: 3.5rem;      /* 56px — the 404 numeral, the only display-size text in the app */
+    /* The top four steps are fluid. Below --text-xl the scale is UI chrome — table cells,
+       badges, captions — where a size that moves with the viewport just makes dense layouts
+       unpredictable, so those stay fixed. From --text-xl up the text is display copy, where
+       a fixed size is either cramped at 1400px or overflowing at 360px.
+
+       Each clamp keeps the previous fixed value as its MAXIMUM, so nothing gets larger than
+       it was on a wide screen and the only change is that small screens now scale down. The
+       preferred term is `rem + vw` rather than pure vw so the text still honours the user's
+       browser font size (a pure-vw heading ignores it entirely and fails SC 1.4.4). */
+    --text-xl:  clamp(1.125rem, 1.05rem + 0.35vw, 1.25rem);   /* 18 → 20px — card and panel headings */
+    --text-2xl: clamp(1.375rem, 1.19rem + 0.8vw, 1.625rem);   /* 22 → 26px — page titles */
+    --text-3xl: clamp(1.75rem, 1.34rem + 1.8vw, 2.25rem);     /* 28 → 36px — hero */
+    --text-4xl: clamp(2.5rem, 1.65rem + 3.7vw, 3.5rem);       /* 40 → 56px — the 404 numeral */
 
     /* Line heights. Tight for headings, open for prose — a single value across
        both is what makes dense tables feel airy and paragraphs feel cramped. */
@@ -230,7 +245,21 @@
        Before this, 13 different breakpoints were in use (360, 420, 575, 720, 760,
        768, 820, 900, 1000, 1023, 1080, 1200, 1360, 1400) and eight stylesheets had
        none at all. New media queries use one of the three above unless there is a
-       specific reason written next to it. */
+       specific reason written next to it.
+
+       AUDIT 2026-09-02: the convention had drifted back. --bp-md was in use ZERO
+       times — the actual set was 640 (widespread), 1080 (Home only) and 1400
+       (ModelProfile only), so every width between phone and 1400px got the desktop
+       layout with no adaptation, and seven scoped stylesheets had no media query at
+       all (ModelCard, SandboxedViewport, MainLayout, Archive, Leaderboard, Login,
+       NotFound). Those now use 1024. Home keeps 1080 as its documented exception —
+       its picker-plus-console grid is genuinely tight below that — and NavMenu keeps
+       the Bootstrap-legacy 767.98/991.98/1279.98 values, where the fractional part is
+       load-bearing against paired min-width rules.
+
+       Prefer a container query to a media query for anything inside a component that
+       renders at more than one width: see TelemetryHud, ModelCard and SandboxedViewport,
+       which measure their own box rather than the window. */
 
     /* Border Radius Scale */
     --radius-sm: 0.375rem;
@@ -410,10 +439,12 @@ a:hover {
     font-size: var(--text-lg);
 }
 
-/* Compact form for nav chrome and in-card action rows. Keeps the 24×24 minimum
-   target (SC 2.5.8) — it shrinks the padding, not the hit area. */
+/* Compact form for nav chrome and in-card action rows. Shrinks the padding, not the
+   hit area — so it reads through --target-min and grows to 44px on a touch device
+   along with everything else. Hard-coding 24px here (as it used to) meant the compact
+   buttons, which are exactly the ones in the densest rows, stayed finger-hostile. */
 .po-btn--sm {
-    min-height: 24px;
+    min-height: var(--target-min);
     padding: var(--space-xs) var(--space-smd);
     font-size: var(--text-sm);
 }
@@ -535,7 +566,10 @@ a:hover {
     padding-top: var(--space-md);
     background-color: transparent;
     color: var(--text);
-    min-height: 100vh;
+    /* dvh, not vh: on iOS/Android the browser toolbar is INSIDE 100vh, so a 100vh box is
+       taller than the visible viewport and the page scrolls by the toolbar's height before
+       any content has overflowed. dvh tracks the viewport as the toolbar collapses. */
+    min-height: 100dvh;
 }
 
 .app-content > * {
@@ -649,8 +683,23 @@ code {
     --focus-ring-offset: 2px;
     /* Sticky topnav is 3.5rem tall; keep focused targets clear of it (SC 2.4.11). */
     --sticky-nav-clearance: 4.5rem;
-    /* SC 2.5.8 Target Size (Minimum). */
+    /* SC 2.5.8 Target Size (Minimum) — 24px is the AA requirement, and it is a FLOOR,
+       not a target. It is the right value for a mouse, which is a pixel-accurate
+       pointing device; it is much too small for a fingertip, which is roughly 9mm of
+       contact area with no visual feedback about where its centre landed. */
     --target-min: 24px;
+}
+
+/* Touch and pen get 44px — the size Apple's HIG and Material both specify, and what
+   SC 2.5.5 (Target Size (Enhanced), AAA) asks for. Gated on the POINTER, not on a
+   width breakpoint, because the two are not the same question: a touchscreen laptop
+   at 1400px needs the large target and a 500px-wide desktop browser window does not.
+   Raising the token lifts every control that consumes it — .po-btn, the bare-element
+   rule below, PromptPicker's chips and TelemetryHud's cells — in one place. */
+@media (pointer: coarse) {
+    :root {
+        --target-min: 44px;
+    }
 }
 
 /* SC 2.4.7 Focus Visible + SC 1.4.11 Non-text Contrast — one ring everywhere,
@@ -1181,5 +1230,57 @@ body::before {
     ::view-transition-old(root),
     ::view-transition-new(root) {
         animation: none;
+    }
+}
+
+/* ── Safe-area insets (notches, home indicators, curved corners) ──────────────
+   Paired with the dvh switch above. dvh gets the HEIGHT right; these keep content
+   out of the physically obstructed strips at the edges of a modern phone screen.
+   env() resolves to 0px on every device without a cutout, so this is inert on
+   desktop and needs no media query. The max() keeps the existing padding as a
+   floor — without it, a device reporting 0px would collapse the padding entirely. */
+.po-page {
+    padding-inline-start: max(var(--space-md), env(safe-area-inset-left));
+    padding-inline-end: max(var(--space-md), env(safe-area-inset-right));
+    padding-bottom: max(var(--space-xl), env(safe-area-inset-bottom));
+}
+
+/* ── SC 1.4.6 / prefers-contrast: more ───────────────────────────────────────
+   The default palette clears AA (4.5:1) on every foreground/surface pair — verified
+   by measurement on 2026-09-02, which is how the --text-dim failure above was found.
+   AA is not always enough: low vision, glare, and cheap panels all eat contrast that
+   a ratio calculation says is present.
+
+   This block raises the muted text tokens to full --text and strengthens borders,
+   which is where contrast actually gets lost — a 1px border at --border is nearly
+   invisible on a washed-out screen, and it is the only thing separating table rows
+   and card edges. Backgrounds go flat: the aurora gradient and the glass blur are
+   both decoration that reduces the contrast of whatever sits on top of them. */
+@media (prefers-contrast: more) {
+    :root {
+        --text-muted: var(--text);
+        --text-dim: var(--text);
+        --border: var(--border-strong);
+        --glass-bg: var(--surface-1);
+        --glass-blur: 0px;
+        --page-gradient: none;
+    }
+
+    /* Decorative only, and the single largest source of low-contrast area in the app. */
+    body::before {
+        display: none;
+    }
+
+    /* A border that exists to be subtle is a border that disappears first. */
+    .po-glass,
+    .po-table th,
+    .po-table td,
+    .po-chip {
+        border-color: var(--border-strong);
+    }
+
+    /* Focus is the one indicator a keyboard user cannot do without. */
+    :focus-visible {
+        outline-width: 3px;
     }
 }

@@ -10,32 +10,57 @@ public sealed class DuelResultRepository : IDuelResultRepository
     private const string BlobContainerName = "duel-html-outputs";
     private const long MaxTablePropertyBytes = 64 * 1024; // 64KB
 
+    /// <summary>
+    /// Column holding an overflow blob's path *relative to the container*. Only this repository
+    /// ever writes it, which is the whole point: the pointer lives outside the content column, so
+    /// nothing a caller supplies is ever interpreted as one.
+    /// </summary>
+    private const string BlobPathColumn = "HtmlOutputBlobPath";
+
+    /// <summary>
+    /// Legacy in-band overflow marker. Rows written before 2026-09-02 stored the pointer *inside*
+    /// <c>HtmlOutputRaw</c> as <c>blob://{absolute uri}</c>, and the read path dereferenced any
+    /// value carrying that prefix. Because an output under the 64KB threshold is persisted
+    /// verbatim, a caller could post the literal string <c>blob://http://10.0.0.5/…</c> and turn
+    /// the next read into a server-side GET of an attacker-chosen host, with the response body
+    /// handed back through <c>GET /api/duels/{id}</c>. The prefix is still recognised so existing
+    /// rows keep resolving, but only after the URI is proven to address our own container.
+    /// </summary>
+    private const string LegacyBlobPrefix = "blob://";
+
     private readonly TableClient _tableClient;
     private readonly BlobContainerClient _blobContainerClient;
+    private readonly ILogger<DuelResultRepository> _logger;
 
-    public DuelResultRepository(TableServiceClient tableServiceClient, BlobServiceClient blobServiceClient)
+    public DuelResultRepository(
+        TableServiceClient tableServiceClient,
+        BlobServiceClient blobServiceClient,
+        ILogger<DuelResultRepository> logger)
     {
         _tableClient = tableServiceClient.GetTableClient(TableName);
         _blobContainerClient = blobServiceClient.GetBlobContainerClient(BlobContainerName);
+        _logger = logger;
     }
 
     public async Task SaveAsync(DuelResult result)
     {
         var htmlOutput = result.HtmlOutputRaw;
         var htmlBytes = System.Text.Encoding.UTF8.GetByteCount(htmlOutput);
+        string? blobPath = null;
 
-        // If output exceeds 64KB, store in Blob Storage
+        // If output exceeds 64KB, store in Blob Storage and keep only the container-relative
+        // path — in its own column, never spliced into the content the caller supplied.
         if (htmlBytes > MaxTablePropertyBytes)
         {
             await _blobContainerClient.CreateIfNotExistsAsync();
-            var blobPath = $"{result.DuelId}/{result.ModelId}.html";
+            blobPath = $"{result.DuelId}/{result.ModelId}.html";
             var blobClient = _blobContainerClient.GetBlobClient(blobPath);
             using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(htmlOutput));
             await blobClient.UploadAsync(stream, overwrite: true);
-            htmlOutput = $"blob://{blobClient.Uri}";
+            htmlOutput = string.Empty;
         }
 
-        var entity = MapToEntity(result, htmlOutput);
+        var entity = MapToEntity(result, htmlOutput, blobPath);
         await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace);
     }
 
@@ -78,7 +103,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
         return results;
     }
 
-    private static TableEntity MapToEntity(DuelResult result, string htmlOutput)
+    private static TableEntity MapToEntity(DuelResult result, string htmlOutput, string? blobPath)
     {
         return new TableEntity(result.DuelId, result.ModelId)
         {
@@ -92,6 +117,7 @@ public sealed class DuelResultRepository : IDuelResultRepository
             ["FinishReason"] = result.FinishReason,
             ["WasTruncated"] = result.WasTruncated,
             ["HtmlOutputRaw"] = htmlOutput,
+            [BlobPathColumn] = blobPath,
             ["HtmlOutputSizeBytes"] = result.HtmlOutputSizeBytes,
             ["CharacterDensityRatio"] = result.CharacterDensityRatio,
             ["OutputQualityScore"] = result.OutputQualityScore,
@@ -107,13 +133,31 @@ public sealed class DuelResultRepository : IDuelResultRepository
     {
         var htmlOutput = entity.GetString("HtmlOutputRaw") ?? string.Empty;
 
-        // Resolve blob reference if needed
-        if (htmlOutput.StartsWith("blob://", StringComparison.OrdinalIgnoreCase))
+        // Resolve an overflow blob. The path comes from our own column on current rows, or from
+        // the legacy in-band prefix on older ones — and either way it is resolved against
+        // _blobContainerClient, so the account and container are fixed here in the server rather
+        // than taken from the row.
+        var blobPath = entity.GetString(BlobPathColumn);
+        var isLegacyPointer = string.IsNullOrEmpty(blobPath)
+            && htmlOutput.StartsWith(LegacyBlobPrefix, StringComparison.OrdinalIgnoreCase);
+
+        if (isLegacyPointer)
+            blobPath = ResolveLegacyBlobPath(htmlOutput[LegacyBlobPrefix.Length..]);
+
+        if (!string.IsNullOrEmpty(blobPath))
         {
-            var blobUri = new Uri(htmlOutput["blob://".Length..]);
-            var blobClient = new BlobClient(blobUri);
-            var response = await blobClient.DownloadContentAsync();
-            htmlOutput = response.Value.Content.ToString();
+            htmlOutput = await DownloadAsync(blobPath, entity.PartitionKey, entity.RowKey);
+        }
+        else if (isLegacyPointer)
+        {
+            // The prefix is there but the URI does not address our container: a forged pointer,
+            // or a row from a storage account this instance is not configured for. Never
+            // dereference it — drop the value and let the row read as empty output.
+            _logger.LogWarning(
+                "Duel result {DuelId}/{ModelId} carries a blob pointer outside this account; ignoring it.",
+                entity.PartitionKey,
+                entity.RowKey);
+            htmlOutput = string.Empty;
         }
 
         return new DuelResult
@@ -139,5 +183,57 @@ public sealed class DuelResultRepository : IDuelResultRepository
             EnergyCostUsd = entity.GetDouble("EnergyCostUsd"),
             ApiCostUsd = entity.GetDouble("ApiCostUsd")
         };
+    }
+
+    /// <summary>
+    /// Maps a legacy <c>blob://{absolute uri}</c> pointer back to a container-relative path, or
+    /// null when the URI does not address this repository's own container. Scheme, host, port and
+    /// container path must all match — anything else is a pointer we did not write, and the one
+    /// safe response is to refuse rather than fetch it.
+    /// </summary>
+    private string? ResolveLegacyBlobPath(string reference)
+    {
+        if (!Uri.TryCreate(reference, UriKind.Absolute, out var uri))
+            return null;
+
+        var container = _blobContainerClient.Uri;
+
+        if (!string.Equals(uri.Scheme, container.Scheme, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(uri.Host, container.Host, StringComparison.OrdinalIgnoreCase)
+            || uri.Port != container.Port)
+        {
+            return null;
+        }
+
+        // Azurite addresses containers path-style ("/devstoreaccount1/duel-html-outputs/…") and
+        // Azure host-style ("/duel-html-outputs/…"), so compare against the container's own path
+        // rather than assuming either shape.
+        var prefix = container.AbsolutePath.TrimEnd('/') + "/";
+        if (!uri.AbsolutePath.StartsWith(prefix, StringComparison.Ordinal))
+            return null;
+
+        var path = Uri.UnescapeDataString(uri.AbsolutePath[prefix.Length..]);
+        return string.IsNullOrEmpty(path) ? null : path;
+    }
+
+    private async Task<string> DownloadAsync(string blobPath, string duelId, string modelId)
+    {
+        try
+        {
+            var response = await _blobContainerClient.GetBlobClient(blobPath).DownloadContentAsync();
+            return response.Value.Content.ToString();
+        }
+        catch (Azure.RequestFailedException ex)
+        {
+            // A missing or unreadable overflow blob must not take the whole duel down with it —
+            // the timings and verdict inputs on the rest of the row are still worth returning.
+            _logger.LogWarning(
+                ex,
+                "Overflow blob {BlobPath} for duel result {DuelId}/{ModelId} could not be read.",
+                blobPath,
+                duelId,
+                modelId);
+            return string.Empty;
+        }
     }
 }

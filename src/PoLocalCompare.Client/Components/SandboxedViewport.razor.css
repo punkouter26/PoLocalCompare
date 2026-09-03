@@ -141,3 +141,40 @@
        document, which brings its own background and assumes a white canvas. */
     background: #fff;
 }
+
+/* ── Container queries ───────────────────────────────────────────────────────
+   The frame is a fixed 320×180 (the size the models are told to design for), but the
+   HEADER above it is fluid and renders in three contexts: an Arena panel at half the
+   page, a Tournament slot, and a full-width phone card. It had no responsive handling.
+
+   Container, not media query — same reasoning as TelemetryHud and ModelCard: what
+   varies is the box this component was given, not the window. */
+.sandboxed-viewport {
+    container-type: inline-size;
+    container-name: viewport;
+}
+
+/* Below the frame's own width the header cannot hold `name ... score` on one line, and
+   the name — which is ellipsised — is what loses. Stack instead, so the model name gets
+   the full width and the score keeps its own row.
+
+   This is the fix for the truncation itself: the name only ellipsised because it was
+   competing for a line it could not win. */
+@container viewport (max-width: 320px) {
+    .sandboxed-viewport__header {
+        flex-wrap: wrap;
+        gap: var(--space-2xs) var(--space-sm);
+    }
+
+    .sandboxed-viewport__model-name {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        overflow-wrap: anywhere;
+        flex: 1 1 100%;
+    }
+
+    .sandboxed-viewport__score {
+        margin-left: 0;
+    }
+}

@@ -43,3 +43,19 @@
     line-height: 1.5;
 }
 
+
+/* ── Responsive ──────────────────────────────────────────────────────────────
+   --text-4xl is fluid now (clamp 40→56px), so the numeral no longer overflows a
+   360px screen on its own. What still needed handling is the card's --space-2xl
+   (3rem) block padding, which on a short phone screen pushed the action button
+   below the fold on a page whose whole job is to offer that button. */
+@media (max-width: 640px) {
+    .not-found {
+        min-height: 50vh;
+        padding: var(--space-lg) var(--space-sm);
+    }
+
+    .not-found__card {
+        padding: var(--space-xl) var(--space-mlg);
+    }
+}

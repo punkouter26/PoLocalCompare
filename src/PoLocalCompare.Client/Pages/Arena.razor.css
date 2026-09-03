@@ -76,6 +76,55 @@
     }
 }
 
+/* ── Mobile focus switcher ──────────────────────────────────────────
+   Desktop never sees this: the two panels fit side by side above 640px, so a control
+   that hides one of them would only be a way to make the page worse. It is display:none
+   here and revealed in the 640 block below — the opposite of the usual direction, and
+   deliberate, because "both panels" is the correct default at every width. */
+.arena__focus {
+    display: none;
+}
+
+.arena__viewport-slot {
+    min-width: 0;
+}
+
+@media (max-width: 640px) {
+    .arena__focus {
+        display: flex;
+        gap: var(--space-xs);
+        justify-content: center;
+        margin-bottom: var(--space-sm);
+        /* The labels are model display names, which can be long. Wrapping the row is
+           better than shrinking targets that are already at the 44px touch minimum. */
+        flex-wrap: wrap;
+    }
+
+    .arena__focus-btn {
+        /* Layout only — the look is .po-btn's, per the app-wide rule. Caps the width so a
+           long model name cannot push the third button onto its own line unnecessarily,
+           and wraps rather than clipping so no name is ever cut mid-word. */
+        max-width: 11rem;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: var(--leading-tight);
+    }
+
+    .arena__focus-btn--active {
+        border-color: var(--accent-blue);
+        background: var(--surface-accent);
+        color: var(--text);
+    }
+
+    /* Hiding the slot, not unmounting the panel: the component keeps streaming, keeps its
+       SignalR handlers and keeps its srcdoc, so switching back is instant and a browser
+       model's inference is never interrupted by a layout choice. */
+    .arena__viewports--focus-left .arena__viewport-slot--right,
+    .arena__viewports--focus-right .arena__viewport-slot--left {
+        display: none;
+    }
+}
+
 /* No height floor. The preview inside sizes itself (see SandboxedViewport's --preview-h),
    and the two sides line up because both frames resolve to the same box — a floor here just
    pushed the verdict below the fold. A failed side is one small card and needs no reserve. */
