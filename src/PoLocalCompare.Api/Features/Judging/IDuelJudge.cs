@@ -3,9 +3,15 @@ using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Api.Features.Judging;
 
-/// <param name="Verdict">Always <see cref="DuelVerdict.Left"/> or <see cref="DuelVerdict.Right"/>.</param>
+/// <param name="Verdict"><see cref="DuelVerdict.Left"/>, <see cref="DuelVerdict.Right"/>, <see cref="DuelVerdict.Tie"/>, or <see cref="DuelVerdict.Voided"/>.</param>
 /// <param name="Rationale">One sentence, shown in the Arena and stored on the duel.</param>
-public sealed record JudgeDecision(DuelVerdict Verdict, string Rationale);
+/// <param name="IsWalkover">
+/// True when the decision is mechanical — an opponent that produced nothing, or a duel voided
+/// for missing results — rather than the output of an LLM comparison. The auto-judge uses it to
+/// stamp <see cref="VerdictSource.Constraint"/> and a null judge model, so a forfeit can never
+/// masquerade in analytics as "the AI judge read both pages and preferred this one".
+/// </param>
+public sealed record JudgeDecision(DuelVerdict Verdict, string Rationale, bool IsWalkover = false);
 
 /// <summary>
 /// Raised when a judge call hit a recoverable upstream failure — the most common case is an

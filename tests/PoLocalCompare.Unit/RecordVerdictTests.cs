@@ -134,4 +134,97 @@ public class RecordVerdictTests
         Assert.Equal(1200, left.CurrentElo);
         Assert.Equal(1200, right.CurrentElo);
     }
+
+    // ── Voiding a duel — terminal with no rating, even when result rows ARE complete ──────
+
+    [Fact]
+    public async Task HandleAsync_Voided_RecordsTerminalStateWithoutChangingElo()
+    {
+        // A void is the no-evidence terminal: the auto-judge or startup recovery sweeper writes
+        // it through this handler when both models failed (or no result row exists). It must
+        // never move ELO, must never count as a duel for the model aggregates, and must stamp
+        // a null JudgeModel so the Arena's "Judge: gpt-5.4-mini" attribution only ever shows
+        // for an actual LLM decision.
+        var left = MakeLocalModel(ModelId.From("left-v"));
+        var right = MakeLocalModel(ModelId.From("right-v"));
+        var duel = MakePendingDuel(DuelId.From("duel-v"), left.ModelId, right.ModelId);
+        var (duelRepo, modelRepo, eloRepo, handler) = MakeHandler(duel.DuelId, left, right, duel);
+
+        var result = await handler.HandleAsync(new RecordVerdictCommand(
+            duel.DuelId, DuelVerdict.Voided, VerdictSource.Constraint, "Abandoned before every model reported.", JudgeModel: null));
+
+        Assert.Equal(DuelVerdict.Voided, result!.Verdict);
+        Assert.Null(result.WinnerModelId);
+        Assert.Null(result.LoserModelId);
+        Assert.Equal(0, result.EloShiftWinner);
+        Assert.Equal(0, result.EloShiftLoser);
+        Assert.Equal(VerdictSource.Constraint, result.Source);
+        Assert.Equal(1200, left.CurrentElo);
+        Assert.Equal(1200, right.CurrentElo);
+        // No history rows written for a void.
+        eloRepo.Verify(r => r.SaveAsync(It.IsAny<EloRecord>()), Times.Never);
+    }
+
+    // ── A void is the no-evidence terminal, so it dispatches before the guard below — the
+    //   guard exists to stop ELO moving on missing evidence, and a void moves nothing. ──────
+
+    [Fact]
+    public async Task HandleAsync_VoidedWithBothResultsFailing_StillSucceeds()
+    {
+        // The endpoint refuses Left/Right/Tie on a both-failed duel; a void must NOT — the
+        // recovery sweeper arrives at this exact shape and needs a path through. The void
+        // handler is the only one that is allowed to record a verdict with two failed
+        // result rows on disk.
+        var left = MakeLocalModel(ModelId.From("left-bf"));
+        var right = MakeLocalModel(ModelId.From("right-bf"));
+        var duel = MakePendingDuel(DuelId.From("duel-bf"), left.ModelId, right.ModelId);
+        var (duelRepo, modelRepo, eloRepo, _) = MakeHandler(duel.DuelId, left, right, duel);
+
+        var duelResultRepo = new Mock<IDuelResultRepository>();
+        duelResultRepo.Setup(r => r.GetByDuelIdAsync(duel.DuelId)).ReturnsAsync(
+        [
+            new DuelResult(duel.DuelId, left.ModelId) { IsFailure = true, FailureReason = "OOM" },
+            new DuelResult(duel.DuelId, right.ModelId) { IsFailure = true, FailureReason = "Watchdog" },
+        ]);
+
+        var handler = new RecordVerdictHandler(
+            duelRepo.Object, modelRepo.Object, eloRepo.Object,
+            kFactor: 32, duelResultRepository: duelResultRepo.Object);
+
+        var result = await handler.HandleAsync(new RecordVerdictCommand(
+            duel.DuelId, DuelVerdict.Voided, VerdictSource.Constraint, "Both models failed."));
+
+        Assert.Equal(DuelVerdict.Voided, result!.Verdict);
+        Assert.Equal(1200, left.CurrentElo);
+        Assert.Equal(1200, right.CurrentElo);
+    }
+
+    // ── A verdict can never land on a still-running duel (one result row missing) ──────
+
+    [Fact]
+    public async Task HandleAsync_LeftWinsWithMissingOtherResult_Throws()
+    {
+        // The endpoint used to accept a vote with one result row still missing — and the
+        // server recorded a winner on half a duel. The guard is now the second arm of the
+        // no-evidence check; ELO must not move while a model is still generating.
+        var left = MakeLocalModel(ModelId.From("left-m"));
+        var right = MakeLocalModel(ModelId.From("right-m"));
+        var duel = MakePendingDuel(DuelId.From("duel-m"), left.ModelId, right.ModelId);
+        var (duelRepo, modelRepo, eloRepo, handler) = MakeHandler(duel.DuelId, left, right, duel);
+
+        var duelResultRepo = new Mock<IDuelResultRepository>();
+        duelResultRepo
+            .Setup(r => r.GetByDuelIdAsync(duel.DuelId))
+            .ReturnsAsync([new DuelResult(duel.DuelId, left.ModelId) { HtmlOutputRaw = "<p>left</p>" }]);
+
+        var guarded = new RecordVerdictHandler(
+            duelRepo.Object, modelRepo.Object, eloRepo.Object,
+            kFactor: 32, duelResultRepository: duelResultRepo.Object);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            guarded.HandleAsync(new RecordVerdictCommand(duel.DuelId, DuelVerdict.Left)));
+        Assert.Contains("not reported", ex.Message);
+        Assert.Equal(1200, left.CurrentElo);
+        Assert.Equal(1200, right.CurrentElo);
+    }
 }

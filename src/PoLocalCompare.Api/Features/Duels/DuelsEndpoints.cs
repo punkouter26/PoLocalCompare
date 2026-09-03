@@ -205,6 +205,12 @@ public static class DuelsEndpoints
         {
             try
             {
+                // Voided is system-reserved: the auto-judge and the startup recovery sweeper
+                // reach it through the handler directly, so an HTTP caller bidding a duel they
+                // dislike out of existence must get a 422, not a voided duel.
+                if (request.Verdict == DuelVerdict.Voided)
+                    return Results.UnprocessableEntity(new { error = "Voided is a system verdict and cannot be submitted manually." });
+
                 var actor = IdentityResolver.ResolveActor(httpContext.User);
                 var response = await handler.HandleWithRetryAsync(
                     new RecordVerdictCommand(duelId, request.Verdict, VerdictSource.Human, Actor: actor));

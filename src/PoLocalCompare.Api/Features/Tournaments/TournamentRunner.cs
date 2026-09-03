@@ -41,7 +41,15 @@ public sealed class TournamentRunner(
     private const int MaxConcurrentMatches = 2;
 
     /// <summary>How long a single match may take before the run gives up on it.</summary>
-    private static readonly TimeSpan MatchTimeout = TimeSpan.FromMinutes(12);
+    /// <remarks>
+    /// Must sit ABOVE the duel execution watchdog (Duel:TimeLimitSeconds, 900 s): the duel's own
+    /// watchdog is what converts a stalled model into a failure row + walkover, which this
+    /// runner then folds into the bracket. At the previous 12-minute match timeout the two
+    /// windows crossed — a duel legitimately finishing between 12 and 15 minutes got its
+    /// bracket Abandoned while the duel itself sailed on to judge and move ELO with nobody home
+    /// to receive the result.
+    /// </remarks>
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromMinutes(16);
 
     /// <summary>Gap between verdict polls while a match is running.</summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
@@ -161,6 +169,15 @@ public sealed class TournamentRunner(
         // one is waited on rather than re-run.
         if (match.DuelId is null)
         {
+            // Double-commence guard: the check-then-act below is only race-free while exactly
+            // one runner exists per tournament per process. The startup resume path can
+            // legitimately run alongside a runner a client just triggered, and without this
+            // re-read both would see DuelId == null and commence two duels for one match.
+            var fresh = await repository.GetByIdAsync(tournament.TournamentId);
+            var freshMatch = fresh?.Matches.FirstOrDefault(m => m.Round == match.Round && m.Index == match.Index);
+            if (freshMatch?.DuelId is not null)
+                return;
+
             var commence = services.GetRequiredService<CommenceDuelHandler>();
             var execution = services.GetRequiredService<DuelExecutionService>();
 
@@ -230,6 +247,16 @@ public sealed class TournamentRunner(
                 var (winnerId, winnerName) = Tournament.SeedTieBreak(match);
                 tournament.RecordWinner(match.Round, match.Index, winnerId, winnerName, wonOnSeedTieBreak: true);
                 break;
+            }
+
+            case DuelVerdict.Voided:
+            {
+                // Terminal with no winner and no draw to seed-break on: both models failed or
+                // the run was abandoned. The bracket cannot be seeded through it, so this is
+                // the honest Abandoned — naming a champion here would invent an outcome.
+                match.FailureReason = duel.JudgeRationale ?? "The duel was voided — no result existed to judge.";
+                tournament.Abandon($"{match.SlotAName} vs {match.SlotBName} was voided before a result existed.");
+                return false;
             }
 
             default:

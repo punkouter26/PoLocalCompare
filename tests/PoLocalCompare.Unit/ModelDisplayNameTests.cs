@@ -1,5 +1,7 @@
+using PoLocalCompare.Shared.Enums;
 using PoLocalCompare.Shared.Ids;
 using PoLocalCompare.Shared.Models;
+using PoLocalCompare.Shared.Presentation;
 
 namespace PoLocalCompare.Unit;
 
@@ -53,5 +55,22 @@ public class ModelDisplayNameTests
     {
         Assert.Equal("Phi-4", ModelDisplayName.ResolveForDisplay("  Phi-4  ", null, Id));
         Assert.False(ModelDisplayName.IsUnresolved("Phi-4", Id.Value));
+    }
+
+    // ── ModelTypeGroup.ShortLabel vocabulary ───────────────────────────────────────────────
+
+    /// <summary>
+    /// The badge text and the filter chips must use the same words. Three call sites read
+    /// <see cref="ModelTypeGroup.ShortLabel"/>; the chips read <see cref="ModelTypeGroup.Label"/>;
+    /// a card showing "SVC" while sitting under a tab that says "Ollama" was the symptom that
+    /// motivated this test.
+    /// </summary>
+    [Theory]
+    [InlineData(ModelType.Remote, "REMOTE")]
+    [InlineData(ModelType.Local, "BROWSER")]
+    [InlineData(ModelType.LocalService, "OLLAMA")]
+    public void ShortLabel_MatchesTheFilterChipVocabulary(ModelType type, string expected)
+    {
+        Assert.Equal(expected, ModelTypeGroup.ShortLabel(type));
     }
 }

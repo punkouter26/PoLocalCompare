@@ -22,7 +22,11 @@
     }
     else
     {
-        @if (_entries.Count > 0 && _entries.All(e => e.DuelCount == 0))
+        // Exactly one state at a time. This used to render the empty banner AND the ranking
+        // table AND the summary bar together — "No competitive history yet" above a table with
+        // zero rows above "26 models ranked / Top ELO: X", three sentences that contradicted
+        // each other. No duelled model ⇒ nothing to rank, so the banner is the whole page.
+        if (_entries.Count == 0 || _entries.All(e => e.DuelCount == 0))
         {
             <div class="po-empty">
                 <h2>🏁 No competitive history yet</h2>
@@ -32,6 +36,8 @@
                 </div>
             </div>
         }
+        else
+        {
         @* Rows open the kill-list panel, so they are keyboard-operable (SC 2.1.1). *@
         <div class="po-table-wrap leaderboard__grid--scrollable">
             <table class="po-table po-table--selectable po-table--cards leaderboard__grid">
@@ -129,14 +135,18 @@
         @if (_entries.Count > 0)
         {
             var totalDuels = _entries.Sum(e => e.DuelCount) / 2;
-            var topModel = _entries.FirstOrDefault()?.DisplayName ?? "—";
+            // Top of the DISPLAYED rows: _entries includes never-duelled catalog entries, so
+            // the old FirstOrDefault() crowned an alphabetical 1200 as "Top ELO" before the
+            // first duel was ever fought.
+            var topModel = _displayedEntries.FirstOrDefault()?.DisplayName ?? "—";
             <div class="leaderboard__summary">
-                <span>&#x1F4CA; <strong>@_entries.Count</strong> model@(_entries.Count == 1 ? "" : "s") ranked</span>
+                <span>&#x1F4CA; <strong>@_displayedEntries.Count</strong> model@(_displayedEntries.Count == 1 ? "" : "s") ranked</span>
                 <span>&#x2694;&#xFE0F; <strong>@totalDuels</strong> duel@(totalDuels == 1 ? "" : "s") fought</span>
                 <span>&#x1F3C6; @TopLabel: <strong>@topModel</strong></span>
             </div>
         }
 
+        }
     }
 </div>
 

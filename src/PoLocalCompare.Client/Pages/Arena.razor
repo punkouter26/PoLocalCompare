@@ -21,6 +21,24 @@
     {
         <p class="po-status">Loading duel results…</p>
     }
+    else if (_loadFailed)
+    {
+        @* A transient failure used to land here with the same "duel no longer exists" message
+           as a real 404 — observed live: a stalled API request left a duel that very much
+           existed rendering a "it may have been wiped" dead end. A network failure is not
+           evidence about the duel, so it gets its own message and a retry instead.
+        *@
+        <div class="arena__not-found">
+            <p class="arena__error">Couldn't load this duel — the server didn't answer in time. Nothing has been lost; try again.</p>
+            <div class="arena__actions arena__actions--secondary">
+                <button type="button" class="po-btn po-btn--primary arena__action-btn" onclick="@RetryLoadAsync" disabled="@_reloading">
+                    @(_reloading ? "Reloading…" : "↻ Try again")
+                </button>
+                <a class="po-btn arena__action-btn" href="/">⚔ Start a new duel</a>
+                <a class="po-btn arena__action-btn" href="/archive">📁 Browse the archive</a>
+            </div>
+        </div>
+    }
     else if (_duel is null)
     {
         <div class="arena__not-found">
@@ -181,6 +199,20 @@
                 {
                     <span>Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong> — recording…</span>
                 }
+                else if (_verdictValue == DuelVerdict.Voided)
+                {
+                    @* Terminal with nothing to judge: no winner to name, no rating that moved.
+                       Before this branch existed a voided duel rendered with no status line at
+                       all and no vote buttons — a page with nothing to say about why. *@
+                    <span>
+                        <span aria-hidden="true">⊘</span>
+                        Duel voided — there was no result to judge, so no rating moved.
+                    </span>
+                    @if (!string.IsNullOrWhiteSpace(_judgeRationale))
+                    {
+                        <span class="arena__judge-rationale">@_judgeRationale</span>
+                    }
+                }
                 else if (_verdictValue == DuelVerdict.Tie)
                 {
                     @* A tie has no winner to name, so it says what happened instead — and says
@@ -254,6 +286,17 @@
             {
                 <div class="arena__judge-note arena__judge-note--error">
                     Both models failed — start a new duel with a different pairing.
+                </div>
+            }
+            else if (WaitingForOtherModel)
+            {
+                @* One side crossed the line while the other is still working. This used to
+                   fall through to the judge countdown even though no judging can start yet —
+                   and the vote buttons under it led to a 409. Say what is actually happening.
+                *@
+                <div class="arena__judge-note" role="status">
+                    <span aria-hidden="true">⏳</span>
+                    First result is in — waiting for the other model to finish.
                 </div>
             }
             else if (_autoJudgeDeciding)
@@ -414,6 +457,9 @@
     private int? _autoJudgeRemaining;
     private bool _autoJudgeDeciding;
     private CancellationTokenSource? _autoJudgeCts;
+    /// <summary>The initial load threw — a transient failure, distinct from a 404.</summary>
+    private bool _loadFailed;
+    private bool _reloading;
 
     // Both models failed → there's nothing to judge; the UI prompts a fresh duel instead.
     private bool BothSidesFailed() =>
@@ -432,7 +478,17 @@
     /// disabling them: once the verdict is in they can never become live again, and a dead
     /// control in the primary position reads as a broken page.
     /// </summary>
-    private bool CanStillVote => !_verdictRecorded && !BothSidesFailed() && !_duelStillRunning;
+    /// <remarks>
+    /// Requires the duel to be terminal (<c>CompletedAt</c> set). One side finishing early used
+    /// to light the buttons while the other model was still generating — and the server, before
+    /// the missing-result guard, ACCEPTED that vote and moved ELO on half a duel.
+    /// </remarks>
+    private bool CanStillVote =>
+        !_verdictRecorded && !BothSidesFailed() && !_duelStillRunning && _duel?.CompletedAt is not null;
+
+    /// <summary>One result is in but the duel is not terminal — the other model is still going.</summary>
+    private bool WaitingForOtherModel =>
+        !_duelStillRunning && !_verdictRecorded && _duel is { Verdict: DuelVerdict.Pending, CompletedAt: null };
 
     /// <summary>The model's actual name, whether or not the duel is currently masked.</summary>
     /// <remarks>
@@ -586,6 +642,24 @@
 
         try
         {
+            await LoadDuelAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// Loads the duel and wires the streaming path. Split from <see cref="OnInitializedAsync"/>
+    /// so a transient failure can be retried from the page instead of stranding it on the
+    /// "duel no longer exists" branch — a fetch that failed says nothing about whether the
+    /// duel exists.
+    /// </summary>
+    private async Task LoadDuelAsync()
+    {
+        try
+        {
             _duel = await ApiClient.GetDuelAsync(_duelId);
             if (_duel is not null)
             {
@@ -615,10 +689,11 @@
                     _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
                     _ = RunStallTimerAsync(_stallTimer);
                 }
-                // If a verdict already exists, restore it. A tie counts: it is terminal and has
-                // no winner id, so testing the winner id alone would drop it back into the
-                // countdown branch below and re-arm a judge that has already spoken.
-                if (_duel.Verdict is DuelVerdict.Tie
+                // If a verdict already exists, restore it. A tie or a void counts: both are
+                // terminal with no winner id, so testing the winner id alone would drop them
+                // back into the countdown branch below and re-arm a judge that has already
+                // spoken (or offer vote buttons on a duel that can no longer be judged).
+                if (_duel.Verdict is DuelVerdict.Tie or DuelVerdict.Voided
                     || (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null))
                 {
                     _verdictRecorded = true;
@@ -638,9 +713,27 @@
                 }
             }
         }
+        catch (Exception)
+        {
+            // A failed fetch is NOT evidence that the duel is gone. Distinguish the two so a
+            // network blip offers a retry instead of the misleading "wiped" message.
+            _duel = null;
+            _loadFailed = true;
+        }
+    }
+
+    private async Task RetryLoadAsync()
+    {
+        if (_reloading) return;
+        _reloading = true;
+        _loadFailed = false;
+        try
+        {
+            await LoadDuelAsync();
+        }
         finally
         {
-            _loading = false;
+            _reloading = false;
         }
     }
 
@@ -749,11 +842,13 @@
 
         if (!string.Equals(predictedWinner, _winnerModelId, StringComparison.Ordinal))
         {
-            _overriddenNotice = _verdictValue == DuelVerdict.Tie
-                ? "The AI judge recorded a tie first — it found both outputs equivalent. Your pick was not counted."
-                : _verdictSource == VerdictSource.Ai
-                    ? $"The AI judge recorded its verdict first — {ResolveDisplayName(_winnerModelId)} won. Your pick was not counted."
-                    : $"This duel was already decided — {ResolveDisplayName(_winnerModelId)} won.";
+            _overriddenNotice = _verdictValue == DuelVerdict.Voided
+                ? "The duel was voided before your pick landed — there was nothing to judge."
+                : _verdictValue == DuelVerdict.Tie
+                    ? "The AI judge recorded a tie first — it found both outputs equivalent. Your pick was not counted."
+                    : _verdictSource == VerdictSource.Ai
+                        ? $"The AI judge recorded its verdict first — {ResolveDisplayName(_winnerModelId)} won. Your pick was not counted."
+                        : $"This duel was already decided — {ResolveDisplayName(_winnerModelId)} won.";
         }
 
         await AnimateEloAsync();

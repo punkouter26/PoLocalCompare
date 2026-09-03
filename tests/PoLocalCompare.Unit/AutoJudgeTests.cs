@@ -170,7 +170,7 @@ public class AutoJudgeTests
     }
 
     [Fact]
-    public async Task RunAsync_BothModelsFailed_LeavesDuelPendingAndNeverCallsJudge()
+    public async Task RunAsync_BothModelsFailed_VoidsDuelAndNeverCallsJudge()
     {
         var duel = MakePendingDuel();
         var harness = BuildHarness(
@@ -180,7 +180,14 @@ public class AutoJudgeTests
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
 
-        Assert.Equal(DuelVerdict.Pending, duel.Verdict);
+        // Both-failed was the original "leave Pending and stand down" branch (PRD §9 item 9).
+        // That left the duel haunting the lobby's awaiting-judgment counter forever — nothing
+        // would ever move ELO on it, and the Arena still offered vote buttons the server would
+        // reject. Voiding is the honest terminal: Verdict != Pending, no winner, no judge.
+        Assert.Equal(DuelVerdict.Voided, duel.Verdict);
+        Assert.Equal(VerdictSource.Constraint, duel.VerdictSource);
+        Assert.Null(duel.WinnerModelId);
+        Assert.Null(duel.JudgeModel);
         harness.Llm.Verify(j => j.JudgeAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -217,7 +224,11 @@ public class AutoJudgeTests
         Assert.Equal(expectedVerdict, duel.Verdict);
         Assert.Equal(expectedWinner, duel.WinnerModelId);
         Assert.Equal(expectedLoser, duel.LoserModelId);
-        Assert.Equal(VerdictSource.Ai, duel.VerdictSource);
+        // A walkover is arithmetic over the result rows — nothing read the outputs — so it must
+        // NOT carry VerdictSource.Ai or the LLM deployment name. Otherwise every analytics
+        // breakdown conflates "the AI judge decided" with "the opponent failed".
+        Assert.Equal(VerdictSource.Constraint, duel.VerdictSource);
+        Assert.Null(duel.JudgeModel);
         Assert.NotNull(duel.JudgeRationale);
         Assert.Contains("Walkover", duel.JudgeRationale);
         Assert.Contains(failureReason, duel.JudgeRationale);
@@ -244,10 +255,10 @@ public class AutoJudgeTests
         harness.DuelRepo.Verify(r => r.GetByIdAsync(It.IsAny<DuelId>()), Times.Never);
     }
 
-    // ── A judge hit by a rate-limit is re-queued, not silently stood down ──────
+    // ── A judge hit by a rate-limit retries on a detached timer, not the shared queue ─────────
 
     [Fact]
-    public async Task RunAsync_RateLimitWithinRetryBudget_RequeuesAndPersistsReason()
+    public async Task RunAsync_RateLimitWithinRetryBudget_PersistsReasonAndDoesNotReEnqueue()
     {
         var duel = MakePendingDuel();
         var harness = BuildHarness(
@@ -266,9 +277,13 @@ public class AutoJudgeTests
 
         await harness.Judge.RunAsync(duel.DuelId, CancellationToken.None);
 
-        // The duel must stay Pending (no ELO movement) and the re-queued work item must exist.
+        // The duel stays Pending while we wait; nothing here moves ELO. The retry used to
+        // occupy a BackgroundTaskService slot for the full retry delay, which would freeze
+        // every duel queued behind it — BackgroundTaskService is single-consumer. The fix
+        // detaches the retry on the thread pool, so the shared queue is empty (no `Work`
+        // items) and the next caller can run immediately.
         Assert.Equal(DuelVerdict.Pending, duel.Verdict);
-        Assert.Single(harness.Queue.Work);
+        Assert.Empty(harness.Queue.Work);
         Assert.NotNull(duel.JudgeStoodDownReason);
         Assert.Contains("Rate-limited", duel.JudgeStoodDownReason!);
     }

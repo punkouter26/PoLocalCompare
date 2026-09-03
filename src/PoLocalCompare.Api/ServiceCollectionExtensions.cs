@@ -23,6 +23,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AutoJudge>();
         services.AddScoped<LobbyNotifier>();
         services.AddScoped<OrphanModelIdRemapper>();
+        services.AddScoped<DuelRecoverySweeper>();
+        // Singleton like TournamentRunner's own consumers: it kicks off bracket runs at startup
+        // and those runs outlive the request-free lifetime they start from.
+        services.AddSingleton<TournamentRunner>();
+        services.AddHostedService<TournamentResumeService>();
         services.AddScoped<CreateTournamentHandler>();
         // Singleton: it owns a Chromium process, launched lazily on first use and reused.
         services.AddSingleton<HtmlScreenshotRenderer>();

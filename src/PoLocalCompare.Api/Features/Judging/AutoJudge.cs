@@ -31,16 +31,19 @@ internal static partial class AutoJudgeLog
 /// </summary>
 /// <remarks>
 /// This reverses the original human-only-verdict rule (PRD §9 item 7) and is why every verdict
-/// now carries a <see cref="VerdictSource"/>. Three invariants keep it honest:
-/// a human who picks inside the window always wins the race; a judge that cannot reach a
-/// decision leaves the duel Pending rather than guessing — ELO never moves on no evidence
-/// (item 9, both sides failed); and a one-sided execution failure is awarded to the survivor
-/// as a walkover (item 20, one side failed — the survivor IS the evidence).
+/// now carries a <see cref="VerdictSource"/>. Four invariants keep it honest:
+/// a human who picks inside the window always wins the race; a judge that cannot reach the LLM
+/// (unreachable, unparseable) leaves the duel Pending rather than guessing — ELO never moves on
+/// no evidence; a one-sided execution failure is awarded to the survivor as a walkover (item 20,
+/// one side failed — the survivor IS the evidence), stamped <see cref="VerdictSource.Constraint"/>
+/// because no model ever read the outputs; and when BOTH sides failed there is nothing to act
+/// on at all, so the duel is voided — terminal, banks nothing, and stops haunting the lobby's
+/// "awaiting judgment" counter forever.
 ///
-/// A fourth behaviour complements those: a judge that *temporarily* cannot reach the model —
-/// a 429 with a <c>Retry-After</c> header, mostly — is re-queued for the requested delay
-/// rather than stood down, so a Foundry rate-limit burst does not silently turn a long unattended
-/// run into one-judge-recorded.
+/// A fifth behaviour complements those: a judge that *temporarily* cannot reach the model —
+/// a 429 with a <c>Retry-After</c> header, mostly — is re-scheduled after the requested delay
+/// on a detached timer rather than stood down, so a Foundry rate-limit burst does not silently
+/// turn a long unattended run into a one-judge-recorded one.
 /// </remarks>
 public sealed class AutoJudge
 {
@@ -140,10 +143,9 @@ public sealed class AutoJudge
             }
 
             // Make the "could not decide" reason persistent on the duel so a human arriving at
-            // the Arena later gets the same hint the judge had. Both sides
-            // failed → no evidence to act on; leave Pending. (One-sided failures take the
-            // walkover path inside DecideAsync, so they reach RecordAsync, not this branch —
-            // see PRD §9 item 20.)
+            // the Arena later gets the same hint the judge had. This is now only the
+            // judge-unreachable / unparseable-reply path — both-models-failed takes the Voided
+            // decision inside DecideAsync, so it reaches RecordAsync, not this branch.
             if (decision is null)
             {
                 standDownReason = SynthesizeStandDownReason(left, right);
@@ -194,7 +196,10 @@ public sealed class AutoJudge
             // Out of retries. Leave the duel Pending so a human can finish it; the queue item
             // is the only thing standing in the way of the next duel, so dropping it is
             // essential and "judge stood down (rate-limit)" still appears in the Arena for
-            // anyone who walks back to this duel.
+            // anyone who walks back to this duel. The attempt counter is dropped with it —
+            // it used to leak here (only the success and no-decision paths cleared it), so a
+            // duel re-arrived at later started life with a spent budget.
+            RateLimitAttempts.TryRemove(duelId, out _);
             AutoJudgeLog.StoodDown(_logger, duelId,
                 $"rate-limit retries exhausted ({attempt - 1} attempts)");
             return Task.CompletedTask;
@@ -202,14 +207,24 @@ public sealed class AutoJudge
 
         AutoJudgeLog.RateLimited(_logger, duelId, cappedDelay.TotalSeconds, attempt, max);
 
-        _backgroundQueue.QueueBackgroundWork(async ct =>
+        // Detached timer, not a queue item. The retry used to occupy a BackgroundTaskService
+        // slot for the whole capped delay (up to RateLimitRetryMaxDelaySeconds) — and because
+        // that host is single-consumer, every duel queued behind it stalled with the duel that
+        // got rate-limited, the opposite of what the old doc comment promised. A detached task
+        // frees the slot immediately; a host shutdown kills the wait, which leaves the duel
+        // Pending and hand-judgeable — the same outcome the old path had on shutdown.
+        _ = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(cappedDelay, ct);
-                await RunAsync(duelId, ct, delaySecondsOverride: 0);
+                await Task.Delay(cappedDelay);
+                await RunAsync(duelId, CancellationToken.None, delaySecondsOverride: 0);
             }
             catch (OperationCanceledException) { /* host shutting down */ }
+            catch (Exception ex)
+            {
+                AutoJudgeLog.Failed(_logger, ex, duelId);
+            }
         });
 
         return Task.CompletedTask;
@@ -224,11 +239,20 @@ public sealed class AutoJudge
         var leftOk = left is not null && !left.IsFailure && !string.IsNullOrWhiteSpace(left.HtmlOutputRaw);
         var rightOk = right is not null && !right.IsFailure && !string.IsNullOrWhiteSpace(right.HtmlOutputRaw);
 
-        // Nothing to compare. Leave it Pending — the Arena tells the user to run a fresh duel.
+        // Nothing to compare. There is no evidence and none is coming — both result rows exist
+        // and both are failures — so the duel is VOIDED rather than left Pending. Leaving it
+        // Pending stranded it forever: the Arena offered winner buttons the server would reject,
+        // the lobby counted it as "awaiting judgment" until the end of time, and the only exit
+        // was a human reading two failure banners. A void is the honest terminal: it banks no
+        // duel count, no draw, no ELO, and drops out of every awaiting-judgment projection.
+        // Recording happens inside RecordAsync, which logs once on success — the void case used
+        // to log here too, leaving two Recorded lines for the same duel.
         if (!leftOk && !rightOk)
         {
-            AutoJudgeLog.StoodDown(_logger, duel.DuelId, "neither model produced output");
-            return null;
+            return new JudgeDecision(
+                DuelVerdict.Voided,
+                "Neither model produced usable output — the duel was voided with no ELO change.",
+                IsWalkover: true);
         }
 
         // One side produced nothing. The survivor is direct model-quality evidence, not the
@@ -242,14 +266,17 @@ public sealed class AutoJudge
             var failedSide = leftOk ? "right" : "left";
             var survivorSide = leftOk ? DuelVerdict.Left : DuelVerdict.Right;
             var failed = leftOk ? right : left;
+            // Trim the trailing period: the reason text usually ends in one, and the rationale
+            // template appends its own — the Arena used to show "(timeout or user abort).).".
             var why = string.IsNullOrWhiteSpace(failed?.FailureReason)
                 ? "produced no output"
-                : failed.FailureReason!.Split('\n', 2)[0].Trim();
+                : failed.FailureReason!.Split('\n', 2)[0].Trim().TrimEnd('.');
             // Caller (RecordAsync) logs Recorded once the verdict is on disk; no log here to
             // avoid double-logging a walkover as both "decided" and "stood down".
             return new JudgeDecision(
                 survivorSide,
-                $"Walkover: opponent ({failedSide}) failed to produce output ({why}).");
+                $"Walkover: opponent ({failedSide}) failed to produce output ({why}).",
+                IsWalkover: true);
         }
 
         return await _judge.JudgeAsync(
@@ -299,12 +326,19 @@ public sealed class AutoJudge
 
     private async Task RecordAsync(DuelId duelId, JudgeDecision decision, CancellationToken cancellationToken)
     {
+        // A walkover or a void is arithmetic over the result rows, not an LLM opinion: it must
+        // never carry VerdictSource.Ai or the deployment name, or every downstream breakdown
+        // ("how often does the AI judge decide duels?") counts forfeits as judgments.
+        var (source, judgeModel) = decision.IsWalkover
+            ? (VerdictSource.Constraint, null)
+            : (VerdictSource.Ai, _options.Deployment);
+
         var command = new RecordVerdictCommand(
             duelId,
             decision.Verdict,
-            VerdictSource.Ai,
+            source,
             decision.Rationale,
-            _options.Deployment);
+            judgeModel);
 
         VerdictResponseDto? response;
         try

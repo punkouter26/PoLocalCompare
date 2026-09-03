@@ -15,7 +15,9 @@ public enum VerdictSource
 
     /// <summary>
     /// A challenge budget decided it: one model stayed inside the ceiling and the other did not,
-    /// so the match was forfeited rather than judged on the merits.
+    /// so the match was forfeited rather than judged on the merits — or no output existed to
+    /// judge at all (a walkover where the opponent failed to produce anything, or a duel voided
+    /// during startup recovery), so the outcome is arithmetic over result rows, never an opinion.
     /// </summary>
     /// <remarks>
     /// Its own value rather than folded into <see cref="Ai"/> because it is a different signal

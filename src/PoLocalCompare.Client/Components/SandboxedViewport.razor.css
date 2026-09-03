@@ -20,9 +20,15 @@
     /* Sized by its contents, and exactly as wide as the frame. It used to be `height: 100%`,
        which resolves against an auto-height parent and stretched the card well past the
        320x180 frame inside it — the empty remainder is what the telemetry HUD ended up
-       drawn over. Nothing here should stretch; the frame's fixed box is the whole size. */
-    width: fit-content;
-    max-width: 100%;
+       drawn over. Nothing here should stretch; the frame's fixed box is the whole size.
+       Width is min(100%, frame+border) rather than `fit-content`: fit-content against a
+       child capped by max-width:100% is a cyclic resolution that collapses to ~1px whenever
+       this card has no other wide content — which in the Arena is ALWAYS, because the model
+       name and quality chip live in the slot header *outside* this card. Measured live: the
+       preview iframe rendered 0x180 inside a 352px grid slot. The explicit min() keeps the
+       frame's exact size while guaranteeing a real width to resolve the frame's max against. */
+    width: min(100%, calc(var(--preview-w) + 2px));
+    min-width: 0;
     margin-inline: auto;
 }
 

@@ -25,11 +25,24 @@ namespace PoLocalCompare.Shared.Enums;
 /// Removing it is safe for stored data: the verdict round-trips as a string, and
 /// <c>Enum.TryParse</c> falls back to <see cref="Pending"/>, so any legacy "Expired" row simply
 /// becomes judgeable again — which is the better outcome for it in any case.
+///
+/// <see cref="Voided">Voided</see> is the newer sibling and exists precisely because
+/// <c>Expired</c> did not: it has two live writers — the startup recovery sweeper (a duel the
+/// process died in the middle of, where a model never reported) and the auto-judge's
+/// both-models-failed path — so it can never be an unreachable label. Unlike a tie it banks
+/// nothing: no duel count, no draw, no history row. There is no evidence to bank.
 /// </remarks>
 public enum DuelVerdict
 {
     Pending,
     Left,
     Right,
-    Tie
+    Tie,
+
+    /// <summary>
+    /// Terminal with no judgment possible: both models failed to produce output, or the run was
+    /// abandoned before every model reported. No ELO, no duel count, no history — and unlike
+    /// <see cref="Pending"/> it is finished, so it never shows up as "awaiting judgment".
+    /// </summary>
+    Voided
 }

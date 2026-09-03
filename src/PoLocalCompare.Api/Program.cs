@@ -22,6 +22,13 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // ─── Key Vault (T037) — must be FIRST before Serilog config ────────────
+    // Capture what the local sources already provided. AddAzureKeyVault appends its source at
+    // the END of the provider chain, giving it precedence over environment variables — so
+    // without this capture, a PoLocalCompare--ConnectionStrings--* secret in the vault would
+    // silently repoint a local dev run at production storage and beat any env-var override.
+    var preKvTableConnection = builder.Configuration["ConnectionStrings:AzureTableStorage"];
+    var preKvBlobConnection = builder.Configuration["ConnectionStrings:AzureBlobStorage"];
+
     var keyVaultUri = builder.Configuration["KeyVault:Uri"];
     if (!string.IsNullOrEmpty(keyVaultUri))
     {
@@ -61,15 +68,18 @@ try
         }
     });
 
-    // In Development, Key Vault holds production storage connection strings.
-    // Override them back to Azurite so local runs don't hit the real storage account.
+    // In Development, Key Vault holds production storage connection strings, and its config
+    // source out-ranks everything the machine provided. Restore whatever the local sources
+    // said (env var, appsettings.Development.json) — defaulting to Azurite when they said
+    // nothing — so a local run can never write to the real storage account. Production is
+    // untouched: there the vault-provided strings are the point.
     if (builder.Environment.IsDevelopment())
     {
-        if (string.IsNullOrWhiteSpace(builder.Configuration["ConnectionStrings:AzureTableStorage"]))
-            builder.Configuration["ConnectionStrings:AzureTableStorage"] = "UseDevelopmentStorage=true";
+        if (builder.Configuration["ConnectionStrings:AzureTableStorage"] != preKvTableConnection)
+            builder.Configuration["ConnectionStrings:AzureTableStorage"] = preKvTableConnection ?? "UseDevelopmentStorage=true";
 
-        if (string.IsNullOrWhiteSpace(builder.Configuration["ConnectionStrings:AzureBlobStorage"]))
-            builder.Configuration["ConnectionStrings:AzureBlobStorage"] = "UseDevelopmentStorage=true";
+        if (builder.Configuration["ConnectionStrings:AzureBlobStorage"] != preKvBlobConnection)
+            builder.Configuration["ConnectionStrings:AzureBlobStorage"] = preKvBlobConnection ?? "UseDevelopmentStorage=true";
     }
 
     if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(builder.Configuration["AzureAiFoundry:ApiKey"]))
@@ -187,6 +197,24 @@ try
         var tables = app.Services.GetRequiredService<TableServiceClient>();
         using var startupCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await tables.GetTableClient("Models").CreateIfNotExistsAsync(startupCts.Token);
+    }
+
+    // ─── Startup recovery: settle duels the previous process left behind ──────
+    // Runs in every environment — a mid-duel process death is the production case (App Service
+    // deployments), and leaving those rows Pending forever is what stranded them. The sweeper
+    // re-judges duels whose results are complete and voids the rest; per-duel failures are
+    // swallowed inside, so one bad row cannot stop startup.
+    using (var sweepScope = app.Services.CreateScope())
+    {
+        try
+        {
+            var sweeper = sweepScope.ServiceProvider.GetRequiredService<DuelRecoverySweeper>();
+            await sweeper.SweepAsync(app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Duel recovery sweep failed at startup; affected duels stay judgeable by hand.");
+        }
     }
 
     // ─── Middleware pipeline ─────────────────────────────────────────────────

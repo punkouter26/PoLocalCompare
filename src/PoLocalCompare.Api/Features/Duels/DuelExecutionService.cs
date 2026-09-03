@@ -116,13 +116,18 @@ public sealed class DuelExecutionService
             var lobby = services.GetRequiredService<LobbyNotifier>();
             await lobby.DuelStartedAsync(duel, leftModel.DisplayName, rightModel.DisplayName, cancellationToken);
 
-            // 900-second watchdog (15 min) — allows for WebGPU shader JIT compilation on first run
-            using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(900));
+            // Watchdog — was a hardcoded 900 s while appsettings shipped Duel:TimeLimitSeconds =
+            // 300 that nothing read, so the two numbers disagreed with each other and with every
+            // DTO that echoed one or the other. One knob now rules them all: the config value,
+            // defaulting to the 900 s the WebGPU JIT warm-up was sized for.
+            var watchdogSeconds = Math.Clamp(
+                _configuration.GetValue("Duel:TimeLimitSeconds", 900), 30, 3600);
+            using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(watchdogSeconds));
 
             var leftTask = RunModelAsync(duelId, leftModel, "Left", duel.PromptFull,
-                ResolveProxy(leftModel), duelResultRepo, watchdog.Token);
+                ResolveProxy(leftModel), duelResultRepo, watchdogSeconds, watchdog.Token);
             var rightTask = RunModelAsync(duelId, rightModel, "Right", duel.PromptFull,
-                ResolveProxy(rightModel), duelResultRepo, watchdog.Token);
+                ResolveProxy(rightModel), duelResultRepo, watchdogSeconds, watchdog.Token);
 
             await Task.WhenAll(leftTask, rightTask);
 
@@ -158,7 +163,7 @@ public sealed class DuelExecutionService
                     StartedAt = duel.StartedAt,
                     CompletedAt = duel.CompletedAt,
                     Verdict = DuelVerdict.Pending,
-                    TimeLimitSeconds = 900,
+                    TimeLimitSeconds = watchdogSeconds,
                     OwnerId = duel.OwnerId,
                     VerdictBy = duel.VerdictBy,
                 });
@@ -197,6 +202,7 @@ public sealed class DuelExecutionService
         string promptFull,
         IRemoteInferenceProxy inferenceProxy,
         IDuelResultRepository duelResultRepo,
+        long watchdogSeconds,
         CancellationToken cancellationToken)
     {
         await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Initializing, 0, 0);
@@ -215,7 +221,7 @@ public sealed class DuelExecutionService
             if (model.ModelType == ModelType.Local)
             {
                 // Local model: client-side inference via SignalR; server waits for client to report results
-                result = await WaitForLocalModelResultAsync(duelId, model, side, cancellationToken);
+                result = await WaitForLocalModelResultAsync(duelId, model, side, watchdogSeconds, cancellationToken);
             }
             else
             {
@@ -236,6 +242,12 @@ public sealed class DuelExecutionService
                         if (warmUpMs is null && tokenCount >= 1)
                             warmUpMs = elapsedMs;
 
+                        // Gap to the PREVIOUS callback, not to now. This used to stamp
+                        // lastTokenAt = UtcNow and then measure UtcNow - lastTokenAt, which is
+                        // zero by construction — IsStalled was false in every frame it was
+                        // ever sent. Measuring the gap between token arrivals is the actual
+                        // "tokens stopped flowing" signal the client displays.
+                        var secondsSincePreviousToken = (DateTimeOffset.UtcNow - lastTokenAt).TotalSeconds;
                         lastTokenAt = DateTimeOffset.UtcNow;
 
                         // Peak velocity (generation-phase only, excluding warm-up)
@@ -243,7 +255,7 @@ public sealed class DuelExecutionService
                         var currentVelocity = genMs > 0 ? Math.Round(tokenCount / (genMs / 1000.0), 1) : 0;
                         if (currentVelocity > peakVelocity) peakVelocity = currentVelocity;
 
-                        var isStalled = (DateTimeOffset.UtcNow - lastTokenAt).TotalSeconds > 2;
+                        var isStalled = secondsSincePreviousToken > 2;
 
                         await SendStatusAsync(duelId, model.ModelId, side,
                             DuelStatus.Generating, elapsedMs, tokenCount,
@@ -263,8 +275,8 @@ public sealed class DuelExecutionService
             result = new DuelResult(duelId, model.ModelId)
             {
                 IsFailure = true,
-                FailureReason = "Inference cancelled by watchdog (900s).",
-                TotalDurationMs = 900_000,
+                FailureReason = $"Inference cancelled by watchdog ({TimeSpan.FromSeconds(watchdogSeconds).TotalMinutes:F0} min).",
+                TotalDurationMs = watchdogSeconds * 1000L,
             };
         }
         catch (Exception ex)
@@ -281,33 +293,78 @@ public sealed class DuelExecutionService
             _logger.LogWarning(ex, "Inference crashed for {Side} ({ModelId}); recording failure row.", side, model.ModelId);
         }
 
-        if (result.IsFailure)
+        // The row is the whole point of everything above — a throw in the status ping, the
+        // enrichment or the save used to escape past the defensive catches and strand the duel
+        // as "in progress, not judged" even though inference itself had finished cleanly. So
+        // the tail is its own guarded section: an enrichment failure degrades the row to a
+        // failure row rather than losing it.
+        try
         {
-            await SendStatusAsync(duelId, model.ModelId, side,
-                DuelStatus.Failed, result.TotalDurationMs, result.TokenCount);
+            if (result.IsFailure)
+            {
+                await SendStatusAsync(duelId, model.ModelId, side,
+                    DuelStatus.Failed, result.TotalDurationMs, result.TokenCount);
+            }
+            else
+            {
+                // The finished output rides out with the Done status rather than waiting for
+                // DuelComplete: that message only fires once *both* sides are in, so until then a
+                // model that crossed the line would still be showing its last mid-stream preview —
+                // truncated ~25 tokens short of the ending, or blank if it never emitted one.
+                await SendStatusAsync(duelId, model.ModelId, side,
+                    DuelStatus.Done, result.TotalDurationMs, result.TokenCount,
+                    finalHtml: Truncate(result.HtmlOutputRaw));
+            }
+
+            // Character density + quality + GreenStats enrichment (shared Domain policy).
+            var electricityRate = _configuration.GetValue("GreenStats:ElectricityRateUsd", 0.12);
+            DuelResultEnricher.Enrich(result, model, electricityRate);
+
+            await duelResultRepo.SaveAsync(result);
         }
-        else
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The finished output rides out with the Done status rather than waiting for
-            // DuelComplete: that message only fires once *both* sides are in, so until then a
-            // model that crossed the line would still be showing its last mid-stream preview —
-            // truncated ~25 tokens short of the ending, or blank if it never emitted one.
-            await SendStatusAsync(duelId, model.ModelId, side,
-                DuelStatus.Done, result.TotalDurationMs, result.TokenCount,
-                finalHtml: Truncate(result.HtmlOutputRaw));
+            // Watchdog fired mid-tail — save the row un-enriched on a detached task so the
+            // evidence still lands (fire-and-forget: execution is being torn down either way).
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (!result.IsFailure)
+                    {
+                        var electricityRate = _configuration.GetValue("GreenStats:ElectricityRateUsd", 0.12);
+                        DuelResultEnricher.Enrich(result, model, electricityRate);
+                    }
+                    using var scope = _scopeFactory.CreateScope();
+                    await scope.ServiceProvider.GetRequiredService<IDuelResultRepository>().SaveAsync(result);
+                }
+                catch (Exception saved)
+                {
+                    _logger.LogWarning(saved, "Could not save the {Side} result row for duel {DuelId} after the watchdog fired.", side, duelId);
+                }
+            });
         }
-
-        // Character density + quality + GreenStats enrichment (shared Domain policy).
-        var electricityRate = _configuration.GetValue("GreenStats:ElectricityRateUsd", 0.12);
-        DuelResultEnricher.Enrich(result, model, electricityRate);
-
-        await duelResultRepo.SaveAsync(result);
+        catch (Exception tail)
+        {
+            _logger.LogError(tail, "Finishing the {Side} result row for duel {DuelId} failed; recording a failure row instead.", side, duelId);
+            result.IsFailure = true;
+            result.FailureReason = $"Result could not be finalised: {tail.Message}";
+            try
+            {
+                await duelResultRepo.SaveAsync(result);
+            }
+            catch (Exception save)
+            {
+                _logger.LogError(save, "Could not persist the {Side} failure row for duel {DuelId}.", side, duelId);
+            }
+        }
     }
 
     private async Task<DuelResult> WaitForLocalModelResultAsync(
         DuelId duelId,
         Model model,
         string side,
+        long watchdogSeconds,
         CancellationToken cancellationToken)
     {
         var payload = new { duelId, modelId = model.ModelId, side, webLlmModelId = model.WebLlmModelId };
@@ -336,7 +393,14 @@ public sealed class DuelExecutionService
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(500, cancellationToken);
+            // Delay on a bare token and check the flag — awaiting the cancellable token directly
+            // throws the moment the watchdog fires, so the post-loop "watchdog expired" block
+            // below was unreachable and a stalled browser model stranded its duel as Pending
+            // with no failure row until a host restart swept it.
+            await Task.Delay(500, CancellationToken.None);
+
+            if (cancellationToken.IsCancellationRequested)
+                break;
 
             var elapsed = (long)(DateTimeOffset.UtcNow - started).TotalMilliseconds;
             await SendStatusAsync(duelId, model.ModelId, side, DuelStatus.Generating, elapsed, 0);
@@ -356,10 +420,10 @@ public sealed class DuelExecutionService
                 return stored;
         }
 
-        // Watchdog expired
+        // Watchdog expired — reachable now that the poll delay no longer throws through it.
         result.IsFailure = true;
-        result.FailureReason = "Watchdog timeout (900s)";
-        result.TotalDurationMs = 900_000;
+        result.FailureReason = $"Watchdog timeout ({TimeSpan.FromSeconds(watchdogSeconds).TotalMinutes:F0} min)";
+        result.TotalDurationMs = watchdogSeconds * 1000L;
         return result;
     }
 

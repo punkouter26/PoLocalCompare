@@ -8,9 +8,17 @@
 <div class="sandboxed-viewport @(IsLoser ? "sandboxed-viewport--loser" : "")">
     <div class="sandboxed-viewport__header">
         <span class="sandboxed-viewport__model-name">@ModelName</span>
-        <span class="sandboxed-viewport__score" title="Heuristic quality score based on renderability checks">
-            Quality @_qualityScore/100
-        </span>
+        @* A score for an empty document is a fabricated number: empty HTML scored 20/100
+           through the renderability deductions, so a side that had not produced a single
+           token displayed "Quality 20/100 — Model produced no renderable output" while the
+           race was still warming up. Score only what exists; while a result is merely
+           pending, the header carries the name and nothing else. *@
+        @if (!string.IsNullOrWhiteSpace(_normalizedHtml))
+        {
+            <span class="sandboxed-viewport__score" title="Heuristic quality score based on renderability checks">
+                Quality @_qualityScore/100
+            </span>
+        }
         @if (IsLoser)
         {
             <span class="sandboxed-viewport__badge sandboxed-viewport__badge--loser">LOSER</span>
@@ -31,10 +39,24 @@
     }
     @if (string.IsNullOrWhiteSpace(_normalizedHtml))
     {
-        <div class="sandboxed-viewport__empty">
-            <span class="sandboxed-viewport__empty-icon" aria-hidden="true">🚫</span>
-            <span>Model produced no renderable output</span>
-        </div>
+        @* Two very different reasons for an empty frame. While the run is still in flight the
+           honest placeholder is neutral — 🚫 + "no renderable output" reads as a VERDICT, and
+           mid-race it told the user both models had already lost. The failure phrasing stays
+           only for the run that genuinely finished without usable output. *@
+        @if (IsAwaitingResult)
+        {
+            <div class="sandboxed-viewport__empty" role="status">
+                <span class="sandboxed-viewport__empty-icon" aria-hidden="true">⏳</span>
+                <span>Generating — preview appears with the first tokens…</span>
+            </div>
+        }
+        else
+        {
+            <div class="sandboxed-viewport__empty">
+                <span class="sandboxed-viewport__empty-icon" aria-hidden="true">🚫</span>
+                <span>Model produced no renderable output</span>
+            </div>
+        }
     }
     else
     {
@@ -55,6 +77,13 @@
     [Parameter] public bool IsLoser { get; set; }
     [Parameter] public bool ShowWinner { get; set; }
 
+    /// <summary>
+    /// True while the run is still in flight (no streaming preview and no result row yet).
+    /// Drives the neutral placeholder — the failure placeholder is reserved for a run that
+    /// finished empty.
+    /// </summary>
+    [Parameter] public bool IsAwaitingResult { get; set; }
+
     private readonly List<string> _diagnosticItems = [];
     private string _normalizedHtml = string.Empty;
     private string _frameHtml = string.Empty;
@@ -64,7 +93,7 @@
     // parameter set can only produce an identical frame. The sentinel makes the first pass
     // always process (a genuinely empty HtmlContent must still be analysed once).
     private string? _lastRaw;
-    private (string Name, bool Loser, bool Winner) _lastChrome;
+    private (string Name, bool Loser, bool Winner, bool Awaiting) _lastChrome;
     private bool _renderDirty = true;
 
     /// <summary>
@@ -78,7 +107,7 @@
     protected override void OnParametersSet()
     {
         var raw = HtmlContent ?? string.Empty;
-        var chrome = (ModelName, IsLoser, ShowWinner);
+        var chrome = (ModelName, IsLoser, ShowWinner, IsAwaitingResult);
 
         // Cheap ordinal gate before the four regex passes below: while a duel streams, most
         // parent renders carry a document identical to the one already on screen.

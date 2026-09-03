@@ -24,6 +24,7 @@
             ModelName="@DisplayName"
             IsLoser="@(LoserModelId == PanelModelId)"
             ShowWinner="@(IsVerdictRecorded && WinnerModelId == PanelModelId)"
+            IsAwaitingResult="@(StreamingHtml is null && Result is null)"
             />
 
         <div class="arena__hud">

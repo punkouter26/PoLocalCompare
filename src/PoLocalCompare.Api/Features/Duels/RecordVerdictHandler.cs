@@ -126,6 +126,11 @@ public sealed class RecordVerdictHandler
         if (duel.Verdict != DuelVerdict.Pending)
             throw new InvalidOperationException("Verdict has already been recorded for this duel.");
 
+        // A void is the no-evidence terminal, so it dispatches before the guard below — the
+        // guard exists to stop ELO moving on missing evidence, and a void moves nothing.
+        if (command.Verdict == DuelVerdict.Voided)
+            return await RecordVoidedAsync(command, duel);
+
         await GuardAgainstNoEvidenceAsync(duel);
 
         var leftModel = await _modelRepository.GetByIdAsync(duel.LeftModelId)
@@ -353,19 +358,20 @@ public sealed class RecordVerdictHandler
     }
 
     /// <summary>
-    /// Refuses a verdict when both models failed, so ELO cannot move on no evidence.
+    /// Refuses a verdict that could move ELO without complete evidence.
     /// </summary>
     /// <remarks>
-    /// <see cref="AutoJudge"/> already stands down in this case, but it is not the only writer:
-    /// the verdict endpoint reaches this handler directly, and the Arena's "both sides failed"
-    /// check was client-side only. A duel with both results failed had therefore been recorded
-    /// as a win with a ±16 ELO swing, which is exactly what this handler being the single gate
-    /// is supposed to prevent.
+    /// Two refusal rules, both enforced here because this handler is the single gate every
+    /// ELO-moving write passes through:
     ///
-    /// Deliberately narrow: it fires only when both sides have a stored result AND both are
-    /// failures. A duel with no results yet is a different situation (nothing has run) and is
-    /// left alone, which also keeps fixtures that record a verdict without seeding results
-    /// working.
+    /// 1. Both results exist and both are failures — nothing to compare. (The auto-judge voids
+    /// this shape instead of ever reaching here; the guard remains for direct endpoint writers.)
+    ///
+    /// 2. A result row is missing entirely. This is the second half of a hole found live: a duel
+    /// whose slow model was still generating showed winner buttons, and a vote WAS accepted with
+    /// <c>CompletedAt</c> null and one result missing — ELO moved on half a duel. The endpoint
+    /// used to check neither. The only legitimate one-result shape is the walkover (one result
+    /// + one failure row), which still passes because both rows exist.
     /// </remarks>
     private async Task GuardAgainstNoEvidenceAsync(Duel duel)
     {
@@ -375,7 +381,11 @@ public sealed class RecordVerdictHandler
         var left = results.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
         var right = results.FirstOrDefault(r => r.ModelId == duel.RightModelId);
 
-        if (left is null || right is null) return;
+        if (left is null || right is null)
+        {
+            throw new InvalidOperationException(
+                "This duel is still running — a model has not reported a result yet.");
+        }
 
         if (left.IsFailure && right.IsFailure)
         {
@@ -383,5 +393,41 @@ public sealed class RecordVerdictHandler
                 "Both models failed, so there is nothing to judge. Retry the duel instead.",
                 nameof(duel));
         }
+    }
+
+    /// <summary>
+    /// Terminalises a duel that can never be judged: both models failed, or the run was
+    /// abandoned before every model reported (startup recovery).
+    /// </summary>
+    /// <remarks>
+    /// Banks nothing — no duel count, no draw, no ELO, no history rows — because there is no
+    /// evidence to bank. The duel-first write order still applies: <c>Verdict != Pending</c> is
+    /// the idempotency guard every other path checks, so a void racing a human vote resolves
+    /// exactly like two competing verdicts (first write wins, loser gets 409).
+    /// </remarks>
+    private async Task<VerdictResponseDto> RecordVoidedAsync(RecordVerdictCommand command, Duel duel)
+    {
+        duel.Verdict = DuelVerdict.Voided;
+        duel.VerdictSource = command.Source;
+        duel.JudgeRationale = command.JudgeRationale;
+        duel.JudgeModel = null;
+        duel.WinnerModelId = null;
+        duel.LoserModelId = null;
+        duel.EloShiftWinner = 0;
+        duel.EloShiftLoser = 0;
+        duel.CompletedAt ??= DateTimeOffset.UtcNow;
+        await _duelRepository.UpdateAsync(duel);
+
+        return new VerdictResponseDto
+        {
+            DuelId = duel.DuelId,
+            Verdict = DuelVerdict.Voided,
+            WinnerModelId = null,
+            LoserModelId = null,
+            EloShiftWinner = 0,
+            EloShiftLoser = 0,
+            Source = command.Source,
+            JudgeRationale = command.JudgeRationale,
+        };
     }
 }
