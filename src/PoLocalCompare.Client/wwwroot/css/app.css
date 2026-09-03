@@ -1284,3 +1284,90 @@ body::before {
         outline-width: 3px;
     }
 }
+
+/* ── Radzen token bridge ─────────────────────────────────────────────────────
+   index.html loads Radzen's STRUCTURAL base stylesheet only (default-base.css) and
+   never one of its colour themes, so its components arrive unpainted. This maps them
+   onto the app's own tokens, which is what keeps the Archive grid and the profile
+   chart looking like the rest of the app in light, dark and both [data-theme] states
+   — a Radzen theme would hard-code its own palette and win, undoing the token system.
+
+   Kept in app.css rather than in Archive.razor.css because scoped CSS cannot reach a
+   child component's internals: Blazor stamps each stylesheet with its own component's
+   scope id, and every element below is rendered by Radzen, not by our .razor files. */
+.rz-datatable,
+.rz-grid-table,
+.rz-datatable-data > tr,
+.rz-datatable-header,
+.rz-datatable-footer {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+    font-size: var(--text-sm);
+}
+
+.rz-datatable-header,
+.rz-grid-table thead th {
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-weight: var(--weight-semibold);
+    border-bottom: 1px solid var(--border-strong);
+}
+
+.rz-grid-table tbody td {
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-sm) var(--space-smd);
+}
+
+.rz-grid-table tbody tr:hover {
+    background: var(--surface-accent);
+    cursor: pointer;
+}
+
+/* The grid's own inputs — filter boxes, the paging controls — inherit the app's
+   surfaces so a filtered column does not suddenly show a white field on a dark page. */
+.rz-inputtext,
+.rz-dropdown,
+.rz-paginator {
+    background: var(--surface-1);
+    color: var(--text);
+    border-color: var(--border);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    min-height: var(--target-min);
+}
+
+/* Radzen draws its own focus treatment; ours is the one the rest of the app uses and
+   the one the WCAG work was verified against, so it wins. */
+.rz-datatable :focus-visible,
+.rz-chart :focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: var(--focus-ring-offset);
+}
+
+/* Chart text. Radzen paints axis labels with a fill, not a colour, so this needs the
+   fill property rather than color to follow the theme. */
+.rz-chart text {
+    fill: var(--text-muted);
+    font-size: var(--text-xs);
+}
+
+.rz-chart .rz-gridlines line {
+    stroke: var(--border);
+}
+
+/* Tooltips are absolutely positioned outside the chart's box. */
+.rz-chart-tooltip {
+    background: var(--surface-1);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+}
+
+@media (prefers-contrast: more) {
+    .rz-grid-table tbody td,
+    .rz-grid-table thead th {
+        border-color: var(--border-strong);
+    }
+}

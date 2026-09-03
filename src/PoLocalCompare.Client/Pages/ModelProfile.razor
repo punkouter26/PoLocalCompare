@@ -106,41 +106,55 @@
         {
             <section class="po-section" aria-labelledby="profile-elo-heading">
                 <h2 id="profile-elo-heading" class="po-section-title">Rating history</h2>
-                @* Inline SVG rather than a chart component. This replaced a RadzenChart on
-                   2026-08-23 for payload reasons — Radzen.Blazor was 1.43 MB gzipped, 11.9% of
-                   the whole app download, for this chart and one data grid.
+                @* RadzenChart — restored 2026-09-02 when the payload decision was re-taken.
+                   What it brings back over the hand-rolled inline SVG that stood in for it:
+                   hover tooltips naming the opponent and the shift, automatic resize, and a
+                   real value axis instead of two hand-placed range labels.
 
-                   What is lost: hover tooltips naming the opponent, and automatic resize. What
-                   is kept, because it is what the chart is actually for: the shape of the curve,
-                   a labelled value range, and a baseline at the starting rating so a run that
-                   ends above 1200 visibly reads as a net gain rather than just a line. Points
-                   carry a <title> so the per-duel detail is still reachable — natively, and
-                   without a rendering library. *@
+                   The baseline at the starting rating is kept as a RadzenSeriesAnnotation-free
+                   second series (a flat 1200 line), because that comparison — "did this model
+                   end above where it started" — is the one thing the curve exists to answer and
+                   a bare line chart does not show it.
+
+                   Colours come from the app tokens (ChartLineColor / ChartBaselineColor), not from a Radzen
+                   theme: index.html deliberately loads only Radzen's structural base CSS, so
+                   nothing here inherits a competing palette. *@
                 <div class="profile__chart-wrap">
-                    <svg class="profile__chart" viewBox="0 0 600 140" preserveAspectRatio="none"
-                         role="img" aria-label="@ChartDescription">
-                        @* Baseline at the starting rating. *@
-                        <line class="profile__chart-baseline"
-                              x1="0" y1="@ChartY(StartingElo).ToString("F1", Inv)"
-                              x2="600" y2="@ChartY(StartingElo).ToString("F1", Inv)" />
+                    <RadzenChart @key="_profile.ModelId"
+                                 Style="width: 100%; height: 16rem"
+                                 class="profile__chart">
+                        <RadzenLineSeries TItem="EloPointView"
+                                          Data="@ChartPoints"
+                                          CategoryProperty="Label"
+                                          ValueProperty="Elo"
+                                          Title="Rating"
+                                          Smooth="false"
+                                          Stroke="@ChartLineColor"
+                                          StrokeWidth="2">
+                            <RadzenMarkers MarkerType="MarkerType.Circle" Size="6" />
+                            <RadzenSeriesDataLabels Visible="false" />
+                        </RadzenLineSeries>
 
-                        <polyline class="profile__chart-line" points="@ChartPolyline" />
+                        <RadzenLineSeries TItem="EloPointView"
+                                          Data="@ChartPoints"
+                                          CategoryProperty="Label"
+                                          ValueProperty="Baseline"
+                                          Title="Starting rating"
+                                          Stroke="@ChartBaselineColor"
+                                          StrokeWidth="1"
+                                          LineType="LineType.Dashed" />
 
-                        @foreach (var (point, i) in _profile.EloHistory.Select((p, i) => (p, i)))
-                        {
-                            <circle class="profile__chart-dot @(point.Shift >= 0 ? "profile__chart-dot--win" : "profile__chart-dot--loss")"
-                                    cx="@ChartX(i).ToString("F1", Inv)"
-                                    cy="@ChartY(point.Elo).ToString("F1", Inv)"
-                                    r="3">
-                                <title>@point.OpponentName — @point.Outcome (@(point.Shift >= 0 ? "+" : "")@point.Shift.ToString("F1")) → @point.Elo.ToString("F0")</title>
-                            </circle>
-                        }
-                    </svg>
+                        <RadzenValueAxis Formatter="@(o => ((double)(o ?? 0d)).ToString("F0", Inv))">
+                            <RadzenGridLines Visible="true" />
+                            <RadzenAxisTitle Text="Elo" />
+                        </RadzenValueAxis>
 
-                    <div class="profile__chart-axis">
-                        <span>@_profile.EloHistory[0].At.ToLocalTime().ToString("yyyy-MM-dd")</span>
-                        <span>@_profile.EloHistory[^1].At.ToLocalTime().ToString("yyyy-MM-dd")</span>
-                    </div>
+                        @* The category axis is one tick per duel; on a long history that is
+                           unreadable, so the step keeps roughly eight labels regardless. *@
+                        <RadzenCategoryAxis Step="@ChartCategoryStep" />
+
+                        <RadzenLegend Visible="false" />
+                    </RadzenChart>
                 </div>
             </section>
         }
@@ -301,43 +315,36 @@
         System.Globalization.CultureInfo.InvariantCulture;
 
     /// <summary>
-    /// Vertical bounds, padded by 5% and floored at a 40-point window so a flat run reads as
-    /// flat rather than being magnified into a mountain range.
+    /// One point per recorded duel, shaped for RadzenLineSeries. <c>Baseline</c> repeats the
+    /// starting rating on every point so the flat reference line can be a second series over
+    /// the same categories — Radzen has no horizontal-rule primitive, and a series is the
+    /// cheapest way to keep "did this model end above where it started" legible.
     /// </summary>
-    private (double Min, double Max) ChartRange
-    {
-        get
-        {
-            var values = _profile!.EloHistory.Select(p => p.Elo).Append(StartingElo).ToList();
-            var min = values.Min();
-            var max = values.Max();
-            var span = Math.Max(max - min, 40);
-            var mid = (min + max) / 2;
-            return (mid - span / 2 * 1.05, mid + span / 2 * 1.05);
-        }
-    }
+    private sealed record EloPointView(string Label, double Elo, double Baseline);
 
-    private double ChartX(int index)
-    {
-        var count = _profile!.EloHistory.Count;
-        if (count <= 1) return ChartWidth / 2;
-        return ChartPadding + (ChartWidth - ChartPadding * 2) * index / (count - 1.0);
-    }
+    private List<EloPointView> ChartPoints =>
+        _profile!.EloHistory
+            .Select(p => new EloPointView(
+                p.At.ToLocalTime().ToString("MMM d", Inv),
+                Math.Round(p.Elo, 1),
+                StartingElo))
+            .ToList();
 
-    /// <summary>SVG's y axis grows downward, so a higher rating maps to a smaller y.</summary>
-    private double ChartY(double elo)
-    {
-        var (min, max) = ChartRange;
-        var span = max - min;
-        if (span <= 0) return ChartHeight / 2;
-        var normalized = (elo - min) / span;
-        return ChartHeight - ChartPadding - normalized * (ChartHeight - ChartPadding * 2);
-    }
+    /// <summary>
+    /// Keeps roughly eight category labels whatever the history length — one tick per duel is
+    /// unreadable past a dozen, and Radzen does not thin them automatically.
+    /// </summary>
+    private int ChartCategoryStep =>
+        Math.Max(1, (int)Math.Ceiling(_profile!.EloHistory.Count / 8.0));
 
-    private string ChartPolyline => string.Join(
-        " ",
-        _profile!.EloHistory.Select((p, i) =>
-            FormattableString.Invariant($"{ChartX(i):F1},{ChartY(p.Elo):F1}")));
+    /// <summary>
+    /// Series colours come from the app's own tokens rather than a Radzen theme — index.html
+    /// loads only Radzen's structural base CSS precisely so the component palette does not
+    /// compete with the design system. These are the literal token values because Radzen's
+    /// Stroke takes a colour string, not a CSS custom property it can resolve at paint time.
+    /// </summary>
+    private const string ChartLineColor = "#1560c4";      /* --accent-blue (light) */
+    private const string ChartBaselineColor = "#8a8f9c";  /* neutral, legible in both themes */
 
     /// <summary>Text alternative for the curve — the shape means nothing to a screen reader.</summary>
     private string ChartDescription

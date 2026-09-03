@@ -52,101 +52,117 @@
            visible side-by-side (no intermediate "Duel Details" panel). Re-Challenge and
            Lab report sit inline as per-row icon buttons so the two side features the
            panel used to host don't quietly disappear. *@
-        @* Semantic table with the shared card treatment below 640px. This replaced a
-           RadzenDataGrid on 2026-08-23: the grid bought sorting and virtualisation, but
-           Radzen.Blazor cost 1.43 MB gzipped — 11.9% of the app's entire download — and was
-           one of two things keeping PublishTrimmed off, which costs another 2.47 MB. Paying
-           roughly a third of cold-start payload for sorting on one table was the wrong trade
-           for an app whose measured time-to-first-heading was 4-12 seconds.
+        @* RadzenDataGrid — re-added 2026-09-02 after the owner re-took the payload decision
+           this table's previous comment recorded. What it buys that the hand-rolled .po-table
+           could not: per-column sorting, per-column filtering and row virtualisation, which is
+           exactly the "the Archive does not scale past ~100 duels" gap.
 
-           Rows are keyboard-operable links: role="link" + tabindex + aria-label keeps them
-           operable (WCAG 2.2 SC 2.1.1) without pretending to be selectable rows. *@
-        <div class="po-table-wrap">
-            <table class="po-table po-table--selectable po-table--cards archive__rows">
-                <caption class="visually-hidden">Recorded duels — open a row to compare both outputs side by side</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col">Prompt</th>
-                        <th scope="col">Left model</th>
-                        <th scope="col">Right model</th>
-                        <th scope="col">Verdict</th>
-                        <th scope="col"><span class="visually-hidden">Actions</span></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var d in _filteredDuels)
-                    {
-                        var href = $"/arena/{d.DuelId}";
-                        <tr @key="d.DuelId"
-                            role="link" tabindex="0"
-                            aria-label="@($"Open {d.LeftModelName} vs {d.RightModelName} side-by-side")"
-                            @onclick="@(() => Nav.NavigateTo(href))"
-                            @onkeydown="e => OnRowKeyDown(e, href)">
-                            <td data-label="Date">@d.StartedAt.ToString("yyyy-MM-dd HH:mm") <span class="archive__tz">UTC</span></td>
-                            <td data-label="Prompt">@d.PromptSummary</td>
-                            <td data-label="Left">
-                                <span class="archive__model @(IsUnresolvedModelName(d.LeftModelName, d.LeftModelId) ? "archive__model--unresolved" : "")"
-                                      title="@d.LeftModelId">
-                                    @FormatModelName(d.LeftModelName, d.LeftModelId)
-                                </span>
-                            </td>
-                            <td data-label="Right">
-                                <span class="archive__model @(IsUnresolvedModelName(d.RightModelName, d.RightModelId) ? "archive__model--unresolved" : "")"
-                                      title="@d.RightModelId">
-                                    @FormatModelName(d.RightModelName, d.RightModelId)
-                                </span>
-                            </td>
-                            <td data-label="Verdict">
-                                @* Names the winner. "Left" made you map a chip back to a column
-                                   to learn anything, which is the one thing this column is for. *@
-                                @if (d.Verdict is DuelVerdict.Left or DuelVerdict.Right)
-                                {
-                                    <span class="archive__verdict archive__verdict--win" title="Winner of this duel">
-                                        🏆 @GetWinnerName(d)
-                                    </span>
-                                }
-                                else if (d.Verdict == DuelVerdict.Tie)
-                                {
-                                    <span class="archive__verdict archive__verdict--tie"
-                                          title="The judge compared both outputs and found them equivalent. No rating moved.">
-                                        🤝 Tie
-                                    </span>
-                                }
-                                else
-                                {
-                                    <a class="po-btn po-btn--sm po-btn--primary archive__judge-btn"
-                                       href="@href"
-                                       title="Open both outputs and pick a winner"
-                                       @onclick:stopPropagation="true">
-                                        ⚖ Judge
-                                    </a>
-                                }
-                            </td>
-                            <td class="po-cell--bare">
-                                <div class="archive__row-actions">
-                                    @* Re-Challenge: same prompt, same two models, fresh duel. *@
-                                    <button type="button"
-                                            class="archive__row-btn"
-                                            aria-label="@($"Re-Challenge {d.LeftModelName} vs {d.RightModelName} with the same prompt")"
-                                            title="Re-Challenge with the same prompt"
-                                            @onclick="@(() => GoToReChallenge(d))"
-                                            @onclick:stopPropagation="true">⚧</button>
-                                    @* Same-origin GET carries the BFF cookie, so the browser
-                                       does the whole download with no interop. *@
-                                    <a class="archive__row-btn archive__row-btn--link"
-                                       href="@($"/api/duels/{d.DuelId}/report")"
-                                       aria-label="Download lab report (HTML)"
-                                       title="Download lab report (HTML)"
-                                       download="@($"lab-report-{d.DuelId}.html")"
-                                       @onclick:stopPropagation="true">⬇</a>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+           Three settings are load-bearing:
+             • Responsive="true" is what preserves the mobile behaviour the .po-table--cards
+               treatment gave us — Radzen stacks each cell into a labelled row below its
+               breakpoint, so a phone still gets cards rather than a horizontal scroller.
+             • AllowVirtualization with a fixed height is the point of the grid on a long
+               archive; without a height it renders every row and the virtualiser is inert.
+             • RowSelect keeps rows navigable. The old markup used role="link" + tabindex on
+               <tr>; Radzen renders its own row semantics, and RowSelect fires for both click
+               and keyboard, so the behaviour survives without us fighting the component.
+
+           The grid inherits the app's design tokens: index.html loads Radzen's STRUCTURAL
+           base stylesheet only, never a colour theme, and the overrides in Archive.razor.css
+           map its surfaces onto --surface-*/--text-*/--border. *@
+        <RadzenDataGrid @ref="_grid"
+                        TItem="DuelSummaryDto"
+                        Data="@_filteredDuels"
+                        AllowSorting="true"
+                        AllowFiltering="true"
+                        AllowColumnResize="true"
+                        FilterMode="FilterMode.Simple"
+                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                        AllowVirtualization="true"
+                        Responsive="true"
+                        Style="height: 32rem"
+                        EmptyText="No duels match this filter."
+                        RowSelect="@(d => Nav.NavigateTo($"/arena/{d.DuelId}"))"
+                        class="archive__grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Date" Property="StartedAt" Width="11rem">
+                    <Template Context="d">
+                        @d.StartedAt.ToString("yyyy-MM-dd HH:mm") <span class="archive__tz">UTC</span>
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Prompt" Property="PromptSummary" />
+
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Left model" Property="LeftModelName" Width="12rem">
+                    <Template Context="d">
+                        <span class="archive__model @(IsUnresolvedModelName(d.LeftModelName, d.LeftModelId) ? "archive__model--unresolved" : "")"
+                              title="@d.LeftModelId">
+                            @FormatModelName(d.LeftModelName, d.LeftModelId)
+                        </span>
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Right model" Property="RightModelName" Width="12rem">
+                    <Template Context="d">
+                        <span class="archive__model @(IsUnresolvedModelName(d.RightModelName, d.RightModelId) ? "archive__model--unresolved" : "")"
+                              title="@d.RightModelId">
+                            @FormatModelName(d.RightModelName, d.RightModelId)
+                        </span>
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Verdict" Property="Verdict" Width="11rem">
+                    <Template Context="d">
+                        @* Names the winner. "Left" made you map a chip back to a column
+                           to learn anything, which is the one thing this column is for. *@
+                        @if (d.Verdict is DuelVerdict.Left or DuelVerdict.Right)
+                        {
+                            <span class="archive__verdict archive__verdict--win" title="Winner of this duel">
+                                🏆 @GetWinnerName(d)
+                            </span>
+                        }
+                        else if (d.Verdict == DuelVerdict.Tie)
+                        {
+                            <span class="archive__verdict archive__verdict--tie"
+                                  title="The judge compared both outputs and found them equivalent. No rating moved.">
+                                🤝 Tie
+                            </span>
+                        }
+                        else
+                        {
+                            <a class="po-btn po-btn--sm po-btn--primary archive__judge-btn"
+                               href="@($"/arena/{d.DuelId}")"
+                               title="Open both outputs and pick a winner"
+                               @onclick:stopPropagation="true">
+                                ⚖ Judge
+                            </a>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="" Sortable="false" Filterable="false" Width="6rem">
+                    <Template Context="d">
+                        <div class="archive__row-actions">
+                            @* Re-Challenge: same prompt, same two models, fresh duel. *@
+                            <button type="button"
+                                    class="archive__row-btn"
+                                    aria-label="@($"Re-Challenge {d.LeftModelName} vs {d.RightModelName} with the same prompt")"
+                                    title="Re-Challenge with the same prompt"
+                                    @onclick="@(() => GoToReChallenge(d))"
+                                    @onclick:stopPropagation="true">⚧</button>
+                            @* Same-origin GET carries the BFF cookie, so the browser
+                               does the whole download with no interop. *@
+                            <a class="archive__row-btn archive__row-btn--link"
+                               href="@($"/api/duels/{d.DuelId}/report")"
+                               aria-label="Download lab report (HTML)"
+                               title="Download lab report (HTML)"
+                               download="@($"lab-report-{d.DuelId}.html")"
+                               @onclick:stopPropagation="true">⬇</a>
+                        </div>
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
 
         <div class="archive__pagination">
             @* The old copy read "Showing 20 of 20 duels — more available", because the first
@@ -181,6 +197,9 @@
     private string? _error;
     private bool _hasMore;
     private const int PageSize = 20;
+
+    /// <summary>Grid handle — held so a filter change can reset paging/scroll position.</summary>
+    private RadzenDataGrid<DuelSummaryDto>? _grid;
 
     private string _verdictFilter = "All";
 

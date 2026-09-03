@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
 using PoLocalCompare.Client;
+using Radzen;
 using PoLocalCompare.Client.Services;
+using ThemeService = PoLocalCompare.Client.Services.ThemeService;
 using System;
 
 try

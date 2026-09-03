@@ -56,4 +56,21 @@
     <Content Update="wwwroot\appsettings.Development.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
+  <!-- MEASURED 2026-09-02 (Release publish, gzipped — what a browser actually downloads):
+         without Radzen   12.71 MB across 233 files
+         with Radzen      15.97 MB across 271 files   -> +3.26 MB, +25.7%
+       That is more than double the 1.43 MB the 2026-08-23 removal recorded, because
+       Radzen 11.3.0 is larger than the version measured then.
+
+       Of the +3.26 MB, 1.48 MB is Radzen.Blazor.wasm and 1.58 MB is theme CSS this app
+       NEVER LOADS — the package publishes all 24 prebuilt themes as static web assets
+       regardless of which one is referenced, and index.html references only the structural
+       `default-base.css` because the components are painted from our own design tokens.
+
+       An MSBuild target to drop the unreferenced themes was attempted and removed: filtering
+       @(StaticWebAsset) after ResolveStaticWebAssetsInputs on PackageId had no effect (the
+       publish output was byte-identical), and an inert build target is worse than none. The
+       1.58 MB is still recoverable by someone who works out the right item/hook — it would
+       take the real cost to ~1.68 MB, close to the historical figure. -->
+
 </Project>
