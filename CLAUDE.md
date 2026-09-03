@@ -9,10 +9,30 @@ deployment, and testing strategy. [docs/PRD_Master.md](docs/PRD_Master.md) is th
 slice boundaries, the endpoint map, the Table Storage schema, and the decision log (§9). Keep both
 current when you change architecture; the decision log is where deviations get recorded.
 
+If a **`DOCS/`** folder exists in the repository root, read it before making changes — it carries the
+overall project summary. (`docs/PRD_Master.md` is referenced throughout this file but is **not in the
+working tree** right now; if neither is present, say so rather than reconstructing the overview from
+the code.)
+
 This repo is governed by the user's global **NET_RULES** ruleset for all `Po*` .NET solutions
 (`Po` prefix everywhere, .NET 10, CPM, VSA, BFF auth, master-only branching, Azure App Service +
 Table Storage). AGENT.MD documents where this repo deliberately deviates — check it before assuming
 a rule is being violated.
+
+## Working rules
+
+- **`master` only.** All work lands on `master`. Do not create, check out or push a feature branch
+  unless the request explicitly asks for one.
+- **Restart the app and verify it came up after every code change.** Stop the running process,
+  `dotnet run --project src/PoLocalCompare.Api --launch-profile https`, and confirm the build
+  succeeded, no startup exception was thrown, and `https://localhost:5001` responds — before calling
+  the change done. Startup is where DI registration, options binding and Key Vault wiring actually
+  fail; none of that shows up in a successful compile.
+- **No `dotnet user-secrets`.** Local values go in `appsettings.Development.json` or an environment
+  variable (`AzureAiFoundry__ApiKey`); anything genuinely secret goes in **Azure Key Vault**, already
+  wired through `KeyVault:Uri`. The `UserSecretsId` still in
+  [PoLocalCompare.Api.csproj](src/PoLocalCompare.Api/PoLocalCompare.Api.csproj) is legacy — don't add
+  new values to that store. Secrets never go in code, logs or committed files.
 
 ## Commands
 
@@ -420,6 +440,9 @@ pipelines; adding a per-attempt timeout will abort SSE streams.
 - **No AOT.** Never set `RunAOTCompilation=true`.
 - `LangVersion=latest` (standards mandate C# 15; SDK 10 tops out at 14 and rejects an explicit `15`).
 - Work on `master`; no feature branches unless asked.
+- Restart the app and verify it starts cleanly after a code change (see Working rules).
+- Never store local config with `dotnet user-secrets` — `appsettings.Development.json`, an
+  environment variable, or Azure Key Vault.
 - `/health` and `/diag` exist but must have **no UI links**. `/diag` masks secret values.
 - When `Features:UseRealAi` is off, the `USING MOCK DATA` banner must render (`NavMenu.razor`).
 - UI targets **WCAG 2.2 Level AA**: keyboard-operable custom controls, `:focus-visible` ring, 24×24

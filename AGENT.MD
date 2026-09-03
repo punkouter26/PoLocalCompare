@@ -1,6 +1,8 @@
 # AGENT.MD — PoLocalCompare AI Coding Agent Context
 
 > **Read this first.** This file is the primary context document for any AI coding agent working in this repository. Start here before touching any code.
+>
+> Then check for a **`DOCS/`** folder in the repository root — if one exists, read it for the project overview before making changes. (Today the project docs live at [docs/PRD_Master.md](docs/PRD_Master.md), which is **not currently checked in**; if neither folder is present, say so rather than inferring the overview from code.)
 
 ---
 
@@ -220,7 +222,7 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `KeyVault:Uri` | App Service setting | `appsettings.json` |
 | `ConnectionStrings:AzureTableStorage` | Key Vault | App Service setting |
 | `ConnectionStrings:AzureBlobStorage` | Key Vault | App Service setting |
-| `AzureAiFoundry:ApiKey` | Key Vault | `dotnet user-secrets` |
+| `AzureAiFoundry:ApiKey` | Key Vault | `appsettings.Development.json` / `AzureAiFoundry__ApiKey` env var |
 | `Elo:KFactor` | `appsettings.json` | — (default 32) |
 | `Duel:TimeLimitSeconds` | `appsettings.json` | — (default 300) |
 | `Ollama:BaseUrl` | `appsettings.json` | — (`http://localhost:11434`) |
@@ -247,8 +249,9 @@ python SCRIPTS/download-models.py
 gh release download webllm-artifacts -D C:\hf-artifacts
 pwsh SCRIPTS/receive-artifacts.ps1 -PartsDir C:\hf-artifacts
 
-# 3. (Optional) Set Azure AI Foundry key
-dotnet user-secrets set "AzureAiFoundry:ApiKey" "your-key" --project src/PoLocalCompare.Api
+# 3. (Optional) Set Azure AI Foundry key - appsettings.Development.json or an env var.
+#     Do NOT use `dotnet user-secrets` (see §7) - Key Vault is the production source.
+$env:AzureAiFoundry__ApiKey = "your-key"
 
 # 4. Run the API (serves Blazor WASM at https://localhost:5001)
 dotnet run --project src/PoLocalCompare.Api --launch-profile https
@@ -263,6 +266,9 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 > Full standards, endpoint map, schema, and decision log are in [docs/PRD_Master.md](docs/PRD_Master.md).
 
 - **No AOT.** `RunAOTCompilation=false` — keeps dev builds fast.
+- **Master only.** All work lands on `master`. Do not create, switch to, or push a feature branch unless the request explicitly asks for one.
+- **No `dotnet user-secrets`.** Local configuration goes in `appsettings.Development.json` (or an `AzureAiFoundry__ApiKey`-style environment variable); anything genuinely secret goes in **Azure Key Vault**, which is already wired up via `KeyVault:Uri`. The `UserSecretsId` in `PoLocalCompare.Api.csproj` is legacy — do not add new values to that store. Secrets still never appear in code, logs or committed files.
+- **Restart and verify after every code change.** Stop the running app, `dotnet run --project src/PoLocalCompare.Api --launch-profile https`, and confirm it actually came up (build succeeded, no startup exception, `https://localhost:5001` responds) before reporting the change as done. A change that compiles but breaks DI wiring or startup config only shows up here.
 - **Warnings are errors.** `TreatWarningsAsErrors=true` globally.
 - **Nullable enabled.** No null reference warnings tolerated.
 - **SOLID + GoF.** Use `<remarks>` XML tags to explain pattern choices.
@@ -377,7 +383,8 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | [BffAuthentication.cs](src/PoLocalCompare.Api/Auth/BffAuthentication.cs) | BFF OIDC flow, session cookie, dev fake-auth guard |
 | [BffAuthenticationStateProvider.cs](src/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
 | [WebLlmService.cs](src/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |
-| [docs/PRD_Master.md](docs/PRD_Master.md) | Project source of truth — slices, endpoints, schema, ADR log |
+| `DOCS/` (repo root) | Project overview — read it before changing anything, when present |
+| [docs/PRD_Master.md](docs/PRD_Master.md) | Project source of truth — slices, endpoints, schema, ADR log (**missing from the working tree**) |
 | [SCRIPTS/setup.ps1](SCRIPTS/setup.ps1) | First-run machine setup |
 | [SCRIPTS/receive-artifacts.ps1](SCRIPTS/receive-artifacts.ps1) | Installs browser-model weights + `.wasm` libs into `wwwroot/models/` |
 | [SCRIPTS/plan-webllm-artifacts.py](SCRIPTS/plan-webllm-artifacts.py) | Single source of the browser-model list for CI and local fetch |
@@ -395,3 +402,10 @@ When asked to make changes to this codebase:
 5. **No AOT.** Never enable `RunAOTCompilation=true`.
 6. **Security:** OWASP Top 10 compliance. No secrets in code or logs.
 7. **Ports:** Never change 5000/5001 without explicit instruction.
+8. **Branching:** Work on `master`. Only use another branch when explicitly asked to.
+9. **Restart & verify:** After a code change, restart the app and confirm it starts cleanly — build
+   output, no startup exception, `https://localhost:5001` reachable. "It compiles" is not "it runs".
+10. **Read the docs folder first:** If a `DOCS/` (or `docs/`) folder exists in the repo root, read it
+    for the project overview before making changes — it outranks inference from the code.
+11. **No `dotnet user-secrets`:** Local config lives in `appsettings.Development.json` or environment
+    variables; real secrets live in Azure Key Vault (`KeyVault:Uri`).
