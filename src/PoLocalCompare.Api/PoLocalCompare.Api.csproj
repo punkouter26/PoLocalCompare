@@ -29,6 +29,7 @@
     <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.ApplicationInsights" />
     <!-- Headless Chromium for the vision judge (Common/Rendering). Feature-flagged off by
          default: the Free-tier App Service has no browser and no room for one, so this is a
          local/self-hosted capability, not a deploy dependency. -->

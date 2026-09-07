@@ -23,10 +23,13 @@
     <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.5.1" />
     <!-- BFF authentication: server-side OIDC + cookie session -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.0" />
-    <!-- Observability: Serilog only. OpenTelemetry + the Application Insights sinks were
-         removed on 2026-08-23 — two exporters shipping to the same App Insights resource on a
-         single-instance F1 plan. Console/file sinks plus App Service's log stream cover it. -->
+    <!-- Observability: Serilog only. OpenTelemetry was removed on 2026-08-23 because TWO
+         exporters were shipping to the same App Insights resource on a single-instance F1 plan.
+         The Serilog sink below is the single remaining exporter — restored on 2026-09-07 so the
+         UserSignedIn record reaches App Insights, where the cross-app sign-in query reads it.
+         Console/file sinks and the App Service log stream still cover everything else. -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.ApplicationInsights" Version="4.0.0" />
     <!-- Blazor WASM -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.7" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.7" />

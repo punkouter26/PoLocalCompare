@@ -15,6 +15,15 @@ resource sharedKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   scope: resourceGroup(sharedResourceGroupName)
 }
 
+@description('Shared App Insights component the Po apps report sign-ins to')
+param sharedAppInsightsName string = 'poappideinsights8f9c9a4e'
+
+// Referenced, never created: analytics stay in PoShared so ONE query spans every Po app.
+resource sharedAppInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: sharedAppInsightsName
+  scope: resourceGroup(sharedResourceGroupName)
+}
+
 // ─── Existing resources in this resource group (PoLocalCompare) ─────────────────────
 // Storage already exists; the app creates its tables at runtime (CreateIfNotExists) and
 // connects with its system-assigned managed identity (standards §5.4).
@@ -72,6 +81,12 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
           // account name via DefaultAzureCredential instead of a shared-key connection string.
           name: 'AzureStorage__AccountName'
           value: storageAccount.name
+        }
+        {
+          // Feeds the single Serilog App Insights sink (Program.cs). Double underscore is the
+          // App Service spelling of the ApplicationInsights:ConnectionString config key.
+          name: 'ApplicationInsights__ConnectionString'
+          value: sharedAppInsights.properties.ConnectionString
         }
       ]
     }

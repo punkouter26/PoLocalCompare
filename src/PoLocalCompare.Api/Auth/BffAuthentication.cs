@@ -1,3 +1,4 @@
+using PoLocalCompare.Api.Platform;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.RegularExpressions;
@@ -19,7 +20,9 @@ public static class BffAuthentication
 {
     public const string MicrosoftScheme = "Microsoft";
     public const string FakeScheme = "Fake";
-    public const string SessionCookieName = "PoLocalCompare.Session";
+    // static readonly, not const: the name is computed from the shared convention. The cookie
+    // is issued Secure unconditionally below, which is what makes the __Host- prefix legal.
+    public static readonly string SessionCookieName = PoPlatform.SessionCookieName(secure: true);
 
     // Matches a v2.0 Microsoft Entra organizational issuer: https://login.microsoftonline.com/{tenantId}/v2.0
     private static readonly Regex EntraIssuerPattern =
@@ -111,6 +114,14 @@ public static class BffAuthentication
                             : throw new SecurityTokenInvalidIssuerException(
                                 $"Issuer '{issuer}' is not a recognized Microsoft account issuer.");
                 }
+                // Canonical UserSignedIn record. OnTokenValidated fires exactly once per interactive
+                // sign-in — after validation, before the session cookie is issued — so it needs no
+                // dedupe, and a rejected token never reaches it.
+                options.Events.OnTokenValidated = ctx =>
+                {
+                    SignInTelemetry.TrackFrom(ctx.HttpContext, ctx.Principal, "PoLocalCompare");
+                    return Task.CompletedTask;
+                };
             });
         }
 

@@ -7,8 +7,10 @@ using Polly;
 using PoLocalCompare.Api;
 using PoLocalCompare.Api.Auth;
 using Scalar.AspNetCore;
+using PoLocalCompare.Api.Platform;
 using Serilog;
 using Serilog.Events;
+using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 using System.IO;
 
 // ─── Bootstrap logger (before DI) ───────────────────────────────────────────
@@ -46,7 +48,7 @@ try
             .ReadFrom.Configuration(ctx.Configuration)
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
-            .Enrich.WithProperty("App", "PoLocalCompare.Api")
+            .Enrich.WithProperty(PoPlatform.ApplicationProperty, PoPlatform.AppName)
             .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
             .WriteTo.Console();
 
@@ -66,6 +68,17 @@ try
                     retainedFileCountLimit: 14,
                     restrictedToMinimumLevel: LogEventLevel.Error);
         }
+
+        // The single App Insights exporter for this app. OpenTelemetry was removed on 2026-08-23
+        // because TWO exporters were shipping to one App Insights resource on the F1 plan; this
+        // sink is deliberately the only one, so that constraint still holds. It exists so the
+        // UserSignedIn record (see Auth/SignInTelemetry.cs) lands where the cross-app sign-in
+        // query can read it — without it the event would never leave the App Service log stream.
+        // Absent connection string (local dev, tests) means the sink is simply not added.
+        var appInsightsConnectionString = PoPlatform.ResolveAppInsightsConnectionString(ctx.Configuration);
+        cfg.WriteTo.Conditional(
+            _ => !string.IsNullOrWhiteSpace(appInsightsConnectionString),
+            sink => sink.ApplicationInsights(appInsightsConnectionString!, TelemetryConverter.Traces));
     });
 
     // In Development, Key Vault holds production storage connection strings, and its config
@@ -322,6 +335,9 @@ try
 
     // ─── Health endpoint (T038) ──────────────────────────────────────────────
     app.MapHealthEndpoints();
+    // Uniform cross-app liveness probe (see PoPlatform). Same shape in every Po app, which
+    // is what lets the portfolio dashboard poll them all and render one uptime grid.
+    app.MapPoLiveness();
 
     // ─── SignalR hubs (auth required) ──────────────────────────────────────────
     app.MapHub<DuelHub>("/hubs/duel").RequireAuthorization();
