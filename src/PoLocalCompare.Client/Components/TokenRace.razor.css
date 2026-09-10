@@ -185,7 +185,46 @@
     }
 
     .token-race__fill,
-    .token-race__runner {
+    .token-race__runner,
+    .token-race__particle {
         transition: none;
+        animation: none;
     }
 }
+
+/* ── Velocity Jetstream Particles ─────────────────────────────────────────── */
+
+.token-race__exhaust {
+    position: absolute;
+    top: 50%;
+    left: var(--pos, 0%);
+    transform: translate(-100%, -50%);
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    height: 14px;
+    z-index: 1;
+}
+
+.token-race__particle {
+    display: inline-block;
+    border-radius: var(--radius-full);
+    background: var(--accent-cyan);
+    filter: blur(1.5px);
+    opacity: 0.75;
+    animation: exhaust-flicker 180ms ease-in-out infinite alternate;
+}
+
+.token-race__lane--right .token-race__particle {
+    background: var(--accent-purple);
+}
+
+.token-race__particle--1 { width: 9px; height: 9px; margin-right: 3px; }
+.token-race__particle--2 { width: 6px; height: 6px; margin-right: 4px; opacity: 0.55; }
+.token-race__particle--3 { width: 4px; height: 4px; opacity: 0.35; }
+
+@keyframes exhaust-flicker {
+    0% { transform: scale(0.75); opacity: 0.4; }
+    100% { transform: scale(1.25); opacity: 0.95; }
+}
+

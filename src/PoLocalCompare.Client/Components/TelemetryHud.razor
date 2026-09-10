@@ -1,11 +1,13 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Client.Services
+@inject AudioService AudioService
 
 @* Speed, cost and the green figures are what a duel is judged on; the shape-of-the-output
    numbers are diagnostics and wait behind a disclosure. A failed result renders nothing at
    all — every metric here reads zero on failure, and the Arena's failure card is the one
    place that explains why. *@
-<div class="telemetry-hud">
+<div class="telemetry-hud @(IsHighEco ? "telemetry-hud--eco-pulse" : "")">
     @if (Result is null)
     {
         <div class="telemetry-hud__pending">Awaiting results…</div>
@@ -88,6 +90,11 @@
 @code {
     [Parameter] public DuelResultDto? Result { get; set; }
 
+    private bool IsHighEco =>
+        Result is not null && !Result.IsFailure && (!Result.ApiCostUsd.HasValue || Result.ApiCostUsd.Value <= 0.0001);
+
+    private bool _chimePlayed;
+
     // The HUD shows post-run numbers, so it has nothing to say while tokens are streaming —
     // but it sits inside the Arena's render tree and was being rebuilt on every frame anyway.
     private DuelResultDto? _lastResult;
@@ -98,6 +105,11 @@
     protected override void OnParametersSet()
     {
         _renderDirty = !ReferenceEquals(Result, _lastResult);
+        if (_renderDirty && IsHighEco && !_chimePlayed)
+        {
+            _chimePlayed = true;
+            _ = AudioService.PlayHarmonicChimeAsync();
+        }
         _lastResult = Result;
     }
 

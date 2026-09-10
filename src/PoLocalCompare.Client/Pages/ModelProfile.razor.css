@@ -176,6 +176,27 @@
     .profile__gallery-item {
         padding: var(--space-xs);
     }
+
+    /* Six stats at minmax(8rem, 1fr) resolved to TWO columns on a phone: three rows of
+       generously-padded boxes, each wrapping a label and a figure that is at most ~10
+       characters ("141 tok/s", "90/100"). Three columns halves that to two rows, and the
+       value steps down one notch — these are glanceable figures, not prose.
+
+       Explicit `repeat(3, minmax(0, 1fr))` rather than a smaller minmax: auto-fit honours the
+       minimum, so lowering it to 6rem would still hand back two columns at this width. */
+    .profile__stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-sm);
+        margin-top: var(--space-md);
+    }
+
+    .profile__stat {
+        padding: var(--space-sm);
+    }
+
+    .profile__stat dd {
+        font-size: var(--text-lg);
+    }
 }
 
 .profile__gallery-item {

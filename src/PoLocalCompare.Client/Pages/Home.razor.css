@@ -467,3 +467,34 @@
     border-radius: var(--radius-md);
     animation-delay: var(--stagger, 0ms);
 }
+
+/* ── Phone: bound the picker ─────────────────────────────────────────────────
+   Below 1080px the layout is one column, so on a phone the model catalog — 26 rich cards
+   carrying name, ELO, duel record, parameter count and pricing — sits ABOVE the console.
+   That is roughly 1700px of list, which pushed the prompt box and Compare a page and a
+   half down: the two controls the page exists for were the last things you could reach.
+
+   Bounding the picker gives the catalog its own scroll window instead, so the page opens
+   with models, prompt and Compare all in reach. A nested scroll area is normally the wrong
+   answer — and it is exactly what was removed from the Archive grid — but the two cases
+   differ in what is inside the box. There the grid WAS the page's content, so the second
+   scrollbar only competed with the first for the same gesture. Here the box is a picker: a
+   bounded list you scan within, which is the ordinary shape for choosing from a long set,
+   and the console below it does not move.
+
+   Every card stays in the DOM, visible and clickable — this bounds the box, it does not
+   hide anything, which is also why it does not disturb the UI tests that click the first
+   card on a 390px viewport.
+
+   40dvh leaves room for the console's own ~380px under a 56px nav; a taller window would
+   put Compare below the fold again, which is the problem being solved.
+   overscroll-behavior: contain stops a flick past the end of the list from scrolling the
+   page underneath it. */
+@media (max-width: 640px) {
+    .home__picker {
+        max-height: 40dvh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: var(--space-md);
+    }
+}

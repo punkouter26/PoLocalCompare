@@ -65,10 +65,19 @@
     margin-bottom: var(--space-md);
 }
 
-.leaderboard__grid--scrollable {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
+/* `leaderboard__grid--scrollable` used to sit here — an `overflow-x: auto` wrapper that
+   duplicated what .po-table-wrap already provides and contradicted what .po-table--cards
+   switches off at 640px. Removed: horizontal behaviour is owned in exactly one place.
+   See the table-strategy note in app.css. */
+
+/* At card size (≤640px) the three derived columns — avg $/duel, first-token ms and the
+   Value score — are dropped from each row rather than stacked, via .po-cell--secondary.
+   Why: a phone row was eight labelled lines per model, and with eleven models the board
+   ran 2602px tall. You could see the rank and ELO, or the cost, but never both — so
+   comparing two models always meant a scroll. All three are *derived* numbers (cost and
+   speed are the inputs to Value; Value is ELO per dollar), so a row still answers "who is
+   winning, and by how much" without them, and the full figures remain on the model's own
+   profile one tap away. Desktop keeps every column; nothing is lost, only deferred. */
 
 .po-empty h2 {
     margin: 0 0 var(--space-xs);

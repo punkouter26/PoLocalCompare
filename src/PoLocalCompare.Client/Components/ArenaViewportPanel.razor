@@ -10,7 +10,7 @@
    viewport, and the ELO badge sits in the panel's foot in both cases. The page passes
    the panel a single `Result` row; nothing on this component reads sibling state. *@
 
-<div class="arena__viewport-panel @((Result?.IsFailure == true) ? "arena__viewport-panel--failed po-bg--err" : "")">
+<div class="arena__viewport-panel @((Result?.IsFailure == true) ? "arena__viewport-panel--failed po-bg--err" : "") @(IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena__viewport-panel--winner-holo" : "")">
     @if (Result?.IsFailure == true)
     {
         <ArenaFailureCard DisplayName="@DisplayName"

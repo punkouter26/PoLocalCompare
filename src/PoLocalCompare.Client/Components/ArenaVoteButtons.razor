@@ -1,4 +1,6 @@
 @using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Client.Services
+@inject AudioService AudioService
 
 @* The two large "pick a winner" buttons in the Arena. Was duplicated in Arena.razor
    once per side; the only differences were the side enum value, the emoji arrow direction
@@ -8,12 +10,12 @@
 <div class="arena__actions arena__actions--vote">
     <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
             disabled="@Disabled"
-            @onclick="@(() => OnVote.InvokeAsync(DuelVerdict.Left))">
+            @onclick="@(async () => { _ = AudioService.PlayMechanicalClickAsync(true); await OnVote.InvokeAsync(DuelVerdict.Left); })">
         👈 Winner: @LeftDisplayName
     </button>
     <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
             disabled="@Disabled"
-            @onclick="@(() => OnVote.InvokeAsync(DuelVerdict.Right))">
+            @onclick="@(async () => { _ = AudioService.PlayMechanicalClickAsync(true); await OnVote.InvokeAsync(DuelVerdict.Right); })">
         Winner: @RightDisplayName 👉
     </button>
 </div>

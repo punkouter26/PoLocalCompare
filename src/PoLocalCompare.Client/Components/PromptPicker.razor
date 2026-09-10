@@ -1,4 +1,6 @@
 @using PoLocalCompare.Shared.Prompts
+@using PoLocalCompare.Client.Services
+@inject AudioService AudioService
 
 @* Prompt sourcing for the Compare page: a curated set, compiled in, so picking a prompt
    costs no network round-trip. The "your recent prompts" list that sat above the library
@@ -12,7 +14,7 @@
         <button type="button" class="po-btn po-btn--sm po-btn--secondary prompt-picker__disclosure"
                 aria-expanded="@(_libraryOpen ? "true" : "false")"
                 aria-controls="prompt-library"
-                @onclick="@(() => _libraryOpen = !_libraryOpen)">
+                @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(true); _libraryOpen = !_libraryOpen; })">
             <span aria-hidden="true">@(_libraryOpen ? "▾" : "▸")</span>
             @(_libraryOpen ? "Hide prompt library" : $"Browse prompt library ({PromptLibrary.All.Count})")
         </button>
@@ -26,7 +28,7 @@
             <button type="button"
                     class="prompt-picker__chip @(_category == AllCategories ? "prompt-picker__chip--active" : "")"
                     aria-pressed="@(_category == AllCategories ? "true" : "false")"
-                    @onclick="@(() => _category = AllCategories)">
+                    @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(false); _category = AllCategories; })">
                 All (@PromptLibrary.All.Count)
             </button>
             @foreach (var category in PromptLibrary.Categories)
@@ -35,7 +37,7 @@
                 <button type="button"
                         class="prompt-picker__chip @(_category == category ? "prompt-picker__chip--active" : "")"
                         aria-pressed="@(_category == category ? "true" : "false")"
-                        @onclick="@(() => _category = category)">
+                        @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(false); _category = category; })">
                     @category (@count)
                 </button>
             }
@@ -81,6 +83,7 @@
 
     private Task SelectAsync(string text)
     {
+        _ = AudioService.PlayMechanicalClickAsync(true);
         CloseLibrary();
         return OnPromptSelected.InvokeAsync(text);
     }

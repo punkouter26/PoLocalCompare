@@ -24,7 +24,17 @@ article.content {
 }
 
 article.app-content {
-    padding-inline: clamp(0.75rem, 2vw, 1.5rem);
+    /* max(), not two rules. This was previously TWO selectors of equal specificity in this
+       same file — `article.app-content { padding-inline: clamp(...) }` here and
+       `article.content { padding-inline: env(...) }` at the bottom — and the later one
+       silently won, resolving the gutter to env() = 0px on every device without a notch.
+       The responsive gutter was therefore dead code for its whole life, and nothing warns,
+       because an overridden declaration is valid CSS.
+
+       max() is the correct composition anyway: the clamp is the floor and a real inset
+       extends it rather than replacing it. */
+    padding-inline: max(clamp(0.75rem, 2vw, 1.5rem), env(safe-area-inset-left))
+                    max(clamp(0.75rem, 2vw, 1.5rem), env(safe-area-inset-right));
     overflow-x: clip;
 }
 
@@ -38,7 +48,8 @@ article.app-content {
 
    The inset goes on the CONTENT, not on .page. Putting it on .page indents the sticky
    nav's background with it, so the page gradient shows as two bars down the outside of
-   a bar that is meant to be full-bleed. NavMenu insets its own inner row instead. */
-article.content {
-    padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
-}
+   a bar that is meant to be full-bleed. NavMenu insets its own inner row instead.
+
+   The horizontal inset is composed into the `article.app-content` rule above (via
+   max()); it must NOT be restated here as its own `article.content` rule, which is what
+   silently zeroed the gutter — see the comment there. */

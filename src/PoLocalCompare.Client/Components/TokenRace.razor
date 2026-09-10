@@ -1,5 +1,8 @@
 @using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Client.Services
 @using System.Globalization
+@inject AudioService AudioService
+@inject FxService Fx
 
 @* Turns the numbers the two panels already report into the thing they actually describe: a race.
    Same telemetry, read as position and pace instead of as a table. *@
@@ -41,6 +44,7 @@
     private bool _leftIsLeader;
     private bool _rightIsLeader;
     private bool _photoFinish;
+    private bool _photoFinishTriggered;
     private string _ticker = "Waiting for the first tokens…";
 
     /// <summary>
@@ -64,8 +68,16 @@
         _leftIsLeader = LeftTokenCount > RightTokenCount;
         _rightIsLeader = RightTokenCount > LeftTokenCount;
 
+        var wasPhotoFinish = _photoFinish;
         // One side across the line while the other is still generating.
         _photoFinish = (leftDone ^ rightDone) && frontRunner > 0;
+
+        if (_photoFinish && !wasPhotoFinish && !_photoFinishTriggered)
+        {
+            _photoFinishTriggered = true;
+            _ = AudioService.PlayShockwaveAsync();
+            _ = Fx.ShockwaveAsync(leftDone ? ".token-race__lane--left" : ".token-race__lane--right", leftDone ? "#12b8cf" : "#7d96ff");
+        }
 
         _ticker = BuildTicker(leftDone, rightDone);
     }
@@ -167,6 +179,14 @@
 
         <div class="token-race__track">
             <div class="token-race__fill" style="--pos: @progress.ToString("F1", CultureInfo.InvariantCulture)%"></div>
+            @if (status == DuelStatus.Generating && (velocity ?? 0) > 8)
+            {
+                <div class="token-race__exhaust" style="--pos: @progress.ToString("F1", CultureInfo.InvariantCulture)%" aria-hidden="true">
+                    <span class="token-race__particle token-race__particle--1"></span>
+                    <span class="token-race__particle token-race__particle--2"></span>
+                    <span class="token-race__particle token-race__particle--3"></span>
+                </div>
+            }
             <div class="token-race__runner @(status == DuelStatus.Generating ? "token-race__runner--moving" : "")"
                  style="--pos: @progress.ToString("F1", CultureInfo.InvariantCulture)%"
                  aria-hidden="true">

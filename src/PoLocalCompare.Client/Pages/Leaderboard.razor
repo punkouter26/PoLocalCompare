@@ -8,6 +8,7 @@
 <PageTitle>Leaderboard — PoLocalCompare</PageTitle>
 
 @inject DuelApiClient ApiClient
+@inject AudioService AudioService
 
 <div class="leaderboard">
     <h1 class="leaderboard__title po-title">Leaderboard</h1>
@@ -39,7 +40,11 @@
         else
         {
         @* Rows open the kill-list panel, so they are keyboard-operable (SC 2.1.1). *@
-        <div class="po-table-wrap leaderboard__grid--scrollable">
+        @* Plain .po-table-wrap. This used to also carry a local `leaderboard__grid--scrollable`
+           class whose only rule was another `overflow-x: auto` — a second horizontal-scroll
+           mechanism competing with the one .po-table-wrap already provides, and with the one
+           .po-table--cards switches off at 640px. See the table-strategy note in app.css. *@
+        <div class="po-table-wrap">
             <table class="po-table po-table--selectable po-table--cards leaderboard__grid">
                 <caption class="visually-hidden">Model rankings - select a model name to open its profile</caption>
                 <thead>
@@ -73,7 +78,8 @@
                                    rating history and output gallery it belongs beside. *@
                                 <a class="po-btn po-btn--ghost po-btn--sm leaderboard__row-btn"
                                    href="@($"/model/{entry.ModelId}")"
-                                   title="@($"Open {entry.DisplayName}")">
+                                   title="@($"Open {entry.DisplayName}")"
+                                   @onclick="@(() => AudioService.PlayMechanicalClickAsync(true))">
                                     @entry.DisplayName
                                     @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
                                     {
@@ -89,7 +95,7 @@
                                it is recoverable from DuelCount and is near-always zero. *@
                             <td data-label="W" class="leaderboard__record">@entry.WinCount</td>
                             <td data-label="L" class="leaderboard__record">@Losses(entry)</td>
-                            <td data-label="Avg $/duel">
+                            <td data-label="Avg $/duel" class="po-cell--secondary">
                                 @* Four decimals: a duel on a nano model costs a few ten-thousandths
                                    of a dollar, and rounding to cents renders the whole column as
                                    $0.00. Suppressed rather than zeroed for unpriced models — free
@@ -103,7 +109,7 @@
                                     <span class="leaderboard__no-data" title="No priced duels yet — local and Ollama models have no per-token rate.">&#8212;</span>
                                 }
                             </td>
-                            <td data-label="First token">
+                            <td data-label="First token" class="po-cell--secondary">
                                 @if (entry.AvgFirstTokenMs is { } ttft)
                                 {
                                     <span class="leaderboard__ttft">@FormatFirstToken(ttft)</span>
@@ -113,7 +119,7 @@
                                     <span class="leaderboard__no-data" title="No completed run has recorded a first-token time yet.">&#8212;</span>
                                 }
                             </td>
-                            <td data-label="Value">
+                            <td data-label="Value" class="po-cell--secondary">
                                 @* Value = ELO earned per dollar of API spend, with the divisor
                                    floored at $0.0001 server-side. Reads as a big number, hence the
                                    tabular-nums treatment; suppress for rows that have no cost. *@

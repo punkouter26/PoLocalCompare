@@ -7,6 +7,7 @@
 @using Microsoft.JSInterop
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
+@inject FxService Fx
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject WebGpuCapability WebGpu
@@ -32,7 +33,14 @@
                 <h1 class="home__title po-title">Compare two models</h1>
                 @if (_health is not null)
                 {
-                    <span class="home__health @HealthBadgeText.ModifierClass(_healthHasRemotes)" title="@HealthBadgeText.Tooltip(_availability?.Count(a => a.IsAvailable), _models.Count, _health?.Models.CloudMode)">@HealthBadgeText.Label(_healthHasRemotes)</span>
+                    @* role="status" so the badge is ANNOUNCED when the health probe resolves.
+                       It renders only after _health lands, so for a screen reader this span
+                       is inserted into a live region rather than updated in place — without
+                       the role, "Models ready" / "Remote models offline" appeared silently
+                       and the only way to learn the app's state was to go looking for it.
+                       Polite, not assertive: a health probe finishing must not interrupt
+                       someone mid-sentence in the prompt box. *@
+                    <span class="home__health @HealthBadgeText.ModifierClass(_healthHasRemotes)" role="status" title="@HealthBadgeText.Tooltip(_availability?.Count(a => a.IsAvailable), _models.Count, _health?.Models.CloudMode)">@HealthBadgeText.Label(_healthHasRemotes)</span>
                 }
             </div>
             <p class="po-subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
@@ -224,7 +232,7 @@
                             <h2 id="home-compare-heading" class="po-section-title">Compare</h2>
                             <p class="po-hint">@CompareHint</p>
                         </div>
-                        <button class="po-btn po-btn--success po-btn--lg"
+                        <button class="po-btn po-btn--success po-btn--lg @(CanCompare ? "po-btn--laser" : "")"
                                 disabled="@(!CanCompare)"
                                 @onclick="StartDuelAsync">
                             Compare →
@@ -462,9 +470,8 @@
 
     private void AssignModel(ModelDto model)
     {
-        // Quiet confirmation that the click landed. Fire-and-forget: the picker must not wait
-        // on an AudioContext that may not be unlocked yet.
-        _ = AudioService.PlayTickAsync();
+        // Tactile mechanical switch click confirmation.
+        _ = AudioService.PlayMechanicalClickAsync(true);
 
         // Both slots full + clicking a 3rd → show replace popover instead of silently overwriting.
         if (_leftModel is not null && _rightModel is not null
@@ -486,17 +493,23 @@
 
     private void ConfirmReplace(string slot)
     {
+        _ = AudioService.PlayMechanicalClickAsync(false);
         if (_replacePopoverModel is null) return;
         if (slot == "left") _leftModel = _replacePopoverModel;
         else _rightModel = _replacePopoverModel;
         _replacePopoverModel = null;
     }
 
-    private void CancelReplace() => _replacePopoverModel = null;
+    private void CancelReplace()
+    {
+        _ = AudioService.PlayMechanicalClickAsync(false);
+        _replacePopoverModel = null;
+    }
 
     private void LoadStarterDuel()
     {
-        // Prefer Remote models — they run server-side and need no WebGPU, so a first-run
+        _ = AudioService.PlayMechanicalClickAsync(true);
+        // Pre-fill prompt and pick two models. Prefer Remote (Azure) if available so starter
         // duel works on any device. Fall back to Ollama, then whatever is available.
         var ordered = _models
             .OrderBy(m => m.ModelType switch { ModelType.Remote => 0, ModelType.LocalService => 1, _ => 2 })
@@ -518,7 +531,10 @@
 
         try
         {
-            await AudioService.PlaySnareRollAsync();
+            // Quantum Ignition: Sub-drop + Dual charge clash
+            _ = AudioService.PlaySubDropAsync();
+            _ = AudioService.PlayIgnitionClashAsync();
+            _ = Fx.BurstFromAsync(".home__compare .po-btn", 40);
 
             var dto = await ApiClient.CommenceDuelAsync(
                 _leftModel!.ModelId, _rightModel!.ModelId, _prompt);
