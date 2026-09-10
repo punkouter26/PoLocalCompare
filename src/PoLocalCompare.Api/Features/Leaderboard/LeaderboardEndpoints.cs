@@ -28,16 +28,10 @@ public static class LeaderboardEndpoints
         .WithSummary("Returns all models ranked by ELO, output quality or average cost.")
         .Produces<IReadOnlyList<LeaderboardEntryDto>>();
 
-        group.MapGet("/{modelId}/killlist", async (
-            ModelId modelId,
-            [FromServices] GetKillListHandler handler) =>
-        {
-            var rows = await handler.HandleAsync(modelId);
-            return Results.Ok(rows);
-        })
-        .WithName("GetKillList")
-        .WithSummary("Returns aggregated head-to-head records for a model.")
-        .Produces<IReadOnlyList<HeadToHeadDto>>();
+        // There is deliberately no /{modelId}/killlist here. GetModelProfileHandler already
+        // composes GetKillListHandler into the profile payload's KillList field, so the separate
+        // endpoint was a second route to the same rows with no caller in the client. Removed
+        // 2026-09-10; the handler stays because the profile depends on it.
 
         group.MapGet("/{modelId}/profile", async (
             ModelId modelId,

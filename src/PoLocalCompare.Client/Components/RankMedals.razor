@@ -1,14 +1,14 @@
 @* Shared rank-medal rendering. The same #1 / #2 / #3 / blank shape was being inlined on
    Leaderboard (gold/silver/bronze chain) and Challenge (gold only), with the emoji glyph
-   and the modifier class written by hand each time. Centralising prevents the three
+   and the modifier class written by hand each time. Centralising prevents the two
    surfaces from drifting on what counts as "gold" (Leaderboard used #1F947, Challenge
    had its own copy of the same code point, and the difference would only show up in a
    regression that would never be caught).
 
-   BEM modifier class is namespaced per surface — Leaderboard uses
-   `leaderboard__rank--gold`, Challenge uses `challenge__rank--gold`. Pass the block
-   prefix in rather than picking a global class so each stylesheet keeps its own colour
-   values and we never reach for a single shared rule across two different scopes. *@
+   Challenge was removed on 2026-09-10, so Leaderboard is now the only caller and
+   `leaderboard` is the only block prefix actually passed. The parameter is kept because it
+   still documents the contract — the modifier class is namespaced per surface, and nothing
+   here should ever reach for one global rule across two different scopes. *@
 
 @code {
     /// <summary>

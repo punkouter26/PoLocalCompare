@@ -2,11 +2,15 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
 <nav class="navmenu">
-    @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ── *@
+    @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ──
+       The wording names which inference paths are simulated on purpose. Browser (WebGPU) models
+       run in this tab and the server never sees them, so they are NOT mocked and a banner
+       claiming all responses were simulated would be the same kind of lie this flag used to be.
+       See MockInferenceProxy for the server half. *@
     @if (_usingMockData)
     {
         <div class="navmenu__mock-banner" role="alert" aria-live="polite">
-            ⚠ USING MOCK DATA — Features:UseRealAi is disabled. AI responses are simulated.
+            ⚠ USING MOCK DATA — Features:UseRealAi is off. Remote and Ollama responses are simulated.
         </div>
     }
     <div class="navmenu__inner">
@@ -99,7 +103,7 @@
                        nothing is actually lost — see the --domain rule in the stylesheet. *@
                     <span class="navmenu__user-badge @(_isGuest ? "navmenu__user-badge--guest" : "navmenu__user-badge--oauth")"
                           title="@(_identity + (_isGuest ? " (guest session)" : " (signed in via Microsoft)"))">
-                        <span class="navmenu__user-badge-local">@IdentityLocalPart</span>@if (IdentityDomain is not null)
+                        <span>@IdentityLocalPart</span>@if (IdentityDomain is not null)
                         {
                             <span class="navmenu__user-badge-domain">@IdentityDomain</span>
                         }

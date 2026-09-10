@@ -16,7 +16,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ListDuelsHandler>();
         services.AddScoped<ExportLabReportHandler>();
         services.AddScoped<GetModelAvailabilityHandler>();
-        services.AddScoped<DownloadModelHandler>();
         services.AddScoped<ListOllamaModelsHandler>();
         services.AddScoped<BenchmarkOllamaModelHandler>();
         services.AddSingleton<DuelExecutionService>();
@@ -24,17 +23,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<LobbyNotifier>();
         services.AddScoped<OrphanModelIdRemapper>();
         services.AddScoped<DuelRecoverySweeper>();
-        // Singleton like TournamentRunner's own consumers: it kicks off bracket runs at startup
-        // and those runs outlive the request-free lifetime they start from.
-        services.AddSingleton<TournamentRunner>();
         services.AddHostedService<TournamentResumeService>();
         services.AddScoped<CreateTournamentHandler>();
         // Singleton: it owns a Chromium process, launched lazily on first use and reused.
         services.AddSingleton<HtmlScreenshotRenderer>();
-        services.AddScoped<ChallengeAdjudicator>();
         // Singleton like DuelExecutionService, and for the same reason: it is queued from a
         // request but outlives it, so it resolves its own scope per step rather than capturing
-        // the request's.
+        // the request's. Registered once — it was previously registered twice, which is a
+        // silent no-op in MS.DI but reads as intent.
         services.AddSingleton<TournamentRunner>();
 
         services.AddScoped<RecordVerdictHandler>(sp =>

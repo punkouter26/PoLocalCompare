@@ -78,9 +78,34 @@ public static class InfrastructureServiceExtensions
             client.Timeout = TimeSpan.FromSeconds(60);
         }).AddResilienceHandler("foundry-judge", AddStreamingRetry);
 
-        // Remote inference proxies — keyed by ModelType name so DuelExecutionService can resolve the right one
-        services.AddKeyedTransient<IRemoteInferenceProxy>("Remote", (sp, _) => sp.GetRequiredService<FoundryInferenceProxy>());
-        services.AddKeyedTransient<IRemoteInferenceProxy>("LocalService", (sp, _) => sp.GetRequiredService<OllamaInferenceProxy>());
+        // Remote inference proxies — keyed by ModelType name so DuelExecutionService can resolve
+        // the right one. Mock mode REPLACES this pair rather than adding a second registration
+        // that wins on ordering: MS.DI resolves the last matching keyed descriptor, so an
+        // appended mock would silently outrank anything a later ConfigureServices registered —
+        // including the test fixtures, which override these same keys. Keeping the two cases
+        // mutually exclusive and in the same position means an override always wins, whichever
+        // way the flag is set.
+        //
+        // This is also the only thing that makes the "USING MOCK DATA" banner in NavMenu.razor
+        // true; before 2026-09-10 the setting was read by the banner and /diag and nothing else,
+        // so the flag was cosmetic. Browser (WebGPU) models are unaffected either way — they run
+        // in the tab and the server never sees that inference.
+        var useRealAi = configuration.GetValue("Features:UseRealAi", true);
+        if (useRealAi)
+        {
+            services.AddKeyedTransient<IRemoteInferenceProxy>("Remote",
+                (sp, _) => sp.GetRequiredService<FoundryInferenceProxy>());
+            services.AddKeyedTransient<IRemoteInferenceProxy>("LocalService",
+                (sp, _) => sp.GetRequiredService<OllamaInferenceProxy>());
+        }
+        else
+        {
+            services.AddTransient<MockInferenceProxy>();
+            services.AddKeyedTransient<IRemoteInferenceProxy>("Remote",
+                (sp, _) => sp.GetRequiredService<MockInferenceProxy>());
+            services.AddKeyedTransient<IRemoteInferenceProxy>("LocalService",
+                (sp, _) => sp.GetRequiredService<MockInferenceProxy>());
+        }
 
         // Lab report renderer
 

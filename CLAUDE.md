@@ -52,6 +52,16 @@ There is no linter or formatter step — `TreatWarningsAsErrors` is the whole ga
 used to sit here and was deleted in the 2026-08-13 prune: it still expected the pre-VSA `src/Client/...`
 layout and failed on a healthy tree. Don't reintroduce it.)
 
+```powershell
+pwsh SCRIPTS/check-clean.ps1    # repo-hygiene gate: test budgets, dead CSS classes, cache-busters
+```
+
+`check-clean.ps1` is not a linter — it is the three things that had already gone wrong silently and
+that nothing else watches: a tier over its test budget, a class applied in markup that no stylesheet
+defines (nothing warns; the element just renders unstyled), and a stylesheet or script loaded
+without a `?v=` cache-buster. It reads source only, so it is deterministic and cheap, and the
+`test` job in [deploy.yml](.github/workflows/deploy.yml) runs it before the suites.
+
 ### Tests
 
 Four projects, one per tier. Unit needs nothing; Integration and E2EAPI need Docker
@@ -77,7 +87,25 @@ touching UI markup.
 AGENT.MD §8 fixes a **ratio contract of 100 / 50 / 25 / 25** — integration ≈ half of unit, each E2E
 tier ≈ a quarter. Counts are test *cases*, so a `[Theory]` contributes one per `InlineData` and each
 UI method counts twice (two viewports). Keep new tests inside those proportions rather than piling
-onto whichever tier is easiest to write.
+onto whichever tier is easiest to write. **The suite now sits exactly at the cap** (100/40/25/24 as
+of 2026-09-10) and `SCRIPTS/check-clean.ps1` fails when a tier exceeds its budget, so the contract is
+enforced rather than remembered.
+
+Two async traps in the server-side suites, both of which were causing real failures until
+2026-09-10:
+
+- **Duel execution is asynchronous.** `POST /api/duels` returns 202 once enqueued; the two result
+  rows land later. A verdict posted before they exist is refused with 409 ("This duel is still
+  running") — correctly, because ELO must never move on missing evidence. Tests must wait for the
+  rows (`DuelTestFlow.WaitForBothResultsAsync` in Integration, `WaitForBothResultsAsync` in
+  `DuelContractTests`) instead of racing them. That race was costing 7–9 of the 50 integration
+  cases per run.
+- **`BackgroundTaskService` is a SINGLE consumer, and `AutoJudge` runs inline inside it.** So
+  anything that makes a queue item wait stalls every later test: a grace window
+  (`AiJudge:DelaySeconds`), or a browser-model duel waiting for a client result that a headless
+  test never posts. That is why the E2EAPI fixture keeps a short watchdog and why its duel suite
+  runs in its own collection with the judge off — tournaments cannot run without the judge and
+  duels cannot run with it, so they get one host each.
 
 ## Architecture
 
@@ -108,8 +136,11 @@ model which output follows the prompt better and records that verdict itself. EL
 through `RecordVerdictHandler`, but it now has three callers, so **every verdict carries a
 `VerdictSource`** (`Human`, `Ai` or `Constraint`) — never add a write path that moves ELO without
 setting it, or the leaderboard silently blends different signals with no way to separate them
-afterwards. `Constraint` is a challenge-budget forfeit: nothing read the outputs, which is why it
-is a third value rather than filed under `Ai`.
+afterwards. `Constraint` means **no model's output was read at all**: `AutoJudge` stamps it for a
+one-sided failure (the survivor *is* the evidence) and `DuelRecoverySweeper` for a duel abandoned
+without results. It began as the challenge-budget forfeit and outlived that feature — challenge
+mode was removed on 2026-09-10, and the value stays because those two paths still produce it and
+stored rows still carry it.
 
 Three invariants hold the design together. A human decision always wins the race (`AutoJudge`
 re-reads the duel and stands down on anything but `Pending`, and `RecordVerdictHandler` throws on a
@@ -235,10 +266,30 @@ degrades to the old horizontal scroll rather than breaking.
 
 **There is no component library — `.po-btn` is the only button.** Radzen was removed wholesale
 in an earlier pass, re-added on 2026-08-22 for `RadzenDataGrid` (Archive) and `RadzenChart` (model
-profile), then **removed again on 2026-08-23**: `Radzen.Blazor` cost 1.43 MB gzipped — 11.9% of
-the app's entire download — for two components. The Archive is a `.po-table` again and the profile
-chart is inline SVG; both files carry a comment saying so. Do not reintroduce it without re-taking
-that payload decision. Buttons and tables are `.po-btn` and `.po-table` in
+profile), then **removed again on 2026-08-23** because `Radzen.Blazor` cost 1.43 MB gzipped —
+11.9% of the app's entire download — for two components. It was **re-added a second time on
+2026-09-02** after the owner re-took that payload decision (see `PoLocalCompare.Client.csproj`):
+the Archive grid is a `RadzenDataGrid` again and the profile chart is a `RadzenChart` again, so
+this repo DOES ship Radzen today. Do not reintroduce *more* of it without re-taking the decision
+again — the two components in use are the sanctioned set.
+
+Because Radzen is present, one consequence matters when reading the stylesheet: swapping the
+profile chart back to inline SVG would save **nothing** on download. The chart and the grid live in
+the same assembly, so the payload is already paid for by the grid being there. The only way the
+payload argument bites is to remove *both*, which means replacing the grid too.
+
+Two Radzen facts worth not re-deriving — both were checked against the package rather than guessed,
+after a first attempt used API that does not exist: `RadzenDataGrid` has **no** `Breakpoint`
+property (its `Responsive` mode applies its own internal breakpoint, and the `rz-datatable-reflow`
+class on the rendered table is how you can tell it is active), and `FilterProperty` exists on
+`RadzenDataGridColumn` (filter on a different property than the column binds — it is not the
+grid-level filter API, which is `RadzenDataFilter`/`RadzenDataFilterProperty`). The Archive's Date
+column gets a **typed calendar filter**, not a free-text box, because `StartedAt` is a
+`DateTimeOffset` — there is no string-vs-display mismatch to fix there. There IS a genuine timezone
+seam in the same place: the cell renders UTC (`… UTC`), the filter picker is a local-time date, so
+for a viewer behind UTC a duel stored late in the UTC day is shown as one date and matched by
+another. Fixing that is a product decision (render local, or make the filter UTC-aware), not a
+one-line change. Buttons and tables are `.po-btn` and `.po-table` in
 [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens. Twelve
 per-surface button classes (`wizard__btn`, `h2h__btn`, `lab__btn`, `source-compare__btn`
 …) had each reimplemented the same thing locally and drifted apart; they were folded into `.po-btn`
@@ -310,18 +361,31 @@ bracket of remote/Ollama models still finishes with nothing open. **The 4-model 
 dropped** in the same pass; `BracketPlanner.SupportedSizes` is `[2, 8]` and the maths is
 size-generic, so re-adding it is a one-line change.
 
-**Challenge budgets are adjudicated before the judge.** A duel can carry a `ChallengeKind` +
-threshold; `ChallengeAdjudicator` runs ahead of `AutoJudge` in `DuelExecutionService`, because a
-budget is arithmetic rather than an opinion and must keep working with `AiJudge:Enabled=false`.
-One side inside the budget wins outright; both inside falls through to the ordinary judge; neither
-inside records a tie. Two measurement rules are load-bearing: a **failed run never meets a budget**
-(a crash has a short stored duration, so counting it would make failing fast the winning speed
-strategy), and an **unpriced model counts as zero spend** (otherwise every local model is
-disqualified from every cost challenge). There is **no challenge leaderboard** — `/challenge`,
-`ChallengesEndpoints`, `ChallengeRecord` and the `ChallengeRecords` table were deleted on
-2026-08-23. Adjudication was always the part that changes outcomes; the board was a second
-ranking of the same duels. The budget picker on Home stays, and a forfeit still moves ELO with
-`VerdictSource.Constraint`.
+**The 2026-09-10 prune removed the last of the low-traffic surface.** Challenge mode is gone
+entirely — `ChallengeKind`, `ChallengeRules`, `ChallengeAdjudicator`, `Features/Challenges/`,
+`Shared/Challenges/`, the `challengeKind`/`challengeThreshold` request fields, the duel columns in
+Table Storage, and the Arena's budget rendering. It was cut because **nothing in the UI ever set
+one**: a challenge was reachable only by posting a raw `challengeKind` body, so the Arena rendered
+a budget line for a field the app could not produce. Also removed in the same pass, each because
+it had no caller: `POST /api/models/{id}/download` + `DownloadModelHandler`;
+`GET /api/leaderboard/{id}/killlist` (the profile payload already carries `KillList`);
+`DuelApiClient`'s `GetKillListAsync`, `GetOllamaAvailableModelsAsync` and
+`BenchmarkOllamaModelAsync`; the `CommandPalette` component and its Ctrl/⌘-K handler;
+`PlayTensionPulseAsync` (the challenge countdown cue); `api/requests/*.http`; `azure.yaml` (an
+`azd` manifest nothing invoked — the workflow uses raw `az` CLI); and `SCRIPTS/test-browser-models.*`
+(a second, parallel implementation of the `/diag` browser-model probe). **Two deliberate survivors**:
+`VerdictSource.Constraint`, and `wwwroot/push-sw.js` — 601 bytes that exist to answer a speculative
+Chromium fetch, so deleting it buys a 404 in the network tab, not simplicity.
+
+**`Features:UseRealAi` is real now, and it was a lie before.** Until 2026-09-10 the setting was
+read by the `USING MOCK DATA` banner and the `/diag` config dump and nothing else, so a run with
+it off still called Foundry while the UI said the responses were simulated. `MockInferenceProxy`
+is what makes the banner true: with the flag off it **replaces** the `Remote`/`LocalService`
+keyed proxies rather than being appended after them. That distinction matters — MS.DI resolves the
+*last* matching keyed descriptor, so an appended mock would silently outrank the keyed mocks that
+`IntegrationHost` and `ApiAppFixture` register for the same keys. Browser (WebGPU) models are not
+mocked either way: they run in the tab and the server never sees that inference, which is why the
+banner names only remote and Ollama.
 
 **`autoJudgeDelaySeconds` is a per-duel override, and a tournament is its only caller.**
 `TournamentRunner` passes 0 so a bracket never stalls between rounds waiting for a human who is
@@ -332,10 +396,12 @@ implementation of the Arena's streaming UI whose only distinguishing feature was
 the tab, and it wrote real duels into the leaderboard while pretending to be a demo.)
 
 **Motion is compositor-only, and that is a correctness constraint, not a style rule.** Browser
-models run WebLLM inference over **WebGPU in this same tab**, and two things depend on that GPU
-being free: the tok/s the `TokenRace` reports, and — since challenge mode — whether a model comes
-in under a `MaxSeconds` budget. A budget miss forfeits the duel and moves ELO, so a render loop
-competing for the GPU would not merely drop frames, it would **record wrong verdicts**. So:
+models run WebLLM inference over **WebGPU in this same tab**, and the tok/s the `TokenRace` reports
+is measured while that is happening. A render loop competing for the GPU would not merely drop
+frames, it would **make the number the app exists to report wrong** and slow a browser model's own
+generation while it is being timed. (The original justification was stronger — a `MaxSeconds`
+challenge budget whose miss forfeited the duel and moved ELO — but the rule outlived challenge
+mode's removal on 2026-09-10 and is still worth keeping.) So:
 continuous motion is CSS transform/opacity only (`body::before` aurora drift, `.po-lift`,
 `.po-glow` in [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css)); `backdrop-filter` is fine
 (compositor, not the 3D pipeline); and the only canvas work in the app —
@@ -454,6 +520,20 @@ pipelines; adding a per-attempt timeout will abort SSE streams.
   styling itself stays in CSS. Colour tokens are declared for light, for `prefers-color-scheme: dark`,
   and again under `:root[data-theme=...]`; the `[data-theme]` blocks must stay last or the header's
   theme toggle cannot override the OS preference.
+- **`box-sizing: border-box` is global** (`app.css`, a `*, *::before, *::after` rule). It was absent
+  until 2026-09-10, so every `width: 100%` + padding rule rendered wider than its container and the
+  excess was silently **clipped** by `article.app-content { overflow-x: clip }` — `.po-page` resolved
+  to 407px inside a 375px parent on a phone, which cut "ELO" off the model-profile header and defeated
+  `.po-table--cards`. Don't remove it, and don't reintroduce a `width: 100%` box that relies on being
+  able to overflow.
+- **Nothing inside `main` may set `min-height: 100dvh`.** `main` already starts below the 56px sticky
+  nav, so a `100dvh` minimum there made *every* route 72px taller than the viewport (measured:
+  `scrollHeight` 972 against `innerHeight` 900 on all six routes). The viewport guarantee belongs to
+  `.page` alone; a descendant that needs a floor must use `calc(100dvh - var(--nav-height))`.
+- **`index.html` cache-busts the stylesheets with `?v=N`**, matching what the `<script src>` tags
+  already did. There is a service worker, so without it the browser serves the previous build's CSS
+  and a change simply does not appear — this cost real time when verifying the box-sizing fix, which
+  was briefly "confirmed" against a stale sheet. **Bump the number on every CSS edit.**
 
 ## Known stale documentation
 

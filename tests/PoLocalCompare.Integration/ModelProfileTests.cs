@@ -37,22 +37,9 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
         return body.GetProperty("modelId").GetString()!;
     }
 
-    private async Task RunDuelAsync(string leftId, string rightId, string verdictSide)
-    {
-        var commence = await _client.PostAsJsonAsync("/api/duels", new
-        {
-            LeftModelId = leftId,
-            RightModelId = rightId,
-            PromptText = "Build an HTML app.",
-        });
-        commence.EnsureSuccessStatusCode();
-
-        var duelId = (await commence.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("duelId").GetString()!;
-
-        var verdict = await _client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = verdictSide });
-        verdict.EnsureSuccessStatusCode();
-    }
+    // Waits for both result rows before recording the verdict — see DuelTestFlow.
+    private Task RunDuelAsync(string leftId, string rightId, string verdictSide) =>
+        DuelTestFlow.RunDuelAsync(_client, leftId, rightId, verdictSide);
 
     private async Task<JsonElement> GetProfileAsync(string modelId) =>
         (await (await _client.GetAsync($"/api/leaderboard/{modelId}/profile"))

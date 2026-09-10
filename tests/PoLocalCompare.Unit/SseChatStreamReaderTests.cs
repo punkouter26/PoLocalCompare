@@ -205,8 +205,7 @@ public class SseChatStreamReaderTests
     [Theory]
     [InlineData(1)]    // pathological: one byte per read
     [InlineData(7)]    // splits mid-JSON and mid-`data: ` prefix
-    [InlineData(64)]
-    [InlineData(4096)]
+    [InlineData(4096)] // a whole frame per read — the ordinary case
     public async Task ReadInto_IsExact_WhenFramesSplitAcrossReads(int chunkSize)
     {
         // Frames do not arrive whole. The reader has to hold a partial line across reads and

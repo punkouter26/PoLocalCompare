@@ -8,7 +8,9 @@ namespace PoLocalCompare.E2EUI;
 ///
 /// Trimmed to the AGENT.MD §8 ratio in the 2026-08-13 prune: assertions that used to sit in
 /// their own method are folded into the journey that already navigates there, so coverage is
-/// kept while the case count drops. 5 viewport-paired methods + 1 viewport-independent = 11 cases.
+/// kept while the case count drops. Trimmed again on 2026-09-10 for the same reason — the
+/// first-load console check now rides along with the route journey that already visited those
+/// pages. 4 viewport-paired methods + 1 viewport-independent = 9 cases.
 /// </summary>
 [Trait("Category", "UI")]
 public sealed class NavigationUiTests : UiTestBase
@@ -94,10 +96,11 @@ public sealed class NavigationUiTests : UiTestBase
     [MemberData(nameof(Viewports))]
     public async Task CoreRoutes_RenderTheirHeadingAndDoNotScrollHorizontally(int width, int height)
     {
-        // Route reachability and the horizontal-overflow check were three separate methods.
-        // They want the same navigation, so they share one: each route must mount its own
-        // titled element (not merely return 200) and must not shear its right edge. Mobile
-        // portrait is the primary target and the classic place overflow shows up.
+        // Route reachability, the horizontal-overflow check and the first-load console check were
+        // three separate methods. They want the same navigation, so they share one: each route
+        // must mount its own titled element (not merely return 200), must not shear its right
+        // edge, and the journey must not log a single console error. Mobile portrait is the
+        // primary target and the classic place overflow shows up.
         var routes = new (string Path, string TitleSelector)[]
         {
             ("/", ".home__title"),
@@ -106,6 +109,14 @@ public sealed class NavigationUiTests : UiTestBase
         };
 
         var page = await NewPageAsync(width, height);
+
+        // Registered before the first navigation, so the boot sequence is covered too.
+        var errors = new List<string>();
+        page.Console += (_, msg) =>
+        {
+            if (msg.Type == "error") errors.Add(msg.Text);
+        };
+
         await page.GotoAsync(SeedAuthUrl("/"));
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
@@ -121,21 +132,6 @@ public sealed class NavigationUiTests : UiTestBase
                 "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1");
             Assert.False(overflows, $"{path} overflows horizontally at {width}×{height}.");
         }
-    }
-
-    [Theory]
-    [MemberData(nameof(Viewports))]
-    public async Task NoConsoleErrorsOnFirstLoad(int width, int height)
-    {
-        var page = await NewPageAsync(width, height);
-        var errors = new List<string>();
-        page.Console += (_, msg) =>
-        {
-            if (msg.Type == "error") errors.Add(msg.Text);
-        };
-
-        await page.GotoAsync(SeedAuthUrl("/"));
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
         Assert.True(errors.Count == 0, "Console errors: " + string.Join(" | ", errors));
     }

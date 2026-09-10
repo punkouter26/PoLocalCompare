@@ -44,15 +44,11 @@ public class ModelDisplayNameTests
     }
 
     [Fact]
-    public void ResolveForDisplay_SubstitutesThePlaceholderRatherThanLeakingTheId()
+    public void ResolveForDisplay_SubstitutesThePlaceholderAndPassesRealNamesThrough()
     {
-        // The whole point: a 26-character ULID must never reach a table cell.
+        // The whole point: a 26-character ULID must never reach a table cell. The positive half
+        // is the same rule read the other way — a real name is passed through, trimmed.
         Assert.Equal(ModelDisplayName.RetiredPlaceholder, ModelDisplayName.ResolveForDisplay(null, null, Id));
-    }
-
-    [Fact]
-    public void ResolveForDisplay_PassesARealNameThroughTrimmed()
-    {
         Assert.Equal("Phi-4", ModelDisplayName.ResolveForDisplay("  Phi-4  ", null, Id));
         Assert.False(ModelDisplayName.IsUnresolved("Phi-4", Id.Value));
     }

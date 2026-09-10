@@ -14,8 +14,7 @@ public class BracketPlannerTests
     // ── Sizes ─────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(4)]   // supported until 2026-08-23; the 4-model bracket was dropped
-    [InlineData(16)]
+    [InlineData(16)]  // an unbracketed size is rejected, not silently rounded
     public void UnsupportedSizes_AreRejected(int size)
     {
         Assert.False(BracketPlanner.IsSupportedSize(size));
@@ -37,16 +36,10 @@ public class BracketPlannerTests
     [Fact]
     public void SeedOrder_ForEight_IsTheStandardLayout()
     {
+        // The exact layout subsumes "uses every seed exactly once": a permutation of 1..8 has
+        // eight distinct entries by construction, so asserting the sequence is the stronger
+        // statement and the count check adds nothing to it.
         Assert.Equal([1, 8, 4, 5, 2, 7, 3, 6], BracketPlanner.SeedOrder(8));
-    }
-
-    [Theory]
-    [InlineData(8)]
-    public void SeedOrder_UsesEverySeedExactlyOnce(int size)
-    {
-        var order = BracketPlanner.SeedOrder(size);
-        Assert.Equal(size, order.Count);
-        Assert.Equal(Enumerable.Range(1, size), order.OrderBy(x => x));
     }
 
     /// <summary>

@@ -15,7 +15,7 @@
    The kill list moved here wholesale from the leaderboard's expanding panel. It answers a
    question about one model, so it belongs on that model's page rather than in a drawer under
    a table of all of them. *@
-<div class="profile po-page">
+<div class="po-page">
     @if (_loading)
     {
         <p class="po-status">Loading model…</p>
@@ -118,10 +118,15 @@
 
                    Colours come from the app tokens (ChartLineColor / ChartBaselineColor), not from a Radzen
                    theme: index.html deliberately loads only Radzen's structural base CSS, so
-                   nothing here inherits a competing palette. *@
+                   nothing here inherits a competing palette.
+
+                   The height is NOT set here as Style="height: 16rem". It lives in app.css
+                   under the Radzen token bridge, for the same reason the Archive grid's height
+                   does: it needs a media query so a phone gets a shorter chart, and an inline
+                   style cannot express that — it also keeps this file on the right side of the
+                   "no inline style= attributes" rule the rest of the app follows. *@
                 <div class="profile__chart-wrap">
                     <RadzenChart @key="_profile.ModelId"
-                                 Style="width: 100%; height: 16rem"
                                  class="profile__chart">
                         <RadzenLineSeries TItem="EloPointView"
                                           Data="@ChartPoints"
@@ -290,7 +295,7 @@
 
     /// <summary>
     /// Compare page prefilled with this pairing — the same querystring the Archive's
-    /// Re-Challenge uses, so there is one way to reopen a matchup rather than two.
+    /// Re-run uses, so there is one way to reopen a matchup rather than two.
     /// </summary>
     private string RematchHref(HeadToHeadDto row) =>
         $"/?leftModelId={Uri.EscapeDataString(_profile?.ModelId.Value ?? string.Empty)}" +

@@ -12,10 +12,9 @@ namespace PoLocalCompare.Api.Features.Models;
 /// Prices below are Microsoft Foundry list rates for the named deployment as of 2026-09-02.
 /// Update in lockstep with the public price sheet
 /// (https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) — a stale number here is a
-/// stale number on the ModelCard, the leaderboard's avg-$/duel column, the Arena total, and
-/// the Cost challenge verdict. ChallengeAdjudicator treats unpriced models as zero spend, so
-/// an unpriced flagship would otherwise win every MaxCost challenge outright; this resolver
-/// is what stops that.
+/// stale number on the ModelCard, the leaderboard's avg-$/duel column and the Arena total.
+/// A missing number is worse than a stale one: an unpriced model renders as unknown cost
+/// everywhere, so this resolver exists to make sure every seeded deployment has a real rate.
 ///
 /// Match key is the deployment name as it appears on the wire (the model's
 /// <c>ApiEndpointRef</c>), normalised to lowercase. The match is suffix-based on purpose:

@@ -81,11 +81,10 @@ public static class ModelSeeder
         //
         // Pricing is null for the same reason as the 2026-08-13 batch — the Foundry list rates
         // could not be verified (the retail-prices API returns no rows for AI meters, the model
-        // metadata carries `cost: null`, and the price sheet is client-rendered). Note the
-        // consequence is worse for this batch than the last: ChallengeAdjudicator treats an
-        // unpriced model as ZERO spend, so GPT-5.4 Pro currently wins every MaxCost challenge
-        // outright. Fill the two pricing arguments and the reconcile loop backfills the stored
-        // rows on the next startup.
+        // metadata carries `cost: null`, and the price sheet is client-rendered). An unpriced
+        // model shows as unknown cost on the ModelCard, the leaderboard's avg-$/duel column and
+        // the Arena total. Fill the two pricing arguments and the reconcile loop backfills the
+        // stored rows on the next startup.
         new Model(ModelId.From("01SEED000000000000000000C"), "GPT-4.1 Nano",      ModelType.Remote, apiEndpointRef: "gpt-4.1-nano"),
         new Model(ModelId.From("01SEED000000000000000000D"), "GPT-OSS 120B",      ModelType.Remote, apiEndpointRef: "gpt-oss-120b"),
         new Model(ModelId.From("01SEED000000000000000000E"), "DeepSeek V4 Flash", ModelType.Remote, apiEndpointRef: "DeepSeek-V4-Flash"),
@@ -103,8 +102,7 @@ public static class ModelSeeder
         //
         // Grok 4.6 IS seeded and works, but note it fails the availability probe with
         // "Probe timed out" — it spent 211 reasoning tokens answering "say hi" and took 18.8 s.
-        // Phi-4 has always shown the same way. Duels are fine (RemoteTimeoutSeconds is 120), but
-        // it will lose most MaxSeconds challenges on thinking time rather than on output.
+        // Phi-4 has always shown the same way. Duels are fine (RemoteTimeoutSeconds is 120).
 
         // Anthropic: ids H, J and K are RESERVED for claude-haiku-4-5, claude-sonnet-4-6 and
         // claude-opus-5 — deployment is blocked on Azure's InvalidModelProviderData, which
@@ -217,8 +215,7 @@ public static class ModelSeeder
         // Default price book — fills rows that were added before their retail rate was known
         // (e.g. the 2026-09-02 catalog expansion shipped with null pricing because the Azure
         // retail-prices API returned no rows for those meters). Without this, the seeded
-        // flagship would have empty Cost UI everywhere AND win every MaxCost challenge by
-        // default (ChallengeAdjudicator treats unpriced models as zero spend). The price
+        // flagship would have empty Cost UI everywhere. The price
         // book is curated manually — see DefaultPriceBook.cs for the table.
         var defaultBackfilled = DefaultPriceBook.Backfill(
             await repo.GetAllAsync(),

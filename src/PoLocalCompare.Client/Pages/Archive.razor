@@ -49,7 +49,7 @@
             </div>
         }
         @* Clicking a row navigates straight to /arena/{id} so both model outputs are
-           visible side-by-side (no intermediate "Duel Details" panel). Re-Challenge and
+           visible side-by-side (no intermediate "Duel Details" panel). Re-run and
            Lab report sit inline as per-row icon buttons so the two side features the
            panel used to host don't quietly disappear. *@
         @* RadzenDataGrid — re-added 2026-09-02 after the owner re-took the payload decision
@@ -63,6 +63,11 @@
                breakpoint, so a phone still gets cards rather than a horizontal scroller.
              • AllowVirtualization with a fixed height is the point of the grid on a long
                archive; without a height it renders every row and the virtualiser is inert.
+               The height itself lives in app.css under the Radzen token bridge
+               (.archive__grid), NOT as an inline Style here: it needs min() against dvh so
+               the grid cannot grow taller than the phone viewport and stack a second
+               scrollbar inside the page's own, and a CSS custom-property-free inline style
+               cannot express that.
              • RowSelect keeps rows navigable. The old markup used role="link" + tabindex on
                <tr>; Radzen renders its own row semantics, and RowSelect fires for both click
                and keyboard, so the behaviour survives without us fighting the component.
@@ -80,7 +85,6 @@
                         FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
                         AllowVirtualization="true"
                         Responsive="true"
-                        Style="height: 32rem"
                         EmptyText="No duels match this filter."
                         RowSelect="@(d => Nav.NavigateTo($"/arena/{d.DuelId}"))"
                         class="archive__grid">
@@ -143,12 +147,12 @@
                 <RadzenDataGridColumn TItem="DuelSummaryDto" Title="" Sortable="false" Filterable="false" Width="6rem">
                     <Template Context="d">
                         <div class="archive__row-actions">
-                            @* Re-Challenge: same prompt, same two models, fresh duel. *@
+                            @* Re-run: same prompt, same two models, fresh duel. *@
                             <button type="button"
                                     class="archive__row-btn"
-                                    aria-label="@($"Re-Challenge {d.LeftModelName} vs {d.RightModelName} with the same prompt")"
-                                    title="Re-Challenge with the same prompt"
-                                    @onclick="@(() => GoToReChallenge(d))"
+                                    aria-label="@($"Re-run {d.LeftModelName} vs {d.RightModelName} with the same prompt")"
+                                    title="Re-run with the same prompt"
+                                    @onclick="@(() => GoToRerun(d))"
                                     @onclick:stopPropagation="true">⚔</button>
                             @* Same-origin GET carries the BFF cookie, so the browser
                                does the whole download with no interop. *@
@@ -330,9 +334,9 @@
         return modelId.Length <= 10 ? $"id: {modelId}" : $"id: {modelId[..4]}…{modelId[^4..]}";
     }
 
-    private void GoToReChallenge(DuelSummaryDto d)
+    private void GoToRerun(DuelSummaryDto d)
     {
-        // Re-Challenge re-runs the same pairing with the same prompt. The Compare page expects
+        // Re-run repeats the same pairing with the same prompt. The Compare page expects
         // the prompt on the query string, so this stays text-only - the user can still swap
         // models on the landing page before launching.
         var prompt = Uri.EscapeDataString(d.PromptSummary);

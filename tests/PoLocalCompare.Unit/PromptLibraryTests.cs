@@ -12,40 +12,31 @@ namespace PoLocalCompare.Unit;
 public class PromptLibraryTests
 {
     [Fact]
-    public void All_HaveUniqueIdsAndATitleAndCategory()
+    public void All_SatisfyTheShapeEveryPromptMustHave()
     {
+        // One pass over the catalog, three kinds of invariant. They were three facts asserting
+        // the same "every entry must satisfy X" over the same collection; keeping them together
+        // means a new entry that violates two of them is one failure to read, not two.
         var ids = PromptLibrary.All.Select(p => p.Id).ToList();
-
         Assert.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
 
         Assert.All(PromptLibrary.All, prompt =>
         {
+            // Identity — the picker keys off Id and renders Title/Category.
             Assert.False(string.IsNullOrWhiteSpace(prompt.Title));
             Assert.False(string.IsNullOrWhiteSpace(prompt.Category));
-        });
-    }
 
-    [Fact]
-    public void All_SatisfyTheCommenceDuelLengthBounds()
-    {
-        // CommenceDuelHandler rejects anything outside this range, so a library entry that
-        // violates it would be a button that always fails.
-        Assert.All(PromptLibrary.All, prompt =>
-        {
+            // CommenceDuelHandler rejects anything outside this range, so a library entry that
+            // violates it would be a button that always fails.
             Assert.InRange(
                 prompt.Text.Length,
                 CommenceDuelCommand.MinPromptLength,
                 CommenceDuelCommand.MaxPromptLength);
-        });
-    }
 
-    [Fact]
-    public void All_AskForASelfContainedSingleFile()
-    {
-        // The sandbox has no same-origin access, so anything split across files renders blank
-        // and the model looks worse than it is.
-        Assert.All(PromptLibrary.All, prompt =>
-            Assert.Contains("self-contained single HTML file", prompt.Text, StringComparison.OrdinalIgnoreCase));
+            // The sandbox has no same-origin access, so anything split across files renders
+            // blank and the model looks worse than it is.
+            Assert.Contains("self-contained single HTML file", prompt.Text, StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     [Fact]

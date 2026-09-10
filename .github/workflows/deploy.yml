@@ -36,6 +36,12 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
       - run: dotnet workload restore ${{ env.API_PROJECT_PATH }}
 
+      # Repo hygiene, before the suites: test budgets (100/50/25/25), dead CSS classes and
+      # cache-buster parity. Source-only and deterministic, so it fails fast and cannot flake.
+      - name: Check clean
+        shell: pwsh
+        run: ./SCRIPTS/check-clean.ps1
+
       # Pure logic, no Docker. Kept first so a logic break fails in seconds rather than
       # after a container pull.
       - name: Unit
@@ -140,6 +146,12 @@ jobs:
             sleep 15
           done
           if [ "$ok" != "1" ]; then echo "::error::/health never returned 200"; exit 1; fi
+          # Platform liveness probe (Platform/PoPlatform.cs, shared across the Po repos). It is
+          # dependency-free by design, so a 200 here means the process itself is up even when
+          # Table Storage is the thing that is broken — the two probes answer different questions.
+          LIVE=$(curl -s -o /dev/null -w "%{http_code}" "$base/health/live" --max-time 30 || echo "000")
+          echo "Liveness probe: HTTP $LIVE"
+          [ "$LIVE" = "200" ] || { echo "::error::/health/live did not return 200"; exit 1; }
           # SPA mount guard — catches trimmed/broken WASM publishes that /health can't see.
           ROOT=$(curl -s "$base/" --max-time 30)
           echo "$ROOT" | grep -q "blazor.webassembly.js" || { echo "::error::index.html is missing the Blazor bootstrap"; exit 1; }

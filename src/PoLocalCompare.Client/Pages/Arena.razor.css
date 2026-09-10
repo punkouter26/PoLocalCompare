@@ -363,7 +363,7 @@
     border-radius: var(--radius-sm);
 }
 
-/* Duel-level cost summary. Sits between the view switcher and the OutputScorecard so the
+/* Duel-level cost summary. Sits between the view switcher and the viewport panels so the
    number lands in the same visual band as the per-side API cost lines in TelemetryHud. */
 .arena__cost-total {
     display: flex;
@@ -407,32 +407,6 @@
     font-style: italic;
 }
 
-/* ── Challenge budget ───────────────────────────────────────────────────
-   Above the outputs, because the ceiling changes what winning means. Each side's measured
-   value appears here as soon as its result exists, so a forfeit is visible rather than only
-   asserted in the verdict line. */
-.arena__budget {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-sm) var(--space-md);
-    margin: var(--space-smd) 0;
-    padding: var(--space-sm) var(--space-smd);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-1);
-    font-size: var(--text-md);
-}
-
-.arena__budget-label {
-    font-weight: 600;
-    color: var(--text);
-}
-
-.arena__budget-side {
-    font-variant-numeric: tabular-nums;
-}
-
-/* `--met` and `--over` are now shared `.po-fg--ok` / `.po-fg--err` text-only modifiers. */
-
+/* `--met` and `--over` were folded into the shared `.po-fg--ok` / `.po-fg--err` text-only
+   modifiers. The `.arena__budget*` rules that sat here went with challenge mode on 2026-09-10. */
 

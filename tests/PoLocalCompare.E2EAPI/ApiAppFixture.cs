@@ -9,6 +9,7 @@ using PoLocalCompare.Api.Features.Judging;
 using PoLocalCompare.Api.Features.Leaderboard;
 using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.DTOs;
+using PoLocalCompare.Shared.Enums;
 using Testcontainers.Azurite;
 
 using PoLocalCompare.Shared.Ids;
@@ -19,13 +20,28 @@ namespace PoLocalCompare.E2EAPI;
 /// Boots the real API (Blazor host) over an ephemeral Azurite container with AI inference mocked,
 /// so E2E-API tests exercise the HTTP surface end-to-end as a black box.
 /// </summary>
-public sealed class ApiAppFixture : IAsyncLifetime
+/// <remarks>
+/// Not sealed: <see cref="DuelApiFixture"/> derives from it to run without the auto-judge, which
+/// this host cannot do globally. DuelExecutionService awaits AutoJudge INLINE on the
+/// single-consumer BackgroundTaskService queue, so the grace window is not just a delay before a
+/// verdict — it is time the only worker in the process spends asleep. A duel collection therefore
+/// wants the judge off, while a tournament collection cannot run without it: TournamentRunner
+/// passes autoJudgeDelaySeconds: 0 because the judge is the only thing that can decide a match,
+/// so with no judge a bracket's first match stays Pending and holds that same queue forever.
+/// </remarks>
+public class ApiAppFixture : IAsyncLifetime
 {
     private readonly AzuriteContainer _azurite = new AzuriteBuilder()
         .WithImage("mcr.microsoft.com/azure-storage/azurite:latest")
         .Build();
 
     private WebApplicationFactory<Program> _factory = null!;
+
+    /// <summary>
+    /// Whether the auto-judge runs in this host. Override to <c>false</c> for a collection that
+    /// owns no tournaments — see the class remarks for why the two cannot share a setting.
+    /// </summary>
+    protected virtual bool EnableAutoJudge => true;
 
     public async Task InitializeAsync()
     {
@@ -40,9 +56,33 @@ public sealed class ApiAppFixture : IAsyncLifetime
             builder.UseSetting("Features:UseRealAi", "false");
             builder.UseSetting("KeyVault:Uri", "");
             builder.UseSetting("Testing:SkipSeeding", "true");
+            builder.UseSetting("AiJudge:Enabled", EnableAutoJudge ? "true" : "false");
+            // Safety net for the same class of problem: a duel left waiting on a browser result
+            // blocks the single-consumer queue until its watchdog fires, and the app default is
+            // 900 s. Clamped to the 30 s floor the execution service enforces. Tests should
+            // release their duels explicitly (see DuelContractTests.ReleaseLocalDuelAsync); this
+            // just stops a future mistake from hanging the run for fifteen minutes.
+            builder.UseSetting("Duel:TimeLimitSeconds", "30");
 
             builder.ConfigureServices(services =>
             {
+                // The auto-judge must be MOCKED, not switched off, and getting this wrong is
+                // what made this assembly's duel tests fail whenever the tournament tests ran
+                // first.
+                //
+                // TournamentRunner passes autoJudgeDelaySeconds: 0 precisely so an unattended
+                // bracket never waits for a human — the judge is the only thing that can decide
+                // a match. So with AiJudge:Enabled=false the first match stays Pending forever,
+                // TournamentRunner sits on the single-consumer background queue waiting for it,
+                // and every duel queued behind it never executes; three DuelContractTests then
+                // timed out waiting for results that could not arrive. Mocking the judge keeps
+                // brackets moving without a Foundry call, while disabling it stalls the queue.
+                var judge = new Mock<IDuelJudge>();
+                judge.Setup(j => j.JudgeAsync(
+                        It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new JudgeDecision(DuelVerdict.Left, "E2E API judge mock.", IsWalkover: false));
+                services.AddScoped(_ => judge.Object);
+
                 services.AddLogging(l =>
                 {
                     l.AddFilter("PoLocalCompare.Api.Common.Persistence", LogLevel.Warning);

@@ -101,29 +101,11 @@ public static class ModelsEndpoints
         .Produces(StatusCodes.Status200OK)
         .AllowAnonymous();
 
-        group.MapPost("/{webLlmModelId}/download", async (
-            [FromRoute] string webLlmModelId,
-            [FromServices] DownloadModelHandler handler) =>
-            await handler.HandleAsync(webLlmModelId) switch
-            {
-                DownloadModelHandler.Outcome.InvalidId =>
-                    Results.BadRequest(new { error = "Invalid model ID format." }),
-                DownloadModelHandler.Outcome.UnknownModel =>
-                    Results.NotFound(new { error = $"No registered model with WebLlmModelId '{webLlmModelId}'." }),
-                DownloadModelHandler.Outcome.ScriptMissing =>
-                    Results.Problem("SCRIPTS/download-models.py not found. Run from repo root.",
-                        statusCode: StatusCodes.Status500InternalServerError),
-                _ => Results.Accepted(value: new
-                {
-                    webLlmModelId,
-                    status = "Downloading in background. Refresh status in a few minutes."
-                })
-            })
-        .WithName("DownloadModel")
-        .WithSummary("Triggers background download of a local WebLLM model from HuggingFace.")
-        .Produces(StatusCodes.Status202Accepted)
-        .Produces(StatusCodes.Status400BadRequest)
-        .Produces(StatusCodes.Status404NotFound);
+        // There is deliberately no POST /download here. Weights are vendored by
+        // SCRIPTS/download-models.py ahead of time (see SCRIPTS/README.md); the endpoint that
+        // once kicked that script off in the background had no caller in the UI and was removed
+        // on 2026-09-10. Nothing in the client ever invoked it — the JS only ever read
+        // download-status above.
 
         return app;
     }

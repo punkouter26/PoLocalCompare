@@ -142,7 +142,8 @@ BenchmarkDotNet.Artifacts/
 ## Azure App Service
 scm_restartfile
 
-## Generated model-test reports (SCRIPTS/build_html_report.py, test-browser-models.cjs)
+## Generated model-test reports (the probers that produced these were removed 2026-09-10;
+## the ignores stay so an old working tree's leftovers do not get committed)
 model-test-report.html
 model-test-status.tsv
 browser-test-status.tsv

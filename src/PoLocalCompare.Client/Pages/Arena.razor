@@ -2,7 +2,6 @@
 @using PoLocalCompare.Client.Components
 @using PoLocalCompare.Client.Services
 @using PoLocalCompare.Shared.DTOs
-@using PoLocalCompare.Shared.Challenges
 @using PoLocalCompare.Shared.Enums
 @inject DuelApiClient ApiClient
 @inject AudioService AudioService
@@ -55,31 +54,6 @@
         @if (!string.IsNullOrWhiteSpace(_duel.OwnerId))
         {
             <p class="arena__owner-line">Started by <strong>@_duel.OwnerId</strong></p>
-        }
-
-        @* ── Challenge budget ─────────────────────────────────────────────
-           Stated before the outputs, because it changes what winning means: a model that goes
-           over the ceiling loses regardless of what it produced. Each side's measurement lands
-           here once its result exists, so the forfeit is visible rather than only asserted in
-           the verdict line. *@
-        @if (_duel.IsChallenge)
-        {
-            <div class="arena__budget">
-                <span class="arena__budget-label">
-                    <span aria-hidden="true">⏱</span>
-                    @ChallengeRules.KindLabel(_duel.ChallengeKind) challenge —
-                    @ChallengeRules.Describe(_duel.ChallengeKind, _duel.ChallengeThreshold)
-                </span>
-                @if (_leftResult is not null || _rightResult is not null)
-                {
-                    <span class="arena__budget-side @(MetBudget(_leftResult) ? "po-fg--ok" : "po-fg--err")">
-                        @LeftDisplayName @MeasuredText(_leftResult) @(MetBudget(_leftResult) ? "✓" : "✗")
-                    </span>
-                    <span class="arena__budget-side @(MetBudget(_rightResult) ? "po-fg--ok" : "po-fg--err")">
-                        @RightDisplayName @MeasuredText(_rightResult) @(MetBudget(_rightResult) ? "✓" : "✗")
-                    </span>
-                }
-            </div>
         }
 
         @* ── Live race ────────────────────────────────────────────────────
@@ -229,10 +203,13 @@
                 }
                 else if (_verdictSource == VerdictSource.Constraint)
                 {
-                    @* Nothing read the outputs here — the budget decided it. Said plainly, so a
-                       forfeit is never mistaken for a judgement about quality. *@
+                    @* No model read the outputs here — one side simply did not produce any. Said
+                       plainly, so a walkover is never mistaken for a judgement about quality.
+                       This used to read "Won on the challenge budget"; challenge mode was removed
+                       on 2026-09-10, but AutoJudge and DuelRecoverySweeper still stamp Constraint
+                       for one-sided failures and abandoned duels. *@
                     <span>
-                        Won on the challenge budget — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
+                        Won by walkover — Winner: <strong>@ResolveDisplayName(_winnerModelId)</strong>
                     </span>
                     @if (!string.IsNullOrWhiteSpace(_judgeRationale))
                     {
@@ -533,36 +510,6 @@
     private static string FormatCost(double? value) => ArenaFormatting.FormatCost(value);
     private static string FormatElo(double value) => ArenaFormatting.FormatElo(value);
     private static string? FirstLine(string? reason) => FailureReasonText.FirstLine(reason);
-
-    // ── Challenge budget ─────────────────────────────────────────────────────
-    // Measured client-side from the same result row the server adjudicated on, through the same
-    // shared rules — so what the page shows and what decided the duel cannot disagree.
-
-    private ChallengeMeasurement? Measure(DuelResultDto? result)
-    {
-        if (_duel is null || !_duel.IsChallenge || result is null) return null;
-
-        // isMetered has to match what ChallengeAdjudicator passed, or the page shows a tick
-        // beside a side the server forfeited. A remote model with no recorded cost is unknown,
-        // not free — see ChallengeRules.CostOf.
-        var isMetered = result.ModelId == _duel.LeftModelId
-            ? _duel.LeftModelType == ModelType.Remote
-            : _duel.RightModelType == ModelType.Remote;
-
-        return ChallengeRules.Measure(
-            _duel.ChallengeKind,
-            _duel.ChallengeThreshold,
-            result.IsFailure,
-            result.TotalDurationMs,
-            result.ApiCostUsd,
-            result.TokenCount,
-            isMetered);
-    }
-
-    private bool MetBudget(DuelResultDto? result) => Measure(result)?.Met ?? false;
-
-    private string MeasuredText(DuelResultDto? result) =>
-        _duel is null ? string.Empty : ChallengeRules.Format(_duel.ChallengeKind, Measure(result)?.Measured);
 
     // ── Live duel state ───────────────────────────────────────────────────────
     // The streaming half of this page used to be the /processing page. It lives here because a
@@ -906,7 +853,14 @@
                 return;
             }
 
+            // Gavel impact + 2.5D Shard Shatter + Mote Transfer
+            _ = AudioService.PlayGavelImpactAsync();
+            await Fx.ShardShatterAsync(".arena__verdict-recorded");
             await Fx.BurstFromAsync(".arena__verdict-recorded");
+
+            var winnerSlot = _winnerModelId == _duel?.LeftModelId ? ".arena__viewport-slot--left" : ".arena__viewport-slot--right";
+            var loserSlot = _loserModelId == _duel?.LeftModelId ? ".arena__viewport-slot--left" : ".arena__viewport-slot--right";
+            _ = Fx.MoteTransferAsync(loserSlot, winnerSlot);
         }
         catch (Exception ex) when (ex is JSException or TaskCanceledException or ObjectDisposedException)
         {
@@ -926,6 +880,8 @@
         _eloAnimationCts?.Dispose();
         _eloAnimationCts = new CancellationTokenSource();
         var token = _eloAnimationCts.Token;
+
+        _ = AudioService.PlayCoinCascadeAsync();
 
         bool reduceMotion;
         try
@@ -1196,6 +1152,16 @@
             "Failed" => DuelStatus.Failed,
             _ => DuelStatus.Initializing,
         };
+
+        // Critical WebGPU Invariant: Pause living canvas rendering during local inference
+        if (status == DuelStatus.Generating)
+        {
+            _ = Fx.PauseLivingAsync(true);
+        }
+        else if (status is DuelStatus.Done or DuelStatus.Failed)
+        {
+            _ = Fx.PauseLivingAsync(false);
+        }
 
         if (isLeft)
         {

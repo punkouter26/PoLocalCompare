@@ -1,5 +1,29 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+/* ── Box sizing ─────────────────────────────────────────────────────────────
+   There was NO box-sizing rule in this file except a single local one on
+   #blazor-error-ui, so every element defaulted to content-box. Any rule of the shape
+   `width: 100%` + padding therefore rendered WIDER than its container, and the app
+   has several of those — .po-page, .po-table--cards tr, .po-table-wrap.
+
+   That overflow used to be invisible rather than obvious, because article.app-content
+   sets `overflow-x: clip`: the 32px excess was silently cut off instead of producing a
+   scrollbar. Measured before this rule, .po-page resolved to 374.67px + 32px padding =
+   407px inside a 375px parent, and on /model/{id} the header rendered "#2 1217 E" with
+   "LO" sliced off the right edge — unrecoverable, because a clipped box gives the user
+   nothing to scroll. It also defeated .po-table--cards: the card rows still overflowed
+   their own wrapper (leaderboard 368px of content in a 343px box), so the "no sideways
+   scrolling on a phone" promise .po-table--cards exists to make did not hold.
+
+   Global rather than scoped to the three offenders: this is a whole-class defect, and
+   every new `width: 100%` + padding rule would reintroduce it. It is also what every
+   component library assumes — Radzen included. */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 /* ── Design tokens ───────────────────────────────────────────────────────────
    Colour tokens are declared three times: once as the light default, once under
    prefers-color-scheme for a system-dark viewer, and once under [data-theme] so an
@@ -39,9 +63,9 @@
     --glass-border: rgba(16, 20, 28, 0.10);
     --glass-shadow: 0 8px 32px rgba(16, 20, 28, 0.12);
 
-    /* The blur that makes --glass-bg actually glass. Three surfaces (TokenRace, TelemetryHud,
-       OutputScorecard) set the translucent background without ever blurring what sits behind
-       it, which reads as "slightly see-through panel" rather than glassmorphism. Theme
+    /* The blur that makes --glass-bg actually glass. The surfaces that set a translucent
+       background (TokenRace, TelemetryHud, ModelCard) would otherwise read as "slightly
+       see-through panel" rather than glassmorphism. Theme
        independent — a blur radius is not a colour — so it is defined once in the base :root
        and the [data-theme] blocks below are left alone. */
     --glass-blur: 14px;
@@ -566,10 +590,16 @@ a:hover {
     padding-top: var(--space-md);
     background-color: transparent;
     color: var(--text);
-    /* dvh, not vh: on iOS/Android the browser toolbar is INSIDE 100vh, so a 100vh box is
-       taller than the visible viewport and the page scrolls by the toolbar's height before
-       any content has overflowed. dvh tracks the viewport as the toolbar collapses. */
-    min-height: 100dvh;
+    /* NO min-height here — and this is a bug fix, not a simplification. This article sits
+       INSIDE <main>, which already begins below the 56px sticky nav. A `min-height: 100dvh`
+       therefore made every page 56px taller than the viewport (72px once this padding-top
+       was added), which measured as scrollHeight 972 against innerHeight 900 on all six
+       routes: a scrollbar on pages that fitted perfectly well.
+
+       The viewport-height guarantee belongs one level up and is already there: `.page` is
+       min-height: 100dvh with main as its flex: 1 child, so the two together fill the
+       viewport exactly once and no descendant needs to restate it. If you ever do need a
+       floor here, it must be calc(100dvh - var(--nav-height)) — never a bare 100dvh. */
 }
 
 .app-content > * {
@@ -822,11 +852,11 @@ p a, li a, td a {
 
    Everything below is compositor work — transform and opacity only — with no JavaScript
    frame loop behind any of it. That is a hard constraint rather than a preference: browser
-   models run WebLLM inference over WebGPU in this same tab, and since challenge mode a
-   MaxSeconds budget decides duels and moves ELO. A render loop competing for the GPU would
-   not merely drop frames, it would record wrong verdicts. Continuous motion therefore stays
-   on the compositor, and the only canvas work in the app (fx.js) is one-shot and fires when
-   inference has already finished.
+   models run WebLLM inference over WebGPU in this same tab, and the tok/s the race reports is
+   measured while that happens. A render loop competing for the GPU would not merely drop
+   frames, it would make the number the app exists to report wrong. Continuous motion therefore
+   stays on the compositor, and the only canvas work in the app (fx.js) is one-shot and fires
+   when inference has already finished.
 
    Every effect here is off under prefers-reduced-motion. */
 
@@ -1109,7 +1139,21 @@ body::before {
 
    Requires markup support: cells need data-label="…". A table without it degrades to the
    old horizontal scroll rather than breaking, because the label is rendered from an
-   attribute that simply is not there. */
+   attribute that simply is not there.
+
+   ── THE table strategy, and the one sanctioned exception ────────────────────────
+   There is exactly ONE responsive strategy for hand-rolled tables, and it is this one:
+   `.po-table--cards` at the 640px breakpoint. Do not add a second mechanism — no
+   per-surface `overflow-x: auto` wrapper, no per-page "hide a few columns on mobile"
+   block, no bespoke card markup. Those were the implementations this replaced, and they
+   disagreed with each other about both the breakpoint and what a phone should see.
+
+   The exception is `RadzenDataGrid` on the Archive, which stacks via its own `Responsive`
+   mode (`rz-datatable-reflow`) at Radzen's internal breakpoint rather than ours. That is
+   accepted rather than fought: `RadzenDataGrid` exposes no `Breakpoint` property to
+   retarget — verified against the package, not assumed — and overriding a third party's
+   internal media queries is a maintenance trap. So two breakpoints do exist; this comment
+   is the record of why. Everything we author uses 640px. */
 @media (max-width: 640px) {
     .po-table--cards thead {
         /* Not display:none — that removes it from the accessibility tree too. Clipped instead,
@@ -1306,6 +1350,45 @@ body::before {
     font-size: var(--text-sm);
 }
 
+/* The Archive grid's height. AllowVirtualization needs a DEFINITE height — without one
+   Radzen renders every row and the virtualiser is inert, which is the whole reason the
+   grid is here. This used to be an inline `Style="height: 32rem"` on the component, and
+   that is 512px: on a 390×844 phone it is taller than the space the page has left after
+   the title, the chips and the filters, so the grid grew an inner scrollbar stacked
+   inside the page's own. Nested scrollers make the gesture ambiguous — the drag that
+   means "scroll the page" scrolls the grid instead, and the grid's own scrollbar is a
+   second, differently-behaving target.
+
+   min() keeps the definite height for the virtualiser while capping it to the viewport:
+   32rem (512px) on any screen taller than ~930px, and 55dvh below that, so on a phone
+   the grid ends inside the page scroller instead of fighting it.
+
+   Not theme-dependent, and deliberately not in Archive.razor.css: Blazor stamps a
+   scoped stylesheet with its own component's scope id, so a rule there cannot reach an
+   element Radzen renders. */
+.rz-datatable.archive__grid {
+    height: min(32rem, 55dvh);
+}
+
+/* The model-profile rating chart. Was an inline Style="width: 100%; height: 16rem" on the
+   RadzenChart component: 256px of chart on a 390×844 phone, for a series that is usually
+   three points long. Moved here so the phone case can differ — this is also the only way to
+   honour the app's "no inline style= attributes" rule, since the height then lives in CSS
+   like every other dimension in the app.
+
+   16rem is kept for anything wider than a phone; 11rem below 640px takes ~80px off the page
+   without flattening a curve that has to show whether the line ended above its baseline. */
+.rz-chart.profile__chart {
+    width: 100%;
+    height: 16rem;
+}
+
+@media (max-width: 640px) {
+    .rz-chart.profile__chart {
+        height: 11rem;
+    }
+}
+
 .rz-datatable-header,
 .rz-grid-table thead th {
     background: var(--surface-2);
@@ -1371,3 +1454,118 @@ body::before {
         border-color: var(--border-strong);
     }
 }
+
+/* ── GFX & Visual Shaders Polish ─────────────────────────────────────────── */
+
+/* 1. Living Atmospheric Canvas */
+#po-living-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* 2. Quantum Ignition: Laser Border on Compare Button */
+@property --laser-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+.po-btn--laser {
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.po-btn--laser::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: conic-gradient(from var(--laser-angle), transparent 70%, var(--accent-cyan), var(--accent-green) 95%, transparent);
+    border-radius: inherit;
+    z-index: -1;
+    animation: laser-spin 2.5s linear infinite;
+}
+
+@keyframes laser-spin {
+    to { --laser-angle: 360deg; }
+}
+
+/* 3. Holographic Shimmer on Winner Viewport */
+.arena__viewport-panel--winner-holo {
+    position: relative;
+    border-color: var(--accent-green) !important;
+    box-shadow: 0 0 28px color-mix(in srgb, var(--accent-green) 35%, transparent) !important;
+}
+
+.arena__viewport-panel--winner-holo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        115deg,
+        transparent 25%,
+        rgba(45, 220, 132, 0.12) 45%,
+        rgba(83, 166, 255, 0.15) 50%,
+        rgba(234, 179, 8, 0.12) 55%,
+        transparent 75%
+    );
+    background-size: 250% 250%;
+    animation: holo-sweep 3.5s ease-in-out infinite;
+    pointer-events: none;
+    border-radius: inherit;
+}
+
+@keyframes holo-sweep {
+    0% { background-position: 200% 0%; }
+    50% { background-position: 0% 100%; }
+    100% { background-position: -200% 0%; }
+}
+
+/* 4. Thermal Alert */
+.arena--thermal-alert {
+    animation: thermal-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes thermal-pulse {
+    0% {
+        box-shadow: inset 0 0 40px rgba(239, 68, 68, 0.08);
+    }
+    100% {
+        box-shadow: inset 0 0 90px rgba(239, 68, 68, 0.22);
+    }
+}
+
+/* 5. Bioluminescent Eco-Pulse on Telemetry HUD */
+.telemetry-hud--eco-pulse {
+    border-color: var(--accent-green) !important;
+    animation: eco-pulse-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes eco-pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 12px color-mix(in srgb, var(--accent-green) 20%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 32px color-mix(in srgb, var(--accent-green) 50%, transparent);
+    }
+}
+
+/* 6. Photo-Finish Sheen on Track */
+.token-race__lane--photo-finish .token-race__track {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent-green) 40%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .po-btn--laser::before,
+    .arena__viewport-panel--winner-holo::after,
+    .arena--thermal-alert,
+    .telemetry-hud--eco-pulse {
+        animation: none;
+    }
+}
+

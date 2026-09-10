@@ -3,7 +3,6 @@ using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Azure;
 using PoLocalCompare.Api.Auth;
-using PoLocalCompare.Shared.Challenges;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -52,21 +51,12 @@ public static class DuelsEndpoints
                 // preferred_username claim is present. The handler stamps it onto Duel.OwnerId.
                 var actor = IdentityResolver.ResolveActor(httpContext.User);
 
-                // A budget with a non-positive ceiling is not a challenge, it is a duel no
-                // model could ever win. Dropped rather than rejected so a stale client cannot
-                // fail a request over an option it did not mean to send.
-                var challengeKind = ChallengeRules.IsValidThreshold(request.ChallengeKind, request.ChallengeThreshold)
-                    ? request.ChallengeKind
-                    : ChallengeKind.None;
-
                 var dto = await handler.HandleAsync(new CommenceDuelCommand(
                     request.LeftModelId,
                     request.RightModelId,
                     request.PromptText,
                     delayOverride,
-                    actor,
-                    challengeKind,
-                    challengeKind == ChallengeKind.None ? 0 : request.ChallengeThreshold));
+                    actor));
 
                 await executionService.EnqueueAsync(dto.DuelId, delayOverride);
 
@@ -313,9 +303,7 @@ public sealed record CommenceDuelRequest(
     ModelId LeftModelId,
     ModelId RightModelId,
     string PromptText,
-    int? AutoJudgeDelaySeconds = null,
-    ChallengeKind ChallengeKind = ChallengeKind.None,
-    double ChallengeThreshold = 0);
+    int? AutoJudgeDelaySeconds = null);
 
 public sealed record LocalResultRequest(
     ModelId ModelId,

@@ -50,23 +50,10 @@ public sealed class LeaderboardTests : IAsyncLifetime
 
     // ── Helper: run a duel and record verdict ─────────────────────────────
 
-    private async Task RunDuelAsync(string leftId, string rightId, string verdictSide)
-    {
-        var commence = await _client.PostAsJsonAsync("/api/duels", new
-        {
-            LeftModelId = leftId,
-            RightModelId = rightId,
-            PromptText = "Build an HTML app.",
-        });
-        commence.EnsureSuccessStatusCode();
-
-        var body = await commence.Content.ReadFromJsonAsync<JsonElement>();
-        var duelId = body.GetProperty("duelId").GetString()!;
-
-        var verdict = await _client.PostAsJsonAsync($"/api/duels/{duelId}/verdict",
-            new { Verdict = verdictSide });
-        verdict.EnsureSuccessStatusCode();
-    }
+    // Waits for both result rows before recording the verdict — see DuelTestFlow for why that
+    // wait is required rather than optional.
+    private Task RunDuelAsync(string leftId, string rightId, string verdictSide) =>
+        DuelTestFlow.RunDuelAsync(_client, leftId, rightId, verdictSide);
 
     // ── GET /api/leaderboard returns correct ELO ranking ─────────────────
 

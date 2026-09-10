@@ -9,8 +9,8 @@ namespace PoLocalCompare.E2EAPI;
 /// verdict invariants. Everything here goes over HTTP with no reach into server internals, so
 /// these are the tests that would catch a breaking change to the surface the client depends on.
 /// </summary>
-[Collection("E2EAPI")]
-public sealed class DuelContractTests(ApiAppFixture app)
+[Collection(DuelCollection.Name)]
+public sealed class DuelContractTests(DuelApiFixture app)
 {
     private static async Task<string> RegisterModelAsync(HttpClient client, string prefix)
     {
@@ -44,8 +44,65 @@ public sealed class DuelContractTests(ApiAppFixture app)
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
     }
 
+    /// <summary>
+    /// Waits until both models have reported, which is what a verdict requires.
+    /// </summary>
+    /// <remarks>
+    /// Duel execution is asynchronous: <c>POST /api/duels</c> returns 202 after enqueueing, and
+    /// the two result rows are written later on the background queue. A verdict posted before
+    /// they exist is correctly refused with 409 "This duel is still running — a model has not
+    /// reported a result yet", because ELO must never move on missing evidence. Posting one on
+    /// the line after commencing therefore made these tests depend on whether a local HTTP round
+    /// trip beat a background write to Azurite — the same latent race that was costing 7-9 of the
+    /// 50 integration cases per run until 2026-09-10. The guard stays; the tests wait.
+    /// </remarks>
+    private static async Task WaitForBothResultsAsync(HttpClient client, string duelId)
+    {
+        var deadline = Environment.TickCount64 + 20_000;
+
+        while (true)
+        {
+            var duel = await client.GetFromJsonAsync<JsonElement>($"/api/duels/{duelId}");
+            if (duel.TryGetProperty("results", out var results)
+                && results.ValueKind == JsonValueKind.Array
+                && results.GetArrayLength() >= 2)
+            {
+                return;
+            }
+
+            if (Environment.TickCount64 > deadline)
+            {
+                throw new TimeoutException(
+                    $"Duel '{duelId}' did not report both results within 20 s. " +
+                    "Duel execution runs on the background queue — a timeout here means it never ran.");
+            }
+
+            await Task.Delay(50);
+        }
+    }
+
     private static async Task<(string DuelId, string Left, string Right)> CommenceAsync(HttpClient client)
         => await CommenceAsync(client, leftIsLocal: false);
+
+    /// <summary>
+    /// Hands a browser model the result its duel is waiting for, so the duel can finish.
+    /// </summary>
+    /// <remarks>
+    /// A duel whose left model is Local (browser) is not driven by the server: DuelExecutionService
+    /// polls <c>WaitForLocalModelResultAsync</c> until the client POSTs /local-result, or until the
+    /// execution watchdog fires (<c>Duel:TimeLimitSeconds</c>, 900 s). BackgroundTaskService is a
+    /// SINGLE consumer, so a duel left waiting for a result that never arrives does not merely
+    /// stall itself — it blocks every duel queued behind it for the rest of the run. The tests
+    /// below assert a rejection from /local-result and so never deliver one; without this they
+    /// starve the queue, and any later test that waits for real results times out. That is what
+    /// made Verdict_Twice_Returns409 and friends fail when run with the rest of the suite but
+    /// pass in isolation.
+    /// </remarks>
+    private static async Task ReleaseLocalDuelAsync(HttpClient client, string duelId, string leftModelId)
+    {
+        var response = await PostLocalResultAsync(client, duelId, leftModelId);
+        response.EnsureSuccessStatusCode();
+    }
 
     private static async Task<(string DuelId, string Left, string Right)> CommenceAsync(
         HttpClient client,
@@ -190,6 +247,7 @@ public sealed class DuelContractTests(ApiAppFixture app)
         // dominant the human picked, mirrored into the response so the client can refresh.
         using var client = app.CreateAuthenticatedClient();
         var (duelId, left, right) = await CommenceAsync(client);
+        await WaitForBothResultsAsync(client, duelId);
 
         var response = await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Right" });
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -208,7 +266,12 @@ public sealed class DuelContractTests(ApiAppFixture app)
         using var client = app.CreateAuthenticatedClient();
         var (duelId, _, _) = await CommenceAsync(client);
 
-        await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Left" });
+        await WaitForBothResultsAsync(client, duelId);
+
+        // The first verdict must land, or the second one's 409 proves nothing.
+        var first = await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Left" });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
         var second = await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Right" });
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
@@ -216,9 +279,11 @@ public sealed class DuelContractTests(ApiAppFixture app)
 
     // ── Local (browser) result ingest ──────────────────────────────────────
 
-[Fact]
+    [Fact]
     public async Task LocalResult_WithoutAModelId_Returns400()
     {
+        // Both sides are Remote here, so the duel finishes on its own and this test needs no
+        // release step — only a duel with a browser (Local) side waits for a client.
         using var client = app.CreateAuthenticatedClient();
         var (duelId, _, _) = await CommenceAsync(client);
 
@@ -254,31 +319,27 @@ public sealed class DuelContractTests(ApiAppFixture app)
     }
 
     [Fact]
-    public async Task LocalResult_ForAModelNotInTheDuel_Returns400()
+    public async Task LocalResult_ForAModelThatIsNotThisDuelsBrowserSide_Returns400()
     {
         // The (duelId, modelId) pair is the storage key. Unchecked, a caller picks both and can
         // write a result row into any duel for any model — which is what DuelExecutionService
         // hands to the judge, so it decides duels the caller is not part of.
+        //
+        // Both rejections are the same guard, so they are asserted together: a model that is in
+        // no way part of this duel, and the duel's own non-browser side (only browser models run
+        // in the client, so only they may report their own output).
         using var client = app.CreateAuthenticatedClient();
-        var (duelId, _, _) = await CommenceAsync(client, leftIsLocal: true);
+        var (duelId, left, right) = await CommenceAsync(client, leftIsLocal: true);
         var outsider = await RegisterLocalModelAsync(client, "Outsider");
 
-        var response = await PostLocalResultAsync(client, duelId, outsider);
+        var forOutsider = await PostLocalResultAsync(client, duelId, outsider);
+        var forRemoteSide = await PostLocalResultAsync(client, duelId, right);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
+        Assert.Equal(HttpStatusCode.BadRequest, forOutsider.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, forRemoteSide.StatusCode);
 
-    [Fact]
-    public async Task LocalResult_ForAServerSideModel_Returns400()
-    {
-        // Only browser models run in the client, so only they may report their own output. A
-        // Remote/Ollama model's result must come from the server that actually produced it.
-        using var client = app.CreateAuthenticatedClient();
-        var (duelId, _, right) = await CommenceAsync(client, leftIsLocal: true);
-
-        var response = await PostLocalResultAsync(client, duelId, right);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Both were refused, so the browser side is still waiting; release the duel.
+        await ReleaseLocalDuelAsync(client, duelId, left);
     }
 
     [Fact]
@@ -333,6 +394,7 @@ public sealed class DuelContractTests(ApiAppFixture app)
     {
         using var client = app.CreateAuthenticatedClient();
         var (duelId, _, _) = await CommenceAsync(client);
+        await WaitForBothResultsAsync(client, duelId);
         await client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Left" });
 
         var response = await client.GetAsync($"/api/duels/{duelId}/report");

@@ -118,6 +118,10 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
         var duelBody = await commenceResponse.Content.ReadFromJsonAsync<JsonElement>();
         var duelId = duelBody.GetProperty("duelId").GetString()!;
 
+        // Duel execution is asynchronous: the 202 above only means the duel was enqueued. The
+        // verdict is refused with 409 until both result rows exist, so wait for them.
+        await DuelTestFlow.WaitForBothResultsAsync(_client, duelId);
+
         // Step 2: Record verdict (left wins)
         var verdictResponse = await _client.PostAsJsonAsync(
             $"/api/duels/{duelId}/verdict",
@@ -161,6 +165,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
         });
         var duelBody = await commenceResponse.Content.ReadFromJsonAsync<JsonElement>();
         var duelId = duelBody.GetProperty("duelId").GetString()!;
+
+        await DuelTestFlow.WaitForBothResultsAsync(_client, duelId);
 
         // First verdict
         var first = await _client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = "Left" });

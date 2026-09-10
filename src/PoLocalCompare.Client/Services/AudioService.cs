@@ -21,7 +21,7 @@ namespace PoLocalCompare.Client.Services;
 /// </remarks>
 public sealed class AudioService(IJSRuntime js)
 {
-    private const string Module = "'/js/audio.js?v=2'";
+    private const string Module = "'/js/audio.js?v=4'";
 
     /// <summary>Pre-duel snare roll — accelerating noise hits into an accent.</summary>
     public Task PlaySnareRollAsync() => InvokeAsync("playSnareRoll()");
@@ -44,11 +44,37 @@ public sealed class AudioService(IJSRuntime js)
     /// <summary>Swept-noise whoosh for a panel or view change.</summary>
     public Task PlayWhooshAsync() => InvokeAsync("playWhoosh()");
 
+    /// <summary>Quantum ignition sub-bass drop (85 Hz down to 22 Hz).</summary>
+    public Task PlaySubDropAsync() => InvokeAsync("playSubDrop()");
+
+    /// <summary>Pre-duel ignition clash with dual panned sweeps and metallic accent.</summary>
+    public Task PlayIgnitionClashAsync() => InvokeAsync("playIgnitionClash()");
+
+    /// <summary>Photo-finish supersonic crack and bass boom.</summary>
+    public Task PlayShockwaveAsync() => InvokeAsync("playShockwave()");
+
+    /// <summary>AI Judge verdict gavel impact and major chord resolution.</summary>
+    public Task PlayGavelImpactAsync() => InvokeAsync("playGavelImpact()");
+
+    /// <summary>Elo rating transfer coin cascade chimes.</summary>
+    public Task PlayCoinCascadeAsync() => InvokeAsync("playCoinCascade()");
+
+    /// <summary>Green score resonance pure harmonic chime (528 Hz Solfeggio + fifth).</summary>
+    public Task PlayHarmonicChimeAsync() => InvokeAsync("playHarmonicChime()");
+
+    /// <summary>Tactile dual-action mechanical keyboard switch click.</summary>
+    public Task PlayMechanicalClickAsync(bool isDown = true) =>
+        InvokeAsync($"playMechanicalClick({(isDown ? "true" : "false")})");
+
+    /// <summary>Starts or stops the low-frequency ambient cyber-drone.</summary>
+    public Task SetAmbientDroneAsync(bool enabled) =>
+        InvokeAsync($"setAmbientDrone({(enabled ? "true" : "false")})");
+
     /// <summary>
     /// A blip whose pitch tracks generation speed, so the race can be heard as well as seen.
     /// </summary>
     /// <remarks>
-    /// Safe to call on every token batch: the module throttles to one blip per 130 ms per side,
+    /// Safe to call on every token batch: the module throttles to one blip per 110 ms per side,
     /// which it has to, because batches arrive many times a second on both sides at once. Safe
     /// to call <em>during inference</em> too — this runs on the audio thread and never touches
     /// the WebGPU device WebLLM is generating on, so it cannot skew tok/s or a time budget.

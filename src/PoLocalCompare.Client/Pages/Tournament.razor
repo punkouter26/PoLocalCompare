@@ -23,7 +23,7 @@
    running match's hub group and drives that inference in this tab, exactly as the Arena does.
    A bracket of remote/Ollama models still finishes with nothing open; one containing a browser
    model needs this tab left open for its matches. *@
-<div class="tourney po-page po-page--wide">
+<div class="po-page po-page--wide">
     @if (_tournament is not null)
     {
         @* ── Bracket view ───────────────────────────────────────────────── *@
@@ -270,7 +270,12 @@
                     @onclick="StartAsync">
                 @(_starting ? "Drawing…" : "Start tournament →")
             </button>
-            <span class="tourney__start-hint">@StartHint</span>
+            @* role="status": this hint is the ONLY explanation of why Start is disabled, and
+               it changes as the user types — empty prompt, too short, ready to go. Without a
+               live region the button silently toggles between enabled and disabled with no
+               announcement, which is the classic "why won't it work" for a keyboard or screen
+               reader user: the reason is on screen but never spoken. *@
+            <span class="tourney__start-hint" role="status">@StartHint</span>
         </div>
 
         @if (_error is not null)
@@ -707,8 +712,10 @@
                         if (fresh.Status == TournamentStatus.Complete)
                         {
                             _ = AudioService.PlayFanfareAsync();
-                            // Bigger than a duel verdict, because a final is.
+                            // Grand 3D tumbling confetti ribbons and golden embers
+                            _ = Fx.ChampionPyrotechnicsAsync(".tourney__champion");
                             _ = Fx.ChampionBurstAsync(".tourney__champion");
+                            _ = Fx.SetLivingStateAsync("victory");
                         }
                         else
                         {

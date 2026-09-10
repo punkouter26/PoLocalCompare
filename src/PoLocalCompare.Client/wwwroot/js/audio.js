@@ -248,16 +248,13 @@ export function playWhoosh() {
     source.onended = () => { try { amp.disconnect(); } catch { } };
 }
 
-// ── Live race blips ──────────────────────────────────────────────────────────
+// ── Live race blips with FM synthesis ──────────────────────────────────────────
 
 let lastBlipAt = 0;
 
 /**
- * A blip whose pitch tracks generation speed, so the race is audible as well as visible.
- *
- * Throttled hard: token batches arrive many times per second per side, and one oscillator per
- * batch would be both a wall of noise and a genuine allocation problem over a long duel. One
- * blip per 130ms per side is enough to hear the pace change.
+ * A blip whose pitch tracks generation speed, enhanced with FM synthesis for harmonic richness
+ * at high speeds, so the race is dynamically audible as well as visible.
  *
  * @param {number} velocity tokens/second
  * @param {string} side 'Left' or 'Right' — panned so the two are distinguishable.
@@ -267,35 +264,228 @@ export function playTokenBlip(velocity, side) {
     if (!audio || !master || muted) return;
 
     const now = audio.currentTime;
-    if (now - lastBlipAt < 0.13) return;
+    if (now - lastBlipAt < 0.11) return;
     lastBlipAt = now;
 
-    // Map a plausible 0–120 tok/s onto just over an octave. Clamped so an outlier reading
-    // cannot produce an inaudible or piercing note.
     const normalized = Math.max(0, Math.min(1, (velocity || 0) / 120));
-    const freq = 330 + normalized * 440;
+    const carrierFreq = 320 + normalized * 460;
 
-    const osc = audio.createOscillator();
-    const amp = audio.createGain();
+    const carrier = audio.createOscillator();
+    const carrierAmp = audio.createGain();
     const pan = audio.createStereoPanner ? audio.createStereoPanner() : null;
 
-    osc.type = 'sine';
-    osc.frequency.value = freq;
+    carrier.type = 'sine';
+    carrier.frequency.value = carrierFreq;
 
-    amp.gain.setValueAtTime(0.0001, now);
-    amp.gain.exponentialRampToValueAtTime(0.05, now + 0.006);
-    amp.gain.setTargetAtTime(0.0001, now + 0.006, 0.02);
+    carrierAmp.gain.setValueAtTime(0.0001, now);
+    carrierAmp.gain.exponentialRampToValueAtTime(0.06, now + 0.005);
+    carrierAmp.gain.setTargetAtTime(0.0001, now + 0.006, 0.02);
 
-    osc.connect(amp);
-    if (pan) {
-        pan.pan.value = side === 'Left' ? -0.5 : 0.5;
-        amp.connect(pan);
-        pan.connect(master);
-    } else {
-        amp.connect(master);
+    // FM modulation for high velocities (>35 tok/s): introduces rich harmonic overtones
+    let modulator = null;
+    let modAmp = null;
+    if (normalized > 0.28) {
+        modulator = audio.createOscillator();
+        modAmp = audio.createGain();
+
+        modulator.type = 'sine';
+        modulator.frequency.value = carrierFreq * 2;
+        modAmp.gain.value = normalized * 180;
+
+        modulator.connect(modAmp);
+        modAmp.connect(carrier.frequency);
+        modulator.start(now);
+        modulator.stop(now + 0.08);
     }
 
-    osc.start(now);
-    osc.stop(now + 0.1);
+    carrier.connect(carrierAmp);
+    if (pan) {
+        pan.pan.value = side === 'Left' ? -0.55 : 0.55;
+        carrierAmp.connect(pan);
+        pan.connect(master);
+    } else {
+        carrierAmp.connect(master);
+    }
+
+    carrier.start(now);
+    carrier.stop(now + 0.08);
+    carrier.onended = () => {
+        try {
+            carrierAmp.disconnect();
+            if (modAmp) modAmp.disconnect();
+        } catch { }
+    };
+}
+
+// ── New Procedural Audio Engines ─────────────────────────────────────────────
+
+/** Quantum ignition sub-bass drop: 85 Hz swept down to 22 Hz. */
+export function playSubDrop() {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    const t0 = audio.currentTime;
+    const osc = audio.createOscillator();
+    const amp = audio.createGain();
+    const filter = audio.createBiquadFilter();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(85, t0);
+    osc.frequency.exponentialRampToValueAtTime(22, t0 + 0.45);
+
+    filter.type = 'lowpass';
+    filter.frequency.value = 130;
+
+    amp.gain.setValueAtTime(0.0001, t0);
+    amp.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02);
+    amp.gain.setTargetAtTime(0.0001, t0 + 0.05, 0.15);
+
+    osc.connect(filter);
+    filter.connect(amp);
+    amp.connect(master);
+
+    osc.start(t0);
+    osc.stop(t0 + 0.5);
     osc.onended = () => { try { amp.disconnect(); } catch { } };
 }
+
+/** Pre-duel ignition clash: dual panned rising sweeps meeting with a metallic accent. */
+export function playIgnitionClash() {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    tone({ freq: 130, glideTo: 390, type: 'sawtooth', at: 0, dur: 0.32, gain: 0.12, detune: -5 });
+    tone({ freq: 165, glideTo: 495, type: 'sawtooth', at: 0, dur: 0.32, gain: 0.12, detune: 5 });
+
+    setTimeout(() => {
+        noiseHit({ at: 0, dur: 0.18, gain: 0.32, freq: 2800, q: 1.2 });
+        tone({ freq: 880, glideTo: 440, type: 'triangle', at: 0, dur: 0.25, gain: 0.22 });
+        tone({ freq: 110, glideTo: 45, type: 'sine', at: 0, dur: 0.3, gain: 0.35 });
+    }, 320);
+}
+
+/** Photo-finish sonic boom: supersonic noise crack + low-frequency resonance. */
+export function playShockwave() {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    noiseHit({ at: 0, dur: 0.06, gain: 0.4, freq: 4800, q: 0.5 });
+    tone({ freq: 100, glideTo: 32, type: 'sine', at: 0.01, dur: 0.65, gain: 0.38 });
+}
+
+/** The AI Judge verdict impact: sub-punch + filtered noise slap + major chord resolve. */
+export function playGavelImpact() {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    tone({ freq: 120, glideTo: 38, type: 'sine', at: 0, dur: 0.28, gain: 0.45 });
+    noiseHit({ at: 0, dur: 0.08, gain: 0.35, freq: 1400, q: 1.0 });
+
+    const chord = [523.25, 659.25, 783.99, 1046.5];
+    chord.forEach((freq, i) => {
+        tone({ freq, type: 'triangle', at: 0.08 + i * 0.035, dur: 0.45, gain: 0.18 });
+    });
+}
+
+/** Elo rating transfer: ascending pentatonic coin cascade with micro-detuning. */
+export function playCoinCascade() {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    const notes = [1046.5, 1174.66, 1318.51, 1567.98, 1760.0, 2093.0, 2349.32, 2637.02];
+    notes.forEach((freq, i) => {
+        const microDetune = (Math.random() - 0.5) * 14;
+        tone({
+            freq,
+            type: 'sine',
+            at: i * 0.032,
+            dur: 0.18,
+            gain: 0.14,
+            detune: microDetune
+        });
+    });
+}
+
+/** Green score resonance chime: 528 Hz Solfeggio pure sine + fifth. */
+export function playHarmonicChime() {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    tone({ freq: 528.0, type: 'sine', at: 0, dur: 1.4, gain: 0.22 });
+    tone({ freq: 792.0, type: 'sine', at: 0.04, dur: 1.2, gain: 0.14 });
+    tone({ freq: 1056.0, type: 'triangle', at: 0.08, dur: 0.9, gain: 0.08 });
+}
+
+/** Dual-action tactile keyboard switch clicks (downstroke thud / upstroke snap). */
+export function playMechanicalClick(isDown = true) {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    if (isDown) {
+        tone({ freq: 340, glideTo: 180, type: 'triangle', at: 0, dur: 0.025, gain: 0.12 });
+        noiseHit({ at: 0, dur: 0.015, gain: 0.08, freq: 1200, q: 1.5 });
+    } else {
+        noiseHit({ at: 0, dur: 0.012, gain: 0.14, freq: 2600, q: 1.8 });
+        tone({ freq: 1800, type: 'sine', at: 0, dur: 0.018, gain: 0.06 });
+    }
+}
+
+// ── Generative Ambient Cyber-Drone ───────────────────────────────────────────
+
+let ambientNodes = null;
+
+/** Ambient generative low-frequency cyber-drone (-32 dB) with slow binaural beat. */
+export function setAmbientDrone(enabled) {
+    const audio = ensureCtx();
+    if (!audio || !master) return;
+
+    if (!enabled || muted) {
+        if (ambientNodes) {
+            try {
+                ambientNodes.gain.gain.setTargetAtTime(0.0001, audio.currentTime, 0.4);
+                const toClean = ambientNodes;
+                ambientNodes = null;
+                setTimeout(() => {
+                    try {
+                        toClean.osc1.stop();
+                        toClean.osc2.stop();
+                        toClean.gain.disconnect();
+                    } catch { }
+                }, 500);
+            } catch { }
+        }
+        return;
+    }
+
+    if (ambientNodes) return;
+
+    try {
+        const now = audio.currentTime;
+        const osc1 = audio.createOscillator();
+        const osc2 = audio.createOscillator();
+        const filter = audio.createBiquadFilter();
+        const gain = audio.createGain();
+
+        osc1.type = 'sine';
+        osc1.frequency.value = 55.0; // A1
+        osc2.type = 'sine';
+        osc2.frequency.value = 55.4; // 0.4 Hz binaural beat
+
+        filter.type = 'lowpass';
+        filter.frequency.value = 160;
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.025, now + 1.2);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(master);
+
+        osc1.start(now);
+        osc2.start(now);
+
+        ambientNodes = { osc1, osc2, filter, gain };
+    } catch { }
+}
+

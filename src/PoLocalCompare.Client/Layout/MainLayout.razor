@@ -1,7 +1,12 @@
 @inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.WebAssembly.Hosting
+@using PoLocalCompare.Client.Services
 @inject IWebAssemblyHostEnvironment HostEnv
 @inject IJSRuntime JS
+@inject FxService Fx
+@inject AudioService AudioService
+
+<canvas id="po-living-canvas" aria-hidden="true"></canvas>
 
 <div class="page">
     @* SC 2.4.1 Bypass Blocks — first tab stop skips the nav.
@@ -11,11 +16,6 @@
     <a class="skip-link" href="#main-content" @onclick="FocusMainAsync">Skip to main content</a>
 
     <NavMenu />
-
-    @* Mounted once here rather than per page: the Ctrl/Cmd-K shortcut has to work from every
-       route, and a per-page copy would register the document listener several times over. It
-       renders nothing until opened. *@
-    <CommandPalette />
 
     <main id="main-content" tabindex="-1">
         <article class="content app-content">
@@ -58,5 +58,13 @@
         // Reset the error boundary on each navigation so the error
         // doesn't persist across pages.
         _errorBoundary?.Recover();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Fx.InitLivingCanvasAsync("po-living-canvas");
+        }
     }
 }

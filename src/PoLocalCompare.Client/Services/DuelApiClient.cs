@@ -37,17 +37,11 @@ public sealed class DuelApiClient
     /// Per-duel grace window before the AI judge decides. Null keeps the server's configured
     /// value; a tournament passes 0 so an unattended run never stalls waiting for a human pick.
     /// </param>
-/// <param name="challengeKind">
-    /// Budget the duel is fought under. <see cref="ChallengeKind.None"/> — the default — is an
-    /// ordinary duel, so existing callers are unaffected.
-    /// </param>
     public async Task<DuelDto?> CommenceDuelAsync(
         string leftModelId,
         string rightModelId,
         string promptText,
-        int? autoJudgeDelaySeconds = null,
-        ChallengeKind challengeKind = ChallengeKind.None,
-        double challengeThreshold = 0)
+        int? autoJudgeDelaySeconds = null)
     {
         var body = new
         {
@@ -55,8 +49,6 @@ public sealed class DuelApiClient
             rightModelId,
             promptText,
             autoJudgeDelaySeconds,
-            challengeKind,
-            challengeThreshold,
         };
         var response = await _http.PostAsJsonAsync("/api/duels", body);
         // Surface the validation body rather than the raw `net_http_message_not_success…` reason
@@ -191,12 +183,6 @@ public sealed class DuelApiClient
             $"/api/leaderboard?sortBy={Uri.EscapeDataString(sortBy)}", JsonOptions);
     }
 
-    public async Task<IReadOnlyList<HeadToHeadDto>?> GetKillListAsync(ModelId modelId)
-    {
-        return await _http.GetFromJsonAsync<IReadOnlyList<HeadToHeadDto>>(
-            $"/api/leaderboard/{modelId}/killlist", JsonOptions);
-    }
-
     /// <summary>
     /// Reads one model's profile, or null when the id names nothing.
     /// </summary>
@@ -276,51 +262,11 @@ public sealed class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<ModelAvailabilityDto>>("/api/models/availability", JsonOptions);
     }
 
-    public async Task<bool> RequestModelDownloadAsync(string webLlmModelId)
-    {
-        try
-        {
-            var response = await _http.PostAsync(
-                $"/api/models/{Uri.EscapeDataString(webLlmModelId)}/download", null);
-            return response.StatusCode == System.Net.HttpStatusCode.Accepted;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    // ── Ollama & diagnostics ─────────────────────────────────────────────────
-
-    public async Task<IReadOnlyList<string>> GetOllamaAvailableModelsAsync()
-    {
-        try
-        {
-            return await _http.GetFromJsonAsync<IReadOnlyList<string>>(
-                "/api/ollama/available-models", JsonOptions) ?? [];
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Ollama available-models unavailable");
-            return [];
-        }
-    }
-
-    public async Task<OllamaBenchmarkResultDto?> BenchmarkOllamaModelAsync(string modelName, string prompt)
-    {
-        try
-        {
-            var body = new { modelName, prompt };
-            var response = await _http.PostAsJsonAsync("/api/ollama/benchmark", body, JsonOptions);
-            if (!response.IsSuccessStatusCode) return null;
-            return await response.Content.ReadFromJsonAsync<OllamaBenchmarkResultDto>(JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Ollama benchmark failed for model {Model}", modelName);
-            return null;
-        }
-    }
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+    // Ollama's two probes are deliberately absent here. /diag drives them straight from
+    // diag-models.js (fetch), because that page has to work when the WASM client is the broken
+    // thing — see CLAUDE.md. Client-side wrappers for them had no caller and were removed
+    // 2026-09-10.
 
     public async Task<SmokeSnapshotDto?> GetSmokeSnapshotAsync()
     {

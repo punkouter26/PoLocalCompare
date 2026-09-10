@@ -74,8 +74,6 @@ PoLocalCompare.slnx
 │   │   │   ├── Ollama/                 ← status/pull endpoints
 │   │   │   ├── Tournaments/            ← Tournament aggregate, TournamentRunner (server-side
 │   │   │   │                             bracket orchestration), repository, endpoints
-│   │   │   ├── Challenges/             ← ChallengeAdjudicator only (budget forfeits, runs ahead
-│   │   │   │                             of AutoJudge). The board + ChallengeRecord were cut 2026-08-23
 │   │   │   └── Diagnostics/            ← /health, /api/diag/*, E2E helpers
 │   │   ├── Common/
 │   │   │   ├── Inference/              ← IRemoteInferenceProxy + Foundry/Ollama typed-HttpClient proxies
@@ -101,10 +99,9 @@ PoLocalCompare.slnx
 │   │   │                                 can test it without referencing the WASM project
 │   │   ├── Prompts/                    ← PromptLibrary (curated starter prompts)
 │   │   ├── Tournaments/                ← BracketPlanner (pure, seeded bracket layout; sizes 2/8)
-│   │   ├── Challenges/                 ← ChallengeRules (pure budget arithmetic)
 │   │   └── Presentation/               ← view-models, enums and helpers the .razor files lean
-│   │                                     on (ModelDiagState, ModelTypeGroup, SourceViewMode,
-│   │                                     RuntimeProbeReport, FailureReasonText,
+│   │                                     on (ModelDiagState, ModelTypeGroup, FailureReasonText,
+│   │                                     HealthBadgeText, ArenaFormatting, SideMetrics,
 │   │                                     RenderCoalescer). Moved out of Client/ so the Unit
 │   │                                     tier can reach them at all.
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
@@ -113,11 +110,13 @@ PoLocalCompare.slnx
 │       │                                 (model health moved to the /diag Razor Page 2026-08-23)
 │       │                                 (model-health is a Home section; Arena both
 │       │                                  streams a running duel and judges it)
-│       ├── Components/                 ← incl. OutputScorecard, SourceCompare, TokenRace,
-│       │                                 PromptPicker, SandboxedViewport
+│       ├── Components/                 ← incl. TokenRace, PromptPicker, SandboxedViewport,
+│       │                                 ModelCard, ArenaViewportPanel, ArenaVoteButtons,
+│       │                                 ArenaFailureCard, TelemetryHud, EloShiftBadge, RankMedals
 │       ├── Services/                   ← DuelApiClient, BffAuthenticationStateProvider,
 │       │                                 WebLlmService, SignalRDuelClient, LobbyTickerService,
-│       │                                 AudioService, PromptHistoryService,
+│       │                                 LocalInferenceDriver, AudioService, FxService,
+│       │                                 WebGpuCapability,
 │       │                                 InferenceSessionStore, CorrelationHandler, ThemeService
 │       └── Layout/
 ├── tests/
@@ -126,8 +125,8 @@ PoLocalCompare.slnx
 │   ├── PoLocalCompare.E2EAPI/          ← Black-box HTTP journeys over Testcontainers + fake auth
 │   └── PoLocalCompare.E2EUI/           ← Playwright, headed Chrome, mobile + desktop viewports
 ├── docs/                               ← PRD_Master.md (the source of truth; nothing else)
-├── SCRIPTS/                            ← setup.ps1, download-models.py, the artifact-ferry trio
-├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep / main.json)
+├── SCRIPTS/                            ← setup.ps1, download-models.py, plan-webllm-artifacts.py
+├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep)
 ├── Directory.Build.props               ← Global: TreatWarningsAsErrors, Nullable, LangVersion=latest
 ├── Directory.Packages.props            ← Central Package Management
 ├── global.json                         ← .NET 10 SDK pin
@@ -175,9 +174,11 @@ Dynamic switching is automatic based on `ASPNETCORE_ENVIRONMENT`.
 populated `wwwroot/models/` keeps weights off the network entirely. Weights are *not* the whole
 story: `prebuiltAppConfig` resolves `model_lib` against **raw.githubusercontent.com**, a separate
 host, so both fetch paths also vendor the `.wasm` libraries into `wwwroot/models/_libs/` and
-`webllm-worker.js` prefers them. Populate both with `SCRIPTS/download-models.py`, or with the
-`Fetch WebLLM artifacts` workflow (§6) if egress is blocked outright; PRD §9 item 8 has the
-rationale, including why the downloader drives `curl` instead of `huggingface_hub`.
+`webllm-worker.js` prefers them. Populate both with `SCRIPTS/download-models.py` — that is the
+only vendoring path this repo has, and it drives `curl` rather than `huggingface_hub` for the
+reason PRD §9 item 8 records. (This paragraph used to point at a "Fetch WebLLM artifacts" GitHub
+workflow and a `SCRIPTS/receive-artifacts.ps1`; neither has ever existed in this repo —
+`.github/workflows/` holds only `deploy.yml`. Don't go looking for them.)
 
 ### 4.4 Authentication (BFF)
 The API is a **Backend-for-Frontend**: it owns the OIDC code flow and the session. The Blazor WASM
@@ -228,7 +229,6 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `Ollama:BaseUrl` | `appsettings.json` | — (`http://localhost:11434`) |
 | `AiJudge:Enabled` | `appsettings.json` | — (default `false` in code, `true` in appsettings) |
 | `AiJudge:DelaySeconds` | `appsettings.json` | — (**10**; code default also 10) |
-| `Duel` challenge budget | per-request | `challengeKind` + `challengeThreshold` on `POST /api/duels`; non-positive threshold degrades to `None` |
 | `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-mini`; must accept image input when vision judging is on) |
 | `AiJudge:VisionEnabled` | `appsettings.json` | — (false; true in Development — needs headless Chromium) |
 
@@ -244,10 +244,10 @@ docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-
 #     Retries/resumes through the reset-prone TLS path; MODELS=small for a 1 GB subset.
 python SCRIPTS/download-models.py
 
-# 2b. ...or, on a network that blocks HuggingFace outright: run the "Fetch WebLLM artifacts"
-#     workflow, then install what it publishes (weights + WebGPU .wasm libraries)
-gh release download webllm-artifacts -D C:\hf-artifacts
-pwsh SCRIPTS/receive-artifacts.ps1 -PartsDir C:\hf-artifacts
+# 2b. There is no offline/air-gapped workflow in this repo. The "Fetch WebLLM artifacts"
+#     workflow and SCRIPTS/receive-artifacts.ps1 that older revisions of this file mention
+#     do not exist; .github/workflows/ holds only deploy.yml. On a network that blocks
+#     HuggingFace, browser models simply fall back to the CDN or fail to load.
 
 # 3. (Optional) Set Azure AI Foundry key - appsettings.Development.json or an env var.
 #     Do NOT use `dotnet user-secrets` (see §7) - Key Vault is the production source.
@@ -386,8 +386,7 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | `DOCS/` (repo root) | Project overview — read it before changing anything, when present |
 | [docs/PRD_Master.md](docs/PRD_Master.md) | Project source of truth — slices, endpoints, schema, ADR log (**missing from the working tree**) |
 | [SCRIPTS/setup.ps1](SCRIPTS/setup.ps1) | First-run machine setup |
-| [SCRIPTS/receive-artifacts.ps1](SCRIPTS/receive-artifacts.ps1) | Installs browser-model weights + `.wasm` libs into `wwwroot/models/` |
-| [SCRIPTS/plan-webllm-artifacts.py](SCRIPTS/plan-webllm-artifacts.py) | Single source of the browser-model list for CI and local fetch |
+| [SCRIPTS/plan-webllm-artifacts.py](SCRIPTS/plan-webllm-artifacts.py) | Single source of the browser-model list for local fetch and the catalog check |
 
 ---
 

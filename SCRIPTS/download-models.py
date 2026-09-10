@@ -27,9 +27,11 @@ speed; it is only connection setup that is unreliable.
 Integrity does not depend on that: every LFS file is verified against the sha256
 that the Hub advertises in its tree listing, and a file that fails is re-fetched.
 
-If this machine cannot reach huggingface.co at all, use the air-gapped route
-instead: the "Fetch WebLLM artifacts" GitHub Actions workflow plus
-receive-artifacts.ps1. See SCRIPTS/README.md.
+There is no air-gapped route in this repo. Older revisions of AGENT.MD and
+SCRIPTS/README.md pointed at a "Fetch WebLLM artifacts" GitHub Actions
+workflow plus receive-artifacts.ps1; neither has ever existed here
+(.github/workflows/ holds only deploy.yml). If this machine cannot reach
+huggingface.co, browser models fall back to the CDN or fail to load.
 """
 
 import hashlib

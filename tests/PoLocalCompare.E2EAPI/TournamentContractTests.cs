@@ -5,8 +5,8 @@ using System.Text.Json;
 namespace PoLocalCompare.E2EAPI;
 
 /// <summary>
-/// Black-box checks on the tournament and challenge HTTP surfaces — the contract a client can
-/// rely on, not the arithmetic behind it. Kept to the most behaviour-covering cases per the
+/// Black-box checks on the tournament HTTP surface — the contract a client can rely on, not
+/// the arithmetic behind it. Kept to the most behaviour-covering cases per the
 /// audit's test ratio; seeding and adjudication logic are covered by the unit tier.
 /// </summary>
 [Collection("E2EAPI")]
@@ -16,18 +16,19 @@ public sealed class TournamentContractTests(ApiAppFixture app)
 
     // ── Deny-by-default ───────────────────────────────────────────────────
 
-    [Theory]
-    [InlineData("/api/tournaments/entrants")]
-    [InlineData("/api/tournaments")]
-    public async Task NewReadEndpoints_AreClosedToAnonymousCallers(string path)
+    [Fact]
+    public async Task NewReadEndpoints_AreClosedToAnonymousCallers()
     {
         // FallbackPolicy is RequireAuthenticatedUser, so a new endpoint is closed unless it
-        // opts out. These assert the opt-out was not added by accident.
+        // opts out. Both new reads are asserted here in one test: the policy is one decision,
+        // and a path that opted out by accident is the same bug either way.
         using var client = app.CreateAnonymousClient();
 
-        var response = await client.GetAsync(path);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        foreach (var path in new[] { "/api/tournaments/entrants", "/api/tournaments" })
+        {
+            var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
     }
 
     // ── Entrants ──────────────────────────────────────────────────────────
@@ -105,62 +106,12 @@ public sealed class TournamentContractTests(ApiAppFixture app)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // ── Challenge surface ─────────────────────────────────────────────────
-
-    /// <summary>
-    /// A budget rides along on the ordinary duel request rather than a separate endpoint —
-    /// a challenge is a duel with a rule attached.
-    /// </summary>
-    [Fact]
-    public async Task Commence_WithABudget_EchoesItBackOnTheDuel()
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "C Left");
-        var right = await RegisterModelAsync(client, "C Right");
-
-        var response = await client.PostAsJsonAsync("/api/duels", new
-        {
-            LeftModelId = left,
-            RightModelId = right,
-            PromptText = Prompt,
-            ChallengeKind = "MaxSeconds",
-            ChallengeThreshold = 5.0,
-        });
-
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("MaxSeconds", body.GetProperty("challengeKind").GetString());
-        Assert.Equal(5.0, body.GetProperty("challengeThreshold").GetDouble());
-    }
-
-    /// <summary>
-    /// A ceiling of zero is not a challenge, it is a duel no model could win — and a missing
-    /// budget is just an ordinary duel. Dropped rather than rejected, so a stale client
-    /// cannot fail a request over an option it did not mean.
-    /// </summary>
-    [Theory]
-    [InlineData(0.0)]    // zero budget
-    public async Task Commence_WithANonPositiveBudget_FallsBackToAnOrdinaryDuel(double threshold)
-    {
-        using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "C Zero L");
-        var right = await RegisterModelAsync(client, "C Zero R");
-
-        var response = await client.PostAsJsonAsync("/api/duels", new
-        {
-            LeftModelId = left,
-            RightModelId = right,
-            PromptText = Prompt,
-            ChallengeKind = "MaxSeconds",
-            ChallengeThreshold = threshold,
-        });
-
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("None", body.GetProperty("challengeKind").GetString());
-    }
+    // ── Challenge surface — removed 2026-09-10 ────────────────────────────
+    // Challenge mode (a duel carrying a ChallengeKind + budget) was reachable only by posting
+    // a raw challengeKind/challengeThreshold body; no UI ever set one, and the Arena rendered a
+    // budget line for a field the app could not produce. It was cut along with ChallengeRules,
+    // ChallengeAdjudicator and the shared enum. The contract tests that asserted the echoed
+    // challengeKind/challengeThreshold fields went with it.
 
     // ── Model profile surface ─────────────────────────────────────────────
 

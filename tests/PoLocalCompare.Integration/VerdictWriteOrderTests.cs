@@ -48,21 +48,9 @@ public sealed class VerdictWriteOrderTests(AzuriteFixture azurite) : IAsyncLifet
         return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
     }
 
-    private async Task RunDuelAsync(string a, string b, string side)
-    {
-        var commence = await _client.PostAsJsonAsync("/api/duels", new
-        {
-            LeftModelId = a,
-            RightModelId = b,
-            PromptText = "Build an HTML app.",
-        });
-        commence.EnsureSuccessStatusCode();
-        var duelId = (await commence.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("duelId").GetString()!;
-
-        var verdict = await _client.PostAsJsonAsync($"/api/duels/{duelId}/verdict", new { Verdict = side });
-        verdict.EnsureSuccessStatusCode();
-    }
+    // Waits for both result rows before recording the verdict — see DuelTestFlow.
+    private Task RunDuelAsync(string a, string b, string side) =>
+        DuelTestFlow.RunDuelAsync(_client, a, b, side);
 
     [Fact]
     public async Task AggregatesMatchHistory_WhenAnotherHostHasAlreadyWritten()

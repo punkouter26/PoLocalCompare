@@ -90,14 +90,13 @@ has a ~130-byte pointer file there and this script will not find any models.
 
 ---
 
-### `test-browser-models.ps1` / `test-browser-models.cjs`
-
-**Purpose:** Drives a headless browser against a running app to prove WebGPU inference actually
-works for each seeded browser model. Not part of CI — no runner has a GPU.
-
-```powershell
-pwsh SCRIPTS/test-browser-models.ps1   # app must already be running on https://localhost:5001
-```
+> **A note on the deleted browser-model probers.** This folder used to carry
+> `test-browser-models.ps1` and `test-browser-models.cjs`, which drove a headless browser against a
+> running app to prove WebGPU inference worked per model. They were removed on 2026-09-10: `/diag`'s
+> Model health section already does exactly this in the app's own JavaScript
+> (`js/diag-models.js` over `js/diag-interop.js`), and it works when the WASM client is the broken
+> thing — which is the case the scripts could not cover. Neither half was in CI (no runner has a
+> GPU), so the second implementation only drifted.
 
 ---
 
