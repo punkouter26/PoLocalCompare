@@ -20,10 +20,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Source-only and deterministic, so it runs alongside the suites rather than ahead of them.
+  # Split out of `test` so the hygiene verdict is one obvious signal instead of being repeated
+  # in every matrix leg.
+  hygiene:
+    name: Repo hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # pwsh ships on ubuntu-latest, and check-clean reads source only — no dotnet needed.
+      - name: Check clean
+        shell: pwsh
+        run: ./SCRIPTS/check-clean.ps1
+
   test:
-    name: Test
+    name: Test (${{ matrix.suite }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      # One suite failing must not cancel the others: seeing every failure in one pass is what
+      # makes a red run diagnosable without re-running it three times.
+      fail-fast: false
+      matrix:
+        suite: [Unit, Integration, E2EAPI]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -36,40 +56,29 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
       - run: dotnet workload restore ${{ env.API_PROJECT_PATH }}
 
-      # Repo hygiene, before the suites: test budgets (100/50/25/25), dead CSS classes and
-      # cache-buster parity. Source-only and deterministic, so it fails fast and cannot flake.
-      - name: Check clean
-        shell: pwsh
-        run: ./SCRIPTS/check-clean.ps1
-
-      # Pure logic, no Docker. Kept first so a logic break fails in seconds rather than
-      # after a container pull.
-      - name: Unit
-        run: dotnet test tests/PoLocalCompare.Unit -c Release --logger "trx;LogFileName=unit.trx"
-
-      # Both of these spin Azurite via Testcontainers; the ubuntu runner ships a Docker daemon.
-      - name: Integration
-        run: dotnet test tests/PoLocalCompare.Integration -c Release --logger "trx;LogFileName=integration.trx"
-
-      - name: E2E API
-        run: dotnet test tests/PoLocalCompare.E2EAPI -c Release --logger "trx;LogFileName=e2eapi.trx"
+      # The three suites do not depend on each other, so they run as parallel legs rather than in
+      # sequence: same gates, roughly a third of the wall clock. Integration and E2EAPI spin
+      # Azurite via Testcontainers, and the ubuntu runner ships a Docker daemon.
+      - name: ${{ matrix.suite }}
+        run: dotnet test tests/PoLocalCompare.${{ matrix.suite }} -c Release --logger "trx;LogFileName=${{ matrix.suite }}.trx"
 
       # PoLocalCompare.E2EUI is deliberately NOT run here: it drives a real headed Chrome
       # against a running instance and exercises WebGPU paths a runner has no GPU for.
       # Run it locally after touching UI markup — see AGENT.MD §8.
 
+      # Named per leg: a shared name would have the three uploads collide.
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.suite }}
           path: '**/TestResults/*.trx'
           retention-days: 7
 
   build:
     name: Build & Publish
     runs-on: ubuntu-latest
-    needs: test
+    needs: [hygiene, test]
     timeout-minutes: 30
     steps:
       # lfs: the vendored web-llm.js bundle is an LFS object and gets published into wwwroot.
@@ -148,7 +157,7 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           package: webapp.zip
-      - name: Verify deployment (health + SPA mount)
+      - name: Verify deployment (health, freshness, auth gate, SPA mount)
         run: |
           base="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           sleep 30
@@ -172,4 +181,28 @@ jobs:
           BOOT=$(curl -s -o /dev/null -w "%{http_code}" "$base/_framework/blazor.webassembly.js" --max-time 30 || echo "000")
           echo "Blazor bootstrap asset: HTTP $BOOT"
           [ "$BOOT" = "200" ] || { echo "::error::Blazor framework assets are not being served"; exit 1; }
-          echo "Deployment verified: health + SPA assets OK."
+
+          # Freshness: the cache-buster on app.css that the live page serves must equal the one
+          # in THIS commit's index.html. Read from the checkout rather than hardcoded, so bumping
+          # the buster does not require touching this workflow.
+          #
+          # Without this the step could pass against a site that silently kept serving the
+          # previous build — which is the exact failure mode the service worker makes easy.
+          EXPECTED=$(grep -o 'css/app\.css?v=[0-9]*' src/PoLocalCompare.Client/wwwroot/index.html | head -1)
+          SERVED=$(echo "$ROOT" | grep -o 'css/app\.css?v=[0-9]*' | head -1)
+          echo "cache-buster in commit: '$EXPECTED' / served: '$SERVED'"
+          if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$SERVED" ]; then
+            echo "::error::live index.html is stale (served '$SERVED', expected '$EXPECTED')"; exit 1
+          fi
+
+          # The auth gate survived the deploy. Server authorization is deny-by-default via
+          # FallbackPolicy, so a 200 here means an endpoint group quietly lost its
+          # RequireAuthorization() — which is precisely the risk in a change that rewrites the
+          # endpoint map, and nothing else in this pipeline would notice.
+          for path in /api/models /api/leaderboard /api/duels; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "$base$path" --max-time 20 || echo "000")
+            echo "anonymous $path: HTTP $CODE"
+            [ "$CODE" = "401" ] || { echo "::error::anonymous $path returned $CODE, expected 401"; exit 1; }
+          done
+
+          echo "Deployment verified: health, liveness, freshness, auth gate and SPA assets OK."

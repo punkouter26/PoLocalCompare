@@ -47,8 +47,11 @@ function Write-Header([string]$text) {
 function Get-SourceFiles([string]$relativeDir, [string[]]$include) {
     $root = Join-Path $repoRoot $relativeDir
     if (-not (Test-Path $root)) { return @() }
+    # Match either separator. CI runs this under pwsh on ubuntu-latest, where FullName uses '/',
+    # so a Windows-only pattern would silently stop excluding build output and this script would
+    # start counting generated files. The script is run on both platforms by design.
     Get-ChildItem $root -Recurse -File -Include $include |
-        Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' }
+        Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
 }
 
 # ── 1. Test budget ────────────────────────────────────────────────────────────
