@@ -1,6 +1,6 @@
 # PoLocalCompare — LLM Duel Arena
 
-> **Live:** [polocalcompare.azurewebsites.net](https://polocalcompare.azurewebsites.net) · Full docs in [docs/PRD_Master.md](docs/PRD_Master.md) · Agent context in [AGENT.MD](AGENT.MD) · Generated reports in [docs/](docs/)
+> **Live:** [app-polocalcompare-win.azurewebsites.net](https://app-polocalcompare-win.azurewebsites.net) · Full docs in [docs/PRD_Master.md](docs/PRD_Master.md) · Agent context in [AGENT.MD](AGENT.MD) · Generated reports in [docs/](docs/)
 
 **What.** PoLocalCompare is a real-time LLM benchmarking arena. Two models race to generate HTML from the same prompt: **Local** models run entirely in your browser via WebLLM/WebGPU, **Remote** models call Azure AI Foundry, and (locally) **Ollama** models run as a service. Both outputs stream live over SignalR with token velocity, GPU placement, and energy telemetry. You judge the winner in side-by-side sandboxed viewports — or, if you don't pick within `AiJudge:DelaySeconds` (60 by default), an AI judge decides which output followed the prompt more accurately and records the verdict itself (configurable under `AiJudge`; verdicts are stored with the source that produced them). If exactly one model failed to produce output, the survivor takes a walkover without a judge call; if both failed, the duel stays pending and no rating moves. An Elo system (K=32, start 1200) ranks every model, with per-duel history, head-to-head "kill lists," Green Score (tokens/Wh) energy metrics, and exportable self-contained HTML lab reports.
 

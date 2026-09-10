@@ -10,7 +10,10 @@
 
 **PoLocalCompare** is a real-time LLM benchmarking platform that pits **local browser-based LLMs** (WebLLM / WebGPU) against **remote cloud models** (Azure AI Foundry) and **Ollama local models** in timed HTML-generation duels. A human judge picks the winner. An Elo (K=32) rating system tracks relative model performance across all duels.
 
-- **Live URL:** https://polocalcompare.azurewebsites.net
+- **Live URL:** https://app-polocalcompare-win.azurewebsites.net (the App Service name is
+  `app-polocalcompare-win`; the shorter `polocalcompare.azurewebsites.net` has **no DNS record at
+  all** and never was the real host, so do not probe it — a smoke test against it looks exactly
+  like a total outage. `AZURE_WEBAPP_NAME` in deploy.yml is the source of truth.)
 - **Solution file:** `PoLocalCompare.slnx`
 - **Master prefix rule:** Every namespace, Azure resource, and Aspire resource uses `PoLocalCompare` as its prefix.
 
