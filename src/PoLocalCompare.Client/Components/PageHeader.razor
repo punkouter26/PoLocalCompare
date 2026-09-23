@@ -1,0 +1,72 @@
+@* ── PageHeader ────────────────────────────────────────────────────────────────
+   The title block at the top of every page. Was implemented four times:
+
+     Home          .home__title + .home__header-row + health pill
+     Tournament    .po-header + .po-header__row with title and status pill
+     ModelProfile  .profile__card po-header po-glass with tier pill + back + save
+     Catalog       .po-header (the canonical form)
+
+   Geometry comes from .po-title on the inner h1. The primitive below is a thin
+   coordinator: it owns the row layout and the optional slots every caller wanted,
+   without claiming to know what each caller puts in them. Specifics — Tournament's
+   left/right pair, Profile's back link, Home's health badge — are still caller
+   markup passed through Status and Actions slots. *@
+
+<header class="@HeaderClass">
+    @* Top row: title + any status pill on the right. flex-wrap so the pill drops
+       below on a phone without competing for the title's line. *@
+    <div class="page-header__row">
+        <h1 class="@TitleClass">@Title</h1>
+        @if (StatusContent is not null)
+        {
+            <div class="page-header__status">@StatusContent</div>
+        }
+        @if (Actions is not null)
+        {
+            <div class="page-header__actions">@Actions</div>
+        }
+    </div>
+
+    @if (Subtitle is not null)
+    {
+        <p class="po-subtitle page-header__subtitle">@Subtitle</p>
+    }
+    @if (Warning is not null)
+    {
+        <p class="page-header__warning">@Warning</p>
+    }
+    @if (ExtraContent is not null)
+    {
+        <div class="page-header__extra">@ExtraContent</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Warning { get; set; }
+    [Parameter] public RenderFragment? StatusContent { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? ExtraContent { get; set; }
+    [Parameter] public PageHeaderVariant Variant { get; set; } = PageHeaderVariant.Default;
+
+    /// <summary>"profile" matches Profile's card treatment; "stacked" forces a vertical
+    /// layout on small screens — used by Home to push the warning above the picker.</summary>
+    [Parameter] public string? Layout { get; set; }
+
+    private string HeaderClass
+    {
+        get
+        {
+            var classes = new List<string> { "page-header" };
+            classes.Add($"page-header--{Variant.ToString().ToLowerInvariant()}");
+            if (Layout is not null) classes.Add($"page-header--{Layout.ToLowerInvariant()}");
+            return string.Join(' ', classes);
+        }
+    }
+
+    /// <summary>Title sizing comes from the .po-title primitive; everything else here is
+    /// how the title sits in the row (no extra rules). The Profile card overrides its own
+    /// title size in model-card geometry, which is fine — Profile is a card, not a page.</summary>
+    private string TitleClass => "po-title page-header__title";
+}

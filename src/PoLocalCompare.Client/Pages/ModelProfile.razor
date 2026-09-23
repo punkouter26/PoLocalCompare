@@ -3,6 +3,7 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
 @inject DuelApiClient ApiClient
+@inject IJSRuntime JS
 
 <PageTitle>@(_profile?.DisplayName ?? "Model") — PoLocalCompare</PageTitle>
 
@@ -27,23 +28,33 @@
     }
     else if (_profile is null)
     {
-        <div class="po-empty">
-            <p class="po-empty__hint">
-                No model with that id — it may have been retired from the catalog since the link was made.
-            </p>
-            <a class="po-btn po-btn--primary" href="/leaderboard">← Back to leaderboard</a>
-        </div>
+        <EmptyState Icon="❓"
+                    Title="Model not found"
+                    Hint="No model with that id — it may have been retired from the catalog since the link was made."
+                    Actions="@(new[] {
+                        new EmptyStateAction("← Back to leaderboard", "/leaderboard", EmptyStateActionVariant.Secondary)
+                    })" />
     }
     else
     {
-        <header class="profile__header po-header">
-            <a class="profile__back" href="/leaderboard">← Leaderboard</a>
+        @* The header is the model's trading card: it tilts under the pointer, its foil shifts
+           with the angle, and the foil's strength is the tier (rank 1 prismatic, 2–3 gold,
+           4–8 silver, the rest bronze). The tier is also stated as text, so nothing is carried
+           by the sheen alone. It is the landing spot of the leaderboard → profile morph. *@
+        <header class="profile__header profile__card profile__card--@Tier po-header po-glass">
+            <div class="profile__card-top">
+                <a class="profile__back" href="/leaderboard">← Leaderboard</a>
+                <span class="profile__tier">@Tier tier</span>
+                <button type="button" class="po-btn po-btn--sm po-btn--ghost profile__card-save"
+                        @onclick="SaveCardAsync"
+                        title="Download this model's card as a PNG">
+                    <span aria-hidden="true">🃏</span> Save card
+                </button>
+            </div>
 
             <div class="profile__identity">
                 <h1 class="po-title">@_profile.DisplayName</h1>
-                <span class="po-chip profile__type--@ModelTypeGroup.CssModifier(_profile.ModelType)">
-                    @ModelTypeGroup.Label(_profile.ModelType)
-                </span>
+                <ModelTypeBadge Type="_profile.ModelType" Variant="ModelTypeBadgeVariant.Long" />
             </div>
 
             <div class="profile__standing">
@@ -56,6 +67,14 @@
                     <span class="profile__rank profile__rank--unranked" title="No judged duels yet">Unranked</span>
                 }
                 <span class="profile__elo">@((int)Math.Round(_profile.CurrentElo)) ELO</span>
+                <span class="profile__ci"
+                      title="@($"95% interval on strength: {_profile.Strength - _profile.RatingInterval:F0}–{_profile.Strength + _profile.RatingInterval:F0}, from a Bradley–Terry fit over every judged duel.")">
+                    ±@((int)Math.Round(_profile.RatingInterval))
+                </span>
+                @if (_profile.IsProvisional)
+                {
+                    <span class="profile__provisional" title="Fewer than 10 judged duels — this rating will still move a lot.">provisional</span>
+                }
             </div>
         </header>
 
@@ -129,7 +148,7 @@
                     <RadzenChart @key="_profile.ModelId"
                                  class="profile__chart">
                         <RadzenLineSeries TItem="EloPointView"
-                                          Data="@ChartPoints"
+                                          Data="@_chartPoints"
                                           CategoryProperty="Label"
                                           ValueProperty="Elo"
                                           Title="Rating"
@@ -138,10 +157,16 @@
                                           StrokeWidth="2">
                             <RadzenMarkers MarkerType="MarkerType.Circle" Size="6" />
                             <RadzenSeriesDataLabels Visible="false" />
+                            @* The highlights below, pinned to the curve. Same point instances as
+                               the series data, so each label lands on its own duel. *@
+                            @foreach (var (point, text) in _chartAnnotations)
+                            {
+                                <RadzenSeriesAnnotation TItem="EloPointView" Data="@point" Text="@text" OffsetY="-14" Fill="@ChartAnnotationColor" />
+                            }
                         </RadzenLineSeries>
 
                         <RadzenLineSeries TItem="EloPointView"
-                                          Data="@ChartPoints"
+                                          Data="@_chartPoints"
                                           CategoryProperty="Label"
                                           ValueProperty="Baseline"
                                           Title="Starting rating"
@@ -161,6 +186,60 @@
                         <RadzenLegend Visible="false" />
                     </RadzenChart>
                 </div>
+            </section>
+        }
+
+        @* ── Highlights ────────────────────────────────────────────────────
+           The curve's story in three facts. Upsets are judged on the ratings at the time of
+           the duel, not today's: beating a model that was 1400 then is an upset even if it has
+           since fallen to 1100. *@
+        @if (_profile.Highlights.PeakElo is { } peak)
+        {
+            var highlights = _profile.Highlights;
+            <section class="po-section" aria-labelledby="profile-highlights-heading">
+                <h2 id="profile-highlights-heading" class="po-section-title">Highlights</h2>
+                <dl class="profile__stats profile__stats--flush">
+                    <div class="profile__stat">
+                        <dt>Peak rating</dt>
+                        <dd>
+                            @((int)Math.Round(peak))
+                            @if (highlights.PeakAt is { } peakAt)
+                            {
+                                <span class="profile__stat-note">@peakAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="profile__stat">
+                        <dt>Longest win streak</dt>
+                        <dd>@highlights.LongestWinStreak</dd>
+                    </div>
+                    <div class="profile__stat">
+                        <dt>Biggest upset</dt>
+                        <dd>@(highlights.Upsets.Count > 0 ? $"+{highlights.Upsets[0].RatingGap:F0}" : "—")</dd>
+                    </div>
+                </dl>
+
+                @if (highlights.Upsets.Count > 0)
+                {
+                    <ol class="profile__upsets">
+                        @foreach (var upset in highlights.Upsets)
+                        {
+                            <li @key="upset.DuelId">
+                                <a class="profile__opponent" href="@($"/arena/{upset.DuelId}")">
+                                    Beat @upset.OpponentName
+                                </a>
+                                <span class="profile__upset-meta">
+                                    rated @upset.RatingGap.ToString("F0") higher at the time · +@upset.Shift.ToString("F1") ELO ·
+                                    @upset.At.ToLocalTime().ToString("yyyy-MM-dd")
+                                </span>
+                            </li>
+                        }
+                    </ol>
+                }
+                else
+                {
+                    <p class="po-hint">No upsets yet — no win so far against a model rated 25+ points higher.</p>
+                }
             </section>
         }
 
@@ -264,6 +343,63 @@
     private bool _loading = true;
     private string? _error;
 
+    /// <summary>
+    /// Foil tier by rank. Rank rather than raw ELO, because a rating only means something
+    /// against the field it was earned in — 1320 is the top of one board and the middle of
+    /// another. Unranked models (no judged duels) are bronze.
+    /// </summary>
+    private string Tier => _profile?.Rank switch
+    {
+        1 => "prismatic",
+        2 or 3 => "gold",
+        >= 4 and <= 8 => "silver",
+        _ => "bronze",
+    };
+
+    private string? _holoBoundTo;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Once per loaded profile: the header element is recreated whenever the page goes
+        // through its loading state, so binding by model id rebinds exactly when it must.
+        var id = _profile?.ModelId.ToString();
+        if (id is null || _loading || id == _holoBoundTo) return;
+        _holoBoundTo = id;
+
+        try
+        {
+            await JS.InvokeVoidAsync("poWow.holo", ".profile__card");
+        }
+        catch (JSException)
+        {
+            // The card simply does not tilt.
+        }
+    }
+
+    private async Task SaveCardAsync()
+    {
+        if (_profile is null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("poWow.exportCard", new
+            {
+                name = _profile.DisplayName,
+                rank = _profile.Rank,
+                elo = _profile.CurrentElo,
+                interval = _profile.RatingInterval,
+                record = $"{_profile.WinCount}–{_profile.LossCount}" + (_profile.DrawCount > 0 ? $"–{_profile.DrawCount}" : ""),
+                winRate = _profile.DuelCount > 0 ? $"{_profile.WinRate * 100:F0}%" : "—",
+                duels = _profile.DuelCount,
+                type = ModelTypeGroup.Label(_profile.ModelType),
+                tier = Tier,
+            });
+        }
+        catch (JSException)
+        {
+            // No canvas or no download support: nothing to save.
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         // OnParametersSetAsync, not OnInitializedAsync: the kill list links model to model, so
@@ -282,6 +418,7 @@
         try
         {
             _profile = await ApiClient.GetModelProfileAsync(ModelId.From(ModelIdText));
+            BuildChart();
         }
         catch (Exception ex)
         {
@@ -325,15 +462,94 @@
     /// the same categories — Radzen has no horizontal-rule primitive, and a series is the
     /// cheapest way to keep "did this model end above where it started" legible.
     /// </summary>
-    private sealed record EloPointView(string Label, double Elo, double Baseline);
+    private sealed record EloPointView(string Label, double Elo, double Baseline, DuelId DuelId);
 
-    private List<EloPointView> ChartPoints =>
-        _profile!.EloHistory
+    /// <summary>
+    /// Built once per load rather than as a computed property: the annotations must reference
+    /// the very instances the series holds, and a property would mint new ones every render.
+    /// </summary>
+    private List<EloPointView> _chartPoints = [];
+    private List<(EloPointView Point, string Text)> _chartAnnotations = [];
+
+    /// <summary>
+    /// A DISTINCT category label per duel, which is what a category axis needs to give each
+    /// point its own tick.
+    /// </summary>
+    /// <remarks>
+    /// This was a bare "MMM d", and a category axis treats two identical categories as ONE —
+    /// so a model whose duels all ran on the same day (which is every model here, because a
+    /// session is where duels happen) had its whole rating history stacked on a single x
+    /// position. The chart rendered as a vertical line with two thirds of its width empty,
+    /// and the one question it exists to answer — did this model end above where it started —
+    /// was unreadable in exactly the common case.
+    ///
+    /// The date alone is kept where it is already unique, because that is the label worth
+    /// reading; a day carrying more than one duel falls back to date + time for every point on
+    /// that day, and a collision inside the same minute takes a trailing ordinal. Ordinals are
+    /// the last resort rather than the first because "#3" says nothing a reader wants.
+    /// </remarks>
+    private static Dictionary<DuelId, string> CategoryLabels(IReadOnlyList<EloPointDto> history)
+    {
+        var byDate = history
+            .GroupBy(p => p.At.ToLocalTime().ToString("MMM d", Inv))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var labels = new Dictionary<DuelId, string>();
+        var used = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var point in history)
+        {
+            var local = point.At.ToLocalTime();
+            var date = local.ToString("MMM d", Inv);
+            var label = byDate[date] == 1 ? date : local.ToString("MMM d, HH:mm", Inv);
+
+            if (used.TryGetValue(label, out var seen))
+            {
+                used[label] = seen + 1;
+                label = $"{label} ({seen + 1})";
+            }
+            else
+            {
+                used[label] = 1;
+            }
+
+            labels[point.DuelId] = label;
+        }
+
+        return labels;
+    }
+
+    private void BuildChart()
+    {
+        _chartPoints = [];
+        _chartAnnotations = [];
+        if (_profile is null) return;
+
+        _chartPoints = _profile.EloHistory
             .Select(p => new EloPointView(
-                p.At.ToLocalTime().ToString("MMM d", Inv),
+                CategoryLabels(_profile.EloHistory)[p.DuelId],
                 Math.Round(p.Elo, 1),
-                StartingElo))
+                StartingElo,
+                p.DuelId))
             .ToList();
+
+        var byDuel = _chartPoints
+            .GroupBy(p => p.DuelId)
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        foreach (var upset in _profile.Highlights.Upsets)
+        {
+            if (byDuel.TryGetValue(upset.DuelId, out var point))
+                _chartAnnotations.Add((point, $"▲ upset +{upset.RatingGap:F0}"));
+        }
+
+        // Peak last so it wins when the peak IS an upset: one label per point, the bigger fact.
+        if (_profile.Highlights.PeakDuelId is { } peakDuel && byDuel.TryGetValue(peakDuel, out var peakPoint))
+        {
+            _chartAnnotations.RemoveAll(a => ReferenceEquals(a.Point, peakPoint));
+            _chartAnnotations.Add((peakPoint, $"★ peak {peakPoint.Elo:F0}"));
+        }
+    }
 
     /// <summary>
     /// Keeps roughly eight category labels whatever the history length — one tick per duel is
@@ -350,6 +566,9 @@
     /// </summary>
     private const string ChartLineColor = "#1560c4";      /* --accent-blue (light) */
     private const string ChartBaselineColor = "#8a8f9c";  /* neutral, legible in both themes */
+    /// <summary>The line colour, so a label reads as belonging to the curve it sits on. The same
+    /// facts are listed as text under Highlights, which is the accessible form of them.</summary>
+    private const string ChartAnnotationColor = ChartLineColor;
 
     /// <summary>Text alternative for the curve — the shape means nothing to a screen reader.</summary>
     private string ChartDescription

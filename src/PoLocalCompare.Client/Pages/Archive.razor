@@ -9,7 +9,7 @@
 
 <PageTitle>Archive — PoLocalCompare</PageTitle>
 
-<div class="archive">
+<div class="archive po-page po-page--wide">
     <h1 class="archive__title po-title">Lab Archive</h1>
 
     @if (_loading)
@@ -22,20 +22,28 @@
     }
     else if (_duels.Count == 0)
     {
-        <div class="po-empty">
-            <h2>No duels recorded yet</h2>
-            <p>Archive snapshots, verdicts, and lab reports will appear here once a duel completes.</p>
-            <div class="archive__empty-actions">
-                <a class="po-btn po-btn--ghost" href="/">⚔ Start a New Duel</a>
-            </div>
-        </div>
+        @* EmptyState — Archive's "no duels yet" card. The new card shares its layout
+           with Leaderboard and Model Profile so a viewer sees the same shape anywhere
+           in the app a list is empty. *@
+        <EmptyState Icon="📁"
+                    Title="No duels recorded yet"
+                    Hint="Archive snapshots, verdicts, and lab reports will appear here once a duel completes."
+                    Actions="@(new[] {
+                        new EmptyStateAction("⚔ Start a New Duel", "/", EmptyStateActionVariant.Ghost)
+                    })" />
     }
     else
     {
-        <div class="archive__filters">
+        @* .po-btn--chip, shared with Home and PromptPicker. These were .archive__filter-chip,
+           a fourth private implementation of the same control, and — like Home's — they carried
+           no aria-pressed, so which filter was active reached assistive tech not at all and
+           reached a colour-blind viewer only as a slightly different grey (SC 1.4.1, 4.1.2). *@
+        <div class="archive__filters" role="group" aria-label="Filter duels by verdict">
             @foreach (var label in Filters)
             {
-                <button class="archive__filter-chip @(_verdictFilter == label ? "archive__filter-chip--active" : "")"
+                <button type="button"
+                        class="po-btn po-btn--sm po-btn--chip"
+                        aria-pressed="@(_verdictFilter == label ? "true" : "false")"
                         @onclick="() => SetVerdictFilter(label)">
                     @label
                 </button>
@@ -43,9 +51,14 @@
         </div>
         @if (_filteredDuels.Count == 0)
         {
+            @* Filtered-empty. PageActions carries the reset button so the geometry is
+               shared with the terminal-empty list above. *@
             <div class="archive__filtered-empty">
                 <p>No duels match the <strong>@_verdictFilter</strong> filter.</p>
-                <button class="archive__filter-reset" @onclick="ResetFilters">Show all duels</button>
+                <PageActions Align="PageActionsAlign.End"
+                             Actions="@(new[] {
+                                 new PageActionDescriptor("Show all duels", OnClick: ResetFiltersCallback())
+                             })" />
             </div>
         }
         @* Clicking a row navigates straight to /arena/{id} so both model outputs are
@@ -75,6 +88,12 @@
            The grid inherits the app's design tokens: index.html loads Radzen's STRUCTURAL
            base stylesheet only, never a colour theme, and the overrides in Archive.razor.css
            map its surfaces onto --surface-*/--text-*/--border. *@
+        @* The wrapper is what lets the grid absorb the leftover viewport height: .archive is a
+           flex column and this is its flex: 1 item, so the grid ends where the page does
+           instead of at a fixed 55dvh with a dead band underneath. It has to be a real element
+           in THIS file — Blazor stamps a scoped stylesheet with its own component's scope id,
+           so a rule here can never reach the div RadzenDataGrid renders. *@
+        <div class="archive__grid-wrap">
         <RadzenDataGrid @ref="_grid"
                         TItem="DuelSummaryDto"
                         Data="@_filteredDuels"
@@ -115,7 +134,13 @@
                     </Template>
                 </RadzenDataGridColumn>
 
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Verdict" Property="Verdict" Width="11rem">
+                @* Filterable="false": the chip row above IS the verdict filter, and it also
+                   backs the ?verdict= deep link the nav's "N awaiting judgment" pill uses. With
+                   the column filter left on, the page shipped two controls for one field forty
+                   pixels apart — a Select… dropdown in the grid header directly under four
+                   chips — that could be set to contradict each other, with no indication which
+                   had won. One field, one control. Sorting stays: that is a different question. *@
+                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Verdict" Property="Verdict" Filterable="false" Width="11rem">
                     <Template Context="d">
                         @* Names the winner. "Left" made you map a chip back to a column
                            to learn anything, which is the one thing this column is for. *@
@@ -167,6 +192,7 @@
                 </RadzenDataGridColumn>
             </Columns>
         </RadzenDataGrid>
+        </div>
 
         <div class="archive__pagination">
             @* The old copy read "Showing 20 of 20 duels — more available", because the first
@@ -211,6 +237,17 @@
     // (empty check, grid data, footer count), and re-sorting on every incidental re-render —
     // a row selection, say — was pure waste.
     private List<DuelSummaryDto> _filteredDuels = [];
+
+    // Bound into the PageActions primitive so the filtered-empty can reuse the row geometry.
+    private EventCallback _resetFilterCallback = default;
+    private EventCallback ResetFiltersCallback()
+    {
+        if (_resetFilterCallback.Equals(default(EventCallback)))
+        {
+            _resetFilterCallback = EventCallback.Factory.Create(this, ResetFilters);
+        }
+        return _resetFilterCallback;
+    }
 
     private void ApplyFilter()
     {

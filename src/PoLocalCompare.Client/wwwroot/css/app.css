@@ -1,4 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* ── Fonts ───────────────────────────────────────────────────────────────────
+   The families are requested from index.html with <link rel="preconnect"> + <link
+   rel="stylesheet">, NOT with an @import here. An @import inside a stylesheet is invisible
+   to the browser's preload scanner: it cannot be discovered until app.css has been fetched
+   AND parsed, so the font request is serialised behind it on the critical path. A <link> in
+   the head is discovered in the initial HTML scan and fetched in parallel.
+
+   The weights requested there are also narrower than they were. Space Grotesk carried 500,
+   which is declared nowhere in this app (grep font-weight: the values in use are 400, 600,
+   700 and, until this pass, a synthetic 800/900), and JetBrains Mono carried 400/500/600 for
+   two rules that both inherit their weight. 800 is requested now because .not-found__icon
+   genuinely wants it — it was asking for a face that was not being loaded, which the browser
+   answers by smearing 700 into a faux bold. */
 
 /* ── Box sizing ─────────────────────────────────────────────────────────────
    There was NO box-sizing rule in this file except a single local one on
@@ -285,6 +297,15 @@
        renders at more than one width: see TelemetryHud, ModelCard and SandboxedViewport,
        which measure their own box rather than the window. */
 
+    /* ── Chrome ──────────────────────────────────────────────────────────
+       The height of the sticky top nav. It was referenced by the comment on `.content`
+       ("a descendant that needs a floor must use calc(100dvh - var(--nav-height))") and
+       by nothing else, because it had never been declared — so the one calc the codebase
+       tells you to write would have resolved to an invalid length and been dropped. The
+       value is .navmenu's own min-height; the two must stay in step, which is why the
+       stylesheet now reads this token rather than restating 3.5rem. */
+    --nav-height: 3.5rem;
+
     /* Border Radius Scale */
     --radius-sm: 0.375rem;
     --radius-md: 0.75rem;
@@ -318,7 +339,32 @@
 
     --violet-surface:  color-mix(in srgb, var(--accent-purple) 12%, var(--surface-1));
     --violet-border:   color-mix(in srgb, var(--accent-purple) 38%, var(--surface-1));
+
+    /* Added when the hand-rolled tints were folded in: the nav ticker's "running" pill and
+       the two cyan accents on Home had no token to move to, which is part of why they were
+       hand-rolled in the first place. */
+    --cyan-surface:    color-mix(in srgb, var(--accent-cyan) 12%, var(--surface-1));
+    --cyan-border:     color-mix(in srgb, var(--accent-cyan) 38%, var(--surface-1));
 }
+
+/* ── Why these tints are OPAQUE, and the failure that made it matter ──────────
+   Each --*-surface mixes an accent into --surface-1, which is a solid colour. The result is
+   solid too, so the contrast of --accent-* on top of it is the same wherever the chip lands:
+   on a card, on the nav bar, over the aurora. Measured in light theme it is 4.53 (cyan) to
+   5.03 (blue); in dark, 4.78 (red) to 9.18 (green). All clear SC 1.4.3.
+
+   Around twenty surfaces used to hand-roll the same effect as a TRANSLUCENT literal instead —
+   `rgba(45, 220, 132, 0.08)`, `color-mix(in srgb, var(--accent-cyan) 12%, transparent)` — and
+   that broke the guarantee twice over. A translucent tint composites against whatever is
+   behind it, so the same chip measured differently on the nav (--surface-base) than on a card
+   (--surface-1): the ticker pills landed at 4.26 and 4.45 against the nav, both under 4.5,
+   while the identical treatment passed elsewhere. And every one of those literals was the
+   DARK-theme accent value frozen into the stylesheet, so a light-theme viewer got a dark
+   palette's hue behind light-palette text — the tokens exist precisely so a colour cannot be
+   picked in one theme and shipped to both.
+
+   So: a status tint is --*-surface for the fill, --*-border for the edge, and the plain
+   --accent-* for the text. Do not reintroduce an rgba() literal for one. */
 
 /* ── Modern Animations ────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
@@ -478,16 +524,22 @@ a:hover {
     width: 100%;
 }
 
+/* --on-accent, not #fff. The literal was measured at 2.54:1 in dark mode — white on
+   --accent-blue, which is #53a6ff there — so the app's PRIMARY button failed SC 1.4.3 on
+   every dark-theme surface that carries one. --on-accent already exists for exactly this,
+   already flips to black in dark, and was already being read by --success and by the model
+   card's type chip; this variant simply was not using it. Black on #53a6ff is 8.27:1, and
+   white on the light palette's #1560c4 stays at 6.00:1. */
 .po-btn--primary {
     background: var(--accent-blue);
     border-color: var(--accent-blue);
-    color: #fff;
+    color: var(--on-accent);
 }
 
 .po-btn--primary:hover:not(:disabled) {
     background: var(--link-hover);
     border-color: var(--link-hover);
-    color: #fff;
+    color: var(--on-accent);
 }
 
 .po-btn--success {
@@ -533,6 +585,49 @@ a:hover {
 .po-btn--warn:hover:not(:disabled) {
     filter: brightness(1.08);
     color: var(--accent-yellow);
+}
+
+/* ── Filter chip ──────────────────────────────────────────────────────────
+   A pill that toggles a list filter. There were FOUR implementations of this one control:
+   Home's type filters (.po-btn + --success when active), Archive's .archive__filter-chip,
+   PromptPicker's .prompt-picker__chip, and the RadzenDataGrid's own per-column filter row.
+   The three hand-rolled ones disagreed on shape (pill vs --radius-sm), on what "active"
+   looks like (filled green vs a coloured outline) and, more seriously, on whether the state
+   reached assistive technology at all: only PromptPicker set aria-pressed, so on Home and
+   Archive the selected filter was conveyed by colour alone (SC 1.4.1, SC 4.1.2).
+
+   This is the same consolidation .po-btn itself came from, so it follows the same rule: a
+   modifier here, not a class per surface, and every caller is a real <button> carrying
+   aria-pressed. The active state changes BOTH fill and border weight, so it survives a
+   greyscale screenshot and prefers-contrast: more. */
+.po-btn--chip {
+    border-radius: var(--radius-full);
+    padding: var(--space-xs) var(--space-smd);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--text-muted);
+    background: var(--surface-1);
+}
+
+.po-btn--chip:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+}
+
+.po-btn--chip[aria-pressed="true"] {
+    color: var(--accent-green);
+    background: var(--success-surface);
+    border-color: var(--accent-green);
+    /* The second visual channel. Colour alone would leave the active chip indistinguishable
+       from the rest for a viewer who cannot separate the two hues. */
+    box-shadow: inset 0 0 0 1px var(--accent-green);
+}
+
+.po-btn--chip[aria-pressed="true"]:hover:not(:disabled) {
+    color: var(--accent-green);
+    background: var(--success-surface);
+    border-color: var(--accent-green);
 }
 
 /* Data table — semantic <table>, horizontally scrollable inside .po-table-wrap. */
@@ -886,13 +981,62 @@ body::before {
 
 /* ── Glass ────────────────────────────────────────────────────────────────
    Opt-in utility for new surfaces. The three existing consumers of --glass-bg set the blur
-   in their own scoped stylesheets alongside the background they already had. */
+   in their own scoped stylesheets alongside the background they already had.
+
+   The first background layer is a specular glint at --gx/--gy, which wow.js sets from the
+   pointer (defaults park it off the top edge, so a touch device sees a soft top light). A
+   white glint on purpose, not a token: it is light hitting the surface, the same in either
+   theme. */
 .po-glass {
-    background: var(--glass-bg);
+    background:
+        radial-gradient(circle at var(--gx, 50%) var(--gy, -25%), rgba(255, 255, 255, 0.10), transparent 45%),
+        var(--glass-bg);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+}
+
+/* ── Liquid glass ─────────────────────────────────────────────────────────
+   Real refraction: the SVG filter in index.html (#po-liquid, fractal-noise displacement)
+   bends whatever is behind the panel before the blur frosts it. Two gates:
+
+   - html.po-liquid — Chromium only, decided by wow.js. Other engines parse url() inside
+     backdrop-filter and then render nothing, which would lose the plain blur as well, so
+     @supports cannot be trusted with this.
+   - not [data-gpu="busy"] — an SVG filter over the backdrop is real GPU work every frame the
+     panel composites. util.js sets that attribute while a WebLLM worker holds the GPU lease,
+     and the panel drops back to the plain blur until it is released. */
+html.po-liquid:not([data-gpu="busy"]) .po-glass {
+    backdrop-filter: url(#po-liquid) blur(var(--glass-blur)) saturate(1.5);
+}
+
+/* Holds the filter definitions; must stay in the render tree for url(#po-liquid) to resolve,
+   so it is collapsed rather than display:none. */
+.po-svg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* ── Bracket comet ────────────────────────────────────────────────────────
+   The point of light wow.js flies from a tournament winner to its next-round slot. Created
+   on <body>, positioned entirely by its WAAPI transform, removed when it lands. */
+.po-comet {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9998;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    background: var(--accent-yellow);
+    box-shadow:
+        0 0 0.5rem 0.2rem color-mix(in srgb, var(--accent-yellow) 70%, transparent),
+        0 0 1.5rem 0.6rem color-mix(in srgb, var(--accent-yellow) 30%, transparent);
+    pointer-events: none;
 }
 
 /* ── Lift ─────────────────────────────────────────────────────────────────
@@ -1009,15 +1153,52 @@ body::before {
 /* ── Page shell ───────────────────────────────────────────────────────────
    Seven different container max-widths were in use (1000, 1080, 1100, 1200, 1360, 1400 …),
    so the content edge visibly jumped as you navigated between pages. */
+/* ── The gutter belongs to ONE element, and that element is article.app-content ──
+   This used to add its own --space-md inline padding on top of the article's responsive
+   gutter, and the two composed rather than replacing each other: on a 390px phone that was
+   12px (article) + 16px (here) per side, and /archive — which also had a shell of its own —
+   reached 36px per side. Measured content widths on one 390px screen were 358px on `/`,
+   334px on /leaderboard and 318px on /archive: three different text columns, and 18% of the
+   screen spent on nested padding before a pixel of content.
+
+   So the horizontal gutter is now declared once, by the article, and .po-page contributes
+   none. The safe-area inset is composed into the article's rule with max() for the same
+   reason and does not need restating here either. */
 .po-page {
     width: 100%;
     max-width: 1200px;
     margin-inline: auto;
-    padding: var(--space-lg) var(--space-md) var(--space-2xl);
+    padding-inline: 0;
+    /* --space-md, not --space-lg: article.content already contributes --space-md above this,
+       so --space-lg put 40px between the nav and the page title on every route. */
+    padding-block: var(--space-md) var(--space-xl);
 }
 
 /* Data-dense surfaces: wide tables and the tournament bracket. */
 .po-page--wide { max-width: 1400px; }
+
+/* ── Page-title hooks ─────────────────────────────────────────────────────
+   .home__title, .archive__title, .arena__title and .leaderboard__title exist so the E2E-UI
+   suite can address one page's h1 without matching another's. CLAUDE.md says they carry no
+   styling, and they had each drifted back into a full ruleset anyway — measured on one
+   1440px desktop that gave the app h1s of 43px, 43px and 31px, two of them at a weight
+   (800) the @import does not load, all three layered over the .po-title the same element
+   already carries.
+
+   One shared declaration instead, and it is layout only — the pattern the app already uses
+   for .po-btn (".arena__action-btn is the pattern"): the gap under a page title, identical
+   on every route. The size, weight and colour stay with .po-title. Anything visual added
+   here is the drift starting again.
+
+   It is also a real rule rather than an empty one on purpose: check-clean.ps1 fails a class
+   that is applied in markup and defined in no stylesheet, and satisfying that check with a
+   mention inside a comment would be gaming it. */
+.home__title,
+.archive__title,
+.arena__title,
+.leaderboard__title {
+    margin-block-end: var(--space-md);
+}
 
 /* ── Text primitives ──────────────────────────────────────────────────────*/
 
@@ -1168,13 +1349,19 @@ body::before {
 
     .po-table--cards,
     .po-table--cards tbody,
-    .po-table--cards tr,
     .po-table--cards td {
         display: block;
         width: 100%;
     }
 
+    /* The row is a wrapping flex container, not a block. Both give one cell per line while
+       every cell is full width, but only flex lets a PAIR of cells share a line — see
+       .po-cell--half below. Two consecutive inline-flex cells at 50% do not pair: the
+       whitespace between them in the markup takes width, so 50% + 50% + a space overflows
+       and the second wraps. A flex basis has no such gap to account for. */
     .po-table--cards tr {
+        display: flex;
+        flex-wrap: wrap;
         margin-bottom: var(--space-sm);
         padding: var(--space-sm) var(--space-smd);
         border: 1px solid var(--border);
@@ -1184,6 +1371,8 @@ body::before {
 
     .po-table--cards td {
         display: flex;
+        /* Full width by default, so the wrapping row still reads as one cell per line. */
+        flex: 1 1 100%;
         align-items: baseline;
         justify-content: space-between;
         gap: var(--space-md);
@@ -1229,6 +1418,25 @@ body::before {
         text-align: left;
     }
 
+    /* Two short cells sharing one row. One card row per column adds up fast, and a
+       "label  value" pair holding a single digit is the worst of it: the leaderboard spent
+       two full-width rows — 48px of a 390px screen, per model, times 26 models — on the W
+       and L counts. Pairs that are narrow BY NATURE opt in; anything that can wrap must not,
+       because two wrapped cells side by side is harder to read than two stacked rows.
+
+       inline-flex with a 50% basis rather than a grid, so it composes with the flex layout
+       the base rule already gives every cell, and the ::before label keeps working unchanged. */
+    /* Half a line each, minus half the gutter between them, so the pair still ends flush
+       with every other cell's edges: (50% - 8) + 16 + (50% - 8) = 100%. */
+    .po-table--cards td.po-cell--half {
+        flex-basis: calc(50% - var(--space-sm));
+        min-width: 0;
+    }
+
+    .po-table--cards td.po-cell--half + .po-cell--half {
+        margin-inline-start: var(--space-md);
+    }
+
     /* The card is the row; the wrapper no longer needs to scroll. */
     .po-table-wrap {
         overflow-x: visible;
@@ -1246,11 +1454,36 @@ body::before {
    Both degrade to nothing on a browser without support — the page simply appears, which is
    what it did before. Neither is load-bearing for any content. */
 
-/* ── Cross-document view transitions ──────────────────────────────────────
-   Opt the app into the browser's own page-transition machinery. Blazor navigation is
-   same-document, so this covers the SPA route swaps the Router performs. */
+/* ── View transitions ─────────────────────────────────────────────────────
+   @view-transition covers cross-document navigations only — a full reload, /diag and back.
+   It does NOT cover the Router's route swaps: Blazor navigation is same-document pushState,
+   which the browser never treats as a navigation to transition. (The comment here used to
+   claim it did.) Same-document morphs are started explicitly by wow.js navigate(), for links
+   marked data-vt and for Compare → Arena; the root fade below applies to both kinds. */
 @view-transition {
     navigation: auto;
+}
+
+/* Shared elements that morph between routes: a Home slot into an Arena panel, a leaderboard
+   link into the profile card. .po-vt-hero is put on the clicked element for one transition
+   only, because a view-transition-name must be unique on the page at capture time. */
+.po-vt-hero {
+    view-transition-name: po-hero;
+}
+
+::view-transition-group(po-hero),
+::view-transition-group(po-fighter-left),
+::view-transition-group(po-fighter-right) {
+    animation-duration: 460ms;
+    animation-timing-function: cubic-bezier(.2, .9, .25, 1);
+}
+
+/* The two snapshots are different content (a link vs a card), so cross-fade them rather than
+   stretching one into the other's box. */
+::view-transition-old(po-hero),
+::view-transition-new(po-hero) {
+    height: 100%;
+    object-fit: cover;
 }
 
 ::view-transition-old(root) {
@@ -1272,8 +1505,14 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
     ::view-transition-old(root),
-    ::view-transition-new(root) {
+    ::view-transition-new(root),
+    ::view-transition-group(*) {
         animation: none;
+    }
+
+    /* The shader stands down in fx.js too; this keeps a stale frame from lingering. */
+    #po-living-canvas {
+        display: none;
     }
 }
 
@@ -1282,10 +1521,13 @@ body::before {
    out of the physically obstructed strips at the edges of a modern phone screen.
    env() resolves to 0px on every device without a cutout, so this is inert on
    desktop and needs no media query. The max() keeps the existing padding as a
-   floor — without it, a device reporting 0px would collapse the padding entirely. */
+   floor — without it, a device reporting 0px would collapse the padding entirely.
+
+   Only the BOTTOM inset is applied here now. The left/right pair moved out with the
+   rest of the horizontal gutter (see the .po-page rule above): it is composed into
+   article.app-content's padding-inline, which every page sits inside, so restating it
+   here would rebuild exactly the double gutter that rule removed. */
 .po-page {
-    padding-inline-start: max(var(--space-md), env(safe-area-inset-left));
-    padding-inline-end: max(var(--space-md), env(safe-area-inset-right));
     padding-bottom: max(var(--space-xl), env(safe-area-inset-bottom));
 }
 
@@ -1311,8 +1553,14 @@ body::before {
     }
 
     /* Decorative only, and the single largest source of low-contrast area in the app. */
-    body::before {
+    body::before,
+    #po-living-canvas {
         display: none;
+    }
+
+    /* Refraction bends text that sits behind a panel's edge; flat surfaces here. */
+    html.po-liquid .po-glass {
+        backdrop-filter: none;
     }
 
     /* A border that exists to be subtle is a border that disappears first. */
@@ -1352,22 +1600,100 @@ body::before {
 
 /* The Archive grid's height. AllowVirtualization needs a DEFINITE height — without one
    Radzen renders every row and the virtualiser is inert, which is the whole reason the
-   grid is here. This used to be an inline `Style="height: 32rem"` on the component, and
-   that is 512px: on a 390×844 phone it is taller than the space the page has left after
-   the title, the chips and the filters, so the grid grew an inner scrollbar stacked
-   inside the page's own. Nested scrollers make the gesture ambiguous — the drag that
-   means "scroll the page" scrolls the grid instead, and the grid's own scrollbar is a
-   second, differently-behaving target.
+   grid is here. This used to be an inline `Style="height: 32rem"`, then `min(32rem, 55dvh)`
+   here, and both were fixed sizes chosen without reference to how much page there actually
+   was. Measured, `min(32rem, 55dvh)` resolved to 495px on a 1440×900 desktop and 464px on a
+   390×844 phone, and in BOTH cases the page ended well short of the viewport: 170px of blank
+   page below the grid on the desktop, 190px on the phone, while the grid itself clipped a
+   row in half at its own bottom edge and scrolled internally. Dead space and a nested
+   scroller at the same time, which is the worst of both.
 
-   min() keeps the definite height for the virtualiser while capping it to the viewport:
-   32rem (512px) on any screen taller than ~930px, and 55dvh below that, so on a phone
-   the grid ends inside the page scroller instead of fighting it.
+   100% of a flex: 1 wrapper instead. .archive is a flex column with a
+   calc(100dvh - --nav-height - padding) floor and .archive__grid-wrap is its flexible child,
+   so the grid is handed exactly what the title, the chips and the footer leave — a definite
+   height, which is what the virtualiser needs, but a derived one. No dead band, no magic
+   number, and it follows the viewport rather than a guess about it.
 
    Not theme-dependent, and deliberately not in Archive.razor.css: Blazor stamps a
    scoped stylesheet with its own component's scope id, so a rule there cannot reach an
    element Radzen renders. */
-.rz-datatable.archive__grid {
-    height: min(32rem, 55dvh);
+.rz-datatable.archive__grid,
+.rz-datatable.catalog__grid,
+.rz-datatable.po-grid--bounded {
+    height: 100%;
+}
+
+/* Bounded window for a list you scan within. Same shape as .home__picker: the page
+   scrolls normally and this is the only sub-scroll. Used by /catalog's browser-models
+   list. min() so a short viewport gets a proportion and a tall one stops at 34rem. */
+.po-grid--bounded {
+    display: flex;
+    flex-direction: column;
+    height: min(34rem, 60dvh);
+}
+
+/* ── Radzen's reflow mode, given the app's card presentation ──────────────────
+   Below its internal breakpoint RadzenDataGrid stacks each cell into a block with the
+   column title above the value (`.rz-column-title` is display:block there). With six
+   columns that is twelve lines per duel: measured at ~330px per row, so nine duels came to
+   3,119px inside a 464px window on a phone — you could see one and a half of them, and the
+   second was sliced through the middle with nothing to say the box scrolled.
+
+   These rules put the label and the value on ONE line and give each row a card edge, which
+   is exactly what .po-table--cards does for every table the app writes itself. app.css
+   already records that two mobile-table breakpoints exist because RadzenDataGrid exposes no
+   Breakpoint property to retarget; that stays true, and it stays accepted. What is fixed
+   here is that the two also LOOKED nothing alike. ~330px per duel becomes ~150px. */
+@media (max-width: 640px) {
+    .rz-datatable-reflow .rz-data-row {
+        margin-bottom: var(--space-sm);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface-1);
+        overflow: hidden;
+    }
+
+    .rz-datatable-reflow .rz-data-row > td {
+        display: flex !important;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-md);
+        padding: var(--space-2xs) var(--space-smd) !important;
+        border-bottom: 1px solid var(--border) !important;
+        line-height: var(--leading-snug);
+        text-align: right !important;
+    }
+
+    .rz-datatable-reflow .rz-data-row > td:last-child {
+        border-bottom: none !important;
+    }
+
+    /* The value half wraps rather than ellipsising. Radzen's cells truncate by default, which
+       is right in a fixed-width column and wrong in a card row where the space below is free —
+       /catalog's model ids are the identifying field and were rendering as
+       "Qwen2.5-0.5B-Instruct-q4f16_1-MLC…", and the display-name input was clipped at the
+       card's right edge. min-width: 0 is what lets a flex item shrink below its content at
+       all; without it the override has nothing to act on. */
+    .rz-datatable-reflow .rz-data-row > td > *:not(.rz-column-title) {
+        min-width: 0;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    /* Matches .po-table--cards td[data-label]::before exactly — same size, weight, casing
+       and tracking — so a Radzen row and a hand-rolled one read as the same component. */
+    .rz-datatable-reflow .rz-data-row > td .rz-column-title {
+        flex: 0 0 auto;
+        margin: 0;
+        color: var(--text-muted);
+        font-size: var(--text-2xs);
+        font-weight: var(--weight-semibold);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        text-align: left;
+    }
 }
 
 /* The model-profile rating chart. Was an inline Style="width: 100%; height: 16rem" on the
@@ -1495,13 +1821,13 @@ body::before {
 }
 
 /* 3. Holographic Shimmer on Winner Viewport */
-.arena__viewport-panel--winner-holo {
+.arena-panel__box--winner-holo {
     position: relative;
     border-color: var(--accent-green) !important;
     box-shadow: 0 0 28px color-mix(in srgb, var(--accent-green) 35%, transparent) !important;
 }
 
-.arena__viewport-panel--winner-holo::after {
+.arena-panel__box--winner-holo::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -1562,7 +1888,7 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
     .po-btn--laser::before,
-    .arena__viewport-panel--winner-holo::after,
+    .arena-panel__box--winner-holo::after,
     .arena--thermal-alert,
     .telemetry-hud--eco-pulse {
         animation: none;

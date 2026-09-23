@@ -1,0 +1,51 @@
+/* ── BrandMark ────────────────────────────────────────────────────────────────
+   The PL tile + wordmark used in NavMenu and Login. The login form wants a
+   centred, larger take; the navbar wants the same tile with no wordmark below
+   992px (which is what Navmenu's --hide rule does there). */
+
+.brand-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    text-decoration: none;
+    color: inherit;
+    font-weight: var(--weight-700, 700);
+    line-height: 1;
+}
+
+.brand-mark__glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-blue);
+    color: var(--on-accent);
+    border-radius: var(--radius-sm, 4px);
+    font-size: var(--text-md);
+    font-weight: var(--weight-700, 700);
+    letter-spacing: 0.04em;
+    inline-size: 2rem;
+    block-size: 2rem;
+}
+
+.brand-mark__label {
+    font-size: var(--text-md);
+    letter-spacing: 0.01em;
+}
+
+.brand-mark--large {
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.brand-mark--large .brand-mark__glyph {
+    inline-size: 4rem;
+    block-size: 4rem;
+    font-size: var(--text-2xl);
+}
+
+.brand-mark--large .brand-mark__label {
+    font-size: var(--text-xl);
+}
+
+/* Login sits the form vertically centred and large; the navbar keeps the mark
+   inline-level so it sits on the same baseline as the toggler. */

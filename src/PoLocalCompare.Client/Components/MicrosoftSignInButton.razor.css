@@ -1,0 +1,39 @@
+/* ── MicrosoftSignInButton ────────────────────────────────────────────────────
+   The Microsoft mark is trademarked artwork with a mandated presentation — the
+   button background must be white in both themes (CLAUDE.md). */
+
+.ms-sign-in {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    background: #fff;
+    color: #5e5e5e;
+    border: 1px solid #8c8c8c;
+    font-weight: var(--weight-500, 500);
+    text-decoration: none;
+}
+
+.ms-sign-in:hover,
+.ms-sign-in:focus-visible {
+    background: #fff;
+    border-color: var(--accent-blue);
+    color: #5e5e5e;
+}
+
+.ms-sign-in__logo {
+    flex: 0 0 auto;
+}
+
+.ms-sign-in--small {
+    padding-inline: var(--space-sm);
+    padding-block: var(--space-2xs);
+    font-size: var(--text-sm);
+}
+
+.ms-sign-in--large {
+    padding-inline: var(--space-md);
+    padding-block: var(--space-sm);
+    font-size: var(--text-md);
+    inline-size: 100%;
+}

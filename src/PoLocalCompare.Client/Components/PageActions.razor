@@ -1,0 +1,61 @@
+@* ── PageActions ────────────────────────────────────────────────────────────────
+   The bottom-of-page "what next" row. Tournament carried two <a class="po-btn">s under
+   .tourney__actions, Arena's terminal follow-ups shipped under
+   .arena__actions--secondary, and every empty-state row was another bespoke
+   __empty-actions variant — six different classes, one control. Variants collapse the
+   spacing and the phone-vs-desktop gap so callers stop picking a number. *@
+
+@if (Actions.Any() || ChildContent is not null)
+{
+    <div class="@AlignClass page-actions page-actions--@Variant.ToString().ToLowerInvariant()">
+        @ChildContent
+        @foreach (var action in Actions)
+        {
+            var cls = ActionClass(action);
+            @if (action.Disabled)
+            {
+                <button type="button" class="@cls" disabled="@action.Disabled"
+                        @onclick="action.OnClick" title="@(action.Title ?? action.Label)">
+                    @action.Label
+                </button>
+            }
+            else if (!string.IsNullOrEmpty(action.Href))
+            {
+                <a class="@cls" href="@action.Href"
+                   title="@(action.Title ?? action.Label)">@action.Label</a>
+            }
+            else
+            {
+                <button type="button" class="@cls" disabled="@action.Disabled"
+                        @onclick="action.OnClick" title="@(action.Title ?? action.Label)">
+                    @action.Label
+                </button>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public PageActionsAlign Align { get; set; } = PageActionsAlign.End;
+    [Parameter] public PageActionsVariant Variant { get; set; } = PageActionsVariant.Default;
+    [Parameter] public IReadOnlyList<PageActionDescriptor> Actions { get; set; } = [];
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string AlignClass => Align switch
+    {
+        PageActionsAlign.Start => "page-actions--align-start",
+        PageActionsAlign.Center => "page-actions--align-center",
+        _ => "page-actions--align-end"
+    };
+
+    private static string ActionClass(PageActionDescriptor a) => a.Variant switch
+    {
+        PageActionsVariant.Primary => "po-btn po-btn--primary",
+        PageActionsVariant.Warn => "po-btn po-btn--warn",
+        PageActionsVariant.Secondary => "po-btn po-btn--secondary",
+        _ => "po-btn"
+    };
+}
+
+@* Types live in PageActions.razor.cs so the consuming .razor files don't need
+   a using directive for an enum that lives inside the .razor's compiled class scope. *@

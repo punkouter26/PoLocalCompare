@@ -17,10 +17,24 @@
          simply does not appear — which is how the box-sizing fix was initially verified
          against a stale sheet. Bump the number on every CSS edit; the app has a service
          worker, so a plain refresh is not enough on its own. -->
+    <!-- Fonts, as <link> rather than an @import at the top of app.css. An @import cannot be
+         seen by the preload scanner — it is only discovered once app.css has been fetched and
+         parsed — so the font request used to sit behind the stylesheet on the critical path.
+         preconnect opens the two connections (googleapis for the CSS, gstatic for the files)
+         while that is still happening.
+
+         Weights: 400/600/700/800 for Space Grotesk, 400 for JetBrains Mono. The previous
+         request included 500 for both and 600 for the mono face, none of which any rule in
+         the app declares, and omitted 800, which .not-found__icon does — so the one weight
+         that was actually needed was the one not being downloaded, and the browser faked it. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400&display=swap" />
     <link rel="stylesheet" href="_content/Radzen.Blazor/css/default-base.css?v=5" />
-    <link rel="stylesheet" href="css/app.css?v=5" />
+    <link rel="stylesheet" href="css/app.css?v=15" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="PoLocalCompare.Client.styles.css?v=5" rel="stylesheet" />
+    <link href="PoLocalCompare.Client.styles.css?v=15" rel="stylesheet" />
     <!-- Loaded in <head>, before first paint: applying the theme after the body renders
          flashes the wrong palette on every navigation. -->
     <script src="js/theme.js?v=2"></script>
@@ -28,6 +42,17 @@
 </head>
 
 <body>
+    <!-- Liquid-glass refraction, referenced as backdrop-filter: url(#po-liquid) by .po-glass.
+         Applied only under html.po-liquid (Chromium; wow.js decides) and never while the GPU
+         lease is held — see the Liquid glass block in app.css. Fractal noise bends whatever is
+         behind the panel; the displacement is modest so text under it stays readable. -->
+    <svg class="po-svg-defs" aria-hidden="true" focusable="false">
+        <filter id="po-liquid" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.007 0.011" numOctaves="2" seed="7" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="26" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+    </svg>
+
     <div id="app">
         <svg class="loading-progress">
             <circle r="40%" cx="50%" cy="50%" />
@@ -134,13 +159,14 @@
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             const script = document.createElement("script");
-            script.src = "/js/webllm-interop.js?v=3";
+            script.src = "/js/webllm-interop.js?v=4";
             script.async = true;
             document.body.appendChild(script);
         });
     </script>
     <script src="/js/diag-interop.js?v=4"></script>
-    <script src="/js/util.js?v=8"></script>
+    <script src="/js/util.js?v=9"></script>
+    <script src="/js/wow.js?v=1"></script>
     <script src="_content/Radzen.Blazor/Radzen.Blazor.js?v=1"></script>
 </body>
 

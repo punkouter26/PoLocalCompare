@@ -1,0 +1,50 @@
+/* ── ModelTypeBadge ──────────────────────────────────────────────────────────
+   The shared colour palette is the existing --success/info/warn surface/border
+   tokens defined in app.css. Remote (cloud) reads on the blue surface,
+   Browser (local) on green, Ollama (localservice) on yellow.
+
+   The token pairs are opaque (per CLAUDE.md "Status tints are the --*-surface /
+   --*-border tokens, never an rgba() literal"), so the contrast of --accent-x
+   on --x-surface is the same wherever the chip lands. */
+
+.model-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    padding-inline: var(--space-xs);
+    padding-block: 1px;
+    border-radius: var(--radius-sm, 4px);
+    border: 1px solid transparent;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-700, 600);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.model-type-badge--long {
+    font-size: var(--text-sm);
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: var(--weight-600, 600);
+}
+
+.model-type-badge--remote {
+    background: var(--info-surface);
+    border-color: var(--info-border);
+    color: var(--accent-blue);
+}
+
+.model-type-badge--local {
+    background: var(--success-surface);
+    border-color: var(--success-border);
+    color: var(--accent-green);
+}
+
+.model-type-badge--localservice {
+    background: var(--warn-surface);
+    border-color: var(--warn-border);
+    color: var(--accent-yellow);
+}

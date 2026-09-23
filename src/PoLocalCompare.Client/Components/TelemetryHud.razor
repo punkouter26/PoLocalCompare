@@ -31,6 +31,18 @@
                     <span class="telemetry-hud__value telemetry-hud__value--yellow">$@Result.ApiCostUsd.Value.ToString("F6")</span>
                 </div>
             }
+
+            @* Duel cost summary: shown only when BOTH sides have results and at least one has
+               a rate. The page passes TotalCost only into the right-side HUD so the row
+               never appears twice. *@
+            @if (TotalCost.HasValue)
+            {
+                <div class="telemetry-hud__item telemetry-hud__item--duel-total"
+                     aria-label="@($"Estimated total cost for this duel, {TotalCost:F4} USD")">
+                    <span class="telemetry-hud__label">Duel cost</span>
+                    <span class="telemetry-hud__value telemetry-hud__value--yellow">$@TotalCost.Value.ToString("F4")</span>
+                </div>
+            }
         </div>
 
         <details class="telemetry-hud__more">
@@ -89,6 +101,10 @@
 
 @code {
     [Parameter] public DuelResultDto? Result { get; set; }
+
+    /// <summary>Optional total of the two sides' API costs. The Arena page passes this only
+    /// into the right-side HUD so the row never appears twice. Null hides it.</summary>
+    [Parameter] public double? TotalCost { get; set; }
 
     private bool IsHighEco =>
         Result is not null && !Result.IsFailure && (!Result.ApiCostUsd.HasValue || Result.ApiCostUsd.Value <= 0.0001);

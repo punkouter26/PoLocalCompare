@@ -7,21 +7,15 @@
 
 <div class="login">
     <div class="login__card">
-        <div class="login__brand">
-            <span class="login__brand-mark" aria-hidden="true">PL</span>
-            <span class="login__brand-name">PoLocalCompare</span>
-        </div>
+        @* BrandMark — the same logo glyph as the navbar but rendered as a stacked
+           centre-aligned form. *@
+        <BrandMark Size="BrandMarkSize.Large" />
         <p class="login__subtitle">LLM Duel Arena</p>
 
-        <button class="po-btn po-btn--lg po-btn--block login__ms-btn" @onclick="LoginWithMicrosoft">
-            <svg class="login__ms-logo" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="20" height="20">
-                <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-                <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-                <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-            </svg>
-            Sign in with Microsoft
-        </button>
+        @* MicrosoftSignInButton. Below 768px the Login route used to drop the page
+           into the navbar's 14px glyph; this takes the login-large 20px glyph
+           instead, so the two buttons now look like two sizes of one control. *@
+        <MicrosoftSignInButton OnClick="LoginWithMicrosoft" Label="Sign in with Microsoft" />
 
         @if (_allowGuest)
         {

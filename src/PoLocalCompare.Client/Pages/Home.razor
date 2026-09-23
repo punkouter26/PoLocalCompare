@@ -14,7 +14,7 @@
 
 <PageTitle>Compare — PoLocalCompare</PageTitle>
 
-<div class="home">
+<div class="home po-page po-page--wide">
     @* ── Workbench ───────────────────────────────────────────────────────
        Was one 880px column running header → models → prompt → Compare → recent, so the button
        the page exists for sat below every card in the catalog. The picker now scrolls on the
@@ -28,29 +28,29 @@
            what keeps Compare inside the first viewport before any scrolling. The mockup put
            the h1 in the console; that would have placed the page's only h1 after the entire
            model catalog in DOM order, which is the reading order a screen reader gets. *@
-        <header class="home__header">
-            <div class="home__header-row">
-                <h1 class="home__title po-title">Compare two models</h1>
-                @if (_health is not null)
-                {
-                    @* role="status" so the badge is ANNOUNCED when the health probe resolves.
-                       It renders only after _health lands, so for a screen reader this span
-                       is inserted into a live region rather than updated in place — without
-                       the role, "Models ready" / "Remote models offline" appeared silently
-                       and the only way to learn the app's state was to go looking for it.
-                       Polite, not assertive: a health probe finishing must not interrupt
-                       someone mid-sentence in the prompt box. *@
-                    <span class="home__health @HealthBadgeText.ModifierClass(_healthHasRemotes)" role="status" title="@HealthBadgeText.Tooltip(_availability?.Count(a => a.IsAvailable), _models.Count, _health?.Models.CloudMode)">@HealthBadgeText.Label(_healthHasRemotes)</span>
-                }
-            </div>
-            <p class="po-subtitle">Pick your contenders, write a prompt, and watch them battle.</p>
-            @if (_health is not null && !_healthHasRemotes)
-            {
-                <p class="home__health-warning">
-                    ⚠ Remote (Azure OpenAI) deployments are unavailable. Use a Browser or Ollama model to run duels.
-                </p>
-            }
-        </header>
+        @* PageHeader — title, optional health pill, subtitle, and the "remote offline" warning.
+   The warning uses the parameter rather than a CSS modifier because the warning condition
+   is conditional in code, not in markup. The wrapping div still carries .home__header so
+   the grid placement rules in Home.razor.css (column 1, row 1) continue to work. *@
+        <div class="home__header">
+            <PageHeader Title="Compare two models"
+                        Subtitle="Pick your contenders, write a prompt, and watch them battle."
+                        Warning="@(_health is not null && !_healthHasRemotes ? "⚠ Remote (Azure OpenAI) deployments are unavailable. Use a Browser or Ollama model to run duels." : null)">
+                <StatusContent>
+                    @if (_health is not null)
+                    {
+                        @* role="status" so the badge is ANNOUNCED when the health probe resolves.
+                           It renders only after _health lands, so for a screen reader this span
+                           is inserted into a live region rather than updated in place — without
+                           the role, "Models ready" / "Remote models offline" appeared silently
+                           and the only way to learn the app's state was to go looking for it.
+                           Polite, not assertive: a health probe finishing must not interrupt
+                           someone mid-sentence in the prompt box. *@
+                        <span class="home__health @HealthBadgeText.ModifierClass(_healthHasRemotes)" role="status" title="@HealthBadgeText.Tooltip(_availability?.Count(a => a.IsAvailable), _models.Count, _health?.Models.CloudMode)">@HealthBadgeText.Label(_healthHasRemotes)</span>
+                    }
+                </StatusContent>
+            </PageHeader>
+        </div>
 
 
         @* ── Left: pick two models ───────────────────────────────────── *@
@@ -79,12 +79,7 @@
 
             @if (_loading)
             {
-                <div class="home__grid">
-                    @for (var i = 0; i < 6; i++)
-                    {
-                        <div class="skeleton home__skeleton" style="--stagger: @(i * 70)ms"></div>
-                    }
-                </div>
+                <SkeletonGrid Count="6" StaggerMs="70" ItemClass="home__skeleton" OuterClass="home__grid" />
             }
             else if (_loadError is not null)
             {
@@ -97,10 +92,18 @@
             }
             else
             {
+                @* .po-btn--chip, and aria-pressed on every one of them. These were .po-btn + --success
+                   when active, which said "this filter is on" in colour and in nothing else — a
+                   screen reader heard four identical buttons and a viewer who cannot separate
+                   green from grey saw four identical buttons (SC 1.4.1, SC 4.1.2). The chip
+                   modifier in app.css is shared with Archive and PromptPicker, which each had
+                   their own copy of this control. *@
                 <div class="home__filters" role="group" aria-label="Filter models by type">
                     @foreach (var f in _filters)
                     {
-                        <button class="po-btn po-btn--sm @(_modelFilter == f.Key ? "po-btn--success" : "po-btn--secondary")"
+                        <button type="button"
+                                class="po-btn po-btn--sm po-btn--chip"
+                                aria-pressed="@(_modelFilter == f.Key ? "true" : "false")"
                                 @onclick="@(() => _modelFilter = f.Key)">
                             @f.Label (@ModelCountFor(f.Key))
                         </button>
@@ -167,13 +170,13 @@
                keeping on its own, but only when it has nothing to compete with. *@
             @if (_leftModel is null && _rightModel is null)
             {
-                <div class="home__onboard">
-                    <h2 class="home__onboard-title">Try a starter duel</h2>
-                    <p class="home__onboard-hint">New here? Click below to load a working prompt and two lightweight models.</p>
+                <EmptyState Icon="⚡"
+                            Title="Try a starter duel"
+                            Hint="New here? Click below to load a working prompt and two lightweight models.">
                     <button class="po-btn po-btn--secondary" @onclick="LoadStarterDuel">
                         ⚡ Load starter duel
                     </button>
-                </div>
+                </EmptyState>
             }
         </section>
 
@@ -181,15 +184,15 @@
            A plain div rather than an <aside>: it carries the primary action, so it is not
            complementary content. Sticky, with only the top half scrolling, so Compare never
            leaves the viewport however long the catalog gets. *@
-        <div class="home__console">
+        <div class="home__console po-glass">
             <div class="home__console-scroll">
                 <div class="home__slots">
-                    <div class="home__slot @(_leftModel is not null ? "home__slot--set" : "")">
+                    <div class="home__slot home__slot--left @(_leftModel is not null ? "home__slot--set" : "")">
                         <span class="home__slot-tag home__slot-tag--left">Left</span>
                         <span class="home__slot-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
                     </div>
                     <span class="home__slot-vs" aria-hidden="true">vs</span>
-                    <div class="home__slot @(_rightModel is not null ? "home__slot--set" : "")">
+                    <div class="home__slot home__slot--right @(_rightModel is not null ? "home__slot--set" : "")">
                         <span class="home__slot-tag home__slot-tag--right">Right</span>
                         <span class="home__slot-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
                     </div>
@@ -422,16 +425,34 @@
         }
     }
 
+    /// <summary>
+    /// Loads the catalog, then folds the health signals in behind it.
+    /// </summary>
+    /// <remarks>
+    /// The three calls still start together, but <c>_loading</c> is now cleared as soon as
+    /// GET /api/models lands rather than after all three have. That ordering was costing real
+    /// time: GET /api/models/availability sends a REAL 16-token completion to every Foundry
+    /// deployment before it answers, so it is the slowest of the three by design — measured at
+    /// 4,850ms against 2,630ms for the model list on a warm local run, and unbounded when a
+    /// deployment is unreachable. Awaiting it here held the entire picker behind a skeleton for
+    /// those extra 2.2 seconds, to decide a badge in the header and which cards to hold back
+    /// behind the "can't run here" toggle — neither of which the first paint needs.
+    ///
+    /// The 12s guard is kept on the model list, which IS the page. The health continuation is
+    /// deliberately unguarded and deliberately not awaited: if it never returns, the page stays
+    /// exactly as it is, with every model selectable, which is the correct degradation.
+    /// </remarks>
     private async Task LoadAsync()
     {
         _loading = true;
         _loadError = null;
 
+        var healthTask = ApiClient.GetSmokeSnapshotAsync();
+        var availabilityTask = ApiClient.GetModelAvailabilityAsync();
+
         try
         {
             var modelsTask = ApiClient.GetModelsAsync();
-            var healthTask = ApiClient.GetSmokeSnapshotAsync();
-            var availabilityTask = ApiClient.GetModelAvailabilityAsync();
 
             var completed = await Task.WhenAny(modelsTask, Task.Delay(TimeSpan.FromSeconds(12)));
             if (completed != modelsTask)
@@ -441,10 +462,6 @@
             }
 
             _models = (await modelsTask)?.ToList() ?? [];
-            _health = await healthTask;
-            _availability = await availabilityTask;
-            _healthHasRemotes = _models.Any(m => m.ModelType == ModelType.Remote)
-                && _health?.Models.CloudMode != true; // CloudMode hides remotes if Azure is up
 
             // Brute-force the slot lookup from the URL. The named-supply-parameter binding
             // is order-sensitive in this framework version (the first match wins, the second
@@ -466,6 +483,37 @@
         {
             _loading = false;
         }
+
+        _ = ApplyHealthWhenReadyAsync(healthTask, availabilityTask);
+    }
+
+    /// <summary>
+    /// Folds the health snapshot and the availability probe into the page once they land,
+    /// after the catalog is already on screen. A failure leaves <c>_health</c> null, which is
+    /// the same state as "not probed yet": the badge and the unavailable-models split both
+    /// render only when it is non-null, so nothing on the page claims knowledge it lacks.
+    /// </summary>
+    private async Task ApplyHealthWhenReadyAsync(
+        Task<DuelApiClient.SmokeSnapshotDto?> healthTask,
+        Task<IReadOnlyList<ModelAvailabilityDto>?> availabilityTask)
+    {
+        try
+        {
+            _health = await healthTask;
+            _availability = await availabilityTask;
+            _healthHasRemotes = _models.Any(m => m.ModelType == ModelType.Remote)
+                && _health?.Models.CloudMode != true; // CloudMode hides remotes if Azure is up
+        }
+        catch
+        {
+            // Leave the page as it is — every model stays selectable, which is what the user
+            // gets anyway when the probe says nothing useful.
+            return;
+        }
+
+        // InvokeAsync, because this runs on the continuation of a request rather than on a
+        // lifecycle method — the renderer's synchronisation context is not guaranteed here.
+        await InvokeAsync(StateHasChanged);
     }
 
     private void AssignModel(ModelDto model)
@@ -539,7 +587,7 @@
             var dto = await ApiClient.CommenceDuelAsync(
                 _leftModel!.ModelId, _rightModel!.ModelId, _prompt);
             if (dto is not null)
-                Nav.NavigateTo($"/arena/{dto.DuelId}");
+                await NavigateToArenaAsync(dto.DuelId);
             else
                 _error = "Could not start the duel. Please try again.";
         }
@@ -549,8 +597,22 @@
         }
     }
 
-    private string HealthLabel() => HealthBadgeText.Label(_healthHasRemotes);
-    private string HealthClass() => HealthBadgeText.ModifierClass(_healthHasRemotes);
-    private string HealthTooltip() =>
-        HealthBadgeText.Tooltip(_availability?.Count(a => a.IsAvailable), _models.Count, _health?.Models.CloudMode);
+    /// <summary>
+    /// Opens the Arena through a view transition: the two slots morph into the two viewport
+    /// panels (matching view-transition-names in the two stylesheets). The transition waits for
+    /// the viewports to exist, because the Arena renders a loading line first.
+    /// </summary>
+    private async Task NavigateToArenaAsync(DuelId duelId)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("poWow.navigate", $"/arena/{duelId}", ".arena__viewports");
+        }
+        catch (JSException)
+        {
+            // wow.js missing or View Transitions unsupported and the fallback threw: navigate plainly.
+            Nav.NavigateTo($"/arena/{duelId}");
+        }
+    }
+
 }

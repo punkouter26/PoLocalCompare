@@ -1,0 +1,44 @@
+/* ── EmptyState ──────────────────────────────────────────────────────────────
+   Tightens the existing .po-empty treatment: a single icon glyph, the title the page
+   would have used anyway, and the same action row shape that used to be seven different
+   ``__empty-actions`` classes. Geometry: icon capped at 2.5rem, actions wrap on phone. */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+    text-align: center;
+    padding-block: var(--space-xl);
+}
+
+.empty-state__icon {
+    font-size: var(--text-3xl);
+    line-height: 1;
+    opacity: 0.85;
+}
+
+.empty-state__title {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: var(--weight-700);
+}
+
+.empty-state__hint {
+    margin: 0;
+    color: var(--text-secondary);
+    max-inline-size: 36rem;
+}
+
+.empty-state__body {
+    inline-size: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.empty-state__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    justify-content: center;
+}

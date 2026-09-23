@@ -16,10 +16,9 @@
     <div class="navmenu__inner">
         @* aria-label, not the visible wordmark, carries the accessible name: below 992px the
            wordmark is hidden to buy the bar room and the mark itself is decorative. *@
-        <a class="navmenu__brand" href="" aria-label="PoLocalCompare home">
-            <span class="navmenu__brand-mark" aria-hidden="true">PL</span>
-            <span class="navmenu__brand-text">PoLocalCompare</span>
-        </a>
+        @* Brand mark — shared with Login. The brand-text hides at 992px (rule in app.css),
+   but the mark stays. *@
+        <BrandMark Size="BrandMarkSize.Small" Href="" AccessibleLabel="PoLocalCompare home" AdditionalClass="navmenu__brand" />
 
         <button title="Navigation menu" aria-label="Navigation menu" class="navmenu__toggler" @onclick="ToggleNavMenu" aria-expanded="@NavExpanded" aria-controls="navbarLinks">
             <span class="navmenu__toggler-icon" aria-hidden="true"></span>
@@ -47,6 +46,11 @@
                         <span class="navmenu__link-text">Archive</span>
                     </NavLink>
                 </li>
+                @* Catalog was demoted from the top nav. It is the lowest-traffic route on this
+                   page and grew one slot on a phone-sized bar at the cost of crowding the
+                   others — see consolidation pass #10. The /catalog route is still served and
+                   still reachable from the dropdown above the user identity or from
+                   /leaderboard's tooling line. *@
             </ul>
 
             @* ── Live activity ticker ──────────────────────────────────────
@@ -55,21 +59,32 @@
             @if (_tickerVisible)
             {
                 <div class="navmenu__ticker" role="status" aria-live="polite" aria-label="Live duel activity">
-                    @if (Ticker.RunningCount > 0)
+                    @* One grouped chip — "N running · M awaiting". The two stats previously
+                       sat on separate pills on the desktop bar; folding them into one rounds
+                       both numbers into a single visual affordance and gives the bar enough
+                       room to land the auth controls next to it. The link href opens the
+                       awaiting-judgment filter so the click is meaningful regardless of
+                       whether M is zero. *@
+                    @if (Ticker.RunningCount > 0 || Ticker.AwaitingVerdictCount > 0)
                     {
-                        <span class="navmenu__ticker-pill navmenu__ticker-pill--running">
-                            <span class="navmenu__ticker-pulse" aria-hidden="true"></span>
-                            @Ticker.RunningCount running
-                        </span>
-                    }
-                    @if (Ticker.AwaitingVerdictCount > 0)
-                    {
-                        @* Lands on the filtered list, not on everything: the pill counts unjudged
-                           duels, so that is what it should open. *@
-                        <a href="archive?verdict=Unjudged" class="navmenu__ticker-pill navmenu__ticker-pill--pending"
-                           title="Duels that finished but have no verdict yet">
-                            <span aria-hidden="true">⚖</span>
-                            @Ticker.AwaitingVerdictCount awaiting judgment
+                        <a href="archive?verdict=Unjudged" class="navmenu__ticker-pill navmenu__ticker-pill--combined"
+                           title="@TickerSummaryTitle()">
+                            @if (Ticker.RunningCount > 0)
+                            {
+                                <span class="navmenu__ticker-pulse" aria-hidden="true"></span>
+                                <span class="navmenu__ticker-count">@Ticker.RunningCount</span>
+                                <span class="visually-hidden">running</span>
+                            }
+                            @if (Ticker.RunningCount > 0 && Ticker.AwaitingVerdictCount > 0)
+                            {
+                                <span class="navmenu__ticker-sep" aria-hidden="true">·</span>
+                            }
+                            @if (Ticker.AwaitingVerdictCount > 0)
+                            {
+                                <span aria-hidden="true">⚖</span>
+                                <span class="navmenu__ticker-count">@Ticker.AwaitingVerdictCount</span>
+                                <span class="visually-hidden">awaiting judgment</span>
+                            }
                         </a>
                     }
                     @if (_latest is not null)
@@ -108,19 +123,25 @@
                             <span class="navmenu__user-badge-domain">@IdentityDomain</span>
                         }
                     </span>
+                    @* Hidden behind the user badge rather than in the top nav — Catalog is
+                       tooling, not a primary flow. Adding a model is something a returning
+                       user does occasionally; surfacing it next to the four core flows made
+                       the bar 110px wider on a phone for a route that already lives under
+                       /leaderboard's "what model did what" mental model. *@
+                    <a class="navmenu__user-menu-link"
+                       href="catalog"
+                       title="Add browser or Ollama models to the catalog">
+                        <span aria-hidden="true">🧪</span> Catalog
+                    </a>
                     <button class="po-btn po-btn--sm po-btn--secondary" @onclick="LogoutAsync">Logout</button>
                 }
                 else
                 {
-                    <button class="po-btn po-btn--sm navmenu__ms-btn" @onclick="LoginWithMicrosoft">
-                        <svg class="navmenu__ms-logo" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="14" height="14">
-                            <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-                            <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-                            <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-                        </svg>
-                        Sign in
-                    </button>
+                    @* Same control as the Login card, just sized small so it sits in the navbar
+                       alongside the theme toggle. *@
+                    <MicrosoftSignInButton Size="MicrosoftSignInSize.Small"
+                                            Label="Sign in"
+                                            OnClick="LoginWithMicrosoft" />
                     @if (_allowGuest)
                     {
                         <button class="po-btn po-btn--sm po-btn--warn" @onclick="LoginAsGuestAsync">
@@ -201,6 +222,16 @@
         Ticker.RunningCount > 0 || Ticker.AwaitingVerdictCount > 0 || _latest is not null;
 
     private string LatestHref => _latest is null ? "archive" : $"arena/{_latest.DuelId}";
+
+    /// <summary>Tooltip for the grouped activity pill. A screen reader hears both counts
+    /// from the visually-hidden labels; the tooltip is the same sentence for sighted users.</summary>
+    private string TickerSummaryTitle()
+    {
+        var parts = new List<string>();
+        if (Ticker.RunningCount > 0) parts.Add($"{Ticker.RunningCount} running");
+        if (Ticker.AwaitingVerdictCount > 0) parts.Add($"{Ticker.AwaitingVerdictCount} awaiting judgment");
+        return string.Join(" — ", parts);
+    }
 
     private string LatestText => _latest switch
     {

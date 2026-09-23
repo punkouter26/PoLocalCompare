@@ -1,0 +1,19 @@
+/* ── PageActions ─────────────────────────────────────────────────────────────
+   The follow-up row that used to be seven different per-surface action bands. Below
+   640px the row wraps, gap is tokenised against --space-sm so it stays consistent with
+   the rest of the app, and the warn variant inherits .po-btn--warn's amber treatment
+   without each surface redefining it. */
+
+.page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.page-actions--align-start { justify-content: flex-start; }
+.page-actions--align-center { justify-content: center; }
+.page-actions--align-end { justify-content: flex-end; }
+
+.page-actions--primary { /* visually identical to default; reserved for future emphasis */ }
+.page-actions--secondary { /* same */ }
+.page-actions--warn { /* hover ring driven by .po-btn--warn */ }

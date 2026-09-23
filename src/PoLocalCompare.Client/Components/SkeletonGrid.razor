@@ -1,0 +1,31 @@
+@* ── SkeletonGrid ────────────────────────────────────────────────────────────
+   Skeleton placeholders while the catalog or any list is loading. Home was
+   the lone caller with an inline `style="--stagger: @(i * 70)ms"`, which is
+   the only place an inline style survived — the rest of the app passes
+   dynamic CSS values via the --foo custom-property convention, and that
+   pattern is enforced.
+
+   This primitive computes --stagger from its Index parameter so the markup
+   never has to. The .skeleton base class still lives in app.css; this
+   component lays out a row of placeholders sized for the surface it's on. *@
+
+<div class="@OuterClass">
+    @for (var i = 0; i < Count; i++)
+    {
+        <div class="skeleton @ItemClass" style="--stagger: @(i * StaggerMs)ms"></div>
+    }
+</div>
+
+@code {
+    /// <summary>How many skeleton tiles to render.</summary>
+    [Parameter] public int Count { get; set; } = 6;
+
+    /// <summary>Stagger between adjacent tiles in milliseconds.</summary>
+    [Parameter] public int StaggerMs { get; set; } = 70;
+
+    /// <summary>Per-item class (e.g. .home__skeleton) — the geometry lives on this.</summary>
+    [Parameter] public string ItemClass { get; set; } = string.Empty;
+
+    /// <summary>Optional outer container class — defaults to a CSS grid sized like the picker grid.</summary>
+    [Parameter] public string OuterClass { get; set; } = "home__grid";
+}

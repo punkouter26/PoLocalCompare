@@ -1,15 +1,11 @@
+/* ── Page shell ─────────────────────────────────────────────────────────────
+   Geometry from .po-page--wide on the element, like every other route. */
 .arena {
-    padding: var(--space-md);
-    max-width: 1400px;
-    margin: 0 auto;
+    color: var(--text);
 }
 
-.arena__title {
-    font-size: var(--text-2xl);
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: var(--space-sm);
-}
+/* .arena__title carries NO styling — E2E-UI selector hook only. What it declared was a
+   verbatim restatement of the .po-title the same element already has. */
 
 .arena__prompt-label {
     color: var(--text-muted);
@@ -23,26 +19,12 @@
     margin: -0.75rem 0 1rem;
 }
 
-.arena__judge-by {
-    display: block;
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    margin-top: var(--space-xs);
-}
-
 .arena__error {
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-/* A dead-end duel id is a full stop, so it gets somewhere to go rather than one italic line. */
-.arena__not-found {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-4, 1rem);
-    padding-block: var(--space-6, 1.5rem);
-    max-inline-size: 46rem;
+    margin: 0;
+    color: var(--accent-red);
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-normal);
 }
 
 .arena__viewports {
@@ -125,177 +107,8 @@
     }
 }
 
-/* No height floor. The preview inside sizes itself (see SandboxedViewport's --preview-h),
-   and the two sides line up because both frames resolve to the same box — a floor here just
-   pushed the verdict below the fold. A failed side is one small card and needs no reserve. */
-.arena__viewport-panel {
-    display: flex;
-    flex-direction: column;
-    /* Pack to the top and let every child keep its own height. Without this the children
-       stretch to fill the taller of the two panels, which is how the HUD came to overlap
-       the preview when one side finished before the other. */
-    align-items: stretch;
-    justify-content: flex-start;
-    gap: var(--space-sm);
-}
-
-.arena__viewport-panel > * {
-    flex: 0 0 auto;
-    min-height: 0;
-}
-
-.arena__hud {
-    flex-shrink: 0;
-    /* Names a containment context so TelemetryHud can size its metric grid against this panel
-       rather than against the window — the panel is full width on a desktop duel, about half
-       that with two panels side by side, and narrower again on a phone, so the viewport is the
-       wrong thing for it to measure. Without this declaration the component's @container rules
-       match nothing and it falls back to two columns, which is the correct degradation. */
-    container: telemetry / inline-size;
-}
-
-.arena__failure-card {
-    border: 1px solid var(--danger-border);
-    background: var(--danger-surface);
-    border-radius: 6px;
-    padding: var(--space-sm) var(--space-smd);
-    color: var(--accent-red);
-}
-
-.arena__failure-title {
-    font-size: var(--text-md);
-    font-weight: 700;
-    margin-bottom: var(--space-xs);
-}
-
-.arena__failure-body {
-    font-size: var(--text-sm);
-    line-height: 1.35;
-}
-
-.arena__failure-hint {
-    margin-top: var(--space-xs);
-    font-size: var(--text-xs);
-    color: var(--accent-red);
-}
-
-/* Finding #10: collapse raw error JSON behind a disclosure */
-.arena__failure-details {
-    margin-top: var(--space-sm);
-    font-size: var(--text-sm);
-}
-
-.arena__failure-details summary {
-    cursor: pointer;
-    color: var(--accent-red);
-    font-weight: 600;
-    user-select: none;
-    padding: var(--space-2xs) 0;
-}
-
-.arena__failure-details summary:hover {
-    color: var(--text);
-}
-
-.arena__failure-raw {
-    margin: var(--space-sm) 0 0;
-    padding: var(--space-sm);
-    background: var(--surface-1);
-    border: 1px solid var(--danger-border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: var(--text-xs);
-    line-height: 1.4;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 8rem;
-    overflow-y: auto;
-}
-
-.arena__elo-badge {
-    text-align: center;
-    font-size: var(--text-xl);
-    font-weight: 700;
-    padding: var(--space-xs);
-    border-radius: 4px;
-    /* The value counts up in C#; tabular figures stop the badge jittering as digits change. */
-    font-variant-numeric: tabular-nums;
-    animation: arena-elo-in 320ms var(--spring-bounce) both;
-}
-
-@keyframes arena-elo-in {
-    from { opacity: 0; transform: translateY(6px) scale(0.96); }
-    to   { opacity: 1; transform: none; }
-}
-
-/* Modifiers `--positive` and `--negative` were single-rule colour pickers. They now
-   read from the shared `.po-fg--ok` / `.po-fg--err` palette tokens in app.css, so a
-   palette rename (e.g. switching the success-green) propagates here automatically. */
-
-.arena__actions {
-    display: flex;
-    justify-content: center;
-    gap: var(--space-md);
-    padding: var(--space-md) 0;
-    flex-wrap: wrap;
-}
-
-.arena__action-btn {
-    min-width: 180px;
-}
-
-/* The vote row rides the bottom of the viewport until the page scrolls down to its real
-   position, then settles into flow. It occupies its own space either way, so nothing is
-   permanently covered — only what you are scrolling past. Opaque background and a top edge,
-   because it is drawn over the outputs for most of the page. */
-.arena__actions--vote {
-    position: sticky;
-    bottom: 0;
-    z-index: 5;
-    background: var(--surface-1);
-    border-top: 1px solid var(--border);
-    padding: var(--space-smd) var(--space-md);
-    margin-top: var(--space-sm);
-    box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
-}
-
-/* Follow-ups, not the decision: tighter, no forced width, and visually quieter than the
-   vote row above them. Six same-sized large buttons in one row gave the page no primary. */
-.arena__actions--secondary {
-    gap: var(--space-sm);
-    padding-top: 0;
-}
-
-.arena__actions--secondary .arena__action-btn {
-    min-width: 0;
-}
-
-.arena__verdict-recorded {
-    text-align: center;
-    color: var(--accent-green);
-    font-weight: 600;
-    font-size: var(--text-lg);
-    padding: var(--space-sm) var(--space-lg);
-    background: var(--success-surface);
-    border: 1px solid var(--success-border);
-    border-radius: 4px;
-    margin-bottom: var(--space-sm);
-    /* UI#4: sticky verdict bar */
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    box-shadow: var(--glass-shadow);
-}
-
-/* The optimistic window: the pick is on screen but the server has not confirmed it. Muted
-   rather than green so a confirmed verdict and a predicted one never look the same. */
-.arena__verdict-recorded--pending {
-    color: var(--text-muted);
-    background: var(--surface-2);
-    border-color: var(--border-strong);
-}
-
+/* Explains pre-first-token silence for a browser model. Deliberately low-key: it reports
+   that work is happening, so it must not read as an error. */
 /* Shown when an optimistic pick lost the race to the auto-judge. It has to read as a
    correction, not as flavour text — the user's click genuinely did not count. */
 .arena__override-notice {
@@ -310,32 +123,6 @@
     border-radius: 4px;
 }
 
-.arena__judge-note {
-    text-align: center;
-    color: var(--text);
-    font-size: var(--text-md);
-    padding: var(--space-sm) var(--space-smd);
-    margin-bottom: var(--space-sm);
-}
-
-.arena__judge-note--error {
-    color: var(--accent-red);
-    border: 1px solid var(--danger-border);
-    background: var(--danger-surface);
-    border-radius: 4px;
-}
-
-/* Auto-judge countdown. Amber reads as "time pressure" without competing with the red
-   failure note. --accent-yellow on --warn-surface is contrast-checked in both themes. */
-.arena__judge-note--auto {
-    color: var(--accent-yellow);
-    border: 1px solid var(--warn-border);
-    background: var(--warn-surface);
-    border-radius: 4px;
-}
-
-/* Explains pre-first-token silence for a browser model. Deliberately low-key: it reports
-   that work is happening, so it must not read as an error. */
 .arena__stall-note {
     margin: var(--space-sm) 0 0;
     padding: var(--space-sm) var(--space-smd);
@@ -349,64 +136,142 @@
 
 /* Live region over the streaming previews. Had carried a class with no rule at all, so it
    rendered as bare body text; matches .arena__stall-note so the two status lines agree. */
-.arena__generating-notice {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-sm);
-    margin: 0 0 var(--space-smd);
-    padding: var(--space-sm) var(--space-smd);
-    font-size: var(--text-sm);
-    color: var(--text-muted);
-    background: var(--info-surface);
-    border: 1px solid var(--info-border);
-    border-radius: var(--radius-sm);
-}
-
-/* Duel-level cost summary. Sits between the view switcher and the viewport panels so the
-   number lands in the same visual band as the per-side API cost lines in TelemetryHud. */
-.arena__cost-total {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--space-sm);
-    margin: var(--space-smd) 0;
-    padding: var(--space-sm) var(--space-smd);
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: var(--text-md);
-    color: var(--text);
-}
-
-.arena__cost-total-label {
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-.arena__cost-total-value {
-    color: var(--accent-yellow);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
-.arena__cost-total-breakdown {
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    font-variant-numeric: tabular-nums;
-}
 
 /* The judge's stated reason, under the winner line. Quieter than the verdict itself —
    it is supporting evidence, not the headline. */
-.arena__judge-rationale {
-    display: block;
-    margin-top: var(--space-xs);
-    color: var(--accent-green);
-    font-weight: 400;
-    font-size: var(--text-md);
-    font-style: italic;
-}
-
 /* `--met` and `--over` were folded into the shared `.po-fg--ok` / `.po-fg--err` text-only
    modifiers. The `.arena__budget*` rules that sat here went with challenge mode on 2026-09-10. */
 
+
+/* ── Compare → Arena morph ──────────────────────────────────────────
+   Shared-element names matching .home__slot--left/right on Home, so the two model slots fly
+   into the two viewport panels when a duel starts (wow.js navigate()). */
+.arena__viewport-slot--left {
+    view-transition-name: po-fighter-left;
+}
+
+.arena__viewport-slot--right {
+    view-transition-name: po-fighter-right;
+}
+
+/* ── The judge's reticle ────────────────────────────────────────────
+   While the grace window runs, corner brackets frame each panel and a scan beam sweeps it.
+   Transform and opacity only — and inference has finished by the time this can show. */
+.arena__viewports--judging .arena__viewport-slot {
+    position: relative;
+    --reticle: var(--accent-cyan);
+}
+
+.arena__viewports--judging .arena__viewport-slot::before {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--space-xs));
+    pointer-events: none;
+    background:
+        linear-gradient(var(--reticle) 0 0) top left / 1.25rem 2px no-repeat,
+        linear-gradient(var(--reticle) 0 0) top left / 2px 1.25rem no-repeat,
+        linear-gradient(var(--reticle) 0 0) top right / 1.25rem 2px no-repeat,
+        linear-gradient(var(--reticle) 0 0) top right / 2px 1.25rem no-repeat,
+        linear-gradient(var(--reticle) 0 0) bottom left / 1.25rem 2px no-repeat,
+        linear-gradient(var(--reticle) 0 0) bottom left / 2px 1.25rem no-repeat,
+        linear-gradient(var(--reticle) 0 0) bottom right / 1.25rem 2px no-repeat,
+        linear-gradient(var(--reticle) 0 0) bottom right / 2px 1.25rem no-repeat;
+    animation: arena-reticle 1s ease-in-out infinite alternate;
+}
+
+.arena__viewports--judging .arena__viewport-slot::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 14%;
+    pointer-events: none;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(to bottom,
+        transparent,
+        color-mix(in srgb, var(--reticle) 35%, transparent) 70%,
+        color-mix(in srgb, var(--reticle) 85%, transparent) 96%,
+        transparent);
+    animation: arena-scan 1.6s cubic-bezier(.45, .05, .55, .95) infinite;
+}
+
+/* The second panel scans half a beat behind the first, so the judge reads as comparing. */
+.arena__viewports--judging .arena__viewport-slot--right::after {
+    animation-delay: 0.8s;
+}
+
+@keyframes arena-reticle {
+    from { opacity: 0.45; }
+    to   { opacity: 1; }
+}
+
+@keyframes arena-scan {
+    from { transform: translateY(-100%); opacity: 0; }
+    15%  { opacity: 1; }
+    85%  { opacity: 1; }
+    to   { transform: translateY(620%); opacity: 0; }
+}
+
+/* ── The judge's eye ────────────────────────────────────────────────
+   The screenshots the vision judge is actually sent, at their true 320×180. */
+.arena__judge-eye {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    margin: var(--space-md) 0;
+    animation: arena-eye-in 320ms ease-out both;
+}
+
+.arena__judge-eye-label {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.arena__judge-eye-shots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-sm);
+}
+
+.arena__judge-eye-shot {
+    width: min(10rem, 42vw);
+    height: auto;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--accent-cyan);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent-cyan) 30%, transparent);
+    background: var(--surface-2);
+}
+
+@keyframes arena-eye-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* ── Photo finish ───────────────────────────────────────────────────
+   The accessible half of the finish-line strip fx.js paints: the margin, stated. */
+.arena__photo-finish {
+    margin: 0 0 var(--space-sm);
+    text-align: center;
+    color: var(--text);
+    font-weight: var(--weight-semibold);
+    animation: arena-eye-in 320ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .arena__viewports--judging .arena__viewport-slot::before,
+    .arena__judge-eye,
+    .arena__photo-finish {
+        animation: none;
+    }
+
+    /* The beam IS motion; the static corner brackets still say "being judged". */
+    .arena__viewports--judging .arena__viewport-slot::after {
+        display: none;
+    }
+}

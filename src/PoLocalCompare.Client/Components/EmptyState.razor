@@ -1,0 +1,53 @@
+@* ── EmptyState ────────────────────────────────────────────────────────────────
+   The shared "nothing to show yet" card. Used to be reimplemented per route — Archive
+   had archive__empty-actions, Leaderboard had leaderboard__empty-actions, Home's
+   starter duel was an inlined bespoke block, the Arena's not-found and the model
+   profile's retired model both repurposed the same primitive without an Actions slot.
+   The point of this consolidation is that one card with three optional affordances is
+   clearer than seven special cases: Icon drives decoration, Title and Hint render in
+   the same shape every page used to do, and Actions is an ordered list of route targets
+   the caller writes declaratively. *@
+
+<div class="po-empty empty-state">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <span class="empty-state__icon" aria-hidden="true">@Icon</span>
+    }
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <h2 class="empty-state__title">@Title</h2>
+    }
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <p class="empty-state__hint">@Hint</p>
+    }
+    @if (ChildContent is not null)
+    {
+        <div class="empty-state__body">@ChildContent</div>
+    }
+    @if (Actions.Any())
+    {
+        <div class="empty-state__actions">
+            @foreach (var action in Actions)
+            {
+                var modifier = action.Variant == EmptyStateActionVariant.Primary ? "po-btn--primary"
+                    : action.Variant == EmptyStateActionVariant.Secondary ? "po-btn--secondary"
+                    : "po-btn--ghost";
+                <a class="po-btn @modifier" href="@action.Href" title="@(action.Title ?? action.Label)">
+                    @action.Label
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public IReadOnlyList<EmptyStateAction> Actions { get; set; } = [];
+}
+
+@* Types live in EmptyState.razor.cs so the consuming .razor files don't need
+   a using directive for an enum that lives inside the .razor's compiled class scope. *@

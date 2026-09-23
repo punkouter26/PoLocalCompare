@@ -1,0 +1,35 @@
+@* ── BrandMark ────────────────────────────────────────────────────────────────
+   The PL square + wordmark used in NavMenu and Login. Two near-identical
+   implementations (different sizes, otherwise identical SVG-free; the "PL" mark is a
+   CSS-styled square, not artwork). Login loses ~4 rules, and a future rebrand
+   touches one element instead of two. *@
+
+@if (Href is null)
+{
+    <span class="brand-mark brand-mark--@Size.ToString().ToLowerInvariant() @AdditionalClass" aria-label="@AccessibleLabel">
+        <span class="brand-mark__glyph" aria-hidden="true">@Glyph</span>
+        @if (ShowLabel)
+        {
+            <span class="brand-mark__label">PoLocalCompare</span>
+        }
+    </span>
+}
+else
+{
+    <a class="brand-mark brand-mark--@Size.ToString().ToLowerInvariant() @AdditionalClass" href="@Href" aria-label="@AccessibleLabel">
+        <span class="brand-mark__glyph" aria-hidden="true">@Glyph</span>
+        @if (ShowLabel)
+        {
+            <span class="brand-mark__label">PoLocalCompare</span>
+        }
+    </a>
+}
+
+@code {
+    [Parameter] public BrandMarkSize Size { get; set; } = BrandMarkSize.Small;
+    [Parameter] public BrandMarkGlyph Glyph { get; set; } = BrandMarkGlyph.PL;
+    [Parameter] public bool ShowLabel { get; set; } = true;
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public string AccessibleLabel { get; set; } = "PoLocalCompare";
+    [Parameter] public string? AdditionalClass { get; set; }
+}

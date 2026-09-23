@@ -1,0 +1,48 @@
+@* ── MicrosoftSignInButton ─────────────────────────────────────────────────────
+   The Microsoft sign-in control. The SVG is the trademarked Microsoft mark — it
+   has a mandated presentation (CLAUDE.md: "restate a fixed white field because
+   the Microsoft mark is trademarked artwork with a mandated presentation"),
+   so the visual stays identical to the previous form, only the markup has been
+   de-duplicated. Two sizes: small (navbar) and large (login card). *@
+
+@if (Href is not null)
+{
+    <a class="ms-sign-in ms-sign-in--@Size.ToString().ToLowerInvariant() @SizeClass()"
+       href="@Href"
+       aria-label="Sign in with Microsoft">
+        <svg class="ms-sign-in__logo" aria-hidden="true" focusable="false"
+             xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"
+             width="@LogoSize" height="@LogoSize">
+            <rect x="1"  y="1"  width="9" height="9" fill="#f25022" />
+            <rect x="11" y="1"  width="9" height="9" fill="#7fba00" />
+            <rect x="1"  y="11" width="9" height="9" fill="#00a4ef" />
+            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+        </svg>
+        <span class="ms-sign-in__label">@Label</span>
+    </a>
+}
+else
+{
+    <button type="button" class="ms-sign-in ms-sign-in--@Size.ToString().ToLowerInvariant() @SizeClass()"
+            @onclick="OnClick">
+        <svg class="ms-sign-in__logo" aria-hidden="true" focusable="false"
+             xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"
+             width="@LogoSize" height="@LogoSize">
+            <rect x="1"  y="1"  width="9" height="9" fill="#f25022" />
+            <rect x="11" y="1"  width="9" height="9" fill="#7fba00" />
+            <rect x="1"  y="11" width="9" height="9" fill="#00a4ef" />
+            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+        </svg>
+        <span class="ms-sign-in__label">@Label</span>
+    </button>
+}
+
+@code {
+    [Parameter] public MicrosoftSignInSize Size { get; set; } = MicrosoftSignInSize.Large;
+    [Parameter] public string Label { get; set; } = "Sign in with Microsoft";
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private int LogoSize => Size == MicrosoftSignInSize.Small ? 14 : 20;
+    private string SizeClass() => Size == MicrosoftSignInSize.Small ? "po-btn po-btn--sm" : "po-btn po-btn--lg po-btn--block";
+}

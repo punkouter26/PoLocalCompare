@@ -10,6 +10,7 @@
 @inject AudioService AudioService
 @inject FxService Fx
 @inject WebLlmService WebLlm
+@inject IJSRuntime JS
 
 <PageTitle>Tournament — PoLocalCompare</PageTitle>
 
@@ -27,15 +28,14 @@
     @if (_tournament is not null)
     {
         @* ── Bracket view ───────────────────────────────────────────────── *@
-        <header class="po-header">
-            <div class="po-header__row">
-                <h1 class="po-title">@SizeLabel(_tournament.Size)</h1>
+        <PageHeader Title="@SizeLabel(_tournament.Size)">
+            <StatusContent>
                 <span class="tourney__status tourney__status--@_tournament.Status.ToString().ToLowerInvariant()">
                     @StatusLabel(_tournament)
                 </span>
-            </div>
-            <p class="tourney__prompt">@_tournament.PromptText</p>
-        </header>
+            </StatusContent>
+        </PageHeader>
+        <p class="tourney__prompt">@_tournament.PromptText</p>
 
         @if (_tournament.Status == TournamentStatus.Complete && _tournament.ChampionName is not null)
         {
@@ -102,7 +102,10 @@
                         <div class="tourney__round-matches">
                             @foreach (var match in round.OrderBy(m => m.Index))
                             {
-                                <div class="tourney__match po-lift @MatchClass(match)" @key="@($"{match.Round}-{match.Index}")">
+                                @* data-match / data-slot are the comet's addresses (wow.js): a winner's
+                                   light flies from its slot here to the slot it fills next round. *@
+                                <div class="tourney__match po-lift @MatchClass(match)" @key="@($"{match.Round}-{match.Index}")"
+                                     data-match="@($"{match.Round}-{match.Index}")">
                                     @RenderSlot(match, isSlotA: true)
                                     @RenderSlot(match, isSlotA: false)
 
@@ -130,10 +133,10 @@
             </div>
         </div>
 
-        <div class="tourney__actions">
+        <PageActions Align="PageActionsAlign.Center">
             <a class="po-btn po-btn--primary" href="/tournament">⚔ New tournament</a>
             <a class="po-btn" href="/leaderboard">📊 Leaderboard</a>
-        </div>
+        </PageActions>
     }
     else if (_loadingTournament)
     {
@@ -141,23 +144,18 @@
     }
     else if (!string.IsNullOrEmpty(TournamentIdText))
     {
-        <div class="po-empty">
-            <p class="po-empty__hint">
-                No tournament with that id — it may have been wiped with the local storage.
-            </p>
-            <a class="po-btn po-btn--primary" href="/tournament">Draw a new bracket</a>
-        </div>
+        <EmptyState Icon="🏆"
+                    Title="Tournament not found"
+                    Hint="No tournament with that id — it may have been wiped with the local storage."
+                    Actions="@(new[] {
+                        new EmptyStateAction("Draw a new bracket", "/tournament", EmptyStateActionVariant.Primary)
+                    })" />
     }
     else
     {
         @* ── Draw view ──────────────────────────────────────────────────── *@
-        <header class="po-header">
-            <h1 class="po-title">Run a tournament</h1>
-            <p class="po-subtitle">
-                Write a prompt and start. Eight models are drawn for you and every match is
-                judged automatically — re-draw if the field is not what you wanted.
-            </p>
-        </header>
+        <PageHeader Title="Run a tournament"
+                    Subtitle="Write a prompt and start. Eight models are drawn for you and every match is judged automatically — re-draw if the field is not what you wanted." />
 
         <section class="po-section" aria-labelledby="tourney-field-heading">
             <div class="tourney__section-head">
@@ -252,19 +250,15 @@
                       @bind="_prompt"
                       @bind:event="oninput"></textarea>
 
-            <div class="tourney__prompt-picks">
-                @foreach (var template in PromptLibrary.SelfRunning.Take(6))
-                {
-                    <button type="button" class="po-btn po-btn--sm po-btn--secondary"
-                            @key="template.Id"
-                            @onclick="() => _prompt = template.Text">
-                        <span aria-hidden="true">@template.Emoji</span> @template.Title
-                    </button>
-                }
-            </div>
+            @* The shared picker, the same one Home uses. This was a private row of six
+               SelfRunning templates rendered as buttons — a second, smaller prompt library
+               with no categories, no excerpts and no indication of which one was applied,
+               sitting beside a textarea that had also drifted from Home's on border, size
+               and focus treatment. One prompt composer, used twice. *@
+            <PromptPicker CurrentPrompt="@_prompt" OnPromptSelected="@(t => _prompt = t)" />
         </section>
 
-        <div class="tourney__actions">
+        <PageActions Align="PageActionsAlign.Center">
             <button type="button" class="po-btn po-btn--success po-btn--lg"
                     disabled="@(!CanStart)"
                     @onclick="StartAsync">
@@ -276,7 +270,7 @@
                announcement, which is the classic "why won't it work" for a keyboard or screen
                reader user: the reason is on screen but never spoken. *@
             <span class="tourney__start-hint" role="status">@StartHint</span>
-        </div>
+        </PageActions>
 
         @if (_error is not null)
         {
@@ -464,33 +458,34 @@
 
         builder.OpenElement(0, "div");
         builder.AddAttribute(1, "class", css);
+        builder.AddAttribute(2, "data-slot", isSlotA ? "a" : "b");
 
         if (modelId.IsEmpty)
         {
-            builder.OpenElement(2, "span");
-            builder.AddAttribute(3, "class", "tourney__slot-name");
-            builder.AddContent(4, "—");
+            builder.OpenElement(3, "span");
+            builder.AddAttribute(4, "class", "tourney__slot-name");
+            builder.AddContent(5, "—");
             builder.CloseElement();
         }
         else
         {
-            builder.OpenElement(5, "span");
-            builder.AddAttribute(6, "class", "tourney__slot-seed");
-            builder.AddAttribute(7, "title", $"Seed {seed}");
-            builder.AddContent(8, seed);
+            builder.OpenElement(6, "span");
+            builder.AddAttribute(7, "class", "tourney__slot-seed");
+            builder.AddAttribute(8, "title", $"Seed {seed}");
+            builder.AddContent(9, seed);
             builder.CloseElement();
 
-            builder.OpenElement(9, "span");
-            builder.AddAttribute(10, "class", "tourney__slot-name");
-            builder.AddContent(11, name);
+            builder.OpenElement(10, "span");
+            builder.AddAttribute(11, "class", "tourney__slot-name");
+            builder.AddContent(12, name);
             builder.CloseElement();
 
             if (won)
             {
-                builder.OpenElement(12, "span");
-                builder.AddAttribute(13, "class", "tourney__slot-badge");
-                builder.AddAttribute(14, "aria-label", "Winner");
-                builder.AddContent(15, "🏆");
+                builder.OpenElement(13, "span");
+                builder.AddAttribute(14, "class", "tourney__slot-badge");
+                builder.AddAttribute(15, "aria-label", "Winner");
+                builder.AddContent(16, "🏆");
                 builder.CloseElement();
             }
         }
@@ -698,9 +693,11 @@
                 if (fresh is null) continue;
 
                 var wasComplete = _tournament?.Status == TournamentStatus.Complete;
+                var decidedBefore = DecidedKeys(_tournament);
                 _tournament = fresh;
                 await EnsureHubForRunningMatchAsync();
                 await InvokeAsync(StateHasChanged);
+                await AnimateNewlyDecidedAsync(decidedBefore, fresh);
 
                 if (fresh.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
                 {
@@ -739,6 +736,45 @@
             // A failed poll is not a failed run — the bracket is server-side. Stop refreshing
             // rather than replacing what is on screen with an error about fetching it.
             StopPolling();
+        }
+    }
+
+    private static HashSet<string> DecidedKeys(TournamentDto? tournament) =>
+        tournament is null
+            ? []
+            : tournament.Matches.Where(m => m.IsDecided).Select(m => $"{m.Round}-{m.Index}").ToHashSet();
+
+    /// <summary>
+    /// For each match decided since the last poll: the loser's slot tips and drops, and a
+    /// point of light carries the winner to the slot it now fills in the next round. Only on
+    /// the transition — a page opened mid-bracket does not replay the rounds already played.
+    /// Transform-only (wow.js), so it is safe even if the next browser match has started.
+    /// </summary>
+    private async Task AnimateNewlyDecidedAsync(HashSet<string> decidedBefore, TournamentDto fresh)
+    {
+        var fresher = fresh.Matches
+            .Where(m => m.IsDecided && m.WinnerModelId is not null && !decidedBefore.Contains($"{m.Round}-{m.Index}"))
+            .ToList();
+        if (fresher.Count == 0) return;
+
+        try
+        {
+            foreach (var match in fresher)
+            {
+                var winnerIsA = match.WinnerModelId == match.SlotAModelId;
+                var here = $"[data-match=\"{match.Round}-{match.Index}\"]";
+                var next = $"[data-match=\"{match.Round + 1}-{match.Index / 2}\"] [data-slot=\"{(match.Index % 2 == 0 ? "a" : "b")}\"]";
+
+                await JS.InvokeVoidAsync("poWow.knock", $"{here} [data-slot=\"{(winnerIsA ? "b" : "a")}\"]");
+                await JS.InvokeVoidAsync("poWow.comet", $"{here} [data-slot=\"{(winnerIsA ? "a" : "b")}\"]", next);
+            }
+
+            _ = AudioService.PlayKnockoutAsync();
+            _ = AudioService.PlayAdvanceAsync();
+        }
+        catch (JSException)
+        {
+            // Decoration: the bracket has already updated.
         }
     }
 

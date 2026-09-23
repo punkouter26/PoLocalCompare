@@ -1,0 +1,68 @@
+/* ── Page shell ─────────────────────────────────────────────────────────────
+   There isn't one: the page is a plain `.po-page--wide`, in ordinary flow. The Archive fixes
+   its own height and hands the whole remainder to its grid because there the grid IS the
+   page; this page has TWO independent lists (browser builds and Ollama tags), so squeezing
+   them into one viewport would starve whichever came second. */
+
+/* ── The browser-model grid ──────────────────────────────────────────────────
+   A bounded window, not a page-filling one — the same shape as .home__picker, and for the
+   same reason that comment gives: this is a PICKER, a long list you scan within to choose
+   one row from, which is the ordinary case for a second scroll area. The Archive's grid is
+   not a picker, which is why it gets the opposite treatment.
+
+   The height must be DEFINITE, not a max — that is what AllowVirtualization resolves its
+   `height: 100%` against. Measured with a min-height instead: the percentage fell back to
+   auto, the virtualiser went inert, and all ~150 builds rendered at once for a page 24,014px
+   tall on a phone. 28 screens, from the rule that was supposed to bound it.
+
+   min() so a short viewport gets a proportion and a tall one stops at 34rem; below that the
+   page would be mostly grid and the Ollama section would never be visible without scrolling
+   past the whole bundle. */
+/* .catalog__grid-wrap was a no-op wrapper around .po-grid--bounded — folded into the shared
+   modifier in app.css. The class is kept here as a selector hook for the page so future
+   additions have somewhere to land without re-touching app.css. */
+
+.catalog__filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm) var(--space-md);
+    margin-block: var(--space-md);
+}
+
+/* Sits opposite the Low-VRAM chip and reports what the chip is hiding. */
+.catalog__count {
+    margin: 0;
+    margin-inline-start: auto;
+}
+
+.catalog__input {
+    inline-size: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-1);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-sm);
+}
+
+
+/* Build ids are long and unbroken ("Llama-3.2-1B-Instruct-q4f32_1-MLC"); let them wrap on
+   the hyphen-less stretches rather than widen the table past the viewport. */
+.catalog__id {
+    overflow-wrap: anywhere;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--text-sm);
+}
+
+.catalog__hub {
+    margin-inline-start: var(--space-sm);
+    font-size: var(--text-xs);
+}
+
+.catalog__num {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+

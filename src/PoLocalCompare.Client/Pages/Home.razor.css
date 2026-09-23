@@ -1,10 +1,11 @@
 /* ── Page shell ─────────────────────────────────────────────────────────
-   Wider than the old 880px single column, because the page is now two columns: the
-   catalog needs three cards per row for the split to earn its keep. */
+   .po-page--wide carries the width, the gutter and the vertical rhythm, exactly as it does
+   on /catalog, /tournament and /model. This used to be a shell of its own at max-width 1360
+   with its own padding, which is how four routes came to have three different content
+   widths (1200 / 1360 / 1400 on a desktop) and three different phone gutters. The class is
+   kept because the E2E-UI suite and the view-transition hooks point at it, but it no longer
+   competes with the primitive for geometry. */
 .home {
-    max-width: 1360px;
-    margin: 0 auto;
-    padding: var(--space-mlg) var(--space-xs) var(--space-2xl);
     color: var(--text);
 }
 
@@ -19,9 +20,9 @@
     align-items: start;
 }
 
-/* The title occupies only the left column's first row. The console spans both rows, so its
-   sticky box starts level with the title rather than below it — without that the foot, and
-   therefore Compare, opened below the fold and only came into view after a scroll. */
+/* The page's <PageHeader /> lives in the left grid item. The console spans both rows, so
+   its sticky box starts level with the title rather than below it — without that the foot,
+   and therefore Compare, opened below the fold and only came into view after a scroll. */
 .home__header {
     grid-column: 1;
     grid-row: 1;
@@ -45,17 +46,25 @@
     background: var(--surface-1);
 }
 
-/* The nav bar is sticky with a 3.5rem min-height, so the console has to clear it. The 6.5rem
-   subtracted from the height is the console top offset (nav 3.5rem + the article and page
-   padding above it) plus a little breathing room, so the foot lands just inside the fold on
-   first paint as well as once it sticks. The fixed height is what lets the foot stay put
-   while only the middle scrolls. */
+/* The nav bar is sticky, so the console has to clear it: `top` is --nav-height plus the
+   --space-md the article contributes above the page, and the height budget subtracts the
+   same again at the foot. Both read the token rather than restating 3.5rem, and the 6.5rem
+   magic number that used to be here is gone with them.
+
+   max-height, NOT height — and that is the fix, not a tidy-up. As a fixed height this box
+   was 796px on a 1440x900 desktop whatever was in it, and what is in it before you open the
+   prompt library is two slot chips, a textarea and a disclosure button: measured, ~278px of
+   empty glass sat between the library button and the Compare footer, about 35% of the panel,
+   and it was the most conspicuous piece of dead space in the app. A maximum keeps every
+   property the fixed height was there for — the foot stays pinned, only the middle scrolls,
+   and the panel can never grow past the fold — while letting it shrink to its content when
+   there is less of it. */
 .home__console {
     position: sticky;
-    top: 4.5rem;
+    top: calc(var(--nav-height) + var(--space-md));
     /* dvh — this is the sticky console's height, so with vh the Compare button it exists
        to keep on screen was pushed below the fold by exactly the mobile toolbar height. */
-    height: calc(100dvh - 6.5rem);
+    max-height: calc(100dvh - var(--nav-height) - var(--space-xl));
     /* border-box, because there is no global reset: without it the 1.25rem padding and the
        border are added to the height and the foot hangs 42px below the fold. */
     box-sizing: border-box;
@@ -64,9 +73,9 @@
     gap: var(--space-md);
     min-width: 0;
     padding: var(--space-mlg);
-    border: 1px solid var(--border);
+    /* Border, background and blur come from .po-glass on the element: the console is the one
+       large surface that sits over the shader backdrop, so it is where glass reads as glass. */
     border-radius: var(--radius-lg);
-    background: var(--surface-1);
 }
 
 .home__console-scroll {
@@ -109,7 +118,7 @@
 
     .home__console {
         position: static;
-        height: auto;
+        max-height: none;
     }
 
     .home__console-scroll {
@@ -118,30 +127,11 @@
     }
 }
 
-/* ── Header ─────────────────────────────────────────────────────────── */
-.home__header {
-    margin-bottom: var(--space-mlg);
-    text-align: left;
-}
+/* ── Header ───────────────────────────────────────────────────────────
+   .home__title carries NO styling — it is an E2E-UI selector hook and nothing else.
+   PageHeader provides the h1 geometry. */
 
-.home__header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-smd);
-    margin-bottom: var(--space-sm);
-}
-
-.home__title {
-    font-size: clamp(1.75rem, 3vw, 2.25rem);
-    font-weight: 700;
-    margin: 0;
-    letter-spacing: -0.02em;
-    color: var(--text);
-}
-
-/* ── Health pill (Finding #1) ───────────────────────────────────────── */
+/* ── Health pill ────────────────────────────────────────────────────── */
 .home__health {
     display: inline-flex;
     align-items: center;
@@ -157,22 +147,22 @@
 
 .home__health--ok {
     color: var(--accent-green);
-    border-color: rgba(45, 220, 132, 0.4);
-    background: rgba(45, 220, 132, 0.08);
+    border-color: var(--success-border);
+    background: var(--success-surface);
 }
 
 .home__health--warn {
     color: var(--accent-yellow);
-    border-color: rgba(234, 179, 8, 0.4);
-    background: rgba(234, 179, 8, 0.08);
+    border-color: var(--warn-border);
+    background: var(--warn-surface);
 }
 
 .home__health-warning {
     margin: var(--space-smd) 0 0;
     padding: var(--space-sm) var(--space-smd);
     color: var(--accent-yellow);
-    background: rgba(234, 179, 8, 0.08);
-    border: 1px solid rgba(234, 179, 8, 0.3);
+    background: var(--warn-surface);
+    border: 1px solid var(--warn-border);
     border-radius: var(--radius-md);
     font-size: var(--text-md);
 }
@@ -205,6 +195,16 @@
     gap: var(--space-smd);
 }
 
+/* Shared-element names for the Compare → Arena view transition (wow.js): each slot morphs
+   into the Arena viewport panel for the same side, which carries the same name. */
+.home__slot--left {
+    view-transition-name: po-fighter-left;
+}
+
+.home__slot--right {
+    view-transition-name: po-fighter-right;
+}
+
 .home__slot {
     display: flex;
     flex-direction: column;
@@ -219,8 +219,8 @@
 }
 
 .home__slot--set {
-    border-color: rgba(45, 220, 132, 0.5);
-    background: linear-gradient(135deg, rgba(45, 220, 132, 0.06), rgba(45, 220, 132, 0.02));
+    border-color: var(--success-border);
+    background: var(--success-surface);
 }
 
 .home__slot-tag {
@@ -235,12 +235,14 @@
 }
 
 .home__slot-tag--left {
-    background: rgba(18, 184, 207, 0.18);
+    background: var(--cyan-surface);
+    border: 1px solid var(--cyan-border);
     color: var(--accent-cyan);
 }
 
 .home__slot-tag--right {
-    background: rgba(245, 158, 11, 0.18);
+    background: var(--warn-surface);
+    border: 1px solid var(--warn-border);
     color: var(--accent-yellow);
 }
 
@@ -313,7 +315,7 @@
     top: 0.5rem;
     right: 0.5rem;
     background: var(--accent-red);
-    color: #fff;
+    color: var(--on-accent);
     font-size: var(--text-2xs);
     font-weight: 700;
     padding: var(--space-2xs) var(--space-sm);
@@ -327,8 +329,8 @@
 .home__popover {
     margin-bottom: var(--space-md);
     padding: var(--space-smd) var(--space-md);
-    background: linear-gradient(135deg, rgba(18, 184, 207, 0.08), rgba(18, 184, 207, 0.02));
-    border: 1px solid rgba(18, 184, 207, 0.4);
+    background: var(--cyan-surface);
+    border: 1px solid var(--cyan-border);
     border-radius: var(--radius-md);
     animation: fadeIn 0.2s ease-out;
 }
@@ -374,14 +376,29 @@
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.home__textarea:focus {
-    outline: none;
+/* :focus-visible with the ring INTACT. This was `:focus { outline: none }` replacing the
+   app's ring with `0 0 0 3px rgba(18,184,207,0.18)` — an 18%-alpha shadow that cannot reach
+   the 3:1 SC 1.4.11 asks of a focus indicator, on the primary input of the page the app
+   exists for. Two separate faults: the outline was removed for keyboard users as well as
+   pointer ones (`:focus`, not `:focus-visible`), and .home__textarea:focus outranks the
+   global `:focus-visible` rule on specificity, so nothing restored it.
+
+   The cyan border is kept — it is the surface's own affordance and reads on hover-into-focus
+   — but it is now additive to the ring rather than a replacement for it. */
+.home__textarea:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: var(--focus-ring-offset);
+    box-shadow: var(--focus-ring);
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 0 3px rgba(18, 184, 207, 0.18);
+}
+
+/* Pointer focus keeps the quieter treatment, which is what the removed rule was really for. */
+.home__textarea:focus:not(:focus-visible) {
+    border-color: var(--accent-cyan);
 }
 
 .home__textarea--warn {
-    border-color: rgba(234, 179, 8, 0.6);
+    border-color: var(--accent-yellow);
 }
 
 .home__textarea::placeholder {
@@ -411,9 +428,9 @@
 
 /* ── Compare CTA (console, foot — never scrolls away) ────────────────── */
 .home__compare {
-    border: 1px solid rgba(45, 220, 132, 0.25);
+    border: 1px solid var(--success-border);
     border-radius: var(--radius-lg);
-    background: linear-gradient(135deg, rgba(45, 220, 132, 0.04), rgba(18, 184, 207, 0.04));
+    background: var(--success-surface);
 }
 
 /* One row: the readiness copy, then the button pinned right. */
@@ -435,29 +452,6 @@
     padding: 0 var(--space-mlg) var(--space-smd);
     color: var(--accent-red);
     font-size: var(--text-md);
-}
-
-/* ── Onboarding example (Finding #4) ────────────────────────────────── */
-.home__onboard {
-    margin-top: var(--space-lg);
-    padding: var(--space-mlg);
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--surface-1);
-    text-align: center;
-}
-
-.home__onboard-title {
-    margin: 0 0 var(--space-sm);
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--text);
-}
-
-.home__onboard-hint {
-    margin: 0 0 var(--space-smd);
-    font-size: var(--text-md);
-    color: var(--text-muted);
 }
 
 /* Loading placeholders in the model grid. Only the stagger is dynamic — the markup passes
@@ -492,9 +486,19 @@
    page underneath it. */
 @media (max-width: 640px) {
     .home__picker {
-        max-height: 40dvh;
+        /* 52dvh, up from 40. The window was sized when a card was 178px tall, where it made
+           no difference how tall the window was — you saw one model either way. ModelCard is
+           ~80px on a phone now (it drops the parameter and pricing rows below 640px), so the
+           extra 12dvh is the difference between four models visible and three, and the
+           console below it still opens inside the first viewport. */
+        max-height: 52dvh;
         overflow-y: auto;
         overscroll-behavior: contain;
         padding: var(--space-md);
     }
+
+    /* The EmptyState blocks (start slot, starter-duel) live below the catalog grid. The
+       catalog is the bounded scroll window, so on a phone the EmptyState's flex order
+       would naturally come after every card; <EmptyState> is gap-only and we keep it that
+       way here, leaving the picker as a plain block. */
 }

@@ -10,7 +10,7 @@
    viewport, and the ELO badge sits in the panel's foot in both cases. The page passes
    the panel a single `Result` row; nothing on this component reads sibling state. *@
 
-<div class="arena__viewport-panel @((Result?.IsFailure == true) ? "arena__viewport-panel--failed po-bg--err" : "") @(IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena__viewport-panel--winner-holo" : "")">
+<div class="arena-panel__box @((Result?.IsFailure == true) ? "arena-panel__box--failed po-bg--err" : "") @(IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena-panel__box--winner-holo" : "")">
     @if (Result?.IsFailure == true)
     {
         <ArenaFailureCard DisplayName="@DisplayName"
@@ -27,8 +27,8 @@
             IsAwaitingResult="@(StreamingHtml is null && Result is null)"
             />
 
-        <div class="arena__hud">
-            <TelemetryHud Result="Result" />
+        <div class="arena-panel__hud">
+            <TelemetryHud Result="Result" TotalCost="TotalCost" />
         </div>
 
         @if (!string.IsNullOrEmpty(Result?.HtmlOutputRaw))
@@ -71,6 +71,10 @@
 
     /// <summary>The ELO shift to display (already animated by the page).</summary>
     [Parameter] public double? EloShiftDisplay { get; set; }
+
+    /// <summary>Sum of both sides' API costs. Page sets this only on the right panel so the
+    /// "Duel cost" row doesn't render twice.</summary>
+    [Parameter] public double? TotalCost { get; set; }
 
 
     /// <summary>View-source click handler. The page opens the raw HTML in a new tab.</summary>

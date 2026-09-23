@@ -1,32 +1,31 @@
+/* ── Page shell ─────────────────────────────────────────────────────────────
+   Geometry comes from .po-page--wide on the element, the same as every other route. This
+   was its own shell at max-width 1400 with a raw 24px pad, which composed with the article
+   gutter into 36px per side — measured, /archive had the narrowest content column in the
+   app on a phone (318px of a 390px screen) while claiming to be the WIDEST page.
+
+   What is left here is the one thing the primitive cannot do: make the page a flex column
+   so the grid can absorb the leftover height. See .rz-datatable.archive__grid in app.css. */
 .archive {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 24px;
-}
-
-.archive__title {
-    color: var(--text);
-    font-size: var(--text-2xl);
-    margin-bottom: 24px;
-}
-
-.po-empty h2 {
-    margin: 0 0 var(--space-xs);
-    color: var(--text);
-    font-size: var(--text-xl);
-}
-
-.po-empty p {
-    margin: 0;
-    color: var(--text-muted);
-}
-
-.archive__empty-actions {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-smd);
-    margin-top: var(--space-smd);
+    flex-direction: column;
+    /* One gap instead of a per-block margin-bottom on each child. */
+    gap: var(--space-md);
+    /* height, NOT min-height — and the difference is load-bearing rather than stylistic.
+       A percentage height on a child resolves against a DEFINITE height on its containing
+       block, and a min-height is not definite. With min-height here the grid's `height: 100%`
+       fell back to auto, which left AllowVirtualization inert and rendered every row:
+       measured, /catalog went to 24,014px (28 screens) on a phone and /archive to 1,916px.
+       A definite height on the shell is what makes the flex child definite in turn.
+
+       Sanctioned form: never a bare 100dvh inside <main>, which already starts below the
+       sticky nav. --space-md twice is the article's padding-top plus .po-page's own. */
+    height: calc(100dvh - var(--nav-height) - var(--space-md) * 2);
 }
+
+/* .archive__title carries NO styling — E2E-UI selector hook only, and .po-title on the same
+   element is the size. It had a --text-2xl and a raw `margin-bottom: 24px` (the only raw px
+   length left in this file) layered over that primitive. */
 
 .archive__row-actions {
     white-space: nowrap;
@@ -124,35 +123,22 @@
     font-size: var(--text-md);
 }
 
+/* The grid is the page. flex: 1 1 auto with min-height: 0 hands it whatever is left of the
+   viewport after the title, the chips and the footer, which is what removes the dead band
+   that a fixed height left underneath it — 170px on a desktop, 190px on a phone. */
+.archive__grid-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .archive__filters {
     display: flex;
     gap: var(--space-sm);
-    margin-bottom: var(--space-md);
     flex-wrap: wrap;
 }
 
-.archive__filter-chip {
-    padding: var(--space-xs) var(--space-smd);
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--surface-1);
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    cursor: pointer;
-    transition: all 0.15s;
-}
-
-.archive__filter-chip:hover {
-    border-color: var(--text-muted);
-    color: var(--text);
-}
-
-.archive__filter-chip--active {
-    border-color: var(--accent-green);
-    color: var(--accent-green);
-    background: var(--success-surface);
-    font-weight: 700;
-}
 
 .archive__filtered-empty {
     display: flex;
@@ -171,14 +157,6 @@
     margin: 0;
 }
 
-.archive__filter-reset {
-    border: 1px solid var(--text-muted);
-    background: var(--surface-2);
-    color: var(--text);
-    border-radius: 6px;
-    padding: var(--space-xs) var(--space-smd);
-    cursor: pointer;
-}
 
 
 /* ── Responsive ──────────────────────────────────────────────────────────────

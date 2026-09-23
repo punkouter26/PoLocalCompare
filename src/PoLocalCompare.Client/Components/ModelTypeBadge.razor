@@ -1,0 +1,32 @@
+@using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Shared.Presentation
+
+@* ── ModelTypeBadge ───────────────────────────────────────────────────────────
+   Type indicator across the app. Was implemented four times with three CSS blocks
+   and three label words:
+
+     ModelCard         model-card__badge--@Modifier        short
+     Leaderboard       leaderboard__type-badge--@Modifier   short
+     ModelProfile      profile__type--@Modifier             long
+     Home (slot tag)   home__slot-tag--{left|right}         slot accent (cyan / purple)
+
+   The slot tag is a different concept — it says which slot a model occupies, not
+   what kind it is. SlotTag is a separate concern; this primitive is the model-type
+   indicator and is unchanged. Style variants collapse the three implementations. *@
+
+<span class="model-type-badge model-type-badge--@ModelTypeGroup.CssModifier(Type) model-type-badge--@Variant.ToString().ToLowerInvariant() @AdditionalClass"
+      title="@ModelTypeGroup.Label(Type)">
+    @Label
+</span>
+
+@code {
+    [Parameter, EditorRequired] public ModelType Type { get; set; }
+    [Parameter] public ModelTypeBadgeVariant Variant { get; set; } = ModelTypeBadgeVariant.Short;
+    [Parameter] public string? AdditionalClass { get; set; }
+
+    private string Label => Variant switch
+    {
+        ModelTypeBadgeVariant.Long => ModelTypeGroup.Label(Type),
+        _ => ModelTypeGroup.ShortLabel(Type)
+    };
+}

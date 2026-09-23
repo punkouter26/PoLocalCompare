@@ -83,6 +83,14 @@
     font-style: italic;
 }
 
+/* "Duel cost" total — spans both grid columns in the right-side HUD so the row is a
+   clear visual footer, not a sibling of an unrelated figure. */
+.telemetry-hud__item--duel-total {
+    grid-column: 1 / -1;
+    padding-top: var(--space-xs);
+    border-top: 1px dashed var(--border);
+}
+
 
 /* ── Container queries ────────────────────────────────────────────────────
    This HUD is placed inside the Arena's viewport panel, whose width varies far more than the
@@ -90,7 +98,7 @@
    two panels side by side, and narrower again on a phone. A @media query asks the wrong
    question in all three cases — it measures the window, not the box this component was given.
 
-   The panel opts in by declaring itself a container (see .arena__hud), and the metric grid
+   The panel opts in by declaring itself a container (see .arena-panel__hud in ArenaViewportPanel.razor.css), and the metric grid
    then responds to the space it actually has. */
 @container telemetry (max-width: 260px) {
     .telemetry-hud__grid {

@@ -1,5 +1,6 @@
 /* Namespaced .login__ like every other surface. The buttons are .po-btn now, so
-   only the brand-mandated Microsoft field is restated below. */
+   only the brand-mandated Microsoft field is restated below — and it now lives
+   inside MicrosoftSignInButton.razor.css so Login and NavMenu share the rule. */
 .login {
     /* dvh — see app.css .content; 100vh overshoots the visible viewport on mobile. */
     min-height: 100dvh;
@@ -24,59 +25,12 @@
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
 
-.login__brand {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-.login__brand-mark {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.2rem;
-    height: 2.2rem;
-    border-radius: 0.55rem;
-    background: linear-gradient(135deg, rgba(18, 184, 207, 0.28), rgba(45, 220, 132, 0.28));
-    border: 1px solid rgba(18, 184, 207, 0.4);
-    color: var(--text-muted);
-    font-size: var(--text-xs);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-}
-
-.login__brand-name {
-    font-size: var(--text-xl);
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: -0.02em;
-}
-
 .login__subtitle {
     margin: -0.5rem 0 0;
     color: var(--text-muted);
     font-size: var(--text-sm);
     letter-spacing: 0.04em;
     text-transform: uppercase;
-}
-
-/* Microsoft brand button: fixed white field with near-black text in BOTH themes.
-   Deliberately not tokenised and not a .po-btn modifier — the mark is trademarked
-   artwork with a mandated presentation. Geometry still comes from .po-btn. */
-.login__ms-btn {
-    background: #ffffff;
-    color: #1a1a1a;
-    border-color: #ffffff;
-}
-
-.login__ms-btn:hover:not(:disabled) {
-    background: #f0f0f0;
-    border-color: #f0f0f0;
-    color: #1a1a1a;
-}
-
-.login__ms-logo {
-    flex-shrink: 0;
 }
 
 .login__divider {
