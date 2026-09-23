@@ -23,12 +23,32 @@ public static class TournamentsEndpoints
             [FromBody] CreateTournamentRequest request,
             HttpContext httpContext,
             [FromServices] CreateTournamentHandler handler,
+            [FromServices] ITournamentRepository repository,
             [FromServices] TournamentRunner runner,
             [FromServices] IBackgroundTaskQueue taskQueue) =>
         {
             try
             {
                 var actor = IdentityResolver.ResolveActor(httpContext.User);
+
+                // One tournament at a time. The runner holds the single-consumer
+                // BackgroundTaskService slot for the whole life of a bracket, so a second
+                // create would queue behind it and look stuck from the page — which is the
+                // bug this guard prevents. The runner's own resume-on-restart re-queues any
+                // non-terminal bracket via TournamentResumeService, so the only thing we lose
+                // here is the ability to start a fresh bracket while another is still playing.
+                var inFlight = await repository.ListRecentAsync(50);
+                var blocking = inFlight.FirstOrDefault(t =>
+                    t.Status is TournamentStatus.Pending or TournamentStatus.Running);
+                if (blocking is not null)
+                {
+                    return Results.Conflict(new
+                    {
+                        title = "A tournament is already running.",
+                        detail = $"Wait for '{blocking.TournamentId.Value}' to finish before drawing another.",
+                        tournamentId = blocking.TournamentId.Value,
+                    });
+                }
 
                 var dto = await handler.HandleAsync(
                     request.ModelIds ?? [],
@@ -37,7 +57,9 @@ public static class TournamentsEndpoints
 
                 // Queued rather than awaited: a bracket is up to seven duels and takes minutes.
                 // The response carries the drawn bracket so the page can render it immediately
-                // and then watch it fill in.
+                // and then watch it fill in. Per-match items (queued by the runner itself) yield
+                // the slot back to the queue between duels, so a sibling tournament created
+                // moments later can start while this one's first match is judging.
                 taskQueue.QueueBackgroundWork(ct => runner.RunAsync(dto.TournamentId, ct));
 
                 return Results.Created($"/api/tournaments/{dto.TournamentId}", dto);
@@ -53,6 +75,7 @@ public static class TournamentsEndpoints
         .WithName("CreateTournament")
         .WithSummary("Draws a seeded bracket and starts running it.")
         .Produces<TournamentDto>(StatusCodes.Status201Created)
+        .Produces(StatusCodes.Status409Conflict)
         .ProducesValidationProblem();
 
         group.MapGet("/entrants", async ([FromServices] CreateTournamentHandler handler) =>

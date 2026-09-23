@@ -24,7 +24,7 @@ namespace PoLocalCompare.Client.Services;
 /// </remarks>
 public sealed class FxService(IJSRuntime js) : IAsyncDisposable
 {
-    private const string ModulePath = "/js/fx.js?v=4";
+    private const string ModulePath = "/js/fx.js?v=5";
 
     private Task<IJSObjectReference>? _module;
 

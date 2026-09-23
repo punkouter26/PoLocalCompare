@@ -4,6 +4,12 @@
     color: var(--text);
 }
 
+/* The bracket back-link sits on its own line above the title. Layout only — its look is
+   .po-btn--ghost. */
+.arena__back {
+    margin-block-end: var(--space-sm);
+}
+
 /* .arena__title carries NO styling — E2E-UI selector hook only. What it declared was a
    verbatim restatement of the .po-title the same element already has. */
 

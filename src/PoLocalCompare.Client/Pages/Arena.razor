@@ -14,6 +14,16 @@
 <PageTitle>Arena — PoLocalCompare</PageTitle>
 
 <div class="arena po-page po-page--wide">
+    @* The way back to the bracket, when the duel was opened from one. Above the title and
+       rendered in every state — loading, streaming, judged — because a tournament viewer
+       dips into a match and returns, and the bracket keeps running while they are here. *@
+    @if (_tournamentId is { } tournamentId)
+    {
+        <a class="arena__back po-btn po-btn--sm po-btn--ghost" href="@($"/tournament/{tournamentId}")">
+            <span aria-hidden="true">←</span> Back to bracket@(_tournamentMatchLabel is null ? "" : $" · {_tournamentMatchLabel}")
+        </a>
+    }
+
     <h1 class="arena__title po-title">Arena — Judge the Duel</h1>
 
     @if (_loading)
@@ -255,7 +265,15 @@
         @if (!_duelStillRunning)
         {
             <PageActions Align="PageActionsAlign.Center">
-                <a class="po-btn po-btn--primary" href="/">⚔ New duel</a>
+                @if (_tournamentId is { } bracketId)
+                {
+                    <a class="po-btn po-btn--primary" href="@($"/tournament/{bracketId}")">🏆 Back to bracket</a>
+                    <a class="po-btn" href="/">⚔ New duel</a>
+                }
+                else
+                {
+                    <a class="po-btn po-btn--primary" href="/">⚔ New duel</a>
+                }
                 <a class="po-btn" href="/archive">📁 Archive</a>
 
                 @* Re-runs the same pairing and prompt as a brand-new duel. Shown only when a
@@ -290,6 +308,18 @@
     // sent GET /api/duels/ with an empty id, which matched the list route, returned a JSON
     // array, and blew up deserializing it into a single DuelDto.
     private DuelId _duelId => DuelId.From(DuelIdText);
+
+    /// <summary>
+    /// The bracket this duel was opened from, carried as <c>?tournament=</c> by the Tournament
+    /// page's match links. A duel row does not record its tournament, so without the query the
+    /// Arena cannot know it is a bracket match — opened from the Archive it is just a duel.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "tournament")] public string? TournamentIdText { get; set; }
+
+    private TournamentId? _tournamentId => TournamentId.FromOrNull(TournamentIdText);
+
+    /// <summary>"Quarter-final 2" etc., once the bracket has been read; null until then or if it cannot be.</summary>
+    private string? _tournamentMatchLabel;
 
     private DuelDto? _duel;
     private DuelResultDto? _leftResult;
@@ -546,13 +576,17 @@
         // (The previous condition inverted this and prompted exactly when it shouldn't.)
         _locationChangingReg = Nav.RegisterLocationChangingHandler(async ctx =>
         {
+            // Never for a bracket match: the tournament's judge decides it with no grace window,
+            // and the viewer's vote is not what the bracket is waiting on.
             if (_duel?.Verdict == DuelVerdict.Pending && !_verdictRecorded && !_retrying
-                && _duel.AutoJudgeDelaySeconds <= 0)
+                && _duel.AutoJudgeDelaySeconds <= 0 && _tournamentId is null)
             {
                 var confirmed = await JS.InvokeAsync<bool>("confirm", "You haven't picked a winner yet. Leave without voting?");
                 if (!confirmed) ctx.PreventNavigation();
             }
         });
+
+        _ = LoadTournamentMatchLabelAsync();
 
         try
         {
@@ -561,6 +595,34 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// Names the match in the back link ("Semi-final 1"). Decoration only and not awaited: the
+    /// link works without it, so a bracket that fails to load must not hold up the duel.
+    /// </summary>
+    private async Task LoadTournamentMatchLabelAsync()
+    {
+        if (_tournamentId is not { } tournamentId) return;
+
+        try
+        {
+            var tournament = await ApiClient.GetTournamentAsync(tournamentId);
+            var match = tournament?.Matches.FirstOrDefault(m => m.DuelId == _duelId);
+            if (match is null) return;
+
+            var inRound = tournament!.Matches.Count(m => m.Round == match.Round);
+            // "Quarter-finals" names the round; one match of it is "Quarter-final 2".
+            _tournamentMatchLabel = inRound <= 1 ? match.RoundName
+                : match.RoundName.EndsWith("finals", StringComparison.Ordinal)
+                    ? $"{match.RoundName[..^1]} {match.Index + 1}"
+                    : $"{match.RoundName}, match {match.Index + 1}";
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception)
+        {
+            // The plain "Back to bracket" link is already on screen.
         }
     }
 
@@ -580,10 +642,22 @@
                 _leftResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.LeftModelId);
                 _rightResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.RightModelId);
 
-                // If duel is still running, connect SignalR for the live race and preview
-                if (_leftResult is null && _rightResult is null && _duel.CompletedAt is null)
+                // If duel is still running, connect SignalR for the live race and preview.
+                // "Running" is "not both results in yet", NOT "no results yet". The old test
+                // required both rows to be missing, so opening a duel after one side had
+                // finished or failed — routine when you click into a tournament match partway
+                // through — treated it as over: no hub, no stream, and no DuelComplete, so the
+                // other side sat at "Generating…" for good. The verdict still arrived through
+                // the countdown's re-read, which is how a walkover winner ended up on screen
+                // with no output under it.
+                if (_duel.CompletedAt is null && (_leftResult is null || _rightResult is null))
                 {
                     _duelStillRunning = true;
+
+                    // A side that already finished will send no more status updates, so seed
+                    // the race from its stored row rather than leaving it at Initializing.
+                    SeedFinishedSide(Side.Left, _leftResult);
+                    SeedFinishedSide(Side.Right, _rightResult);
                     NoteBrowserModels(_duel);
 
                     // Each model's melody is derived from its id, so it sounds the same every
@@ -604,27 +678,22 @@
                     WebLlm.OnStatusUpdate += OnLocalStatusUpdate;
                     await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), _duelId);
 
+                    // DuelComplete goes once, to whoever is in the group at that moment. A duel
+                    // that finished between the read above and joining the group is never
+                    // announced to this page, which then shows a race that never ends — most
+                    // likely exactly when one side was already done at load. Re-read once now
+                    // that the page is subscribed: any later completion will be pushed.
+                    var current = await ApiClient.GetDuelAsync(_duelId);
+                    if (current?.CompletedAt is not null)
+                        OnDuelComplete(current);
+
                     // Independent ticker: worker silence is exactly when the UI must keep talking.
                     _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
                     _ = RunStallTimerAsync(_stallTimer);
                 }
-                // If a verdict already exists, restore it. A tie or a void counts: both are
-                // terminal with no winner id, so testing the winner id alone would drop them
-                // back into the countdown branch below and re-arm a judge that has already
-                // spoken (or offer vote buttons on a duel that can no longer be judged).
-                if (_duel.Verdict is DuelVerdict.Tie or DuelVerdict.Voided
-                    || (_duel.Verdict != DuelVerdict.Pending && _duel.WinnerModelId is not null))
-                {
-                    _verdictRecorded = true;
-                    _verdictValue = _duel.Verdict;
-                    _winnerModelId = _duel.WinnerModelId;
-                    _loserModelId = _duel.LoserModelId;
-                    _verdictSource = _duel.VerdictSource;
-                    _judgeRationale = _duel.JudgeRationale;
-                    ApplyEloShifts(_duel);
-                    SettleEloDisplay();
-                }
-                else if (!_duelStillRunning)
+                // If a verdict already exists, restore it; otherwise a finished duel resumes
+                // the judge's countdown.
+                if (!TryRestoreVerdict(_duel) && !_duelStillRunning)
                 {
                     // Arrived at an already-finished duel: the server's clock has been running
                     // since CompletedAt, so resume from where it actually is, not from zero.
@@ -1118,6 +1187,44 @@
             _ = AudioService.PlayTokenBlipAsync(velocity, update.Side);
     }
 
+    /// <summary>
+    /// Adopts a verdict already stored on the duel. A tie or a void counts: both are terminal
+    /// with no winner id, so testing the winner id alone would drop them back into the
+    /// countdown branch and re-arm a judge that has already spoken (or offer vote buttons on a
+    /// duel that can no longer be judged).
+    /// </summary>
+    private bool TryRestoreVerdict(DuelDto duel)
+    {
+        if (!(duel.Verdict is DuelVerdict.Tie or DuelVerdict.Voided
+              || (duel.Verdict != DuelVerdict.Pending && duel.WinnerModelId is not null)))
+            return false;
+
+        _verdictRecorded = true;
+        _verdictValue = duel.Verdict;
+        _winnerModelId = duel.WinnerModelId;
+        _loserModelId = duel.LoserModelId;
+        _verdictSource = duel.VerdictSource;
+        _judgeRationale = duel.JudgeRationale;
+        ApplyEloShifts(duel);
+        SettleEloDisplay();
+        return true;
+    }
+
+    private bool _completionHandled;
+
+    /// <summary>Marks a side the page joined too late to watch as finished, from its result row.</summary>
+    private void SeedFinishedSide(Side side, DuelResultDto? result)
+    {
+        if (result is null) return;
+
+        var metrics = _sides[(int)side];
+        // Status, not NoteStatus: that stamps FinishedAt with *now*, and PhotoFinish would then
+        // compare the moment this page loaded against the other side's real finish.
+        metrics.Status = result.IsFailure ? DuelStatus.Failed : DuelStatus.Done;
+        metrics.TokenCount = result.TokenCount;
+        metrics.TokenVelocity = result.TokenVelocity;
+    }
+
     /// <summary>Maps a SignalR side name to the <see cref="Side"/> enum, or null if unknown.</summary>
     private static Side? ParseSide(string side) =>
         side == "Left" ? Side.Left : side == "Right" ? Side.Right : null;
@@ -1252,6 +1359,10 @@
 
     private void OnDuelComplete(DuelDto completedDuel)
     {
+        // Reachable twice: the hub push and the post-connect catch-up read can both see it.
+        if (_completionHandled) return;
+        _completionHandled = true;
+
         _duelStillRunning = false;
         _ = AudioService.SetAmbientDroneAsync(false);
         CheckPhotoFinish();
@@ -1265,7 +1376,12 @@
                 _rightResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.RightModelId);
                 _leftStreamingHtml  = null;
                 _rightStreamingHtml = null;
-                StartAutoJudgeCountdown();
+                // The verdict may already exist — a walkover is decided the moment the duel
+                // completes — and its push may have been missed for the same reason as this one.
+                if (!_verdictRecorded && TryRestoreVerdict(_duel))
+                    await AnimateEloAsync();
+                else
+                    StartAutoJudgeCountdown();
             }
             // Terminal: paint now rather than waiting out a coalescing interval, and drop any
             // pending streaming render so it cannot repaint stale mid-stream state afterwards.

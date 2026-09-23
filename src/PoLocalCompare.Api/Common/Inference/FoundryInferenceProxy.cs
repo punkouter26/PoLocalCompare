@@ -66,7 +66,7 @@ public sealed class FoundryInferenceProxy(
 
         // Reasoning tokens are drawn from max_completion_tokens before visible output, so a
         // reasoning model still needs headroom above the classic budget — but far less of it
-        // now that FoundryChatRequest pins reasoning_effort to minimal. 16,384 existed to
+        // now that FoundryChatRequest pins reasoning_effort to each deployment's floor. 16,384 existed to
         // survive an unbounded default-effort reasoning pass; 8,192 leaves roughly the same
         // room for the document itself while capping the damage if a model ignores the hint.
         var maxTokens = FoundryChatRequest.IsReasoningModel(deploymentName) ? 8_192 : 4_096;

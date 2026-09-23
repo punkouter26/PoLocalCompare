@@ -189,4 +189,30 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    // ── One tournament at a time ───────────────────────────────────────────
+
+    /// <summary>
+    /// The runner holds the single-consumer BackgroundTaskService slot for the whole life of a
+    /// bracket. A second create would queue behind it and look stuck from the page. The
+    /// endpoint surfaces that as a 409 with the running bracket's id, so the page can link the
+    /// user to it instead of letting them stare at "Starting the next match…" forever.
+    /// </summary>
+    [Fact]
+    public async Task Create_WhileAnotherIsInFlight_Returns409WithTheRunningBracketId()
+    {
+        var field = await RegisterFieldAsync("TE InFlight", 2);
+
+        var first = await DrawAsync(field);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var second = await DrawAsync(field);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+
+        var body = await second.Content.ReadFromJsonAsync<JsonElement>();
+        // The conflict body hands the page the id of the running bracket. Without it, the
+        // 409 is just a message the user has nowhere to act on.
+        Assert.True(body.TryGetProperty("tournamentId", out var runningId));
+        Assert.False(string.IsNullOrWhiteSpace(runningId.GetString()));
+    }
+
 }

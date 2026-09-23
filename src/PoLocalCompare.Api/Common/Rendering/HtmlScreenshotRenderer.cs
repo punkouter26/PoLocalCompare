@@ -93,11 +93,14 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
         IBrowserContext? context = null;
         try
         {
-            // Reuse one context per duel across both sides. Launching a context costs ~200 ms
-            // on Chromium even though it inherits from a singleton browser, so two renders for
-            // one judge call otherwise pay 2 × launch + 2 × teardown. The context is read-only
-            // (we never set cookies, never log in) so a single shared instance is safe.
-            context = await GetOrCreateContextAsync(browser, cancellationToken);
+            // One context per render, closed in the finally. This was a shared context cached
+            // in a field "for both sides of a duel" — but the finally below closed it after
+            // every render without clearing the field, so every later render got a dead context,
+            // and the two sides render concurrently, so the first to finish closed it under the
+            // second. Every screenshot failed with TargetClosedException and every duel was
+            // judged from source alone, silently, because failure degrades by design. ~200 ms
+            // per render is the price of a context nothing else can close.
+            context = await NewContextAsync(browser);
             await context.RouteAsync("**/*", route => route.AbortAsync());
 
             var page = await context.NewPageAsync();
@@ -145,16 +148,8 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
             || html.Contains("transition:", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// One context per judge call, shared across both sides. Re-created on demand so a render
-    /// that throws still leaves the next judge call with a fresh, valid context.
-    /// </summary>
-    private IBrowserContext? _sharedContext;
-
-    private async Task<IBrowserContext> GetOrCreateContextAsync(IBrowser browser, CancellationToken ct)
-    {
-        if (_sharedContext is not null) return _sharedContext;
-        return _sharedContext = await browser.NewContextAsync(new BrowserNewContextOptions
+    private static Task<IBrowserContext> NewContextAsync(IBrowser browser) =>
+        browser.NewContextAsync(new BrowserNewContextOptions
         {
             ViewportSize = new ViewportSize
             {
@@ -167,7 +162,7 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
             // straight after.
             JavaScriptEnabled = true,
         });
-    }
+
     private async Task<IBrowser?> GetBrowserAsync(CancellationToken cancellationToken)
     {
         if (_browser is not null) return _browser;

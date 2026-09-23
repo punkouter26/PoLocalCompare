@@ -53,6 +53,12 @@ public class FoundryChatRequestTests
 
         Assert.Equal(16_384, body["max_completion_tokens"]);
         Assert.False(body.ContainsKey("temperature"));
+
+        // The effort floor differs per deployment and an unsupported value is a 400: GPT-5.5
+        // rejects "minimal", which lost it every duel by walkover.
+        Assert.Equal("minimal", body["reasoning_effort"]);
+        var gpt55 = FoundryChatRequest.Build("gpt-5.5", Array.Empty<object>(), 16_384, 0.7, stream: true, includeModelField: false);
+        Assert.Equal("none", gpt55["reasoning_effort"]);
     }
 
     [Theory]

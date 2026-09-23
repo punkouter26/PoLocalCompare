@@ -69,7 +69,7 @@
                         Now: <strong>@RunningMatch.SlotAName</strong> vs <strong>@RunningMatch.SlotBName</strong>
                         @if (RunningMatch.DuelId is { } liveDuelId)
                         {
-                            <a class="tourney__watch" href="@($"/arena/{liveDuelId}")">Watch →</a>
+                            <a class="tourney__watch" href="@DuelUrl(liveDuelId)">Watch →</a>
                         }
                     </span>
                 }
@@ -104,16 +104,29 @@
                             {
                                 @* data-match / data-slot are the comet's addresses (wow.js): a winner's
                                    light flies from its slot here to the slot it fills next round. *@
-                                <div class="tourney__match po-lift @MatchClass(match)" @key="@($"{match.Round}-{match.Index}")"
-                                     data-match="@($"{match.Round}-{match.Index}")">
+                                @* The whole card is the link to the duel. The earlier design only
+                                   rendered a link once a DuelId existed, and the text-only anchor
+                                   it used ("Watch live →") sat under the slots where it was easy to
+                                   miss. Making the card itself the target makes every match — ready,
+                                   running and decided alike — open the Arena on click, and a focus
+                                   ring around it gives keyboard users the same affordance. *@
+                                @* No duel yet means nothing to open. This used to fall back to slot
+                                   A's model profile, so clicking "A vs B" before it started landed
+                                   on a page about A alone — not the match you clicked. *@
+                                var matchUrl = match.DuelId is { } did ? DuelUrl(did) : null;
+                                <a class="tourney__match po-lift @MatchClass(match)"
+                                   href="@matchUrl"
+                                   aria-label="@MatchAriaLabel(match)"
+                                   @key="@($"{match.Round}-{match.Index}")"
+                                   data-match="@($"{match.Round}-{match.Index}")">
                                     @RenderSlot(match, isSlotA: true)
                                     @RenderSlot(match, isSlotA: false)
 
                                     @if (match.DuelId is { } duelId)
                                     {
-                                        <a class="tourney__match-link" href="@($"/arena/{duelId}")">
-                                            @(match.IsDecided ? "View duel →" : "Watch live →")
-                                        </a>
+                                        <span class="tourney__match-link" aria-hidden="true">
+                                            @(match.IsDecided ? "View duel →" : match.IsRunning ? "Watch live →" : "View duel →")
+                                        </span>
                                     }
                                     @if (match.WonOnSeedTieBreak)
                                     {
@@ -125,7 +138,7 @@
                                     {
                                         <span class="tourney__match-error">@match.FailureReason</span>
                                     }
-                                </div>
+                                </a>
                             }
                         </div>
                     </div>
@@ -264,11 +277,21 @@
                     @onclick="StartAsync">
                 @(_starting ? "Drawing…" : "Start tournament →")
             </button>
+            @* Server already rejects a second create with 409; this button is the recovery
+               path so the user does not have to read a raw 409 and figure out where to go. *@
+            @if (_inFlight is { } live)
+            {
+                <a class="po-btn po-btn--lg"
+                   href="@($"/tournament/{live.TournamentId}")">
+                    Watch the running tournament →
+                </a>
+            }
             @* role="status": this hint is the ONLY explanation of why Start is disabled, and
-               it changes as the user types — empty prompt, too short, ready to go. Without a
-               live region the button silently toggles between enabled and disabled with no
-               announcement, which is the classic "why won't it work" for a keyboard or screen
-               reader user: the reason is on screen but never spoken. *@
+               it changes as the user types — empty prompt, too short, ready to go, or a
+               tournament already running. Without a live region the button silently toggles
+               between enabled and disabled with no announcement, which is the classic
+               "why won't it work" for a keyboard or screen reader user: the reason is on
+               screen but never spoken. *@
             <span class="tourney__start-hint" role="status">@StartHint</span>
         </PageActions>
 
@@ -326,6 +349,19 @@
     private string? _error;
     private List<TournamentDto> _recent = [];
 
+    /// <summary>
+    /// The bracket the server says is already in flight when the page loads — used to gate the
+    /// Start button and to deep-link the user to it from the disabled-hint line.
+    /// </summary>
+    /// <remarks>
+    /// Detected from the recent-tournaments list the draw view already loads: a Pending or
+    /// Running row at the top is the one blocking a new draw. The API also rejects a second
+    /// create with a 409, so this is purely a UX gate — the authoritative check is on the server.
+    /// </remarks>
+    private TournamentDto? _inFlight =>
+        _recent.FirstOrDefault(t =>
+            t.Status is TournamentStatus.Pending or TournamentStatus.Running);
+
     // ── Bracket state ────────────────────────────────────────────────────────
     private TournamentDto? _tournament;
     private bool _loadingTournament;
@@ -351,14 +387,36 @@
 
     private bool CanStart => _selected.Count == FieldSize
         && _prompt.Trim().Length >= 10
+        && _inFlight is null
         && !_starting;
 
-    private string StartHint => (_selected.Count == FieldSize, _prompt.Trim().Length >= 10) switch
+    private string StartHint
     {
-        (false, _) => "Not enough models registered to fill a bracket.",
-        (true, false) => "Write a prompt for the bracket.",
-        _ => $"{FieldSize} models · {FieldSize - 1} duels · judged automatically.",
-    };
+        get
+        {
+            if (_inFlight is { } live)
+                return $"A tournament is already running — finish or abandon it before starting a new one.";
+
+            return (_selected.Count == FieldSize, _prompt.Trim().Length >= 10) switch
+            {
+                (false, _) => "Not enough models registered to fill a bracket.",
+                (true, false) => "Write a prompt for the bracket.",
+                _ => $"{FieldSize} models · {FieldSize - 1} duels · judged automatically.",
+            };
+        }
+    }
+
+    /// <summary>
+    /// Accessible label for a match card. Spells out who is playing and the link's action so a
+    /// screen reader user hears what a sighted user sees, rather than a bare "link" announcement.
+    /// </summary>
+    private static string MatchAriaLabel(TournamentMatchDto match) => match.DuelId is null
+        ? $"{match.SlotAName} versus {match.SlotBName}"
+        : match.IsDecided
+            ? $"{match.SlotAName} versus {match.SlotBName} — view the decided duel"
+            : match.IsRunning
+                ? $"{match.SlotAName} versus {match.SlotBName} — watch the live duel"
+                : $"{match.SlotAName} versus {match.SlotBName} — view the duel";
 
     /// <summary>The drawn field, in draw order, resolved back to entrant rows.</summary>
     private IEnumerable<TournamentEntrantDto> DrawnField =>
@@ -408,6 +466,13 @@
 
     private TournamentMatchDto? RunningMatch => _tournament?.Matches.FirstOrDefault(m => m.IsRunning);
 
+    /// <summary>
+    /// A match's Arena link, carrying the bracket it came from. A duel row does not record its
+    /// tournament, so the query string is the only way the Arena knows to offer the way back.
+    /// </summary>
+    private string DuelUrl(DuelId duelId) =>
+        $"/arena/{duelId}?tournament={Uri.EscapeDataString(_tournament!.TournamentId.Value)}";
+
     private static string SizeLabel(int size) => size switch
     {
         2 => "1v1",
@@ -443,7 +508,14 @@
     /// Renders one side of a match. A slot with no model yet is a placeholder rather than a
     /// blank, so an unplayed round reads as "waiting for a winner" instead of as a broken card.
     /// </summary>
-    private RenderFragment RenderSlot(TournamentMatchDto match, bool isSlotA) => builder =>
+    /// <remarks>
+    /// A Razor template, not a hand-written <c>RenderTreeBuilder</c>. The builder version emitted
+    /// elements without this component's CSS scope attribute, so every <c>.tourney__slot*</c>
+    /// rule in Tournament.razor.css matched nothing — the seed ran into the name ("1GPT-4.1
+    /// Mini") and a winner looked exactly like a loser. Markup written in the .razor file is
+    /// stamped with the scope id; markup built in C# is not.
+    /// </remarks>
+    private RenderFragment RenderSlot(TournamentMatchDto match, bool isSlotA)
     {
         var modelId = isSlotA ? match.SlotAModelId : match.SlotBModelId;
         var name = isSlotA ? match.SlotAName : match.SlotBName;
@@ -456,42 +528,22 @@
             + (lost ? " tourney__slot--lost" : "")
             + (modelId.IsEmpty ? " tourney__slot--empty" : "");
 
-        builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", css);
-        builder.AddAttribute(2, "data-slot", isSlotA ? "a" : "b");
-
-        if (modelId.IsEmpty)
-        {
-            builder.OpenElement(3, "span");
-            builder.AddAttribute(4, "class", "tourney__slot-name");
-            builder.AddContent(5, "—");
-            builder.CloseElement();
-        }
-        else
-        {
-            builder.OpenElement(6, "span");
-            builder.AddAttribute(7, "class", "tourney__slot-seed");
-            builder.AddAttribute(8, "title", $"Seed {seed}");
-            builder.AddContent(9, seed);
-            builder.CloseElement();
-
-            builder.OpenElement(10, "span");
-            builder.AddAttribute(11, "class", "tourney__slot-name");
-            builder.AddContent(12, name);
-            builder.CloseElement();
-
-            if (won)
+        return @<div class="@css" data-slot="@(isSlotA ? "a" : "b")">
+            @if (modelId.IsEmpty)
             {
-                builder.OpenElement(13, "span");
-                builder.AddAttribute(14, "class", "tourney__slot-badge");
-                builder.AddAttribute(15, "aria-label", "Winner");
-                builder.AddContent(16, "🏆");
-                builder.CloseElement();
+                <span class="tourney__slot-name">—</span>
             }
-        }
-
-        builder.CloseElement();
-    };
+            else
+            {
+                <span class="tourney__slot-seed" title="@($"Seed {seed}")">@seed</span>
+                <span class="tourney__slot-name">@name</span>
+                @if (won)
+                {
+                    <span class="tourney__slot-badge" aria-label="Winner">🏆</span>
+                }
+            }
+        </div>;
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -597,6 +649,14 @@
                 Nav.NavigateTo($"/tournament/{drawn.TournamentId}");
             else
                 _error = "Could not draw the bracket. Please try again.";
+        }
+        catch (DuelApiClient.TournamentInFlightException ex) when (ex.RunningTournamentId is { } running)
+        {
+            // The server has the authoritative "one at a time" gate. Surface the running
+            // bracket as an error AND offer to take the user there, so the rejection is
+            // navigable rather than just informative.
+            _error = ex.Message;
+            Nav.NavigateTo($"/tournament/{running}");
         }
         catch (Exception ex)
         {

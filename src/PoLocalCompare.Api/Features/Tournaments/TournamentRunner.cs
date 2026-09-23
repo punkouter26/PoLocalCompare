@@ -1,3 +1,4 @@
+using PoLocalCompare.Api.Common.Background;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -19,6 +20,7 @@ namespace PoLocalCompare.Api.Features.Tournaments;
 /// </remarks>
 public sealed class TournamentRunner(
     IServiceScopeFactory scopeFactory,
+    IBackgroundTaskQueue taskQueue,
     ILogger<TournamentRunner> logger)
 {
     /// <summary>
@@ -58,43 +60,55 @@ public sealed class TournamentRunner(
     /// Runs the bracket to completion. Every failure path ends with the tournament marked
     /// Complete or Abandoned — a run that stops silently would leave the page spinning forever.
     /// </summary>
+    /// <remarks>
+    /// Yields the queue slot between batches so a sibling tournament can start its own batch
+    /// while this one is waiting on verdicts. <see cref="BackgroundTaskService"/> is a single
+    /// consumer that awaits each work item before dequeuing the next; without yielding, a
+    /// bracket's verdict-polling loop held the slot for the entire bracket and a fresh create
+    /// looked stuck on "Starting the next match…" from the page. Now the runner kicks off a
+    /// batch, enqueues <em>itself</em> to apply the results, and returns — a new tournament
+    /// created between two batches can start in the slot this one just freed.
+    /// </remarks>
     public async Task RunAsync(TournamentId tournamentId, CancellationToken cancellationToken)
     {
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            using var scope = scopeFactory.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<ITournamentRepository>();
+
+            var tournament = await repository.GetByIdAsync(tournamentId);
+            if (tournament is null)
             {
-                using var scope = scopeFactory.CreateScope();
-                var repository = scope.ServiceProvider.GetRequiredService<ITournamentRepository>();
-
-                var tournament = await repository.GetByIdAsync(tournamentId);
-                if (tournament is null)
-                {
-                    logger.LogWarning("Tournament {TournamentId} vanished mid-run.", tournamentId);
-                    return;
-                }
-
-                if (tournament.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
-                    return;
-
-                // Matches playable at the same moment are independent of one another — round
-                // 1's quarter-finals share no state — so several run at once instead of each
-                // waiting out the one before it. An 8-model bracket was 7 strictly serial
-                // matches; this makes the first round finish in roughly the time of its
-                // slowest match rather than the sum of all four.
-                var batch = tournament.AllPlayable().Take(MaxConcurrentMatches).ToList();
-                if (batch.Count == 0)
-                {
-                    // Nothing playable and no champion: a match failed and the bracket cannot be
-                    // seeded any further. Bracket rounds depend on each other, so there is no
-                    // way to skip past it.
-                    tournament.Abandon("A match could not be decided, so the bracket could not be completed.");
-                    await repository.UpdateAsync(tournament);
-                    return;
-                }
-
-                await PlayBatchAsync(scope.ServiceProvider, repository, tournament, batch, cancellationToken);
+                logger.LogWarning("Tournament {TournamentId} vanished mid-run.", tournamentId);
+                return;
             }
+
+            if (tournament.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
+                return;
+
+            // Matches playable at the same moment are independent of one another — round
+            // 1's quarter-finals share no state — so several run at once instead of each
+            // waiting out the one before it. An 8-model bracket was 7 strictly serial
+            // matches; this makes the first round finish in roughly the time of its
+            // slowest match rather than the sum of all four.
+            var batch = tournament.AllPlayable().Take(MaxConcurrentMatches).ToList();
+            if (batch.Count == 0)
+            {
+                // Nothing playable and no champion: a match failed and the bracket cannot be
+                // seeded any further. Bracket rounds depend on each other, so there is no
+                // way to skip past it.
+                tournament.Abandon("A match could not be decided, so the bracket could not be completed.");
+                await repository.UpdateAsync(tournament);
+                return;
+            }
+
+            await PlayBatchAsync(scope.ServiceProvider, repository, tournament, batch, cancellationToken);
+
+            // Yield the queue slot: enqueue the next step so a sibling tournament can dequeue
+            // and start while this one's batch finishes. The tournament is still ours — the
+            // re-read at the top of the next call picks up where we left off — but the
+            // single-consumer worker is free.
+            taskQueue.QueueBackgroundWork(ct => RunAsync(tournamentId, ct));
         }
         catch (OperationCanceledException)
         {

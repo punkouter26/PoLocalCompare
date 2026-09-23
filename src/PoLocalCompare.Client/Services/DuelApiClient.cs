@@ -216,7 +216,9 @@ public sealed class DuelApiClient
     /// <remarks>
     /// Reads the body on a 400 rather than throwing: every rejection here is a message the user
     /// needs (wrong field size, a browser model in the field, a prompt that is too short), and
-    /// EnsureSuccessStatusCode would discard all of it.
+    /// EnsureSuccessStatusCode would discard all of it. A 409 surfaces as
+    /// <see cref="TournamentInFlightException"/> so the page can link to the running bracket
+    /// rather than just showing the message.
     /// </remarks>
     public async Task<TournamentDto?> CreateTournamentAsync(IReadOnlyList<ModelId> modelIds, string promptText)
     {
@@ -230,8 +232,50 @@ public sealed class DuelApiClient
             throw new InvalidOperationException(detail ?? "That bracket could not be drawn.");
         }
 
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // The body is a small anonymous object the endpoint hands back to identify the
+            // running bracket by id — that is what the page links the user to.
+            var conflict = await TryReadConflictAsync(response);
+            throw new TournamentInFlightException(conflict);
+        }
+
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<TournamentDto>(JsonOptions);
+    }
+
+    /// <summary>
+    /// What the tournaments POST returns on a 409. Kept narrow: the page only needs the
+    /// running tournament's id (to link to it) and a short message to show the user.
+    /// </summary>
+    public sealed record TournamentConflictPayload(string? Title, string? Detail, string? TournamentId);
+
+    private static async Task<TournamentConflictPayload?> TryReadConflictAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<TournamentConflictPayload>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Thrown by <see cref="CreateTournamentAsync"/> when the server rejects the request
+    /// because another tournament is already in flight. Carries the running bracket's id so
+    /// the page can deep-link to it instead of just showing a message.
+    /// </summary>
+    public sealed class TournamentInFlightException : Exception
+    {
+        public string? RunningTournamentId { get; }
+
+        public TournamentInFlightException(TournamentConflictPayload? payload)
+            : base(payload?.Detail ?? payload?.Title ?? "Another tournament is already running.")
+        {
+            RunningTournamentId = payload?.TournamentId;
+        }
     }
 
     /// <summary>Reads one bracket, or null when the id names nothing.</summary>

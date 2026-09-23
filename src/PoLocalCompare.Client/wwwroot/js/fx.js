@@ -145,7 +145,7 @@ export function burst(options = {}) {
         const dt = Math.min((now - previous) / 1000, 0.05);
         previous = now;
 
-        const elapsed = now - started;
+        const elapsed = Math.max(0, now - started);
         const life = elapsed / durationMs;
 
         if (life >= 1) {
@@ -231,7 +231,11 @@ export function shockwave(options = {}) {
     const started = performance.now();
 
     function frame(now) {
-        const elapsed = now - started;
+        // Clamped: rAF's timestamp is the frame's START, which can precede the
+        // performance.now() taken above, so the first frame's elapsed is often slightly
+        // negative. Here that made the eased radius negative, arc() threw, and the throw
+        // skipped the cleanup — leaking the overlay canvas and the active count.
+        const elapsed = Math.max(0, now - started);
         const progress = Math.min(elapsed / durationMs, 1);
 
         if (progress >= 1) {
@@ -345,7 +349,7 @@ export function shardShatter(options = {}) {
         const dt = Math.min((now - prev) / 1000, 0.05);
         prev = now;
 
-        const elapsed = now - started;
+        const elapsed = Math.max(0, now - started);
         const life = elapsed / durationMs;
 
         if (life >= 1) {
@@ -458,7 +462,7 @@ export function championPyrotechnics(options = {}) {
         const dt = Math.min((now - prev) / 1000, 0.05);
         prev = now;
 
-        const elapsed = now - started;
+        const elapsed = Math.max(0, now - started);
         const life = elapsed / durationMs;
 
         if (life >= 1) {
@@ -575,7 +579,7 @@ export function moteTransfer(fromSelector, toSelector, count = 24) {
     const started = performance.now();
 
     function frame(now) {
-        const elapsed = now - started;
+        const elapsed = Math.max(0, now - started);
 
         let allDone = true;
         ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
@@ -697,7 +701,7 @@ export function photoFinish(data) {
     }
 
     function frame(now) {
-        const elapsed = now - started;
+        const elapsed = Math.max(0, now - started);
         if (elapsed >= total) {
             overlay.canvas.remove();
             active--;

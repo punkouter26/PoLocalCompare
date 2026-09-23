@@ -46,25 +46,6 @@ public sealed class GetModelAvailabilityHandler(
             httpClientFactory.CreateClient("Foundry"),
             new SemaphoreSlim(MaxConcurrentProbes, MaxConcurrentProbes));
 
-        // Hoisted probe-body strings — the deployment-route and model-inference-route bodies
-        // are identical across every model (same probe prompt, same budget, same fields).
-        // Building them once instead of JsonSerializer.Serialize'ing per model removes an
-        // allocation per model per poll: 17 saves per call, every refresh.
-        var probeMessages = new[] { new { role = "user", content = "Say OK." } };
-        // Reasoning models (gpt-5*, o-series) reject max_tokens/temperature with HTTP 400, and
-        // reasoning tokens count against the budget. Probe a representative model to learn the
-        // shape — Foundry is single-shape today; revisit if/when reasoning probes start
-        // diverging per deployment.
-        var representativeDeployment = models.FirstOrDefault(m => m.ModelType != ModelType.Local && m.ModelType != ModelType.LocalService)
-            ?.ApiEndpointRef;
-        var (deploymentBody, inferenceBody) = string.IsNullOrWhiteSpace(representativeDeployment)
-            ? (null, null)
-            : (JsonSerializer.Serialize(FoundryChatRequest.Build(representativeDeployment, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: false)),
-               JsonSerializer.Serialize(FoundryChatRequest.Build(representativeDeployment, probeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField: true)));
-
-        foundry.DeploymentProbeBody = deploymentBody;
-        foundry.InferenceProbeBody = inferenceBody;
-
         // Startup-side warning: when the registry names Ollama tags that the daemon does not
         // have, the picker offers pairings that 404 on submit. Surface the mismatch once at
         // process boot so the operator can fix the seed (e.g. `ollama cp gemma4:26b gemma4:latest`)
@@ -126,14 +107,22 @@ public sealed class GetModelAvailabilityHandler(
     // ── Foundry ───────────────────────────────────────────────────────────────
 
     /// <summary>Open connections to Foundry, throttled per probe to honour rate limits.</summary>
-    private sealed record FoundryProbeContext(string? Endpoint, string? ApiKey, HttpClient Client, SemaphoreSlim Throttle)
-    {
-        /// <summary>Identical probe body for the deployment route, reused across every model.</summary>
-        public string? DeploymentProbeBody { get; set; }
+    private sealed record FoundryProbeContext(string? Endpoint, string? ApiKey, HttpClient Client, SemaphoreSlim Throttle);
 
-        /// <summary>Identical probe body for the model-inference route, reused across every model.</summary>
-        public string? InferenceProbeBody { get; set; }
-    }
+    private static readonly object[] ProbeMessages = [new { role = "user", content = "Say OK." }];
+
+    /// <summary>
+    /// The probe body for one deployment. Built per model, not once per poll: the body's shape
+    /// depends on the deployment (reasoning models take <c>max_completion_tokens</c> and a
+    /// reasoning effort, classic ones <c>max_tokens</c> and a temperature), and the
+    /// model-inference route names the model in the body. The hoisted version built both from
+    /// the first remote model in the catalog, so every GPT-5 deployment was sent a classic body,
+    /// answered 400 and was reported unavailable — and the 404 fallback asked about the wrong
+    /// model entirely.
+    /// </summary>
+    private static string ProbeBody(string deploymentName, bool includeModelField) =>
+        JsonSerializer.Serialize(FoundryChatRequest.Build(
+            deploymentName, ProbeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField));
 
     private static async Task<(HttpStatusCode StatusCode, string Body)> SendProbeAsync(
         HttpClient client,
@@ -202,16 +191,11 @@ public sealed class GetModelAvailabilityHandler(
 
         var deploymentName = model.ApiEndpointRef;
 
-        // Empty body strings are the "no remote models in this poll" signal — every probe
-        // is short-circuited as Unavailable, with the same diagnostic as the missing endpoint.
-        if (string.IsNullOrWhiteSpace(foundry.DeploymentProbeBody) || string.IsNullOrWhiteSpace(foundry.InferenceProbeBody))
-            return Unavailable(model, "AzureAiFoundry endpoint or API key is missing.");
-
         try
         {
             var (deploymentStatus, _) = await SendProbeAsync(
                 foundry.Client, FoundryChatRequest.DeploymentUrl(foundry.Endpoint, deploymentName),
-                foundry.ApiKey, foundry.DeploymentProbeBody, foundry.Throttle, ct);
+                foundry.ApiKey, ProbeBody(deploymentName, includeModelField: false), foundry.Throttle, ct);
 
             if ((int)deploymentStatus is >= 200 and < 300)
                 return Available(model);
@@ -222,7 +206,7 @@ public sealed class GetModelAvailabilityHandler(
             {
                 var (inferenceStatus, _) = await SendProbeAsync(
                     foundry.Client, FoundryChatRequest.ModelInferenceUrl(foundry.Endpoint),
-                    foundry.ApiKey, foundry.InferenceProbeBody, foundry.Throttle, ct);
+                    foundry.ApiKey, ProbeBody(deploymentName, includeModelField: true), foundry.Throttle, ct);
 
                 if ((int)inferenceStatus is >= 200 and < 300)
                     return Available(model);

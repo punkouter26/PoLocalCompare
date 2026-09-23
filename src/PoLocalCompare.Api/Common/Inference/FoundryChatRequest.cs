@@ -16,10 +16,25 @@ public static class FoundryChatRequest
     public const string ApiVersion = "2024-12-01-preview";
 
     /// <summary>
-    /// Reasoning budget for GPT-5 / o-series deployments. See the note at the call site for why
-    /// this workload wants the floor rather than the default.
+    /// The lowest reasoning effort a deployment accepts. See the note at the call site in
+    /// <see cref="Build"/> for why this workload wants the floor rather than the default.
     /// </summary>
-    public const string ReasoningEffort = "minimal";
+    /// <remarks>
+    /// The floor is not one value across the family, and an unsupported one is a hard HTTP 400,
+    /// not a fallback. It was a single <c>"minimal"</c> constant until GPT-5.5 joined the catalog
+    /// and failed every duel with "'reasoning_effort' does not support 'minimal' with this model.
+    /// Supported values are: 'none', 'low', 'medium', 'high', and 'xhigh'" — which a tournament
+    /// shows as its opponent winning by walkover. The original GPT-5 and the 5.4 family accept
+    /// <c>minimal</c>; GPT-5.5 replaced it with <c>none</c>; the o-series never had either.
+    /// A new GPT-5 deployment that 400s on this field needs its prefix added here.
+    /// </remarks>
+    public static string ReasoningEffortFor(string deploymentName)
+    {
+        var n = deploymentName.ToLowerInvariant();
+        if (n.StartsWith("gpt-5.5")) return "none";
+        if (n.StartsWith("o1") || n.StartsWith("o3") || n.StartsWith("o4")) return "low";
+        return "minimal";
+    }
 
     /// <summary>
     /// Per-deployment chat route. A name that is not a deployment in this resource 404s here
@@ -208,13 +223,12 @@ public static class FoundryChatRequest
             // visible character — billed at output rates, and paid on the clock the TokenRace
             // is measuring. That is close to pure waste for this workload: the task is "return
             // an HTML document", the output format is fixed, and there is no multi-step problem
-            // to think through. Minimal keeps the reasoning path available (these models reject
-            // being asked to skip it) while spending as little of the budget on it as the API
-            // allows.
+            // to think through. So ask for the lowest effort each deployment allows — which
+            // differs across the family; see ReasoningEffortFor.
             //
             // Deployments that predate the parameter ignore an unknown field rather than
-            // rejecting it, so this is safe across the catalog.
-            body["reasoning_effort"] = ReasoningEffort;
+            // rejecting it; a value a deployment does not support, however, is rejected.
+            body["reasoning_effort"] = ReasoningEffortFor(deploymentName);
         }
         else
         {
