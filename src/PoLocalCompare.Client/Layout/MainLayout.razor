@@ -5,6 +5,8 @@
 @inject IJSRuntime JS
 @inject FxService Fx
 @inject AudioService AudioService
+@inject NavigationManager Nav
+@implements IDisposable
 
 <canvas id="po-living-canvas" aria-hidden="true"></canvas>
 
@@ -65,6 +67,17 @@
         if (firstRender)
         {
             await Fx.InitLivingCanvasAsync("po-living-canvas");
+            Nav.LocationChanged += OnLocationChanged;
         }
     }
+
+    /// <summary>
+    /// The shader backdrop decides from the route whether it may run: never where a browser
+    /// model could be inferring. Blazor navigation is pushState, which fires no event the
+    /// module could hear for itself.
+    /// </summary>
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = Fx.SetLivingRouteAsync("/" + Nav.ToBaseRelativePath(e.Location));
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

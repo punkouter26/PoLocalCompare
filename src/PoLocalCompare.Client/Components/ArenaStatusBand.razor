@@ -1,0 +1,164 @@
+@using PoLocalCompare.Shared.Enums
+@using PoLocalCompare.Shared.Presentation
+
+@* ── The Arena's status band ───────────────────────────────────────────────────
+   One region saying one thing. This was two @if chains and a loose notice in Arena.razor,
+   branching across nine separate flags, and each arm carried its own role="status" — ten live
+   regions on that page, several of which could update in the same frame. A polite live region
+   that fires ten times is a worse experience than one that fires once: a screen reader queues
+   them and reads the lot, so the countdown, the cost summary and the verdict all arrive in a
+   row with no indication which one the user was waiting for.
+
+   So: one element, one role="status", and its content chosen by ArenaPhase. The wording of
+   every arm is carried over verbatim — each sentence was argued for and some of them are the
+   fix for a specific misreading (a walkover is not a judgement about quality; a tie moved no
+   rating; "Nobody picked in time" explains why the AI is deciding). Changing the structure
+   is not a licence to reword them.
+
+   SC 4.1.3 Status Messages: announced without moving focus. That matters most in
+   JudgeCountdown, where the thing a user is racing the clock to reach is the vote buttons
+   BELOW this band — stealing focus here would take it away from them. *@
+
+@if (Phase is not ArenaPhase.Idle)
+{
+    <div class="@BandClass" role="status">
+        @switch (Phase)
+        {
+            case ArenaPhase.Running:
+                <span><span aria-hidden="true">⚡</span> Duel in progress — previewing output as it streams…</span>
+                break;
+
+            case ArenaPhase.WaitingForOtherModel:
+                <span>
+                    <span aria-hidden="true">⏳</span>
+                    First result is in — waiting for the other model to finish.
+                </span>
+                break;
+
+            case ArenaPhase.BothSidesFailed:
+                <span>Both models failed — start a new duel with a different pairing.</span>
+                break;
+
+            case ArenaPhase.JudgeDeciding:
+                <span><span aria-hidden="true">⚖</span> Nobody picked in time — the AI judge is deciding…</span>
+                break;
+
+            case ArenaPhase.JudgeCountdown:
+                <span>
+                    <span aria-hidden="true">⚖</span>
+                    Pick the winner below — otherwise the AI judge decides in
+                    <strong>@AutoJudgeRemaining</strong> @(AutoJudgeRemaining == 1 ? "second" : "seconds").
+                </span>
+                break;
+
+            case ArenaPhase.AwaitingHumanPick:
+                <span><span aria-hidden="true">⚖</span> Pick the winner below.</span>
+                break;
+
+            case ArenaPhase.VerdictOptimistic:
+                <span>Winner: <strong>@WinnerDisplayName</strong> — recording…</span>
+                break;
+
+            case ArenaPhase.VerdictVoided:
+                @* Terminal with nothing to judge: no winner to name, no rating that moved.
+                   Before this branch existed a voided duel rendered with no status line at
+                   all and no vote buttons — a page with nothing to say about why. *@
+                <span>
+                    <span aria-hidden="true">⊘</span>
+                    Duel voided — there was no result to judge, so no rating moved.
+                </span>
+                break;
+
+            case ArenaPhase.VerdictTie:
+                @* A tie has no winner to name, so it says what happened instead — and says
+                   explicitly that ratings did not move, because "no winner" otherwise reads
+                   as "the judge never ran". *@
+                <span>
+                    <span aria-hidden="true">🤝</span>
+                    Judged a tie — both outputs were found equivalent, so no rating moved.
+                </span>
+                break;
+
+            case ArenaPhase.VerdictWalkover:
+                @* No model read the outputs here — one side simply did not produce any. Said
+                   plainly, so a walkover is never mistaken for a judgement about quality.
+                   This used to read "Won on the challenge budget"; challenge mode was removed
+                   on 2026-09-10, but AutoJudge and DuelRecoverySweeper still stamp Constraint
+                   for one-sided failures and abandoned duels. *@
+                <span>Won by walkover — Winner: <strong>@WinnerDisplayName</strong></span>
+                break;
+
+            case ArenaPhase.VerdictByAi:
+                <span>Decided by the AI judge — Winner: <strong>@WinnerDisplayName</strong></span>
+                break;
+
+            default:
+                <span>Verdict recorded ✓ — Winner: <strong>@WinnerDisplayName</strong></span>
+                break;
+        }
+
+        @* The judge's own words, where there are any. Quoted for the two phases where a model
+           was actually reading the outputs and is being paraphrased; unquoted for a walkover
+           and a void, where the sentence is a statement of fact about the duel rather than a
+           judgement someone made. *@
+        @if (!string.IsNullOrWhiteSpace(JudgeRationale) && ShowsRationale)
+        {
+            <span class="arena-band__rationale">@(QuotesRationale ? $"“{JudgeRationale}”" : JudgeRationale)</span>
+        }
+
+        @* Forensic attribution — visible to the user, but never used for authorization.
+           For Human verdicts this is the clicker; for AI verdicts this is null and we
+           fall back to the deployment name. *@
+        @if (Phase is ArenaPhase.VerdictByHuman && !string.IsNullOrWhiteSpace(VerdictBy))
+        {
+            <span class="arena-band__by">Judged by <strong>@VerdictBy</strong></span>
+        }
+        else if (Phase is ArenaPhase.VerdictByAi or ArenaPhase.VerdictWalkover
+                 && !string.IsNullOrWhiteSpace(JudgeModel))
+        {
+            <span class="arena-band__by">Judge: <strong>@JudgeModel</strong></span>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ArenaPhase Phase { get; set; }
+
+    /// <summary>Seconds left in the grace window — read only in <see cref="ArenaPhase.JudgeCountdown"/>.</summary>
+    [Parameter] public int? AutoJudgeRemaining { get; set; }
+
+    /// <summary>The winner's resolved display name, for the four phases that name one.</summary>
+    [Parameter] public string? WinnerDisplayName { get; set; }
+
+    /// <summary>The judge's one-line reason, when it gave one.</summary>
+    [Parameter] public string? JudgeRationale { get; set; }
+
+    /// <summary>The human who clicked, for a Human verdict.</summary>
+    [Parameter] public string? VerdictBy { get; set; }
+
+    /// <summary>The judge deployment name, for an AI or Constraint verdict.</summary>
+    [Parameter] public string? JudgeModel { get; set; }
+
+    private bool ShowsRationale =>
+        Phase is ArenaPhase.VerdictVoided
+              or ArenaPhase.VerdictTie
+              or ArenaPhase.VerdictWalkover
+              or ArenaPhase.VerdictByAi;
+
+    private bool QuotesRationale =>
+        Phase is ArenaPhase.VerdictTie or ArenaPhase.VerdictByAi;
+
+    /// <summary>
+    /// The band's own class. Three visual treatments, matching what the separate blocks used
+    /// to carry: the settled verdict panel, the judge's note, and the live streaming notice.
+    /// </summary>
+    private string BandClass => Phase switch
+    {
+        ArenaPhase.Running => "arena-band__box arena-band__box--live",
+        ArenaPhase.BothSidesFailed => "arena-band__box arena-band__box--error",
+        ArenaPhase.JudgeDeciding or ArenaPhase.JudgeCountdown => "arena-band__box arena-band__box--judging",
+        ArenaPhase.WaitingForOtherModel or ArenaPhase.AwaitingHumanPick => "arena-band__box arena-band__box--note",
+        ArenaPhase.VerdictOptimistic => "arena-band__box arena-band__box--verdict arena-band__box--pending",
+        _ => "arena-band__box arena-band__box--verdict",
+    };
+}

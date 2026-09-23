@@ -262,6 +262,38 @@ public sealed class DuelApiClient
         return await _http.GetFromJsonAsync<IReadOnlyList<ModelAvailabilityDto>>("/api/models/availability", JsonOptions);
     }
 
+    /// <summary>Models that can be added at runtime and are not in the catalog yet.</summary>
+    public async Task<ModelDiscoveryDto?> GetModelDiscoveryAsync()
+    {
+        return await _http.GetFromJsonAsync<ModelDiscoveryDto>("/api/models/discover", JsonOptions);
+    }
+
+    /// <summary>
+    /// Adds one discovered model. Throws <see cref="InvalidOperationException"/> carrying the
+    /// server's reason on a 400 or 409 — "no prebuiltAppConfig entry", "already in the
+    /// catalog" — because that sentence is the whole of what the page needs to show.
+    /// </summary>
+    public async Task<ModelDto?> AddDiscoveredModelAsync(AddDiscoveredModelRequest request)
+    {
+        var response = await _http.PostAsJsonAsync("/api/models/discovered", request, JsonOptions);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ValidationProblemShape>(JsonOptions);
+            throw new InvalidOperationException(
+                problem?.Errors?.SelectMany(e => e.Value).FirstOrDefault() ?? "That model cannot be added.");
+        }
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            var conflict = await response.Content.ReadFromJsonAsync<ConflictShape>(JsonOptions);
+            throw new InvalidOperationException(conflict?.Error ?? "That model is already in the catalog.");
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ModelDto>(JsonOptions);
+    }
+
     // ── Diagnostics ──────────────────────────────────────────────────────────
     // Ollama's two probes are deliberately absent here. /diag drives them straight from
     // diag-models.js (fetch), because that page has to work when the WASM client is the broken
@@ -307,4 +339,10 @@ public sealed class DuelApiClient
 internal sealed class ValidationProblemShape
 {
     public Dictionary<string, string[]>? Errors { get; set; }
+}
+
+/// <summary>The <c>{ error }</c> body the API's 409 responses carry.</summary>
+internal sealed class ConflictShape
+{
+    public string? Error { get; set; }
 }

@@ -7,7 +7,7 @@
 
 @if (Value.HasValue)
 {
-    <div class="arena__elo-badge @(Value.Value >= 0 ? "po-bg--ok po-fg--ok" : "po-bg--err po-fg--err")">
+    <div class="elo-shift__badge @(Value.Value >= 0 ? "po-bg--ok po-fg--ok" : "po-bg--err po-fg--err")">
         ELO @FormatSignedValue(Value.Value)
     </div>
 }

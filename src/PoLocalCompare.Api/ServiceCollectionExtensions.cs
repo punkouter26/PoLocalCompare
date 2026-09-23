@@ -8,6 +8,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<RegisterModelHandler>();
         services.AddScoped<ListModelsHandler>();
+        services.AddScoped<DiscoverModelsHandler>();
+        services.AddScoped<AddDiscoveredModelHandler>();
         services.AddScoped<CommenceDuelHandler>();
         services.AddScoped<GetDuelHandler>();
         services.AddScoped<GetLeaderboardHandler>();

@@ -1,0 +1,62 @@
+/* ── ArenaFailureCard ────────────────────────────────────────────────────────
+   Moved out of Arena.razor.css, where these rules could not reach this component's markup.
+   See the note in ArenaViewportPanel.razor.css for the mechanism and the measurement. */
+
+.arena-failure__card {
+    border: 1px solid var(--danger-border);
+    background: var(--danger-surface);
+    border-radius: 6px;
+    padding: var(--space-sm) var(--space-smd);
+    color: var(--accent-red);
+}
+
+.arena-failure__title {
+    font-size: var(--text-md);
+    font-weight: 700;
+    margin-bottom: var(--space-xs);
+}
+
+.arena-failure__body {
+    font-size: var(--text-sm);
+    line-height: 1.35;
+}
+
+.arena-failure__hint {
+    margin-top: var(--space-xs);
+    font-size: var(--text-xs);
+    color: var(--accent-red);
+}
+
+/* Finding #10: collapse raw error JSON behind a disclosure */
+.arena-failure__details {
+    margin-top: var(--space-sm);
+    font-size: var(--text-sm);
+}
+
+.arena-failure__details summary {
+    cursor: pointer;
+    color: var(--accent-red);
+    font-weight: 600;
+    user-select: none;
+    padding: var(--space-2xs) 0;
+}
+
+.arena-failure__details summary:hover {
+    color: var(--text);
+}
+
+.arena-failure__raw {
+    margin: var(--space-sm) 0 0;
+    padding: var(--space-sm);
+    background: var(--surface-1);
+    border: 1px solid var(--danger-border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--text-xs);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 8rem;
+    overflow-y: auto;
+}

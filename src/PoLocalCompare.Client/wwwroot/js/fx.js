@@ -1,22 +1,32 @@
 /**
- * fx.js — Canvas2D particle bursts for the app's two payoff moments.
- *
- * Deliberately NOT a WebGL/WebGPU renderer, and deliberately not a persistent loop.
+ * fx.js — the app's canvas effects: one-shot payoff bursts, the photo-finish strip, and the
+ * shader backdrop behind idle pages.
  *
  * Browser models run WebLLM inference over WebGPU in this same tab, and the tok/s the race
  * reports is measured while that is happening. A render loop stealing GPU would not merely
  * look bad, it would make the number the app exists to report wrong — and slow a browser
- * model's own generation while it is being timed. So the only effects here are one-shot, they
- * run on Canvas2D rather than the 3D pipeline, and they are fired at moments when inference
- * has already finished: a verdict landing and a champion being crowned.
+ * model's own generation while it is being timed. Two rules follow from that:
  *
- * Everything self-terminates. The canvas is created on demand, animated for well under a
- * second, and removed — there is no idle cost when nothing is celebrating.
+ *   1. Every effect here checks the GPU lease (window.poGpuLease, util.js) and does nothing
+ *      while it is held. webllm-interop.js holds it for exactly the life of a WebLLM worker.
+ *   2. The one-shots are Canvas2D, run for well under three seconds and remove their canvas.
+ *      The only continuous effect — the backdrop — is WebGL2 at quarter resolution, capped at
+ *      30 fps, only on routes where nothing can be inferring, and it STOPS (no idle rAF) the
+ *      moment the lease is taken, the tab is hidden or the route changes.
  */
 
 /** Hard ceiling on concurrent bursts, so a fast click-through cannot stack canvases. */
 const MAX_ACTIVE = 2;
 let active = 0;
+
+/** True while a WebLLM worker holds the GPU — see util.js. */
+function gpuBusy() {
+    try {
+        return !!window.poGpuLease?.busy();
+    } catch {
+        return false;
+    }
+}
 
 function prefersReducedMotion() {
     try {
@@ -71,6 +81,7 @@ function createOverlay() {
  * @param {number} options.durationMs
  */
 export function burst(options = {}) {
+    if (gpuBusy()) return;
     // Respecting reduced-motion by not animating at all, rather than by animating faster.
     // A confetti burst has no non-moving equivalent worth substituting.
     if (prefersReducedMotion()) return;
@@ -196,6 +207,7 @@ export function burstFrom(selector, options = {}) {
  * High-speed expanding radial displacement shockwave for photo-finishes and impacts.
  */
 export function shockwave(options = {}) {
+    if (gpuBusy()) return;
     if (prefersReducedMotion()) return;
     if (active >= MAX_ACTIVE + 2) return;
     if (!document.body) return;
@@ -280,6 +292,7 @@ export function shockwaveFrom(selector, options = {}) {
  * Explodes angular polygonal glass/light shards from an element on verdict landing.
  */
 export function shardShatter(options = {}) {
+    if (gpuBusy()) return;
     if (prefersReducedMotion()) return;
     if (active >= MAX_ACTIVE + 2) return;
     if (!document.body) return;
@@ -396,6 +409,7 @@ export function shardShatterFrom(selector, options = {}) {
  * Multi-stage grand celebration with 3D tumbling ribbon confetti and golden embers.
  */
 export function championPyrotechnics(options = {}) {
+    if (gpuBusy()) return;
     if (prefersReducedMotion()) return;
     if (active >= MAX_ACTIVE + 2) return;
     if (!document.body) return;
@@ -511,6 +525,7 @@ export function championPyrotechnicsFrom(selector) {
  * Transfers glowing energy motes from the loser to the winner's Elo badge.
  */
 export function moteTransfer(fromSelector, toSelector, count = 24) {
+    if (gpuBusy()) return;
     if (prefersReducedMotion()) return;
     if (!document.body) return;
 
@@ -601,97 +616,420 @@ export function moteTransfer(fromSelector, toSelector, count = 24) {
     requestAnimationFrame(frame);
 }
 
-// ── 5. Reactive Living Atmosphere Background ─────────────────────────────────
 
-let livingCanvas = null;
-let livingCtx = null;
-let livingState = 'idle'; // 'idle' | 'battle' | 'victory'
-let livingPaused = false;
-let livingAnimId = null;
+// ── 5. Photo finish ──────────────────────────────────────────────────────────
 
 /**
- * Initializes the subtle ambient reactive canvas behind MainLayout.
- * Auto-pauses during local WebGPU inference so it never steals GPU compute!
+ * A slit-scan strip of the race, shown when both models cross the line almost together.
+ *
+ * Each lane is the side's tok/s history laid out left to right, one column per sample, with
+ * height and brightness tracking pace — the same data the race sparklines drew, read the way a
+ * finish-line camera reads a race. Fired from the Arena on DuelComplete, so inference is over
+ * by construction; the lease check still runs, because a tournament tab can start the next
+ * browser match while a duel page is open.
+ *
+ * Decorative: the Arena states the margin as text in a status region, so this canvas is
+ * aria-hidden like every other overlay here.
+ *
+ * @param {object} data
+ * @param {{name: string, history: number[]}} data.left
+ * @param {{name: string, history: number[]}} data.right
+ * @param {string} data.winner  display name of whoever crossed first
+ * @param {number} data.marginMs
  */
-export function initLivingCanvas(canvasId = 'po-living-canvas') {
-    if (prefersReducedMotion()) return;
-    livingCanvas = document.getElementById(canvasId);
-    if (!livingCanvas) return;
+export function photoFinish(data) {
+    if (prefersReducedMotion() || gpuBusy()) return;
+    if (!document.body || !data) return;
 
-    livingCtx = livingCanvas.getContext('2d');
-    if (!livingCtx) return;
+    const overlay = createOverlay();
+    const ctx = overlay.ctx;
+    if (!ctx) {
+        overlay.canvas.remove();
+        return;
+    }
 
-    const resize = () => {
-        if (!livingCanvas) return;
-        livingCanvas.width = window.innerWidth;
-        livingCanvas.height = window.innerHeight;
-    };
-    window.addEventListener('resize', resize);
-    resize();
+    active++;
 
-    let step = 0;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = Math.min(640, vw - 32);
+    const laneH = 46;
+    const h = laneH * 2 + 96;
+    const x0 = (vw - w) / 2;
+    const y0 = Math.max(24, vh * 0.3 - h / 2);
 
-    function render() {
-        if (!livingPaused && livingCtx && livingCanvas) {
-            step += (livingState === 'battle' ? 0.015 : 0.005);
+    const lanes = [
+        { ...data.left, color: token('--accent-cyan', '#12b8cf') },
+        { ...data.right, color: token('--accent-purple', '#7d96ff') },
+    ];
+    const text = token('--text', '#e6edf3');
+    const surface = token('--surface-1', '#131b2d');
 
-            const w = livingCanvas.width;
-            const h = livingCanvas.height;
+    const develop = 520;   // the strip "develops" left to right
+    const hold = 1700;
+    const fade = 420;
+    const total = develop + hold + fade;
+    const started = performance.now();
 
-            livingCtx.clearRect(0, 0, w, h);
+    function drawLane(lane, y, reveal) {
+        const history = lane.history && lane.history.length ? lane.history : [0];
+        const peak = Math.max(1, ...history);
+        const cols = history.length;
+        const colW = (w - 32) / cols;
+        const limit = Math.ceil(cols * reveal);
 
-            // Orbiting soft plasma color nodes
-            const node1X = w * (0.25 + 0.15 * Math.sin(step * 0.8));
-            const node1Y = h * (0.2 + 0.1 * Math.cos(step * 0.6));
-            const node2X = w * (0.75 + 0.12 * Math.cos(step * 0.7));
-            const node2Y = h * (0.3 + 0.15 * Math.sin(step * 0.9));
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(x0 + 16, y, w - 32, laneH);
 
-            const radius = Math.max(w, h) * 0.45;
+        for (let i = 0; i < limit; i++) {
+            const k = Math.max(0.08, history[i] / peak);
+            ctx.globalAlpha = 0.25 + k * 0.75;
+            ctx.fillStyle = lane.color;
+            // Taller columns for faster samples: the strip reads as a waveform of pace.
+            const colH = laneH * (0.35 + k * 0.65);
+            ctx.fillRect(x0 + 16 + i * colW, y + (laneH - colH) / 2, Math.max(1, colW - 1), colH);
+        }
+        ctx.globalAlpha = 1;
 
-            // Node 1: Left color
-            const grad1 = livingCtx.createRadialGradient(node1X, node1Y, 0, node1X, node1Y, radius);
-            const color1 = livingState === 'victory'
-                ? 'rgba(234, 179, 8, 0.08)'
-                : 'rgba(18, 184, 207, 0.07)';
-            grad1.addColorStop(0, color1);
-            grad1.addColorStop(1, 'transparent');
+        ctx.fillStyle = text;
+        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.fillText(lane.name ?? '', x0 + 20, y - 6);
+    }
 
-            // Node 2: Right color
-            const grad2 = livingCtx.createRadialGradient(node2X, node2Y, 0, node2X, node2Y, radius);
-            const color2 = livingState === 'victory'
-                ? 'rgba(255, 215, 0, 0.06)'
-                : livingState === 'battle'
-                    ? 'rgba(45, 220, 132, 0.08)'
-                    : 'rgba(83, 166, 255, 0.05)';
-            grad2.addColorStop(0, color2);
-            grad2.addColorStop(1, 'transparent');
-
-            livingCtx.fillStyle = grad1;
-            livingCtx.fillRect(0, 0, w, h);
-
-            livingCtx.fillStyle = grad2;
-            livingCtx.fillRect(0, 0, w, h);
+    function frame(now) {
+        const elapsed = now - started;
+        if (elapsed >= total) {
+            overlay.canvas.remove();
+            active--;
+            return;
         }
 
-        livingAnimId = requestAnimationFrame(render);
+        const reveal = Math.min(1, elapsed / develop);
+        const alpha = elapsed > develop + hold
+            ? 1 - (elapsed - develop - hold) / fade
+            : Math.min(1, elapsed / 140);
+
+        ctx.clearRect(0, 0, vw, vh);
+
+        ctx.save();
+        ctx.fillStyle = surface;
+        ctx.globalAlpha = alpha * 0.94;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x0, y0, w, h, 14);
+        else ctx.rect(x0, y0, w, h);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = text;
+        ctx.font = '800 13px system-ui, sans-serif';
+        ctx.fillText('PHOTO FINISH', x0 + 16, y0 + 24);
+
+        drawLane(lanes[0], y0 + 50, reveal);
+        ctx.globalAlpha = alpha;
+        drawLane(lanes[1], y0 + 50 + laneH + 22, reveal);
+        ctx.globalAlpha = alpha;
+
+        // The finish line flashes once the strip has fully developed.
+        if (reveal >= 1) {
+            const flash = Math.max(0, 1 - (elapsed - develop) / 380);
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = alpha * (0.55 + flash * 0.45);
+            ctx.fillRect(x0 + w - 18, y0 + 40, 3, laneH * 2 + 36);
+            ctx.globalAlpha = alpha;
+
+            ctx.fillStyle = text;
+            ctx.font = '700 13px system-ui, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(`${data.winner} by ${(data.marginMs / 1000).toFixed(2)} s`, x0 + w - 16, y0 + 24);
+            ctx.textAlign = 'left';
+        }
+        ctx.restore();
+
+        requestAnimationFrame(frame);
     }
 
-    if (!livingAnimId) render();
+    requestAnimationFrame(frame);
 }
 
-/** Sets the living atmosphere state ('idle', 'battle', 'victory') */
-export function setLivingState(state) {
-    livingState = state;
-}
+// ── 6. Shader backdrop ───────────────────────────────────────────────────────
 
 /**
- * CRITICAL WebGPU Invariant: Pauses living canvas when local WebLLM inference begins
- * to safeguard 100% of GPU compute pipelines for token generation.
+ * Domain-warped gradient behind idle pages, in the theme's own accent tokens.
+ *
+ * Raw WebGL2, not Three.js: it is one fragment shader, and a library would be a large download
+ * that makes an always-on render loop the easy thing to write. Its cost is bounded three ways —
+ * quarter resolution (CSS stretches it; the softness is the look), a 30 fps cap, and four fbm
+ * octaves — and it only runs while ALL of these hold:
+ *
+ *   - the route cannot be inferring (not /arena, not /tournament unless a champion is crowned);
+ *   - the GPU lease is free;
+ *   - the tab is visible;
+ *   - reduced motion and increased contrast are both off.
+ *
+ * When any of them stops holding, the loop is cancelled outright rather than spinning with the
+ * drawing skipped. With no WebGL2 it does nothing and the CSS aurora (body::before) carries
+ * the page alone, as it always did.
  */
-export function pauseLiving(paused) {
-    livingPaused = !!paused;
-    if (livingPaused && livingCtx && livingCanvas) {
-        livingCtx.clearRect(0, 0, livingCanvas.width, livingCanvas.height);
+
+const LIVING_BLOCKED_ROUTES = ['/arena', '/tournament', '/diag'];
+
+const living = {
+    canvas: null,
+    gl: null,
+    uniforms: null,
+    rafId: 0,
+    lastFrame: 0,
+    started: 0,
+    state: 'idle',      // 'idle' | 'victory'
+    route: '/',
+    palette: null,
+    lost: false,
+};
+
+const VERT = `#version 300 es
+in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+const FRAG = `#version 300 es
+precision mediump float;
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec3 uA;
+uniform vec3 uB;
+uniform vec3 uC;
+uniform float uAlpha;
+out vec4 outColor;
+
+float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; i++) {
+        v += a * noise(p);
+        p = p * 2.03 + vec2(1.7, 9.2);
+        a *= 0.5;
+    }
+    return v;
+}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / uRes;
+    vec2 p = uv * vec2(uRes.x / uRes.y, 1.0) * 1.6;
+    float t = uTime * 0.04;
+
+    // Two levels of domain warping: the flow folds back on itself instead of scrolling.
+    vec2 q = vec2(fbm(p + t), fbm(p + vec2(5.2, 1.3) - t));
+    vec2 r = vec2(fbm(p + 3.0 * q + vec2(1.7, 9.2) + t * 1.3), fbm(p + 3.0 * q + vec2(8.3, 2.8) - t));
+    float f = fbm(p + 3.0 * r);
+
+    vec3 col = mix(uA, uB, clamp(f * f * 2.0, 0.0, 1.0));
+    col = mix(col, uC, clamp(length(q) * 0.6, 0.0, 1.0));
+
+    float a = uAlpha * smoothstep(0.2, 0.95, f) * (0.55 + 0.45 * uv.y);
+    outColor = vec4(col * a, a);   // premultiplied: the canvas composites over the page
+}`;
+
+function hexToRgb(value, fallback) {
+    const hex = (value || '').replace('#', '').trim();
+    if (!/^[0-9a-f]{6}$/i.test(hex)) return fallback;
+    return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+}
+
+function isDarkTheme() {
+    const forced = document.documentElement.dataset.theme;
+    if (forced === 'dark') return true;
+    if (forced === 'light') return false;
+    try {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch {
+        return true;
     }
 }
 
+function readPalette() {
+    const victory = living.state === 'victory';
+    return {
+        a: hexToRgb(token(victory ? '--accent-yellow' : '--accent-cyan', '#12b8cf'), [0.07, 0.72, 0.81]),
+        b: hexToRgb(token(victory ? '--accent-yellow' : '--accent-blue', '#53a6ff'), [0.33, 0.65, 1]),
+        c: hexToRgb(token(victory ? '--accent-green' : '--accent-purple', '#7d96ff'), [0.49, 0.59, 1]),
+        // Light pages get a fainter wash: the same alpha over white reads as a stain.
+        alpha: isDarkTheme() ? 0.22 : 0.10,
+    };
+}
+
+function livingAllowed() {
+    if (!living.gl || living.lost) return false;
+    if (prefersReducedMotion() || gpuBusy() || document.hidden) return false;
+    try {
+        if (window.matchMedia('(prefers-contrast: more)').matches) return false;
+    } catch {
+        // No matchMedia: treat as the default preference.
+    }
+    const blocked = LIVING_BLOCKED_ROUTES.some(r => living.route === r || living.route.startsWith(r + '/'));
+    // A crowned champion is the one tournament moment with nothing left to infer.
+    return !blocked || living.state === 'victory';
+}
+
+function compile(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        gl.deleteShader(shader);
+        return null;
+    }
+    return shader;
+}
+
+function resizeLiving() {
+    const c = living.canvas;
+    if (!c) return;
+    c.width = Math.max(1, Math.floor(window.innerWidth / 4));
+    c.height = Math.max(1, Math.floor(window.innerHeight / 4));
+    living.gl?.viewport(0, 0, c.width, c.height);
+}
+
+function clearLiving() {
+    const gl = living.gl;
+    if (!gl || living.lost) return;
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
+function renderLiving(now) {
+    living.rafId = 0;
+    if (!livingAllowed()) {
+        clearLiving();
+        return;
+    }
+
+    living.rafId = requestAnimationFrame(renderLiving);
+    if (now - living.lastFrame < 33) return;   // 30 fps cap
+    living.lastFrame = now;
+
+    const { gl, uniforms, canvas } = living;
+    const pal = living.palette ?? (living.palette = readPalette());
+    gl.uniform2f(uniforms.res, canvas.width, canvas.height);
+    gl.uniform1f(uniforms.time, (now - living.started) / 1000);
+    gl.uniform3fv(uniforms.a, pal.a);
+    gl.uniform3fv(uniforms.b, pal.b);
+    gl.uniform3fv(uniforms.c, pal.c);
+    gl.uniform1f(uniforms.alpha, pal.alpha);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+/** Starts the loop if everything allows it; cancels it — no idle rAF — if anything does not. */
+function syncLiving() {
+    if (livingAllowed()) {
+        if (!living.rafId) living.rafId = requestAnimationFrame(renderLiving);
+    } else if (living.rafId) {
+        cancelAnimationFrame(living.rafId);
+        living.rafId = 0;
+        clearLiving();
+    }
+}
+
+export function initLivingCanvas(canvasId = 'po-living-canvas') {
+    if (living.canvas) return;
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    const gl = canvas.getContext('webgl2', {
+        alpha: true,
+        premultipliedAlpha: true,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        // Prefer the integrated GPU on dual-GPU laptops, leaving the discrete one to WebLLM.
+        powerPreference: 'low-power',
+    });
+    if (!gl) return;
+
+    const vs = compile(gl, gl.VERTEX_SHADER, VERT);
+    const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG);
+    if (!vs || !fs) return;
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+    gl.useProgram(program);
+
+    // One oversized triangle covers the viewport with no index buffer.
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(program, 'aPos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    Object.assign(living, {
+        canvas,
+        gl,
+        started: performance.now(),
+        route: location.pathname.toLowerCase(),
+        uniforms: {
+            res: gl.getUniformLocation(program, 'uRes'),
+            time: gl.getUniformLocation(program, 'uTime'),
+            a: gl.getUniformLocation(program, 'uA'),
+            b: gl.getUniformLocation(program, 'uB'),
+            c: gl.getUniformLocation(program, 'uC'),
+            alpha: gl.getUniformLocation(program, 'uAlpha'),
+        },
+    });
+
+    canvas.addEventListener('webglcontextlost', e => {
+        e.preventDefault();
+        living.lost = true;
+        syncLiving();
+    });
+
+    resizeLiving();
+    window.addEventListener('resize', resizeLiving);
+    document.addEventListener('visibilitychange', syncLiving);
+    window.poGpuLease?.subscribe(syncLiving);
+
+    // Re-read the palette when the theme flips, from the header toggle or from the OS.
+    const repalette = () => { living.palette = null; };
+    new MutationObserver(repalette).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    try {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', repalette);
+    } catch {
+        // Older engines without MediaQueryList events: the palette updates on the next navigation.
+    }
+
+    syncLiving();
+}
+
+/** 'idle' or 'victory'. A crowned champion switches the wash to gold and unblocks /tournament. */
+export function setLivingState(state) {
+    living.state = state === 'victory' ? 'victory' : 'idle';
+    living.palette = null;
+    syncLiving();
+}
+
+/** Called by MainLayout on every navigation. A route change also ends a victory wash. */
+export function setLivingRoute(path) {
+    living.route = (path || '/').split(/[?#]/)[0].toLowerCase() || '/';
+    if (living.state === 'victory') {
+        living.state = 'idle';
+        living.palette = null;
+    }
+    syncLiving();
+}

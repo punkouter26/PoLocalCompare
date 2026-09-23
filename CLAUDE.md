@@ -88,8 +88,19 @@ AGENT.MD §8 fixes a **ratio contract of 100 / 50 / 25 / 25** — integration �
 tier ≈ a quarter. Counts are test *cases*, so a `[Theory]` contributes one per `InlineData` and each
 UI method counts twice (two viewports). Keep new tests inside those proportions rather than piling
 onto whichever tier is easiest to write. **The suite now sits exactly at the cap** (100/40/25/24 as
-of 2026-09-10) and `SCRIPTS/check-clean.ps1` fails when a tier exceeds its budget, so the contract is
-enforced rather than remembered.
+of 2026-09-10; 100/40/25/23 on 2026-09-22) and `SCRIPTS/check-clean.ps1` fails when a tier exceeds
+its budget, so the contract is enforced rather than remembered. The practical consequence is that
+**Unit and E2EAPI have no headroom at all**: a pure function extracted into `Shared` for the express
+purpose of being unit-testable — `ArenaPhaseResolver` is the current example — cannot get its table
+test without the owner re-taking the ratio. Say so rather than quietly raising the cap.
+
+**E2E-UI needs the machine to itself.** The suite drives a real browser against the one running dev
+instance, and `SignedInPageAsync` waits for `NetworkIdle` with a 45-second budget. Anything else
+loading the same server at the same time — a second Playwright script, a browser tab left open on
+`/arena` with a live SignalR connection — pushes cases past that budget and they fail as assertion
+timeouts, which reads exactly like a real regression. Observed on 2026-09-22: four cases failed in
+a full run and every one of them passed in isolation, three of them in 8 seconds against 48. Re-run
+a failure on its own before believing it.
 
 Two async traps in the server-side suites, both of which were causing real failures until
 2026-09-10:
@@ -182,6 +193,31 @@ additionally need a matching `prebuiltAppConfig` entry in
 `download-models.py`, and exits non-zero when they disagree — run it after any catalog edit. Retired seed IDs are commented out, never reused (007/008 are burnt).
 Ollama (`ModelType.LocalService`) models seed in **Development only**, so Production has no dead entries.
 
+**Home renders the catalog before the health probe lands.** `GET /api/models/availability`
+sends a real 16-token completion to every Foundry deployment before it answers — measured at
+4,850ms against 2,630ms for the model list — and `LoadAsync` used to await all three calls
+before clearing `_loading`, so the whole picker sat behind a skeleton for those extra seconds
+to decide a header badge and which cards to hold back. The health pair is folded in afterwards
+through `ApplyHealthWhenReadyAsync`, unguarded and not awaited: if it never returns the page
+stays as it is with every model selectable, which is the right degradation.
+
+**Models can also be added at runtime from `/catalog`**, which is the way round the seed-only-when-empty
+rule without wiping Azurite. `GET /api/models/discover` lists browser builds parsed out of the
+vendored `web-llm.js` (`WebLlmBundleCatalog` — the same parse as `plan-webllm-artifacts.py`),
+ranked by Hugging Face Hub download counts, plus pulled Ollama tags in Development.
+`POST /api/models/discovered` **re-checks** the id against the bundle or the daemon before
+registering, which is the point of it being separate from `POST /api/models` (that one takes any
+`WebLlmModelId`, typos included). A runtime-added model is not in `ModelSeeder`, so
+`download-models.py` will not vendor its weights — it streams from the CDN unless you also add it to
+the seeder.
+
+**The leaderboard's `±N` is a Bradley–Terry interval, not a property of ELO.** `BradleyTerry`
+fits every judged duel at once (MAP with a 400-point Gaussian prior) and reports each model's 95%
+interval *relative to the mean of the models that have played* — BT only identifies differences,
+so an absolute interval would carry the prior's scale uncertainty forever and never narrow. It is
+read-side only; ranking is still `CurrentElo`. Each duel is written into both models' history
+partitions, so `GamesFrom` de-duplicates on duel id — counting both halves would halve every band.
+
 **`web-llm.js` is a Git LFS object.** The vendored bundle is 6.5 MB — larger than all the source
 in the repo combined — so it is tracked through LFS rather than as an ordinary blob. A clone made
 without `git lfs install` gets a ~130-byte pointer file instead, and the symptom is every browser
@@ -208,6 +244,17 @@ runs. That is why the diff engine, the HTML analyzer, the prompt library and the
 sit in `Shared/Analysis`, `Shared/Prompts` and `Shared/Tournaments` rather than beside the
 components that use them. Razor components stay thin wrappers over those statics.
 
+**Home's console is `max-height`, and the phone picker is a bounded window.** The console
+was a FIXED `height: calc(100dvh - 6.5rem)` whatever it contained — 796px on a 1440x900
+desktop, of which ~278px was empty glass between the prompt-library button and the Compare
+footer. A maximum keeps everything the fixed height was there for (the foot stays pinned, only
+the middle scrolls, it can never grow past the fold) and lets it shrink to its content. Below
+640px the picker is capped at `52dvh` and `ModelCard` drops its parameter and pricing rows, so
+the window shows ~4 models rather than 1.5; the starter-duel block is pulled to the top of that
+window and compacted to a single row, because at the bottom of an unbounded list it measured at
+y=3735 inside a 337px box — the one control aimed at a first-time user was the least reachable
+thing in the app.
+
 **Home is a two-column workbench, not a wizard and not one column.** It was a three-panel
 disclosure accordion with a numbered stepper, step-advance rules and a sticky readiness bar that
 existed only because the Compare button could be collapsed out of view. Flattening it removed all
@@ -223,6 +270,19 @@ is `flex: 0 0 auto`, so Compare never scrolls away. And the console needs its ex
 `calc(100vh - …)` height and the foot hangs below the fold again. Below 1080px it collapses to one
 column in the original reading order. Don't reintroduce `home__panel*` or `home__section` — the
 E2E-UI selectors point at `home__title`, `home__grid` and `home__compare .po-btn`.
+
+**The Arena's status band is one region driven by one enum.** `ArenaPhaseResolver` in
+`Shared/Presentation` is a pure function from thirteen inputs to a single `ArenaPhase`, and
+`ArenaStatusBand` renders it. That replaced nine independent flags (`_duelStillRunning`,
+`_verdictRecorded`, `_optimistic`, `_verdictValue`, `_verdictSource`, `_autoJudgeDeciding`,
+`_autoJudgeRemaining`, `WaitingForOtherModel`, `BothSidesFailed()`) read across ~12 mutually
+exclusive arms in two separate `@if` chains, each carrying its own `role="status"` — ten live
+regions on one page, several able to fire in the same frame. Consistency came from arm
+*order*, which is a property you cannot test and cannot see; the same trap already documented
+on Home's `CompareHint`. It is in `Shared` rather than beside the page for the reason given
+below: `PoLocalCompare.Unit` cannot reach anything under `src/PoLocalCompare.Client/`. **The
+Unit tier is at its 100/100 budget, so the resolver currently ships with no test** — adding
+one means re-taking the ratio contract in AGENT.MD §8.
 
 **The Arena is the whole duel — streaming and judging.** `/processing` no longer exists; `POST
 /api/duels` navigates straight to `/arena/{id}`, which connects to `DuelHub`, shows the live
@@ -248,6 +308,57 @@ Home collapses at **1080px** (the picker-plus-console grid is genuinely tight be
 fractional part is load-bearing against paired `min-width` rules. Everything else was 13
 arbitrary values, and eight stylesheets had no responsive handling at all.
 
+**`.po-page` is the only page shell, and the gutter is declared exactly once.** Every route
+puts `po-page` (or `po-page--wide`) on its container; `.home`, `.arena`, `.archive` and
+`.leaderboard` are kept as E2E-UI and view-transition hooks but carry no geometry. Until
+2026-09-22 those four rolled their own `max-width` and padding *on top of*
+`article.app-content`'s responsive gutter, and the two composed rather than replacing each
+other — measured on one 390px phone, the content column was 358px on `/`, 334px on
+`/leaderboard` and 318px on `/archive` (18% of the screen in nested padding), and on a 1440px
+desktop the content edge jumped between 1200, 1360 and 1400 as you used the nav. So
+**`.po-page` sets `padding-inline: 0`** and `article.app-content` owns the horizontal gutter
+(`clamp(1rem, 2vw, 1.5rem)`, composed with the safe-area inset via `max()`). Don't give a page
+its own inline padding; if a route needs a different width, use the `--wide` modifier or add a
+modifier here.
+
+**`--nav-height` exists now (`3.5rem`).** `NavMenu.razor.css` reads it for its own
+`min-height`, and it is what `calc(100dvh - var(--nav-height) …)` refers to — that instruction
+had been in `app.css` for a while pointing at a token that was never declared, so the one calc
+the codebase tells you to write would have been dropped as invalid.
+
+**Status tints are the `--*-surface` / `--*-border` tokens, never an `rgba()` literal.** The
+pairing is `--x-surface` for the fill, `--x-border` for the edge and the plain `--accent-x` for
+the text (`--cyan-surface`/`--cyan-border` were added on 2026-09-22 for the nav ticker and
+Home's slot tags). About twenty surfaces used to hand-roll the same effect as a **translucent**
+literal, and that broke the guarantee twice: a translucent tint composites against whatever is
+behind it, so the nav's ticker pills measured 4.26:1 and 4.45:1 against `--surface-base` while
+the identical treatment passed on a card; and every literal was the **dark-theme** accent value
+frozen into the stylesheet, so a light-theme viewer got a dark palette's hue behind light
+palette text. The tokens are opaque, so the contrast of `--accent-x` on `--x-surface` is the
+same wherever the chip lands (light 4.53–5.03, dark 4.78–9.18).
+
+**`.po-btn--chip` is the only filter chip.** Home's model-type filters, the Archive's verdict
+filters and `PromptPicker`'s categories were three private implementations of one control, and
+only `PromptPicker` set `aria-pressed` — on the other two the active filter was conveyed by
+colour alone (SC 1.4.1, SC 4.1.2). Every caller is a real `<button>` with `aria-pressed`, and
+the active state changes fill *and* border weight so it survives greyscale. Related: the
+Archive's chips and the grid's own Verdict column filter were two controls for one field forty
+pixels apart, so the column is now `Filterable="false"` — the chips own verdict, and they back
+the `?verdict=` deep link the nav's "awaiting judgment" pill uses.
+
+**The four page-title hooks carry one shared layout-only rule.** `home__title`,
+`archive__title`, `arena__title` and `leaderboard__title` exist so E2E-UI can address one
+page's h1; all four had drifted back into full rulesets layered over the `.po-title` on the same
+element (measured: 43px, 43px and 31px h1s on one desktop, two of them at `font-weight: 800`,
+a face the app does not load — so the browser was synthesising it). `app.css` now gives the
+group `margin-block-end` and nothing else. Anything visual added there is the drift restarting.
+
+**Fonts load from `index.html`, not from an `@import` in `app.css`.** An `@import` inside a
+stylesheet is invisible to the preload scanner — it cannot be discovered until `app.css` has
+been fetched *and* parsed — so the font request was serialised behind it. The weights requested
+are the ones actually declared (400/600/700/800 Space Grotesk, 400 JetBrains Mono); the old
+request carried a 500 no rule uses and omitted the 800 that `.not-found__icon` does.
+
 **Shared text and layout primitives, same rule as `.po-btn`.** `.po-page` (+`--narrow`/`--wide`),
 `.po-header`, `.po-title`, `.po-subtitle`, `.po-section-title`, `.po-section`, `.po-hint`,
 `.po-status`, `.po-error`, `.po-empty`, `.po-chip`, `.po-glass`, `.po-lift`, `.po-glow`. These
@@ -258,11 +369,36 @@ Note `home__title`, `archive__title`, `arena__title` and `leaderboard__title` ar
 E2E-UI selector hooks and carry no styling; that suite is not in CI, so removing one fails
 silently.
 
+**The Radzen grids' reflow mode is styled to match `.po-table--cards`.** Below its internal
+breakpoint `RadzenDataGrid` stacks each cell with the column title *above* the value, which for
+the Archive's six columns was twelve lines and ~330px per duel — nine duels came to 3,119px
+inside a 464px window on a phone. `app.css` puts the label and value on one line and gives each
+row a card edge, matching the hand-rolled treatment exactly (~150px per row). Two mobile-table
+breakpoints still exist, for the reason already recorded; they no longer look like two
+different components.
+
 **Wide tables become cards below 640px.** `.po-table--cards` turns each `<td>` into a labelled
 row using `data-label` on the cell. The table stays a real `<table>` with real `<th scope>`, so
 the accessibility tree is unchanged and `::before` content is not announced twice; only the
-visual presentation changes. Cells opt out with `.po-cell--bare`. A table without `data-label`
-degrades to the old horizontal scroll rather than breaking.
+visual presentation changes. Cells opt out with `.po-cell--bare`, hide with
+`.po-cell--secondary`, and **pair onto one line with `.po-cell--half`** — the leaderboard's W
+and L were a full-width row each, 48px per model times 26 models, for two single digits. The
+card row is a wrapping flex container rather than a block precisely so a pair can share a line;
+two `inline-flex` cells at 50% do not pair, because the markup whitespace between them takes
+width and the second wraps. Only pair cells that are narrow *by nature*. A table without
+`data-label` degrades to the old horizontal scroll rather than breaking.
+
+**Two shapes for a bounded grid, and the difference is which one the page is.** `/archive` fixes
+its own height (`calc(100dvh - var(--nav-height) - …)`), makes itself a flex column and hands the
+remainder to the grid, because there the grid *is* the page — a fixed 55dvh left 170px of blank
+page below it on a desktop and 190px on a phone, with a row clipped in half at its own bottom
+edge. `/catalog` does the opposite: it has two independent lists, so the page scrolls normally
+and the browser-model grid is a bounded window (`min(34rem, 60dvh)`), the same shape and the
+same argument as `.home__picker` — a picker is a list you scan *within*. Either way the height
+must be **definite**. `AllowVirtualization` resolves its `height: 100%` against the containing
+block, a `min-height` is not definite, and with one the percentage falls back to `auto`, the
+virtualiser goes inert and every row renders: measured, that put `/catalog` at 24,014px — 28
+screens — on a phone.
 
 **There is no component library — `.po-btn` is the only button.** Radzen was removed wholesale
 in an earlier pass, re-added on 2026-08-22 for `RadzenDataGrid` (Archive) and `RadzenChart` (model
@@ -270,8 +406,13 @@ profile), then **removed again on 2026-08-23** because `Radzen.Blazor` cost 1.43
 11.9% of the app's entire download — for two components. It was **re-added a second time on
 2026-09-02** after the owner re-took that payload decision (see `PoLocalCompare.Client.csproj`):
 the Archive grid is a `RadzenDataGrid` again and the profile chart is a `RadzenChart` again, so
-this repo DOES ship Radzen today. Do not reintroduce *more* of it without re-taking the decision
-again — the two components in use are the sanctioned set.
+this repo DOES ship Radzen today. The sanctioned set is `RadzenDataGrid` and `RadzenChart`;
+do not reintroduce *other* Radzen components without re-taking the decision again. Adding more
+**uses** of those two is not the same decision and costs nothing: `/catalog`'s browser-model list
+became a third `RadzenDataGrid` on 2026-09-22, because it was the longest list in the app
+(measured at 4,911px — 5.8 screens — on a phone for a list truncated to 25 of ~150 rows, with a
+live `<input>` mounted per row) while the nine-row Archive already had the virtualised grid. The
+payload was already paid for.
 
 Because Radzen is present, one consequence matters when reading the stylesheet: swapping the
 profile chart back to inline SVG would save **nothing** on download. The chart and the grid live in
@@ -309,6 +450,14 @@ and it has broken twice: `Leaderboard.razor.css` carried both `lb__` and `leader
 old `LabModelCard` shared `lab__` with its parent panel — which is exactly the scope-id trap below
 waiting to happen. Do not introduce a second block into a stylesheet.
 
+**A CSS class used as a JS selector is a rename that fails silently.** `Arena.razor` names
+the verdict band for `fx.js`, Home names the Compare button, `ModelProfile` names its card and
+`Tournament` names its champion strip. `fx.js` answers a selector that matches nothing by doing
+nothing at all, so a renamed class turns a payoff effect off without a console warning and
+without a failing test — which is what happened to `".arena__verdict-recorded"` when that block
+was folded into `ArenaStatusBand`. Where a selector is used more than once it is a named
+constant (`VerdictBandSelector`), so at least the uses cannot drift apart.
+
 **Classes in markup with no rule anywhere are a recurring defect.** The nav bar carried
 `nav-item`, `btn-sm` and `btn-outline-warning` long after Bootstrap was gone, and
 `arena__source-btn`, `arena__generating-notice`, `auth-spinner`, `h2h__sparkline-col` and
@@ -317,7 +466,20 @@ classes used in `.razor` markup against the selectors defined in any `.css`.
 
 **Scoped CSS is per-`.razor`-file, and nothing warns when it isn't.** The since-deleted
 `ModelHealthPanel.razor.css` spent a long time styling `LabModelCard`'s markup, which silently
-matched nothing because Blazor stamps each stylesheet with its own component's scope id. If you move markup into a child
+matched nothing because Blazor stamps each stylesheet with its own component's scope id.
+
+It happened again, and on the Arena. `ArenaViewportPanel`, `ArenaFailureCard`,
+`ArenaVoteButtons` and `EloShiftBadge` were extracted out of `Arena.razor` but left their
+`arena__*` rules behind in `Arena.razor.css`, so **none of those rules had ever applied** —
+verified in a browser on 2026-09-22, where the panel computed `display: block` against the
+declared `flex` and `.arena__hud` computed `container-type: normal` against the declared
+`inline-size`, which means `TelemetryHud`'s `@container` queries had been matching nothing for
+the whole life of the component. Each of the four now has its own `.razor.css` **and its own
+block named after its file** (`arena-panel__`, `arena-failure__`, `arena-vote__`,
+`elo-shift__`, plus `arena-band__` for the new status band) — sharing one `arena__` prefix
+across five files is exactly what let the rules end up in the wrong stylesheet.
+**`check-clean.ps1` cannot catch this**: it asks whether a rule exists *somewhere*, not whether
+it can reach the markup. Moving markup into a child component means moving its rules too. If you move markup into a child
 component, move its rules into that component's own `.razor.css` (or use `::deep` — which is why
 `navmenu__link` rules need it, since `NavLink` renders the anchor outside the component's scope).
 A class that is built by interpolation — `tourney__status--@_tournament.Status`,
@@ -513,7 +675,19 @@ pipelines; adding a per-attempt timeout will abort SSE streams.
 - When `Features:UseRealAi` is off, the `USING MOCK DATA` banner must render (`NavMenu.razor`).
 - UI targets **WCAG 2.2 Level AA**: keyboard-operable custom controls, `:focus-visible` ring, 24×24
   minimum target size, `role="status"` for live updates, `aria-hidden` on decorative glyphs. Colour
-  contrast is not automatically checked — verify new palette tokens by hand.
+  contrast is not automatically checked — verify new palette tokens by hand, **in both themes and
+  against every surface the token lands on**. Four failures were found that way on 2026-09-22 and
+  all four came from a literal rather than a token: `#fff` on `--accent-blue` (2.54:1 in dark — the
+  app's *primary* button), `#fff` on `--accent-red` twice (3.76:1 in dark), and white on the
+  `--remote` / `--localservice` type chips' gradients (3.68:1 and 2.43:1, judged at the light end,
+  under a comment asserting they were "well past 4.5:1"). **`--on-accent` is what goes on an accent
+  fill** — it is white in light and black in dark, and it already existed; the failing rules simply
+  were not reading it. A gradient is judged at its lightest stop.
+- **A focus ring is never replaced by a translucent shadow.** `.home__textarea` did
+  `:focus { outline: none }` — `:focus`, not `:focus-visible`, so keyboard users lost it too — and
+  substituted `0 0 0 3px rgba(18,184,207,0.18)`, which cannot reach the 3:1 of SC 1.4.11, on the
+  primary input of the page the app exists for. A scoped `.class:focus` also outranks the global
+  `:focus-visible`, so nothing put it back.
 - Styling is scoped `.razor.css` + design tokens; there are **no** inline `style=` attributes or
   `<style>` blocks left. A genuinely dynamic value (a progress width, an animation stagger) is passed
   as a CSS custom property — `style="--fill: 42%"` — and consumed by a rule in the stylesheet, so the

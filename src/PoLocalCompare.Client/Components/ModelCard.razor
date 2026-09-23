@@ -28,11 +28,16 @@
             </span>
         </div>
     </div>
-    <div class="model-card__elo">
-        ELO: <strong>@Model.CurrentElo.ToString("F0")</strong>
-    </div>
-    <div class="model-card__stats">
-        Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Math.Max(Model.DuelCount - Model.WinCount - Model.DrawCount, 0))@(Model.DrawCount > 0 ? $"/{Model.DrawCount}" : "")
+    @* The rating and the record are one unit — "how good is it" — so they share a wrapper.
+       Below 640px that wrapper becomes a single row and the two blocks below it are dropped,
+       which is what takes the card from ~178px to ~80px on a phone. See the stylesheet. *@
+    <div class="model-card__meta">
+        <div class="model-card__elo">
+            ELO: <strong>@Model.CurrentElo.ToString("F0")</strong>
+        </div>
+        <div class="model-card__stats">
+            Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Math.Max(Model.DuelCount - Model.WinCount - Model.DrawCount, 0))@(Model.DrawCount > 0 ? $"/{Model.DrawCount}" : "")
+        </div>
     </div>
     <div class="model-card__params">
         Params: <span class="model-card__params-value">@GetParameterLabel()</span>

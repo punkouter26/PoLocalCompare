@@ -32,9 +32,15 @@ article.app-content {
        because an overridden declaration is valid CSS.
 
        max() is the correct composition anyway: the clamp is the floor and a real inset
-       extends it rather than replacing it. */
-    padding-inline: max(clamp(0.75rem, 2vw, 1.5rem), env(safe-area-inset-left))
-                    max(clamp(0.75rem, 2vw, 1.5rem), env(safe-area-inset-right));
+       extends it rather than replacing it.
+
+       The floor is 1rem rather than 0.75rem because this is now the app's ONLY horizontal
+       gutter: .po-page used to add --space-md on top of it and no longer does (see the
+       .po-page rule in app.css for the measurements). 16px on a phone, growing to 24px past
+       1200px, is what every route gets — where before they got 28px, 36px or 40px depending
+       on which shell the page happened to use. */
+    padding-inline: max(clamp(1rem, 2vw, 1.5rem), env(safe-area-inset-left))
+                    max(clamp(1rem, 2vw, 1.5rem), env(safe-area-inset-right));
     overflow-x: clip;
 }
 

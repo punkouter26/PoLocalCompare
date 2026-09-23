@@ -8,9 +8,27 @@
    Challenge was removed on 2026-09-10, so Leaderboard is now the only caller and
    `leaderboard` is the only block prefix actually passed. The parameter is kept because it
    still documents the contract — the modifier class is namespaced per surface, and nothing
-   here should ever reach for one global rule across two different scopes. *@
+   here should ever reach for one global rule across two different scopes.
+
+   ── The glyphs, and why they are named constants ─────────────────────────────
+   These were 🍇 / 48 / 49 for a long time, with `// 🥇 🥈 🥉` written beside them.
+   That range is U+1F347–1F349 — GRAPES, MELON, WATERMELON — so the top three rows of the
+   leaderboard were labelled with fruit, in every theme, on every viewport. The medals are
+   U+1F947–1F949, which is a different LEADING surrogate (\uD83E, not \uD83C).
+
+   The exact failure the comment above predicted, then. It survived because a surrogate pair
+   is unreadable by eye and the trailing halves differ by one hex digit, so the code looked
+   right next to a comment that said what it was meant to be. Naming them removes the pair
+   from the call sites entirely; if one is ever wrong again it is wrong in one place, and the
+   escape sits next to the literal character in the same line. *@
 
 @code {
+    // U+1F947 1st place medal. Written as the escape plus the literal so the two can be
+    // checked against each other without decoding a surrogate pair by hand.
+    private const string GoldMedal = "🥇";     // 🥇
+    private const string SilverMedal = "🥈";   // 🥈
+    private const string BronzeMedal = "🥉";   // 🥉
+
     /// <summary>
     /// Renders the medal for a row whose ordinal rank is <paramref name="rank"/>. Anything
     /// past #3 returns a plain numeric span with no class.
@@ -22,36 +40,38 @@
     /// </param>
     public static RenderFragment Render(int rank, string blockPrefix) => builder =>
     {
-        if (rank == 1)
+        var (glyph, modifier) = rank switch
         {
-            builder.OpenElement(0, "span");
-            builder.AddAttribute(1, "class", $"{blockPrefix}__rank {blockPrefix}__rank--gold po-glow");
-            builder.AddAttribute(2, "title", "#1 Ranked");
-            builder.AddContent(3, "\uD83C\uDF47"); // 🥇
-            builder.CloseElement();
-        }
-        else if (rank == 2)
+            1 => (GoldMedal, $" {blockPrefix}__rank--gold po-glow"),
+            2 => (SilverMedal, $" {blockPrefix}__rank--silver"),
+            3 => (BronzeMedal, $" {blockPrefix}__rank--bronze"),
+            _ => (null, string.Empty),
+        };
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"{blockPrefix}__rank{modifier}");
+
+        if (glyph is null)
         {
-            builder.OpenElement(0, "span");
-            builder.AddAttribute(1, "class", $"{blockPrefix}__rank {blockPrefix}__rank--silver");
-            builder.AddAttribute(2, "title", "#2 Ranked");
-            builder.AddContent(3, "\uD83C\uDF48"); // 🥈
-            builder.CloseElement();
-        }
-        else if (rank == 3)
-        {
-            builder.OpenElement(0, "span");
-            builder.AddAttribute(1, "class", $"{blockPrefix}__rank {blockPrefix}__rank--bronze");
-            builder.AddAttribute(2, "title", "#3 Ranked");
-            builder.AddContent(3, "\uD83C\uDF49"); // 🥉
-            builder.CloseElement();
+            builder.AddContent(2, rank);
         }
         else
         {
-            builder.OpenElement(0, "span");
-            builder.AddAttribute(1, "class", $"{blockPrefix}__rank");
-            builder.AddContent(2, rank);
+            // The medal is decoration and the rank is the content. A `title` on a span is not
+            // reliably announced, so the top three used to be a bare emoji as far as assistive
+            // tech was concerned — the one column whose whole job is to say what position this
+            // row is in. The glyph is hidden and the ordinal is stated instead.
+            builder.AddAttribute(2, "title", $"#{rank} Ranked");
+            builder.OpenElement(3, "span");
+            builder.AddAttribute(4, "aria-hidden", "true");
+            builder.AddContent(5, glyph);
+            builder.CloseElement();
+            builder.OpenElement(6, "span");
+            builder.AddAttribute(7, "class", "visually-hidden");
+            builder.AddContent(8, $"Rank {rank}");
             builder.CloseElement();
         }
+
+        builder.CloseElement();
     };
 }

@@ -35,34 +35,10 @@
     margin-bottom: var(--space-md);
 }
 
-.prompt-picker__chip {
-    min-height: var(--target-min);
-    padding: var(--space-xs) var(--space-smd);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--text-muted);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    cursor: pointer;
-    transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.prompt-picker__chip:hover {
-    color: var(--text);
-    border-color: var(--border-strong);
-}
-
-.prompt-picker__chip--active {
-    color: var(--on-accent-green);
-    background: var(--accent-green);
-    border-color: var(--accent-green);
-}
-
-.prompt-picker__chip:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
+/* The category chips are .po-btn--chip now — see app.css. This was the third private copy
+   of the control (Home's type filters and Archive's verdict filter were the others), and the
+   only one of the three that got aria-pressed right; the shared modifier keeps that and
+   gives it to the other two. */
 
 /* ── Library cards ────────────────────────────────────────────────────────── */
 

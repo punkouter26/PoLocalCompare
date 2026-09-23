@@ -55,6 +55,12 @@ public sealed class ModelProfileDto
     public int Rank { get; init; }
 
     public double CurrentElo { get; init; }
+
+    /// <summary>Same fields and meaning as on <see cref="LeaderboardEntryDto"/>.</summary>
+    public double RatingInterval { get; init; }
+    public double Strength { get; init; }
+    public bool IsProvisional { get; init; }
+
     public int DuelCount { get; init; }
     public int WinCount { get; init; }
     public int DrawCount { get; init; }
@@ -80,4 +86,33 @@ public sealed class ModelProfileDto
     public IReadOnlyList<HeadToHeadDto> KillList { get; init; } = [];
 
     public IReadOnlyList<WinningOutputDto> WinningOutputs { get; init; } = [];
+
+    public ProfileHighlightsDto Highlights { get; init; } = new();
+}
+
+/// <summary>A win over a model rated higher at the time.</summary>
+public sealed class UpsetDto
+{
+    public DuelId DuelId { get; init; }
+    public ModelId OpponentModelId { get; init; }
+    public string OpponentName { get; init; } = string.Empty;
+
+    /// <summary>How far the opponent was rated above this model before the duel, in Elo points.</summary>
+    public double RatingGap { get; init; }
+
+    /// <summary>What the win was worth.</summary>
+    public double Shift { get; init; }
+    public DateTimeOffset At { get; init; }
+}
+
+/// <summary>The points on the rating curve the profile calls out. Empty until the first duel.</summary>
+public sealed class ProfileHighlightsDto
+{
+    public double? PeakElo { get; init; }
+    public DateTimeOffset? PeakAt { get; init; }
+    public DuelId? PeakDuelId { get; init; }
+
+    /// <summary>Biggest rating gap overcome first.</summary>
+    public IReadOnlyList<UpsetDto> Upsets { get; init; } = [];
+    public int LongestWinStreak { get; init; }
 }

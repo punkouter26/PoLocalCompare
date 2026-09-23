@@ -1,0 +1,47 @@
+/* ── ArenaViewportPanel ──────────────────────────────────────────────────────
+   These rules used to live in Arena.razor.css under an `arena__` prefix, and they had
+   never once applied. Blazor stamps a scoped stylesheet with its OWN component's scope id,
+   so `.arena__viewport-panel[b-vc13joezsl]` could only ever match an element written in
+   Arena.razor — and this panel is written here. Verified in the browser before the move:
+   the panel computed `display: block` against the declared `flex`, and `.arena__hud`
+   computed `container-type: normal` against the declared `inline-size`, which meant
+   TelemetryHud's @container rules had been matching nothing and silently falling back to
+   two columns for the whole life of the component.
+
+   Exactly the trap CLAUDE.md already records once (ModelHealthPanel.razor.css styling
+   LabModelCard's markup), recurring in the Arena's extraction. It is also why the block is
+   renamed: this file owns `arena-panel__`, per "every surface owns exactly one BEM block,
+   named after its file". Sharing `arena__` across four files is how the rules ended up in
+   the wrong stylesheet in the first place.
+
+   check-clean.ps1 cannot see this class of bug — it asks whether a rule exists SOMEWHERE,
+   not whether it can reach the markup. */
+
+/* No height floor. The preview inside sizes itself (see SandboxedViewport's --preview-h),
+   and the two sides line up because both frames resolve to the same box — a floor here just
+   pushed the verdict below the fold. A failed side is one small card and needs no reserve. */
+.arena-panel__box {
+    display: flex;
+    flex-direction: column;
+    /* Pack to the top and let every child keep its own height. Without this the children
+       stretch to fill the taller of the two panels, which is how the HUD came to overlap
+       the preview when one side finished before the other. */
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--space-sm);
+}
+
+.arena-panel__box > * {
+    flex: 0 0 auto;
+    min-height: 0;
+}
+
+.arena-panel__hud {
+    flex-shrink: 0;
+    /* Names a containment context so TelemetryHud can size its metric grid against this panel
+       rather than against the window — the panel is full width on a desktop duel, about half
+       that with two panels side by side, and narrower again on a phone, so the viewport is the
+       wrong thing for it to measure. Without this declaration the component's @container rules
+       match nothing and it falls back to two columns, which is the correct degradation. */
+    container: telemetry / inline-size;
+}

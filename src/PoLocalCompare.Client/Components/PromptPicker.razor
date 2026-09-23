@@ -26,7 +26,7 @@
 
         <div class="prompt-picker__filters" role="group" aria-label="Filter prompts by category">
             <button type="button"
-                    class="prompt-picker__chip @(_category == AllCategories ? "prompt-picker__chip--active" : "")"
+                    class="po-btn po-btn--sm po-btn--chip"
                     aria-pressed="@(_category == AllCategories ? "true" : "false")"
                     @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(false); _category = AllCategories; })">
                 All (@PromptLibrary.All.Count)
@@ -35,7 +35,7 @@
             {
                 var count = PromptLibrary.InCategory(category).Count;
                 <button type="button"
-                        class="prompt-picker__chip @(_category == category ? "prompt-picker__chip--active" : "")"
+                        class="po-btn po-btn--sm po-btn--chip"
                         aria-pressed="@(_category == category ? "true" : "false")"
                         @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(false); _category = category; })">
                     @category (@count)

@@ -15,12 +15,23 @@ public sealed class GetLeaderboardHandler(
         // costing 2N serial round-trips per cache miss (paid three times over on a cold cache —
         // there are three cached sort variants). Bounded, because a model's result set can pull
         // a blob per oversized output and the roster grows without a ceiling.
+        //
+        // The full history (not just the last 20 for the sparkline) because the Bradley–Terry
+        // fit below needs every judged duel. It is the same partition query, unbounded.
+        var histories = new List<EloRecord>[models.Count];
         var rows = (await StorageConcurrency.ReadAllAsync(models.Count, async index =>
         {
             var model = models[index];
-            var historyTask = eloHistoryRepository.GetLast20Async(model.ModelId);
+            var historyTask = eloHistoryRepository.GetAllByModelAsync(model.ModelId);
             var modelResults = (await duelResultRepository.GetByModelIdAsync(model.ModelId)).ToList();
-            var sparkline = (await historyTask).Select(x => Math.Round(x.EloAfter, 1)).ToArray();
+            var history = (await historyTask).ToList();
+            histories[index] = history;
+            var sparkline = history
+                .OrderByDescending(x => x.RecordedAt)
+                .Take(20)
+                .Reverse()
+                .Select(x => Math.Round(x.EloAfter, 1))
+                .ToArray();
 
             // Avg API cost per duel. Only priced duels contribute; unpriced (local/Ollama,
             // or priced-model duels from before a rate was assigned) are excluded from the
@@ -43,32 +54,36 @@ public sealed class GetLeaderboardHandler(
                 : null;
 
             return new LeaderboardEntryDto
-            {
-                ModelId = model.ModelId,
-                DisplayName = model.DisplayName,
-                ModelType = model.ModelType,
-                CurrentElo = Math.Round(model.CurrentElo, 1),
-                DuelCount = model.DuelCount,
-                WinCount = model.WinCount,
-                WinRate = WinRateCalculator.Calculate(model.WinCount, model.DuelCount),
-                DrawCount = model.DrawCount,
-                InputTokenPricePerMillion = model.InputTokenPricePerMillion,
-                OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
-                AvgApiCostPerDuel = avgCost,
-                Value = value,
-                OutputQualityAvg = modelResults.Count > 0
-                    ? modelResults.Average(r => r.OutputQualityScore)
-                    : null,
-                // Only runs that actually produced a token. A failure records a short duration,
-                // so counting one would make crashing look like the fastest possible start.
-                AvgFirstTokenMs = modelResults.Any(r => !r.IsFailure && r.WarmUpDurationMs > 0)
-                    ? Math.Round(modelResults
-                        .Where(r => !r.IsFailure && r.WarmUpDurationMs > 0)
-                        .Average(r => (double)r.WarmUpDurationMs))
-                    : null,
-                EloSparkline = sparkline,
-            };
+                {
+                    ModelId = model.ModelId,
+                    DisplayName = model.DisplayName,
+                    ModelType = model.ModelType,
+                    CurrentElo = Math.Round(model.CurrentElo, 1),
+                    DuelCount = model.DuelCount,
+                    WinCount = model.WinCount,
+                    WinRate = WinRateCalculator.Calculate(model.WinCount, model.DuelCount),
+                    DrawCount = model.DrawCount,
+                    InputTokenPricePerMillion = model.InputTokenPricePerMillion,
+                    OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
+                    AvgApiCostPerDuel = avgCost,
+                    Value = value,
+                    OutputQualityAvg = modelResults.Count > 0
+                        ? modelResults.Average(r => r.OutputQualityScore)
+                        : null,
+                    // Only runs that actually produced a token. A failure records a short duration,
+                    // so counting one would make crashing look like the fastest possible start.
+                    AvgFirstTokenMs = modelResults.Any(r => !r.IsFailure && r.WarmUpDurationMs > 0)
+                        ? Math.Round(modelResults
+                            .Where(r => !r.IsFailure && r.WarmUpDurationMs > 0)
+                            .Average(r => (double)r.WarmUpDurationMs))
+                        : null,
+                    EloSparkline = sparkline,
+                };
         })).ToList();
+
+        var estimates = BradleyTerry.Fit(
+            models.Select(m => m.ModelId),
+            BradleyTerry.GamesFrom(histories.SelectMany(h => h)));
 
         // Sort: any "Value" branch must respect the same nullable convention as the Cost branch
         // (priced rows first, then null-rows tail — not floating to whichever ELO they happen
@@ -107,23 +122,33 @@ public sealed class GetLeaderboardHandler(
                 .ToList();
 
         return sorted
-            .Select((entry, index) => new LeaderboardEntryDto
+            .Select((entry, index) =>
             {
-                Rank = index + 1,
-                ModelId = entry.ModelId,
-                DisplayName = entry.DisplayName,
-                ModelType = entry.ModelType,
-                CurrentElo = entry.CurrentElo,
-                DuelCount = entry.DuelCount,
-                WinCount = entry.WinCount,
-                WinRate = entry.WinRate,
-                DrawCount = entry.DrawCount,
-                InputTokenPricePerMillion = entry.InputTokenPricePerMillion,
-                OutputTokenPricePerMillion = entry.OutputTokenPricePerMillion,
-                AvgApiCostPerDuel = entry.AvgApiCostPerDuel,
-                Value = entry.Value,
-                OutputQualityAvg = entry.OutputQualityAvg,
-                EloSparkline = entry.EloSparkline,
+                var estimate = estimates[entry.ModelId];
+                return new LeaderboardEntryDto
+                {
+                    Rank = index + 1,
+                    ModelId = entry.ModelId,
+                    DisplayName = entry.DisplayName,
+                    ModelType = entry.ModelType,
+                    CurrentElo = entry.CurrentElo,
+                    DuelCount = entry.DuelCount,
+                    WinCount = entry.WinCount,
+                    WinRate = entry.WinRate,
+                    DrawCount = entry.DrawCount,
+                    InputTokenPricePerMillion = entry.InputTokenPricePerMillion,
+                    OutputTokenPricePerMillion = entry.OutputTokenPricePerMillion,
+                    AvgApiCostPerDuel = entry.AvgApiCostPerDuel,
+                    Value = entry.Value,
+                    OutputQualityAvg = entry.OutputQualityAvg,
+                    // Was missing from this copy, so the "First token" column always read "—"
+                    // even though the value was computed above.
+                    AvgFirstTokenMs = entry.AvgFirstTokenMs,
+                    EloSparkline = entry.EloSparkline,
+                    RatingInterval = estimate.Interval95,
+                    Strength = estimate.Rating,
+                    IsProvisional = estimate.IsProvisional,
+                };
             })
             .ToList();
     }

@@ -31,8 +31,7 @@ namespace PoLocalCompare.E2EAPI;
 /// </remarks>
 public class ApiAppFixture : IAsyncLifetime
 {
-    private readonly AzuriteContainer _azurite = new AzuriteBuilder()
-        .WithImage("mcr.microsoft.com/azure-storage/azurite:latest")
+    private readonly AzuriteContainer _azurite = new AzuriteBuilder("mcr.microsoft.com/azure-storage/azurite:latest")
         .Build();
 
     private WebApplicationFactory<Program> _factory = null!;

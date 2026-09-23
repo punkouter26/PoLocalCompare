@@ -117,6 +117,12 @@ window.startWebLlmInference = async function (dotnetRef, modelId, webLlmModelId,
         delete workers[modelId];
     }
 
+    // Hold the GPU lease (util.js) for exactly as long as this worker lives, so every
+    // continuous effect in the app stops while WebLLM is generating and being timed.
+    const leaseOwner = `webllm:${modelId}`;
+    const releaseLease = () => window.poGpuLease?.release(leaseOwner);
+    window.poGpuLease?.acquire(leaseOwner);
+
     const worker = new Worker('/js/webllm-worker.js?v=10', { type: 'module' });
     workers[modelId] = worker;
 
@@ -133,15 +139,18 @@ window.startWebLlmInference = async function (dotnetRef, modelId, webLlmModelId,
                 msg.cacheHit ?? false,
                 msg.htmlPreview ?? null);
         } else if (msg.type === 'complete') {
+            releaseLease();
             dotnetRef.invokeMethodAsync('ReceiveComplete', modelId, msg.htmlOutput, msg.tokenCount, msg.totalMs, msg.warmUpMs);
             delete workers[modelId];
         } else if (msg.type === 'error') {
+            releaseLease();
             dotnetRef.invokeMethodAsync('ReceiveError', modelId, msg.reason);
             delete workers[modelId];
         }
     };
 
     worker.onerror = (err) => {
+        releaseLease();
         dotnetRef.invokeMethodAsync('ReceiveError', modelId, err.message || 'Web Worker error');
         delete workers[modelId];
     };
@@ -157,13 +166,20 @@ window.startWebLlmInference = async function (dotnetRef, modelId, webLlmModelId,
             availability = { available: true, source: 'local', baseUrl: `${window.location.origin}/models/${webLlmModelId}/` };
         }
     } catch { /* fall through to CDN resolution */ }
-    if (!availability) {
-        availability = await window.resolveBrowserModelAvailability(
-            webLlmModelId,
-            window.location.origin + '/models/',
-            cdnBaseUrlTemplates,
-            /* skipLocalProbe */ true);
-    }
+    try {
+        if (!availability) {
+            availability = await window.resolveBrowserModelAvailability(
+                webLlmModelId,
+                window.location.origin + '/models/',
+                cdnBaseUrlTemplates,
+                /* skipLocalProbe */ true);
+        }
 
-    worker.postMessage({ modelId, webLlmModelId, prompt, localModelBaseUrl: availability.baseUrl });
+        worker.postMessage({ modelId, webLlmModelId, prompt, localModelBaseUrl: availability.baseUrl });
+    } catch (err) {
+        // The worker never got its job, so no message will ever release the lease for it —
+        // a leaked lease would switch every effect off for the rest of the session.
+        releaseLease();
+        throw err;
+    }
 };

@@ -99,6 +99,50 @@ public static class DuelsEndpoints
         .Produces<DuelDto>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status404NotFound);
 
+        // The Arena's "what the judge sees" strip: the same 320×180 screenshot FoundryDuelJudge
+        // attaches for one side, from the same raw output and the same renderer. 404 whenever
+        // the judge would not have had one either — vision off (always, in Production: the
+        // Free-tier App Service has no browser), no output yet, or a render that failed — and
+        // the client hides the strip on that. Cached because a page view asks for both sides
+        // and the output is immutable once written; rendering is ~1 s of headless Chromium.
+        group.MapGet("/{duelId}/judge-view/{side}", async (
+            DuelId duelId,
+            string side,
+            [FromServices] IDuelRepository duels,
+            [FromServices] IDuelResultRepository results,
+            [FromServices] HtmlScreenshotRenderer renderer,
+            [FromServices] HybridCache cache,
+            [FromServices] Microsoft.Extensions.Options.IOptions<AutoJudgeOptions> judgeOptions,
+            CancellationToken cancellationToken) =>
+        {
+            if (!judgeOptions.Value.VisionEnabled) return Results.NotFound();
+
+            var isLeft = string.Equals(side, "left", StringComparison.OrdinalIgnoreCase);
+            if (!isLeft && !string.Equals(side, "right", StringComparison.OrdinalIgnoreCase))
+                return Results.NotFound();
+
+            var png = await cache.GetOrCreateAsync(
+                $"judge-view:{duelId}:{(isLeft ? "left" : "right")}",
+                async token =>
+                {
+                    var duel = await duels.GetByIdAsync(duelId);
+                    if (duel is null) return null;
+
+                    var result = await results.GetAsync(duelId, isLeft ? duel.LeftModelId : duel.RightModelId);
+                    if (result is null || result.IsFailure) return null;
+
+                    return await renderer.RenderAsync(result.HtmlOutputRaw, token);
+                },
+                new HybridCacheEntryOptions { Expiration = TimeSpan.FromMinutes(10) },
+                cancellationToken: cancellationToken);
+
+            return png is null ? Results.NotFound() : Results.File(png, "image/png");
+        })
+        .WithName("GetJudgeView")
+        .WithSummary("Renders one side of a duel as the vision judge sees it (PNG). 404 when vision is off.")
+        .Produces(StatusCodes.Status200OK, contentType: "image/png")
+        .Produces(StatusCodes.Status404NotFound);
+
         // Called by the Blazor client after local (WebLLM) inference completes. It carried an
         // unconditional AllowAnonymous() until 2026-09-02, on the premise that "the browser worker
         // invoking this endpoint is not authenticated" — which was never true: the POST comes from

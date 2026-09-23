@@ -38,8 +38,10 @@
 .model-card--selected {
     border-color: var(--accent-green);
     border-left: none;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4), 0 0 24px rgba(34, 197, 94, 0.2);
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--surface-1) 100%);
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--accent-green) 40%, transparent),
+        0 0 24px color-mix(in srgb, var(--accent-green) 20%, transparent);
+    background: var(--success-surface);
     animation: borderGlow 3s ease-in-out infinite;
 }
 
@@ -104,7 +106,15 @@
 /* The three type chips keep their literal gradients on purpose: they are saturated
    brand-ish fills that read the same against a white or a black page, and swapping
    them for the muted light-mode accents would make them harder to tell apart, which
-   is the one job they have. White text sits on all three at well past 4.5:1. */
+   is the one job they have.
+
+   This block used to claim "white text sits on all three at well past 4.5:1". Measured,
+   it did not: white on #3b82f6 (the REMOTE gradient's light end) is 3.68:1 and white on
+   #06b6d4 (OLLAMA's) is 2.43:1, and a gradient is judged at its lightest point because
+   that is where the text is thinnest against it. Both ends of both gradients are darkened
+   below; the chips stay three clearly different hues (violet / blue / teal) and every stop
+   now clears 4.5:1 — 10.95 and 5.70 for local, 6.70 and 5.17 for remote, 5.47 and 5.36 for
+   localservice. Re-measure BOTH stops if these are ever retuned. */
 .model-card__badge--local {
     background: linear-gradient(135deg, #4c1d95, #7c3aed);
     color: #fff;
@@ -113,16 +123,16 @@
 .model-card__badge--local::before { color: #c4b5fd; }
 
 .model-card__badge--remote {
-    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
     color: #fff;
     box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
 }
 .model-card__badge--remote::before { color: #93c5fd; }
 
 .model-card__badge--localservice {
-    background: linear-gradient(135deg, #0d9469, #06b6d4);
+    background: linear-gradient(135deg, #0f766e, #0e7490);
     color: #fff;
-    box-shadow: 0 2px 8px rgba(13, 148, 105, 0.3);
+    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
 }
 .model-card__badge--localservice::before { color: #6ee7b7; }
 
@@ -133,6 +143,12 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+}
+
+/* Wraps the rating and the record. Transparent at desktop width — the two children keep
+   their own block layout — and becomes a single row on a phone. */
+.model-card__meta {
+    min-width: 0;
 }
 
 .model-card__stats {
@@ -209,9 +225,12 @@
 }
 
 /* ── Container queries ───────────────────────────────────────────────────────
-   This card renders at three very different widths: the Home picker's grid column,
-   the Arena and Tournament slot summaries, and the ModelProfile gallery. It had no
-   responsive handling of any kind, and a media query would be the wrong tool anyway
+   The Home picker's grid column is the only place this card renders — the Arena and
+   Tournament slot summaries and the ModelProfile gallery that this comment used to also
+   name have all since been replaced by their own markup — but that column is still handed
+   very different widths (three across at 1440px, one across on a phone, and anything in
+   between while the window is dragged). It had no responsive handling of any kind, and a
+   media query would be the wrong tool for the WIDTH question
    — it measures the WINDOW, when what varies here is the box the card was handed.
    A 1400px desktop showing a narrow picker column and a 640px phone showing a
    full-bleed card are the same layout problem and the opposite media query.
@@ -242,18 +261,44 @@
     }
 }
 
-/* Wide slot: the card has room to put the rating and the price on one line rather
-   than stacking them, which closes the dead space under a two-line card. */
-@container modelcard (min-width: 420px) {
-    .model-card__stats {
+/* ── Phone: the card is a picker row, not a datasheet ────────────────────────
+   A media query rather than a container query, and that is the one place in this file
+   where the window IS the right thing to measure. The container queries above ask how
+   much WIDTH the card was handed; this asks how much of the page it is allowed to spend,
+   which is a different question. Below 1080px the Home layout collapses to one column and
+   the picker becomes a bounded 40dvh window — so on a 390x844 phone the catalog is a 337px
+   porthole, and at 178px per card that showed ONE AND A HALF of 26 models. (Measured
+   side-effect: the "Load starter duel" onboarding button, which sits under the grid, was at
+   y=3735 inside that window. Nobody was ever going to reach it.)
+
+   The card keeps its name, type chip, rating and record — everything the aria-label already
+   announces, and everything you choose between. Parameter count and per-token pricing are
+   dropped: they are comparison detail, they are both on the model's own page, and together
+   they are 60% of the card's height. ~178px becomes ~80px, so the same porthole now shows
+   four models instead of one. */
+@media (max-width: 640px) {
+    .model-card {
+        padding: var(--space-sm) var(--space-smd);
+        margin-bottom: var(--space-xs);
+    }
+
+    .model-card__meta {
         display: flex;
         align-items: baseline;
-        gap: var(--space-md);
+        gap: var(--space-sm);
         flex-wrap: wrap;
     }
 
+    .model-card__elo {
+        margin-bottom: 0;
+    }
+
+    /* display: none, not visibility or opacity — the point is to reclaim the space. Nothing
+       is lost to assistive tech: the card's aria-label already carries name, type and rating,
+       and the full datasheet is one tap away on /model/{id}. */
+    .model-card__params,
     .model-card__pricing {
-        margin-top: 0;
+        display: none;
     }
 }
 

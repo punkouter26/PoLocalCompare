@@ -1,0 +1,93 @@
+/* ── ArenaStatusBand ─────────────────────────────────────────────────────────
+   New component, new block. The rules below are the four superseded blocks' own colours
+   carried over unchanged — only the selectors merged. They live here rather than in
+   Arena.razor.css because a scoped stylesheet can only reach its own component's markup;
+   see ArenaViewportPanel.razor.css for what happened the last time that was got wrong. */
+
+/* ── Status band ──────────────────────────────────────────────────────────────
+   One element with five treatments, replacing .arena__verdict-recorded,
+   .arena__judge-note (+ --auto, --error) and .arena__generating-notice. Those were four
+   blocks in the markup that could never appear together but did not know it; they are one
+   ArenaStatusBand now, keyed on ArenaPhase. The colours below are each block's own, carried
+   over unchanged — only the selectors merged. */
+.arena-band__box {
+    text-align: center;
+    font-size: var(--text-md);
+    color: var(--text);
+    padding: var(--space-sm) var(--space-smd);
+    margin-bottom: var(--space-sm);
+    border-radius: var(--radius-sm);
+}
+
+/* A settled verdict. Sticky, because it is the answer the page exists to give and the
+   evidence above it is taller than any screen. */
+.arena-band__box--verdict {
+    color: var(--accent-green);
+    font-weight: 600;
+    font-size: var(--text-lg);
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--success-surface);
+    border: 1px solid var(--success-border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: var(--glass-shadow);
+}
+
+/* The optimistic window: the pick is on screen but the server has not confirmed it. Muted
+   rather than green so a confirmed verdict and a predicted one never look the same. */
+.arena-band__box--pending {
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+}
+
+/* Nothing left to judge. */
+.arena-band__box--error {
+    color: var(--accent-red);
+    border: 1px solid var(--danger-border);
+    background: var(--danger-surface);
+}
+
+/* Auto-judge countdown, and the moment the judge is deciding. Amber reads as "time pressure"
+   without competing with the red failure note. --accent-yellow on --warn-surface is
+   contrast-checked in both themes. */
+.arena-band__box--judging {
+    color: var(--accent-yellow);
+    border: 1px solid var(--warn-border);
+    background: var(--warn-surface);
+}
+
+/* Inference is still streaming. Reports that work is happening, so it must not read as an
+   error or as a result. */
+.arena-band__box--live {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    background: var(--info-surface);
+    border: 1px solid var(--info-border);
+}
+
+/* "Waiting for the other model" and "Pick the winner below" — plain text, no panel. */
+.arena-band__box--note {
+    color: var(--text);
+}
+
+.arena-band__rationale {
+    display: block;
+    margin-top: var(--space-xs);
+    color: var(--accent-green);
+    font-weight: 400;
+    font-size: var(--text-md);
+    font-style: italic;
+}
+
+.arena-band__by {
+    display: block;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-xs);
+}

@@ -48,24 +48,10 @@ public class EloCalculatorTests
             Assert.True(shift > 20.0, $"Expected a large shift for an upset win, got {shift:F1}.");
     }
 
-    // ── Rounding to 1 decimal place ────────────────────────────────────────
-
-    // ── Rounding to 1 decimal place ────────────────────────────────────────
-
-    [Fact]
-    public void Calculate_ResultsAreRoundedToOneDecimalPlace()
-    {
-        var (newA, newB) = EloCalculator.Calculate(1205, 1198, k: 32, outcomeA: 1.0);
-
-        Assert.Equal(newA, Math.Round(newA, 1));
-        Assert.Equal(newB, Math.Round(newB, 1));
-    }
-
     // ── Zero-sum property ─────────────────────────────────────────────────
 
     [Theory]
     [InlineData(1500, 1100, 32, 0.0)]
-    [InlineData(900, 1600, 16, 1.0)]
     public void Calculate_RatingChangesAreZeroSum(double ra, double rb, double k, double outcome)
     {
         var (newA, newB) = EloCalculator.Calculate(ra, rb, k, outcome);

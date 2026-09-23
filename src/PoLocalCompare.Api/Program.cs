@@ -162,6 +162,26 @@ try
             });
             pipeline.AddTimeout(TimeSpan.FromSeconds(5));
         });
+    // The Hub's public model API, for the catalog page's download/like counts. One short
+    // idempotent GET, so it gets a per-attempt timeout like OllamaStatus; discovery degrades
+    // to "no popularity" when it fails, so a slow Hub must not hold the page.
+    builder.Services.AddHttpClient(DiscoverModelsHandler.HubClient, client =>
+        {
+            client.BaseAddress = new Uri("https://huggingface.co");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("PoLocalCompare/1.0");
+        })
+        .AddResilienceHandler("huggingface-hub", pipeline =>
+        {
+            pipeline.AddRetry(new Polly.Retry.RetryStrategyOptions<HttpResponseMessage>
+            {
+                MaxRetryAttempts = 1,
+                Delay = TimeSpan.FromMilliseconds(300),
+                ShouldHandle = new Polly.PredicateBuilder<HttpResponseMessage>()
+                    .Handle<HttpRequestException>()
+                    .HandleResult(r => (int)r.StatusCode >= 500),
+            });
+            pipeline.AddTimeout(TimeSpan.FromSeconds(8));
+        });
     builder.Services.AddInfrastructure(builder.Configuration);
 
     // ─── Application use cases (Phase 3 + 4 + 6) ────────────────────────────

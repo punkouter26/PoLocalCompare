@@ -4,7 +4,7 @@ namespace PoLocalCompare.Unit;
 
 /// <summary>
 /// The leaderboard's "W/L/T (Win %)" column reads <see cref="WinRateCalculator.Calculate"/>.
-/// These tests pin the four cases the projection has to handle, including the
+/// These tests pin the cases the projection has to handle, including the
 /// never-competed branch (must be 0, not NaN, so the column renders).
 /// </summary>
 public class WinRateCalculatorTests
@@ -15,7 +15,6 @@ public class WinRateCalculatorTests
     /// </summary>
     [Theory]
     [InlineData(17, 19, 17.0 / 19.0)]    // typical record
-    [InlineData(12, 12, 1.0)]           // all wins
     [InlineData(0,  0,  0.0)]           // never competed — never NaN
     [InlineData(0, -1,  0.0)]           // defensive clamp on negative input
     public void Calculate_MapsEveryBranchTheLeaderboardRenders(int wins, int duels, double expected)

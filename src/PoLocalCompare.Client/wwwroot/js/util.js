@@ -103,3 +103,44 @@ window.hapticPulse = function (pattern) {
         /* vibration is decoration — never let it surface as an error */
     }
 };
+
+/**
+ * The GPU lease: the single answer to "may anything draw right now?".
+ *
+ * Browser models run WebLLM over WebGPU in this tab, and the tok/s the race reports is measured
+ * while that happens. Any render loop that competes for the GPU makes that number wrong, so
+ * every continuous effect in the app (the shader backdrop in fx.js, the liquid-glass
+ * refraction) asks this before each frame and stops outright while it is held — it does not
+ * keep a requestAnimationFrame spinning with the drawing skipped, which is what the old
+ * pauseLiving() did.
+ *
+ * webllm-interop.js acquires it when a worker starts and releases it when that worker completes,
+ * errors or is terminated, so the Arena and the Tournament page (the two places a browser model
+ * runs) are covered by the same hook and neither has to remember to pause anything. Holders are
+ * counted, not flagged: two browser models in one duel hold two leases, and the GPU is free only
+ * when both have finished.
+ *
+ * Classic script rather than a module so it exists before the first worker is created;
+ * webllm-interop.js is a classic script too and cannot import one synchronously.
+ */
+window.poGpuLease = (() => {
+    const holders = new Set();
+    const listeners = new Set();
+
+    const publish = () => {
+        const busy = holders.size > 0;
+        // Mirrored onto <html> so CSS can switch GPU-heavy treatments off with no JS per frame.
+        try { document.documentElement.dataset.gpu = busy ? 'busy' : 'free'; } catch { /* pre-DOM */ }
+        for (const fn of listeners) {
+            try { fn(busy); } catch { /* a broken listener must not block the others */ }
+        }
+    };
+
+    return {
+        acquire(owner) { holders.add(String(owner)); publish(); },
+        release(owner) { if (holders.delete(String(owner))) publish(); },
+        busy() { return holders.size > 0; },
+        /** Calls fn(busy) on every change. Returns an unsubscribe function. */
+        subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    };
+})();

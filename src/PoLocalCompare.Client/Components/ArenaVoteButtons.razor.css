@@ -1,0 +1,33 @@
+/* ── ArenaVoteButtons ────────────────────────────────────────────────────────
+   Moved out of Arena.razor.css, where these rules could not reach this component's markup.
+   See the note in ArenaViewportPanel.razor.css for the mechanism and the measurement.
+
+   One declaration, not two: the flex layout came from `.arena__actions` over there and the
+   sticky treatment from `.arena__actions--vote` beside it. Splitting one element's rules
+   across a base class and a modifier earns its keep only when something else uses the base,
+   and a class shared across two files is exactly what put these rules in the wrong stylesheet
+   to begin with. Arena.razor keeps its own `.arena__actions` for the secondary row.
+
+   The row rides the bottom of the viewport until the page scrolls down to its real position,
+   then settles into flow. It occupies its own space either way, so nothing is permanently
+   covered — only what you are scrolling past. Opaque background and a top edge, because it is
+   drawn over the outputs for most of the page. */
+.arena-vote__row {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    background: var(--surface-1);
+    border-top: 1px solid var(--border);
+    padding: var(--space-smd) var(--space-md);
+    margin-top: var(--space-sm);
+    box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
+}
+
+/* Layout only — the look is .po-btn's, per the app-wide rule. */
+.arena-vote__btn {
+    min-width: 180px;
+}

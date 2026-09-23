@@ -66,6 +66,44 @@ public static class ModelsEndpoints
         .Produces<ModelDto>(StatusCodes.Status201Created)
         .ProducesValidationProblem();
 
+        // ── Runtime discovery ────────────────────────────────────────────────────
+        // The catalog page's feed. ModelSeeder only seeds an empty table, so without these
+        // a new model meant editing the seeder and wiping Azurite.
+        group.MapGet("/discover", async (
+            [FromServices] DiscoverModelsHandler handler,
+            CancellationToken ct) => Results.Ok(await handler.HandleAsync(ct)))
+        .WithName("DiscoverModels")
+        .WithSummary("Lists browser (WebLLM bundle) and Ollama models that can be added and are not yet registered.")
+        .Produces<ModelDiscoveryDto>();
+
+        group.MapPost("/discovered", async (
+            [FromBody] AddDiscoveredModelRequest request,
+            [FromServices] AddDiscoveredModelHandler handler,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var dto = await handler.HandleAsync(request, ct);
+                return Results.Created($"/api/models/{dto.ModelId}", dto);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Conflict(new { error = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["Id"] = [ex.Message]
+                });
+            }
+        })
+        .WithName("AddDiscoveredModel")
+        .WithSummary("Registers a model from the discovery list, re-checking that it can actually run.")
+        .Produces<ModelDto>(StatusCodes.Status201Created)
+        .Produces(StatusCodes.Status409Conflict)
+        .ProducesValidationProblem();
+
         group.MapDelete("/{modelId}", async (
             [FromRoute] ModelId modelId,
             [FromServices] IModelRepository repository) =>

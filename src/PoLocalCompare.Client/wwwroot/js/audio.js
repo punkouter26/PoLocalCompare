@@ -11,12 +11,25 @@
  * Cost is a few hundred bytes of oscillator graph per cue, torn down when it finishes. All of
  * it runs on the browser's audio thread, which is why this is safe to use during a duel: it
  * does not contend with the WebGPU device WebLLM is running inference on, and it cannot skew
- * the tok/s figure or a MaxSeconds challenge budget the way a GPU render loop would.
+ * the tok/s figure the way a GPU render loop would.
  */
 
 let ctx = null;
 let master = null;
 let muted = false;
+
+// ── Bus layout ───────────────────────────────────────────────────────────────
+//
+//   cues ──► sfxBus ──┬──────────────────────► master (mute) ──► limiter ──► speakers
+//                     └─► reverbSend ─► room ─┘
+//   blips/drone ──► blipBus ─┘ (ducked under the payoff cues)
+//
+// One compressor on the way out so overlapping cues (a gavel over the coin cascade over the
+// last token blips) glue together instead of clipping, and one synthetic room so every cue
+// sounds like it happened in the same place. Both are built from code: the room's impulse
+// response is generated noise, for the same no-assets reason as everything else here.
+let sfxBus = null;
+let blipBus = null;
 
 const MUTE_KEY = 'polocalcompare.muted';
 
@@ -43,13 +56,65 @@ function ensureCtx() {
         ctx = new Ctor();
         master = ctx.createGain();
         master.gain.value = muted ? 0 : MASTER_GAIN;
-        master.connect(ctx.destination);
+
+        const limiter = ctx.createDynamicsCompressor();
+        limiter.threshold.value = -18;
+        limiter.knee.value = 12;
+        limiter.ratio.value = 4;
+        limiter.attack.value = 0.004;
+        limiter.release.value = 0.2;
+        master.connect(limiter);
+        limiter.connect(ctx.destination);
+
+        sfxBus = ctx.createGain();
+        blipBus = ctx.createGain();
+        sfxBus.connect(master);
+        blipBus.connect(master);
+
+        const room = ctx.createConvolver();
+        room.buffer = roomImpulse(ctx, 1.6);
+        const reverbSend = ctx.createGain();
+        reverbSend.gain.value = 0.22;
+        sfxBus.connect(reverbSend);
+        reverbSend.connect(room);
+        room.connect(master);
     } catch {
         ctx = null;
         master = null;
+        sfxBus = null;
+        blipBus = null;
     }
 
     return ctx;
+}
+
+/**
+ * A stereo impulse response made of noise under an exponential decay — a small, bright room.
+ * Independent noise per channel is what gives it width; identical channels would sound mono.
+ */
+function roomImpulse(audio, seconds) {
+    const frames = Math.floor(audio.sampleRate * seconds);
+    const buffer = audio.createBuffer(2, frames, audio.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const data = buffer.getChannelData(ch);
+        for (let i = 0; i < frames; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / frames, 3.2);
+        }
+    }
+    return buffer;
+}
+
+/**
+ * Pulls the blip bus (token blips and the ambient drone) down under a payoff cue, then lets it
+ * back up. Without it the verdict gavel lands on top of the last few racing blips and reads
+ * as clutter rather than as the moment.
+ */
+function duck(depth = 0.18, seconds = 1.1) {
+    if (!ctx || !blipBus) return;
+    const t = ctx.currentTime;
+    blipBus.gain.cancelScheduledValues(t);
+    blipBus.gain.setTargetAtTime(depth, t, 0.03);
+    blipBus.gain.setTargetAtTime(1, t + seconds, 0.25);
 }
 
 try {
@@ -72,6 +137,8 @@ export function setMuted(value) {
     if (master && ctx) {
         master.gain.setTargetAtTime(muted ? 0 : MASTER_GAIN, ctx.currentTime, 0.01);
     }
+    // A drone left running under a zero master gain still costs an audio graph for nothing.
+    if (muted) setAmbientDrone(false);
     return muted;
 }
 
@@ -81,7 +148,7 @@ export function setMuted(value) {
  * One shaped note. Uses setTargetAtTime for the tail rather than a linear ramp so the decay
  * sounds exponential — a linear fade reads as a synthetic "cut" rather than a note ending.
  */
-function tone({ freq, type = 'sine', at = 0, dur = 0.3, gain = 0.5, glideTo = null, detune = 0 }) {
+function tone({ freq, type = 'sine', at = 0, dur = 0.3, gain = 0.5, glideTo = null, detune = 0, bus = null }) {
     const audio = ensureCtx();
     if (!audio || !master) return;
 
@@ -102,7 +169,7 @@ function tone({ freq, type = 'sine', at = 0, dur = 0.3, gain = 0.5, glideTo = nu
     amp.gain.setTargetAtTime(0.0001, t0 + 0.008, dur / 3);
 
     osc.connect(amp);
-    amp.connect(master);
+    amp.connect(bus ?? sfxBus);
 
     osc.start(t0);
     osc.stop(t0 + dur + 0.1);
@@ -142,7 +209,7 @@ function noiseHit({ at = 0, dur = 0.12, gain = 0.5, freq = 1800, q = 0.7 }) {
 
     source.connect(filter);
     filter.connect(amp);
-    amp.connect(master);
+    amp.connect(sfxBus);
 
     source.start(t0);
     source.stop(t0 + dur + 0.05);
@@ -182,6 +249,7 @@ export function playSnareRoll() {
 
 /** Verdict recorded — a bright major arpeggio. */
 export function playSuccess() {
+    duck(0.25, 0.8);
     // C6 E6 G6 C7: a plain major triad resolving up an octave.
     const notes = [1046.5, 1318.5, 1568.0, 2093.0];
     notes.forEach((freq, i) => {
@@ -193,6 +261,7 @@ export function playSuccess() {
 
 /** Tournament champion — a longer, wider fanfare so the final reads bigger than a duel. */
 export function playFanfare() {
+    duck(0.12, 2.0);
     const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
     notes.forEach((freq, i) => {
         // Two detuned saws per note: the beating between them is what makes it sound brassy
@@ -241,78 +310,170 @@ export function playWhoosh() {
 
     source.connect(filter);
     filter.connect(amp);
-    amp.connect(master);
+    amp.connect(sfxBus);
 
     source.start(t0);
     source.stop(t0 + 0.45);
     source.onended = () => { try { amp.disconnect(); } catch { } };
 }
 
-// ── Live race blips with FM synthesis ──────────────────────────────────────────
-
-let lastBlipAt = 0;
+// ── The duet: each model gets a voice ────────────────────────────────────────
 
 /**
- * A blip whose pitch tracks generation speed, enhanced with FM synthesis for harmonic richness
- * at high speeds, so the race is dynamically audible as well as visible.
+ * Musical identity derived from a model id, so the same model always sounds the same across
+ * duels — a sonic signature rather than a random patch. The hash picks a root, a scale and a
+ * timbre; it is FNV-1a because it is five lines and distributes short ids well.
+ */
+const SCALES = [
+    [0, 2, 4, 7, 9],        // major pentatonic
+    [0, 3, 5, 7, 10],       // minor pentatonic
+    [0, 2, 3, 5, 7, 9, 10], // dorian
+    [0, 2, 4, 6, 7, 9, 11], // lydian
+];
+const TIMBRES = [
+    { type: 'sine', fm: 2 },
+    { type: 'triangle', fm: 3 },
+    { type: 'sine', fm: 1.5 },
+    { type: 'triangle', fm: 1 },
+];
+
+function hashSeed(seed) {
+    let h = 0x811c9dc5;
+    const text = String(seed ?? '');
+    for (let i = 0; i < text.length; i++) {
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+}
+
+function voiceFor(seed) {
+    const h = hashSeed(seed);
+    return {
+        root: 57 + (h % 8),                 // A3 … E4 (MIDI)
+        scale: SCALES[(h >>> 3) % SCALES.length],
+        timbre: TIMBRES[(h >>> 6) % TIMBRES.length],
+        stride: 1 + ((h >>> 9) % 2),        // how far the melody walks per note
+    };
+}
+
+const duet = {
+    Left: { voice: voiceFor('left'), step: 0, dir: 1, lastAt: 0, panner: null },
+    Right: { voice: voiceFor('right'), step: 0, dir: 1, lastAt: 0, panner: null },
+};
+
+/**
+ * Assigns the two voices for a duel. When two models hash to the same root and scale, the
+ * right-hand one moves up a fourth — a duet in unison is one voice, and the point is to hear
+ * two.
+ */
+export function setDuetVoices(leftSeed, rightSeed) {
+    const left = voiceFor(leftSeed);
+    const right = voiceFor(rightSeed);
+    if (left.root === right.root && left.scale === right.scale) right.root += 5;
+
+    duet.Left = { voice: left, step: 0, dir: 1, lastAt: 0, panner: duet.Left.panner };
+    duet.Right = { voice: right, step: 0, dir: 1, lastAt: 0, panner: duet.Right.panner };
+}
+
+/**
+ * A spatial panner per side, reused for the whole duel. HRTF places the left model to your
+ * left and slightly ahead rather than just louder in one ear, which is what makes two
+ * overlapping melodies separable on headphones. Falls back to a stereo panner, then to none.
+ */
+function pannerFor(audio, side) {
+    const lane = duet[side];
+    if (lane.panner) return lane.panner;
+
+    const x = side === 'Left' ? -1.6 : 1.6;
+    try {
+        const p = audio.createPanner();
+        p.panningModel = 'HRTF';
+        p.distanceModel = 'inverse';
+        p.refDistance = 1;
+        if (p.positionX) {
+            p.positionX.value = x;
+            p.positionY.value = 0;
+            p.positionZ.value = -1;
+        } else {
+            p.setPosition(x, 0, -1);
+        }
+        p.connect(blipBus);
+        lane.panner = p;
+    } catch {
+        try {
+            const p = audio.createStereoPanner();
+            p.pan.value = side === 'Left' ? -0.6 : 0.6;
+            p.connect(blipBus);
+            lane.panner = p;
+        } catch {
+            lane.panner = blipBus;
+        }
+    }
+    return lane.panner;
+}
+
+/**
+ * One note of a model's melody. Pace is audible two ways: the faster model plays MORE notes
+ * (the per-side gap shrinks from ~420 ms toward 90 ms as tok/s climbs), and it plays them an
+ * octave up past ~60 tok/s. FM brightness also rises with speed.
+ *
+ * Throttled per side — the previous version kept one timestamp for both, so whichever side
+ * reported first silenced the other for the whole window.
  *
  * @param {number} velocity tokens/second
- * @param {string} side 'Left' or 'Right' — panned so the two are distinguishable.
+ * @param {string} side 'Left' or 'Right'
  */
 export function playTokenBlip(velocity, side) {
     const audio = ensureCtx();
     if (!audio || !master || muted) return;
 
-    const now = audio.currentTime;
-    if (now - lastBlipAt < 0.11) return;
-    lastBlipAt = now;
-
+    const lane = duet[side === 'Left' ? 'Left' : 'Right'];
     const normalized = Math.max(0, Math.min(1, (velocity || 0) / 120));
-    const carrierFreq = 320 + normalized * 460;
+    const gap = 0.42 - normalized * 0.33;
+
+    const now = audio.currentTime;
+    if (now - lane.lastAt < gap) return;
+    lane.lastAt = now;
+
+    // Walk the scale, turning around at the ends, so it reads as a line rather than a random
+    // sequence of pitches.
+    const { root, scale, timbre, stride } = lane.voice;
+    lane.step += lane.dir * stride;
+    if (lane.step >= scale.length * 2 || lane.step <= 0) lane.dir = -lane.dir;
+    lane.step = Math.max(0, Math.min(scale.length * 2 - 1, lane.step));
+
+    const octave = Math.floor(lane.step / scale.length) + (normalized > 0.5 ? 1 : 0);
+    const midi = root + scale[lane.step % scale.length] + octave * 12;
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
 
     const carrier = audio.createOscillator();
-    const carrierAmp = audio.createGain();
-    const pan = audio.createStereoPanner ? audio.createStereoPanner() : null;
+    const amp = audio.createGain();
+    carrier.type = timbre.type;
+    carrier.frequency.value = freq;
 
-    carrier.type = 'sine';
-    carrier.frequency.value = carrierFreq;
+    amp.gain.setValueAtTime(0.0001, now);
+    amp.gain.exponentialRampToValueAtTime(0.07, now + 0.006);
+    amp.gain.setTargetAtTime(0.0001, now + 0.008, 0.045);
 
-    carrierAmp.gain.setValueAtTime(0.0001, now);
-    carrierAmp.gain.exponentialRampToValueAtTime(0.06, now + 0.005);
-    carrierAmp.gain.setTargetAtTime(0.0001, now + 0.006, 0.02);
+    const modulator = audio.createOscillator();
+    const modAmp = audio.createGain();
+    modulator.frequency.value = freq * timbre.fm;
+    modAmp.gain.value = 20 + normalized * 220;
+    modulator.connect(modAmp);
+    modAmp.connect(carrier.frequency);
 
-    // FM modulation for high velocities (>35 tok/s): introduces rich harmonic overtones
-    let modulator = null;
-    let modAmp = null;
-    if (normalized > 0.28) {
-        modulator = audio.createOscillator();
-        modAmp = audio.createGain();
+    carrier.connect(amp);
+    amp.connect(pannerFor(audio, side === 'Left' ? 'Left' : 'Right'));
 
-        modulator.type = 'sine';
-        modulator.frequency.value = carrierFreq * 2;
-        modAmp.gain.value = normalized * 180;
-
-        modulator.connect(modAmp);
-        modAmp.connect(carrier.frequency);
-        modulator.start(now);
-        modulator.stop(now + 0.08);
-    }
-
-    carrier.connect(carrierAmp);
-    if (pan) {
-        pan.pan.value = side === 'Left' ? -0.55 : 0.55;
-        carrierAmp.connect(pan);
-        pan.connect(master);
-    } else {
-        carrierAmp.connect(master);
-    }
-
+    modulator.start(now);
     carrier.start(now);
-    carrier.stop(now + 0.08);
+    modulator.stop(now + 0.22);
+    carrier.stop(now + 0.22);
     carrier.onended = () => {
         try {
-            carrierAmp.disconnect();
-            if (modAmp) modAmp.disconnect();
+            amp.disconnect();
+            modAmp.disconnect();
         } catch { }
     };
 }
@@ -342,7 +503,7 @@ export function playSubDrop() {
 
     osc.connect(filter);
     filter.connect(amp);
-    amp.connect(master);
+    amp.connect(sfxBus);
 
     osc.start(t0);
     osc.stop(t0 + 0.5);
@@ -369,6 +530,7 @@ export function playShockwave() {
     const audio = ensureCtx();
     if (!audio || !master || muted) return;
 
+    duck(0.3, 0.9);
     noiseHit({ at: 0, dur: 0.06, gain: 0.4, freq: 4800, q: 0.5 });
     tone({ freq: 100, glideTo: 32, type: 'sine', at: 0.01, dur: 0.65, gain: 0.38 });
 }
@@ -378,6 +540,7 @@ export function playGavelImpact() {
     const audio = ensureCtx();
     if (!audio || !master || muted) return;
 
+    duck(0.1, 1.6);
     tone({ freq: 120, glideTo: 38, type: 'sine', at: 0, dur: 0.28, gain: 0.45 });
     noiseHit({ at: 0, dur: 0.08, gain: 0.35, freq: 1400, q: 1.0 });
 
@@ -480,7 +643,7 @@ export function setAmbientDrone(enabled) {
         osc1.connect(filter);
         osc2.connect(filter);
         filter.connect(gain);
-        gain.connect(master);
+        gain.connect(blipBus);
 
         osc1.start(now);
         osc2.start(now);
@@ -489,3 +652,72 @@ export function setAmbientDrone(enabled) {
     } catch { }
 }
 
+
+// ── Judge, board and bracket cues ────────────────────────────────────────────
+
+/**
+ * One heartbeat of the judge countdown: a lub-dub of two low thumps. Urgency (0…1) raises the
+ * level and tightens the gap between the two beats, so the last seconds feel closer together
+ * even though the Arena still calls this once per second.
+ */
+export function playHeartbeat(urgency = 0) {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    const u = Math.max(0, Math.min(1, urgency));
+    const gain = 0.22 + u * 0.28;
+    const gap = 0.24 - u * 0.1;
+
+    tone({ freq: 62, glideTo: 38, type: 'sine', at: 0, dur: 0.16, gain });
+    tone({ freq: 55, glideTo: 34, type: 'sine', at: gap, dur: 0.2, gain: gain * 0.75 });
+}
+
+/** A soft rising scan under the judge's reticle as it starts looking. */
+export function playScanSweep() {
+    const audio = ensureCtx();
+    if (!audio || !master || muted) return;
+
+    const t0 = audio.currentTime;
+    const source = noiseSource(audio, 1.3);
+    const filter = audio.createBiquadFilter();
+    const amp = audio.createGain();
+
+    filter.type = 'bandpass';
+    filter.Q.value = 6;
+    filter.frequency.setValueAtTime(500, t0);
+    filter.frequency.exponentialRampToValueAtTime(4200, t0 + 1.1);
+
+    amp.gain.setValueAtTime(0.0001, t0);
+    amp.gain.exponentialRampToValueAtTime(0.09, t0 + 0.2);
+    amp.gain.setTargetAtTime(0.0001, t0 + 0.9, 0.12);
+
+    source.connect(filter);
+    filter.connect(amp);
+    amp.connect(sfxBus);
+    source.start(t0);
+    source.stop(t0 + 1.3);
+    source.onended = () => { try { amp.disconnect(); } catch { } };
+}
+
+/** A model moved on the leaderboard since you last looked: up is a rising fifth, down a falling third. */
+export function playRankShift(direction) {
+    if (direction > 0) {
+        tone({ freq: 880, type: 'triangle', at: 0, dur: 0.18, gain: 0.14 });
+        tone({ freq: 1318.5, type: 'triangle', at: 0.07, dur: 0.28, gain: 0.14 });
+    } else {
+        tone({ freq: 659.25, type: 'sine', at: 0, dur: 0.18, gain: 0.1 });
+        tone({ freq: 523.25, type: 'sine', at: 0.08, dur: 0.26, gain: 0.1 });
+    }
+}
+
+/** A bracket winner's light travelling to the next round. */
+export function playAdvance() {
+    tone({ freq: 523.25, glideTo: 1046.5, type: 'triangle', at: 0, dur: 0.42, gain: 0.12 });
+    tone({ freq: 1568.0, type: 'sine', at: 0.36, dur: 0.4, gain: 0.12 });
+}
+
+/** A bracket loser dropping out: a low thud and a downward glide. */
+export function playKnockout() {
+    tone({ freq: 140, glideTo: 50, type: 'sine', at: 0, dur: 0.3, gain: 0.3 });
+    tone({ freq: 392.0, glideTo: 196.0, type: 'triangle', at: 0.02, dur: 0.36, gain: 0.08 });
+}

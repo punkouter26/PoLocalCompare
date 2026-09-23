@@ -7,13 +7,13 @@
    and the display name. They live here so a future surface (e.g. a quick-pick chip on a
    model page) can present the same control without forking the markup. *@
 
-<div class="arena__actions arena__actions--vote">
-    <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+<div class="arena-vote__row">
+    <button type="button" class="po-btn po-btn--lg po-btn--success arena-vote__btn"
             disabled="@Disabled"
             @onclick="@(async () => { _ = AudioService.PlayMechanicalClickAsync(true); await OnVote.InvokeAsync(DuelVerdict.Left); })">
         👈 Winner: @LeftDisplayName
     </button>
-    <button type="button" class="po-btn po-btn--lg po-btn--success arena__action-btn"
+    <button type="button" class="po-btn po-btn--lg po-btn--success arena-vote__btn"
             disabled="@Disabled"
             @onclick="@(async () => { _ = AudioService.PlayMechanicalClickAsync(true); await OnVote.InvokeAsync(DuelVerdict.Right); })">
         Winner: @RightDisplayName 👉

@@ -32,6 +32,19 @@ public sealed class SideMetrics
     public long? WarmUpMs { get; set; }
 
     public string? StallDetail { get; set; }
+
+    /// <summary>
+    /// When this side first reported <see cref="DuelStatus.Done"/>, as seen by this tab. Set
+    /// once; drives the photo finish, which needs both sides' finish times against one clock.
+    /// </summary>
+    public DateTimeOffset? FinishedAt { get; private set; }
+
+    /// <summary>Records the finish on the first Done this side reports; later reports are ignored.</summary>
+    public void NoteStatus(DuelStatus status, DateTimeOffset now)
+    {
+        Status = status;
+        if (status == DuelStatus.Done) FinishedAt ??= now;
+    }
 }
 
 /// <summary>Which side of the duel a piece of state belongs to.</summary>

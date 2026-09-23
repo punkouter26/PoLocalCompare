@@ -51,4 +51,21 @@ public sealed class LeaderboardEntryDto
     public double? AvgFirstTokenMs { get; init; }
 
     public double[]? EloSparkline { get; init; }
+
+    /// <summary>
+    /// Half-width of the 95% interval on this model's strength, in Elo points, from a
+    /// Bradley–Terry fit over every judged duel. Shown as "±N" beside the ELO. Wide for a
+    /// model with little evidence, narrow for one with a lot — the thing a bare rating hides.
+    /// </summary>
+    public double RatingInterval { get; init; }
+
+    /// <summary>
+    /// The Bradley–Terry strength itself (the centre of <see cref="RatingInterval"/>). Order-
+    /// independent, unlike <see cref="CurrentElo"/>, which depends on the sequence duels were
+    /// judged in. The board still ranks by ELO; this is the cross-check.
+    /// </summary>
+    public double Strength { get; init; }
+
+    /// <summary>Fewer judged duels than the fit needs to say much. The UI marks the row.</summary>
+    public bool IsProvisional { get; init; }
 }

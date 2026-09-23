@@ -43,7 +43,8 @@ public sealed class GetModelProfileHandler(
 
         // Rank comes from the leaderboard projection rather than a local re-sort, so the number
         // here is by construction the number the leaderboard row showed. Zero means unranked.
-        var rank = board.FirstOrDefault(e => e.ModelId == modelId)?.Rank ?? 0;
+        var standing = board.FirstOrDefault(e => e.ModelId == modelId);
+        var rank = standing?.Rank ?? 0;
 
         var opponentNames = await ResolveOpponentNamesAsync(history);
 
@@ -56,6 +57,12 @@ public sealed class GetModelProfileHandler(
             ModelType = model.ModelType,
             Rank = rank,
             CurrentElo = Math.Round(model.CurrentElo, 1),
+            // From the board rather than a second fit: one Bradley–Terry pass over the whole
+            // history is the only way a single model's interval means anything, and the board
+            // has already paid for it.
+            RatingInterval = standing?.RatingInterval ?? 0,
+            Strength = standing?.Strength ?? Math.Round(model.CurrentElo, 1),
+            IsProvisional = standing?.IsProvisional ?? true,
             DuelCount = model.DuelCount,
             WinCount = model.WinCount,
             DrawCount = model.DrawCount,
@@ -86,6 +93,9 @@ public sealed class GetModelProfileHandler(
             }).ToList(),
             KillList = killList,
             WinningOutputs = await BuildGalleryAsync(modelId, history, opponentNames),
+            Highlights = ProfileHighlights.Compute(history, id => opponentNames.GetValueOrDefault(
+                id,
+                ModelDisplayName.ResolveForDisplay(null, null, id))),
         };
     }
 
