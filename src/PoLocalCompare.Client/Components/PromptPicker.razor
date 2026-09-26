@@ -14,7 +14,7 @@
         <button type="button" class="po-btn po-btn--sm po-btn--secondary prompt-picker__disclosure"
                 aria-expanded="@(_libraryOpen ? "true" : "false")"
                 aria-controls="prompt-library"
-                @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(true); _libraryOpen = !_libraryOpen; })">
+                @onclick="@(() => { _ = AudioService.PlayTickAsync(); _libraryOpen = !_libraryOpen; })">
             <span aria-hidden="true">@(_libraryOpen ? "▾" : "▸")</span>
             @(_libraryOpen ? "Hide prompt library" : $"Browse prompt library ({PromptLibrary.All.Count})")
         </button>
@@ -22,13 +22,12 @@
         @if (_libraryOpen)
         {
         <div id="prompt-library">
-        <p class="prompt-picker__section-hint">Each one asks for a single self-contained HTML file.</p>
 
         <div class="prompt-picker__filters" role="group" aria-label="Filter prompts by category">
             <button type="button"
                     class="po-btn po-btn--sm po-btn--chip"
                     aria-pressed="@(_category == AllCategories ? "true" : "false")"
-                    @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(false); _category = AllCategories; })">
+                    @onclick="@(() => { _ = AudioService.PlayTickAsync(); _category = AllCategories; })">
                 All (@PromptLibrary.All.Count)
             </button>
             @foreach (var category in PromptLibrary.Categories)
@@ -37,7 +36,7 @@
                 <button type="button"
                         class="po-btn po-btn--sm po-btn--chip"
                         aria-pressed="@(_category == category ? "true" : "false")"
-                        @onclick="@(() => { _ = AudioService.PlayMechanicalClickAsync(false); _category = category; })">
+                        @onclick="@(() => { _ = AudioService.PlayTickAsync(); _category = category; })">
                     @category (@count)
                 </button>
             }
@@ -83,7 +82,7 @@
 
     private Task SelectAsync(string text)
     {
-        _ = AudioService.PlayMechanicalClickAsync(true);
+        _ = AudioService.PlayTickAsync();
         CloseLibrary();
         return OnPromptSelected.InvokeAsync(text);
     }

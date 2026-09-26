@@ -12,11 +12,10 @@
     backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     padding: var(--space-smd);
     font-size: var(--text-sm);
     color: var(--text);
-    backdrop-filter: blur(4px);
 }
 
 /* Diagnostics disclosure. Closed by default — these are the numbers you go looking for,
@@ -41,7 +40,7 @@
 .telemetry-hud__more-summary:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
 }
 
 .telemetry-hud__grid {
@@ -66,7 +65,7 @@
 
 .telemetry-hud__value {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 
@@ -83,14 +82,33 @@
     font-style: italic;
 }
 
-/* "Duel cost" total — spans both grid columns in the right-side HUD so the row is a
-   clear visual footer, not a sibling of an unrelated figure. */
-.telemetry-hud__item--duel-total {
-    grid-column: 1 / -1;
-    padding-top: var(--space-xs);
-    border-top: 1px dashed var(--border);
+/* ── Live track ──────────────────────────────────────────────────────────────
+   While the side streams: how far along it is against the front-runner. Was TokenRace's lane,
+   one per side in a separate panel above both outputs. --pos is written by the component. */
+.telemetry-hud__track {
+    height: var(--space-xs);
+    margin-bottom: var(--space-sm);
+    border-radius: var(--radius-full);
+    background: var(--surface-2);
+    overflow: hidden;
 }
 
+.telemetry-hud__fill {
+    width: var(--pos, 0%);
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+    transition: width var(--transition-medium);
+}
+
+.telemetry-hud__fill--failed {
+    background: var(--accent-red);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .telemetry-hud__fill {
+        transition: none;
+    }
+}
 
 /* ── Container queries ────────────────────────────────────────────────────
    This HUD is placed inside the Arena's viewport panel, whose width varies far more than the
@@ -103,11 +121,5 @@
 @container telemetry (max-width: 260px) {
     .telemetry-hud__grid {
         grid-template-columns: 1fr;
-    }
-}
-
-@container telemetry (min-width: 520px) {
-    .telemetry-hud__grid {
-        grid-template-columns: repeat(3, 1fr);
     }
 }

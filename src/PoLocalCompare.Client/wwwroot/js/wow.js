@@ -1,12 +1,11 @@
 /**
- * wow.js — DOM-level motion: route morphs, the holographic model card, the leaderboard
- * reshuffle, liquid glass and the bracket comet.
+ * wow.js — DOM-level motion: route morphs, the leaderboard reshuffle and liquid glass.
  *
  * Everything here animates transform and opacity (or hands the work to the browser's own
  * View Transitions machinery), so it runs on the compositor and never contends with the WebGPU
  * device WebLLM generates on. The one GPU-heavier treatment — the liquid-glass refraction — is
  * switched off by CSS whenever the GPU lease is held (html[data-gpu="busy"], set by util.js).
- * The canvas and shader effects live in fx.js; this file owns no canvas.
+ * The one canvas effect (confetti) lives in fx.js; this file owns no canvas.
  *
  * A classic script rather than a module because the navigation hook has to be listening before
  * the first click, and Blazor's interop reaches window.poWow.* directly.
@@ -94,159 +93,7 @@ window.poWow = (() => {
         navigate(href, link.dataset.vt, link.closest('[data-vt-hero]') ?? link);
     }, true);
 
-    // ── 2. Holographic model card ────────────────────────────────────────────
-
-    /**
-     * Pointer-tilts a card and moves its foil sheen with the angle. The values go out as CSS
-     * custom properties and every visual rule lives in the stylesheet, which is the app's rule
-     * for dynamic values. rAF-throttled: pointermove fires far faster than a frame.
-     */
-    function holo(selector) {
-        const card = document.querySelector(selector);
-        if (!card || card.dataset.holo === 'on' || reduced()) return;
-        card.dataset.holo = 'on';
-
-        let frame = 0;
-        let last = null;
-
-        const apply = () => {
-            frame = 0;
-            if (!last) return;
-            const rect = card.getBoundingClientRect();
-            const x = Math.min(1, Math.max(0, (last.clientX - rect.left) / rect.width));
-            const y = Math.min(1, Math.max(0, (last.clientY - rect.top) / rect.height));
-            card.style.setProperty('--holo-rx', `${((0.5 - y) * 10).toFixed(2)}deg`);
-            card.style.setProperty('--holo-ry', `${((x - 0.5) * 14).toFixed(2)}deg`);
-            card.style.setProperty('--holo-mx', `${(x * 100).toFixed(1)}%`);
-            card.style.setProperty('--holo-my', `${(y * 100).toFixed(1)}%`);
-            card.style.setProperty('--holo-angle', `${Math.round(x * 180 + y * 90)}deg`);
-        };
-
-        card.addEventListener('pointermove', e => {
-            last = e;
-            card.classList.add('profile__card--live');
-            if (!frame) frame = requestAnimationFrame(apply);
-        });
-        card.addEventListener('pointerleave', () => {
-            last = null;
-            card.classList.remove('profile__card--live');
-            for (const p of ['--holo-rx', '--holo-ry', '--holo-mx', '--holo-my', '--holo-angle']) {
-                card.style.removeProperty(p);
-            }
-        });
-    }
-
-    const TIER_COLOURS = {
-        prismatic: ['#ff6ec7', '#7d96ff', '#12b8cf', '#2ddc84', '#eab308'],
-        gold: ['#8a6100', '#eab308', '#ffe57f', '#eab308'],
-        silver: ['#5b6475', '#c9d1dc', '#f4f6f9', '#aab4c3'],
-        bronze: ['#5a3a1f', '#b0703a', '#e0a36b', '#8c5a2e'],
-    };
-
-    /**
-     * Draws the model's card to a PNG and downloads it. Canvas2D, on demand, from a click —
-     * not a render loop. Fixed tier palettes rather than theme tokens: a trading card should
-     * look the same whoever saves it.
-     */
-    function exportCard(data) {
-        const W = 600;
-        const H = 840;
-        const canvas = document.createElement('canvas');
-        canvas.width = W;
-        canvas.height = H;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const colours = TIER_COLOURS[data.tier] ?? TIER_COLOURS.bronze;
-
-        const frame = ctx.createLinearGradient(0, 0, W, H);
-        colours.forEach((c, i) => frame.addColorStop(i / (colours.length - 1), c));
-        ctx.fillStyle = frame;
-        roundRect(ctx, 0, 0, W, H, 36);
-        ctx.fill();
-
-        ctx.fillStyle = '#0d1422';
-        roundRect(ctx, 22, 22, W - 44, H - 44, 24);
-        ctx.fill();
-
-        // Foil band across the art box.
-        const foil = ctx.createLinearGradient(40, 120, W - 40, 420);
-        colours.forEach((c, i) => foil.addColorStop(i / (colours.length - 1), c));
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = foil;
-        roundRect(ctx, 48, 120, W - 96, 300, 18);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '800 30px system-ui, sans-serif';
-        ctx.fillText(fit(ctx, data.name, W - 180), 52, 84);
-
-        ctx.textAlign = 'right';
-        ctx.font = '800 34px system-ui, sans-serif';
-        ctx.fillText(data.rank > 0 ? `#${data.rank}` : '—', W - 52, 86);
-        ctx.textAlign = 'left';
-
-        ctx.font = '900 110px system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(13, 20, 34, 0.82)';
-        ctx.textAlign = 'center';
-        ctx.fillText(String(Math.round(data.elo)), W / 2, 310);
-        ctx.font = '700 22px system-ui, sans-serif';
-        ctx.fillText(`ELO  ±${Math.round(data.interval)}`, W / 2, 360);
-        ctx.textAlign = 'left';
-
-        const stats = [
-            ['Record', data.record],
-            ['Win rate', data.winRate],
-            ['Duels', String(data.duels)],
-            ['Type', data.type],
-        ];
-        ctx.font = '600 20px system-ui, sans-serif';
-        stats.forEach(([label, value], i) => {
-            const y = 490 + i * 62;
-            ctx.fillStyle = '#8b96a8';
-            ctx.fillText(label.toUpperCase(), 56, y);
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'right';
-            ctx.fillText(value, W - 56, y);
-            ctx.textAlign = 'left';
-            ctx.fillStyle = 'rgba(255,255,255,0.08)';
-            ctx.fillRect(56, y + 20, W - 112, 1);
-        });
-
-        ctx.fillStyle = colours[1];
-        ctx.font = '800 16px system-ui, sans-serif';
-        ctx.fillText(`${data.tier.toUpperCase()} · POLOCALCOMPARE`, 56, H - 56);
-
-        canvas.toBlob(blob => {
-            if (!blob) return;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${String(data.name).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-card.png`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
-        }, 'image/png');
-    }
-
-    function roundRect(ctx, x, y, w, h, r) {
-        ctx.beginPath();
-        if (ctx.roundRect) {
-            ctx.roundRect(x, y, w, h, r);
-        } else {
-            ctx.rect(x, y, w, h);
-        }
-    }
-
-    function fit(ctx, text, max) {
-        let value = String(text ?? '');
-        while (value.length > 4 && ctx.measureText(value).width > max) value = value.slice(0, -2);
-        return value === String(text ?? '') ? value : `${value}…`;
-    }
-
-    // ── 3. Leaderboard reshuffle ─────────────────────────────────────────────
+    // ── 2. Leaderboard reshuffle ─────────────────────────────────────────────
 
     const RANKS_KEY = 'polocalcompare.lastRanks';
 
@@ -321,7 +168,7 @@ window.poWow = (() => {
         }
     }
 
-    // ── 4. Liquid glass ──────────────────────────────────────────────────────
+    // ── 3. Liquid glass ──────────────────────────────────────────────────────
 
     /**
      * backdrop-filter: url(#svg) is Chromium-only, and @supports cannot be trusted to say so —
@@ -352,61 +199,7 @@ window.poWow = (() => {
         }, { passive: true });
     }
 
-    // ── 5. Bracket comet ─────────────────────────────────────────────────────
-
-    function centreOf(selector) {
-        const el = document.querySelector(selector);
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    }
-
-    /**
-     * A point of light from a match winner to the slot it now fills in the next round, along a
-     * shallow arc. A transformed <span> animated by WAAPI — compositor-only, so it is safe even
-     * if the next browser match is already starting on the GPU.
-     */
-    function comet(fromSelector, toSelector) {
-        if (reduced()) return;
-        const from = centreOf(fromSelector);
-        const to = centreOf(toSelector);
-        if (!from || !to) return;
-
-        const dot = document.createElement('span');
-        dot.className = 'po-comet';
-        dot.setAttribute('aria-hidden', 'true');
-        document.body.appendChild(dot);
-
-        const lift = Math.min(60, Math.abs(to.x - from.x) * 0.25);
-        const mid = { x: (from.x + to.x) / 2, y: Math.min(from.y, to.y) - lift };
-        const at = p => `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
-
-        dot.animate(
-            [
-                { transform: `${at(from)} scale(0.4)`, opacity: 0 },
-                { transform: `${at(from)} scale(1)`, opacity: 1, offset: 0.1 },
-                { transform: `${at(mid)} scale(1.25)`, opacity: 1, offset: 0.55 },
-                { transform: `${at(to)} scale(0.6)`, opacity: 0 },
-            ],
-            { duration: 900, easing: 'cubic-bezier(.45,.05,.3,1)' }
-        ).finished.finally(() => dot.remove());
-    }
-
-    /** The loser of a just-decided match tips and drops, then settles back dimmed. */
-    function knock(selector) {
-        if (reduced()) return;
-        const el = document.querySelector(selector);
-        el?.animate(
-            [
-                { transform: 'none' },
-                { transform: 'translateY(6px) rotate(-4deg)', offset: 0.3 },
-                { transform: 'translateY(14px) rotate(3deg)', opacity: 0.35, offset: 0.65 },
-                { transform: 'none' },
-            ],
-            { duration: 820, easing: 'cubic-bezier(.3,.7,.4,1)' });
-    }
-
     initGlass();
 
-    return { navigate, holo, exportCard, rankDiff, flipRows, comet, knock };
+    return { navigate, rankDiff, flipRows };
 })();

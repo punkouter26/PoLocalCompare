@@ -83,7 +83,22 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
     /// Renders <paramref name="html"/> and returns the PNG bytes, or null if it could not be
     /// rendered for any reason.
     /// </summary>
-    public async Task<byte[]?> RenderAsync(string? html, CancellationToken cancellationToken)
+    public async Task<byte[]?> RenderAsync(string? html, CancellationToken cancellationToken) =>
+        (await RenderCoreAsync(html, motion: false, cancellationToken))?[0];
+
+    /// <summary>
+    /// Like <see cref="RenderAsync"/>, but a page that looks animated is shot twice,
+    /// <see cref="FrameGap"/> apart. One frame cannot show motion, and most curated prompts ask
+    /// for it ("rotating continuously") — two identical frames are how the judge can tell a
+    /// cube that spins from one that was merely drawn. A static page still returns one frame.
+    /// </summary>
+    public Task<IReadOnlyList<byte[]>?> RenderFramesAsync(string? html, CancellationToken cancellationToken) =>
+        RenderCoreAsync(html, motion: true, cancellationToken);
+
+    /// <summary>Gap between the two frames of an animated page.</summary>
+    public static readonly TimeSpan FrameGap = TimeSpan.FromMilliseconds(800);
+
+    private async Task<IReadOnlyList<byte[]>?> RenderCoreAsync(string? html, bool motion, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(html)) return null;
 
@@ -111,10 +126,21 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
             });
 
             // Static HTML is fully painted the moment the DOM loads; only wait for animations.
-            var settle = LooksInteractive(html) ? SettleDelay : StaticSettleDelay;
+            var interactive = LooksInteractive(html);
+            if (motion && interactive)
+            {
+                // Same total budget as one long settle, split around the two shots.
+                await page.WaitForTimeoutAsync((float)(SettleDelay - FrameGap).TotalMilliseconds);
+                var first = await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png });
+                await page.WaitForTimeoutAsync((float)FrameGap.TotalMilliseconds);
+                var second = await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png });
+                return [first, second];
+            }
+
+            var settle = interactive ? SettleDelay : StaticSettleDelay;
             await page.WaitForTimeoutAsync((float)settle.TotalMilliseconds);
 
-            return await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png });
+            return [await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png })];
         }
         catch (Exception ex)
         {

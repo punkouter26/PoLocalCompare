@@ -18,9 +18,6 @@ public static partial class HtmlOutputQualityScorer
     [GeneratedRegex(@"<\s*body\b", RegexOptions.IgnoreCase)]
     private static partial Regex BodyTagRegex();
 
-    [GeneratedRegex(@"<\s*script\b", RegexOptions.IgnoreCase)]
-    private static partial Regex ScriptTagRegex();
-
     [GeneratedRegex(@"</\s*html\s*>", RegexOptions.IgnoreCase)]
     private static partial Regex ClosingHtmlTagRegex();
 
@@ -41,7 +38,8 @@ public static partial class HtmlOutputQualityScorer
         if (!DoctypeRegex().IsMatch(text)) score -= 10;
         if (!HtmlTagRegex().IsMatch(text)) score -= 10;
         if (!BodyTagRegex().IsMatch(text)) score -= 10;
-        if (!ScriptTagRegex().IsMatch(text)) score -= 10;
+        // No penalty for a missing <script>: curated prompts ask for CSS-only work (the cube is
+        // "CSS 3D transforms"), so a page that did exactly what it was told lost 10 points.
         if (HtmlTagRegex().IsMatch(text) && !ClosingHtmlTagRegex().IsMatch(text)) score -= 20;
         if (text.Length < 200) score -= 10;
 

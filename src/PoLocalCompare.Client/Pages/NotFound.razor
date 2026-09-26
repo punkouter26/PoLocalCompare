@@ -3,11 +3,10 @@
 
 <PageTitle>Page not found — PoLocalCompare</PageTitle>
 
-<div class="not-found">
-    <div class="not-found__card">
-        <span class="not-found__icon">404</span>
-        <h1 class="not-found__title">Page Not Found</h1>
-        <p class="not-found__message">The page you're looking for doesn't exist or has been moved.</p>
-        <a href="/" class="po-btn po-btn--ghost">← Back to Compare</a>
-    </div>
+<div class="po-page">
+    <EmptyState Icon="404"
+                IsPageHeading="true"
+                Title="Page not found"
+                Hint="The page you're looking for doesn't exist or has been moved."
+                Actions="@(new[] { new EmptyStateAction("Back to Compare", "/", EmptyStateActionVariant.Ghost) })" />
 </div>

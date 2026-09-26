@@ -12,7 +12,7 @@
    left/right pair, Profile's back link, Home's health badge — are still caller
    markup passed through Status and Actions slots. *@
 
-<header class="@HeaderClass">
+<header class="page-header">
     @* Top row: title + any status pill on the right. flex-wrap so the pill drops
        below on a phone without competing for the title's line. *@
     <div class="page-header__row">
@@ -35,10 +35,6 @@
     {
         <p class="page-header__warning">@Warning</p>
     }
-    @if (ExtraContent is not null)
-    {
-        <div>@ExtraContent</div>
-    }
 </header>
 
 @code {
@@ -47,26 +43,10 @@
     [Parameter] public string? Warning { get; set; }
     [Parameter] public RenderFragment? StatusContent { get; set; }
     [Parameter] public RenderFragment? Actions { get; set; }
-    [Parameter] public RenderFragment? ExtraContent { get; set; }
-    [Parameter] public PageHeaderVariant Variant { get; set; } = PageHeaderVariant.Default;
 
-    /// <summary>"profile" matches Profile's card treatment; "stacked" forces a vertical
-    /// layout on small screens — used by Home to push the warning above the picker.</summary>
-    [Parameter] public string? Layout { get; set; }
+    /// <summary>Extra class on the h1 — the per-page E2E-UI hook (home__title, archive__title…).
+    /// Those hooks carry no styling of their own; see app.css "Page-title hooks".</summary>
+    [Parameter] public string? TitleHook { get; set; }
 
-    private string HeaderClass
-    {
-        get
-        {
-            var classes = new List<string> { "page-header" };
-            classes.Add($"page-header--{Variant.ToString().ToLowerInvariant()}");
-            if (Layout is not null) classes.Add($"page-header--{Layout.ToLowerInvariant()}");
-            return string.Join(' ', classes);
-        }
-    }
-
-    /// <summary>Title sizing comes from the .po-title primitive; everything else here is
-    /// how the title sits in the row (no extra rules). The Profile card overrides its own
-    /// title size in model-card geometry, which is fine — Profile is a card, not a page.</summary>
-    private string TitleClass => "po-title page-header__title";
+    private string TitleClass => TitleHook is null ? "po-title page-header__title" : $"po-title page-header__title {TitleHook}";
 }

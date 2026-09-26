@@ -276,6 +276,15 @@ self.onmessage = async (event) => {
             ],
             stream: true,
             max_tokens: 4096,
+            // 0.2, matching FoundryInferenceProxy and OllamaInferenceProxy. Without it WebLLM
+            // uses each model's own config default (often 0.6–1.0), so a browser model was
+            // sampling at a different temperature from its remote opponent in the same duel.
+            temperature: 0.2,
+            // Qwen3 thinks by default — hundreds of tokens on the GPU being timed before the
+            // first character of HTML. WebLLM implements enable_thinking=false by prefilling an
+            // empty <think></think> block for ANY model, so send it only to Qwen3; on a model
+            // without a thinking template that block is just noise in its reply.
+            ...(/^qwen3/i.test(effectiveModelId) ? { extra_body: { enable_thinking: false } } : {}),
         });
 
         for await (const chunk of stream) {

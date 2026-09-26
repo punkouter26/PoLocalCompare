@@ -1,13 +1,13 @@
 /* ── PageHeader ──────────────────────────────────────────────────────────────
    The page title row. Was carried by .home__header-row, .po-header__row and the
    Profile card's flex. The primitive below is geometry-only — no font-sizes here,
-   those come from the .po-title on the inner h1. Per-surface tweaks now live as
-   layout modifiers that callers add (e.g. `Layout="stacked"` on Home). */
+   those come from the .po-title on the inner h1. */
 
 .page-header {
     display: flex;
     flex-direction: column;
-    gap: var(--space-smd);
+    gap: var(--space-xs);
+    margin-block-end: var(--space-md);
 }
 
 .page-header__row {
@@ -15,7 +15,7 @@
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: var(--space-md);
+    gap: var(--space-sm) var(--space-md);
     min-width: 0;
 }
 
@@ -40,25 +40,5 @@
     margin: 0;
     color: var(--accent-yellow);
     font-size: var(--text-md);
-    font-weight: var(--weight-500, 500);
-}
-
-/* Card variant: Profile's tier-framed display. */
-.page-header--card {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-md) var(--space-lg);
-}
-
-.page-header--card .page-header__title {
-    font-size: var(--text-2xl);
-}
-
-/* Stacked variant: forces a vertical layout so callers can guarantee ordering on small
-   screens (e.g. Home — the title is the first thing a phone reads). */
-.page-header--stacked .page-header__row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-sm);
+    font-weight: var(--weight-medium);
 }

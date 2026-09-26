@@ -123,7 +123,7 @@ window.startWebLlmInference = async function (dotnetRef, modelId, webLlmModelId,
     const releaseLease = () => window.poGpuLease?.release(leaseOwner);
     window.poGpuLease?.acquire(leaseOwner);
 
-    const worker = new Worker('/js/webllm-worker.js?v=10', { type: 'module' });
+    const worker = new Worker('/js/webllm-worker.js?v=11', { type: 'module' });
     workers[modelId] = worker;
 
     worker.onmessage = (event) => {

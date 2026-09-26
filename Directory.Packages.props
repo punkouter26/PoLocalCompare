@@ -49,6 +49,5 @@
     <!-- Re-added 2026-09-02. Removed on 2026-08-23 over payload (1.43 MB gzipped,
          11.9% of the download); the owner re-took that decision explicitly. See the
          measured before/after in PoLocalCompare.Client.csproj. -->
-    <PackageVersion Include="Radzen.Blazor" Version="11.3.0" />
   </ItemGroup>
 </Project>

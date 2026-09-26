@@ -12,6 +12,13 @@ public static class HtmlOutputNormalizer
         @"```(?:html)?\s*(?<body>[\s\S]*?)\s*```",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    // A reasoning model's scratchpad. Qwen3 on WebLLM emits one (an empty one even with
+    // thinking switched off), and rendered in the preview it is a paragraph of plain text
+    // above the page.
+    private static readonly Regex ThinkBlockRegex = new(
+        @"^\s*<think>[\s\S]*?</think>",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     public static string Normalize(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -19,7 +26,7 @@ public static class HtmlOutputNormalizer
             return string.Empty;
         }
 
-        var trimmed = raw.Trim();
+        var trimmed = ThinkBlockRegex.Replace(raw, string.Empty).Trim();
 
         var fencedBlock = FencedBlockRegex.Match(trimmed);
         if (fencedBlock.Success)

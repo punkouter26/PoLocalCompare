@@ -44,10 +44,8 @@ public static class ModelDisplayName
     /// </summary>
     /// <remarks>
     /// "Retired", not "Deleted": the duel is intact, it is the catalog entry that is gone.
-    /// <c>OrphanModelIdRemapper</c> repoints history at the current catalog on startup, so in
-    /// practice this now fires only for a model whose name matches nothing the catalog knows.
-    /// It stays because re-registering an API model after a storage wipe can mint a fresh id at
-    /// any time. This is the single implementation: the Archive, the Home page's recent list and
+    /// Re-registering an API model after a storage wipe can mint a fresh id at any time, which
+    /// orphans that model's older duels. This is the single implementation: the Archive, the Home page's recent list and
     /// the kill-list handler each carried their own, and they had already drifted — two said
     /// "Retired model" and the third said "Unknown model" for the same condition.
     /// </remarks>

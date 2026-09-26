@@ -11,10 +11,9 @@ namespace PoLocalCompare.Shared.Presentation;
 /// </summary>
 /// <remarks>
 /// Mutable by design: status updates arrive many times per second and a per-update
-/// allocation would be churn for nothing. The shape is the streaming subset only —
-/// static per-duel state (which side runs in the browser, the previous status, the
-/// "last token at" timing) stays on the page because they are read in different places
-/// than the live telemetry.
+/// allocation would be churn for nothing. The browser-model bookkeeping lives here too:
+/// it used to be a second row of <c>_leftXxx</c> / <c>_rightXxx</c> fields on the Arena
+/// beside this class, which kept the local status handler as two copy-pasted branches.
 /// </remarks>
 public sealed class SideMetrics
 {
@@ -24,27 +23,26 @@ public sealed class SideMetrics
 
     public double? TokenVelocity { get; set; }
 
-    public double? PeakVelocity { get; set; }
-
-    /// <summary>Bounded list of recent tok/s samples for the sparkline.</summary>
-    public List<double> VelocityHistory { get; } = new();
-
+    /// <summary>
+    /// A browser model's warm-up, captured at the worker's Initializing → Generating edge and
+    /// subtracted from its elapsed time so a slow model load does not read as slow generation.
+    /// </summary>
     public long? WarmUpMs { get; set; }
 
-    public string? StallDetail { get; set; }
+    /// <summary>This side runs in the tab (WebGPU) — the only kind the stall note explains.</summary>
+    public bool IsBrowserModel { get; set; }
 
     /// <summary>
-    /// When this side first reported <see cref="DuelStatus.Done"/>, as seen by this tab. Set
-    /// once; drives the photo finish, which needs both sides' finish times against one clock.
+    /// The last status the in-tab worker reported. Separate from <see cref="Status"/> because
+    /// the server's hub sends its own placeholder <c>Generating</c> for a browser side every
+    /// 500 ms, which would hide the worker's own warm-up edge.
     /// </summary>
-    public DateTimeOffset? FinishedAt { get; private set; }
+    public DuelStatus LocalStatus { get; set; } = DuelStatus.Initializing;
 
-    /// <summary>Records the finish on the first Done this side reports; later reports are ignored.</summary>
-    public void NoteStatus(DuelStatus status, DateTimeOffset now)
-    {
-        Status = status;
-        if (status == DuelStatus.Done) FinishedAt ??= now;
-    }
+    /// <summary>When the in-tab worker last reported anything — the stall note's clock.</summary>
+    public DateTimeOffset LastLocalUpdateAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public string? StallDetail { get; set; }
 }
 
 /// <summary>Which side of the duel a piece of state belongs to.</summary>

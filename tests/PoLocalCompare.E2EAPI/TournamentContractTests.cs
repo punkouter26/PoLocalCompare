@@ -37,7 +37,7 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     public async Task Entrants_Returns200WithAnEntrantShape()
     {
         using var client = app.CreateAuthenticatedClient();
-        await RegisterModelAsync(client, "Entrant");
+        await RegisterModelAsync("Entrant");
 
         var response = await client.GetAsync("/api/tournaments/entrants");
 
@@ -57,8 +57,8 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     public async Task Draw_Returns201WithTheBracketAlreadyPopulated()
     {
         using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "T Left");
-        var right = await RegisterModelAsync(client, "T Right");
+        var left = await RegisterModelAsync("T Left");
+        var right = await RegisterModelAsync("T Right");
 
         var response = await client.PostAsJsonAsync("/api/tournaments", new
         {
@@ -85,7 +85,7 @@ public sealed class TournamentContractTests(ApiAppFixture app)
 
         var ids = new List<string>();
         for (var i = 0; i < fieldSize; i++)
-            ids.Add(await RegisterModelAsync(client, $"T Bad{fieldSize}"));
+            ids.Add(await RegisterModelAsync($"T Bad{fieldSize}"));
 
         var response = await client.PostAsJsonAsync("/api/tournaments", new
         {
@@ -119,7 +119,7 @@ public sealed class TournamentContractTests(ApiAppFixture app)
     public async Task Profile_ReturnsTheExpectedShapeForARealModelAnd404ForAnUnknownId()
     {
         using var client = app.CreateAuthenticatedClient();
-        var modelId = await RegisterModelAsync(client, "P Shape");
+        var modelId = await RegisterModelAsync("P Shape");
 
         var ok = await client.GetAsync($"/api/leaderboard/{modelId}/profile");
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
@@ -137,17 +137,6 @@ public sealed class TournamentContractTests(ApiAppFixture app)
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
 
-    private static async Task<string> RegisterModelAsync(HttpClient client, string prefix)
-    {
-        var response = await client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = $"{prefix} {Guid.NewGuid():N}",
-            ModelType = "Remote",
-            ApiEndpointRef = "demo-deployment",
-            InputTokenPricePerMillion = 0.10m,
-            OutputTokenPricePerMillion = 0.30m,
-        });
-        response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
-    }
+    private Task<string> RegisterModelAsync(string prefix) =>
+        TestModels.RemoteAsync(app.Services, $"{prefix} {Guid.NewGuid():N}");
 }

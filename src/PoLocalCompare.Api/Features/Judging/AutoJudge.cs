@@ -331,7 +331,9 @@ public sealed class AutoJudge
         // ("how often does the AI judge decide duels?") counts forfeits as judgments.
         var (source, judgeModel) = decision.IsWalkover
             ? (VerdictSource.Constraint, null)
-            : (VerdictSource.Ai, _options.Deployment);
+            // The model that actually judged: with vision off that is TextOnlyDeployment, and
+            // stamping Deployment credited gpt-5.4-mini with every gpt-4.1-nano verdict.
+            : (VerdictSource.Ai, _options.EffectiveDeployment(_options.VisionEnabled));
 
         var command = new RecordVerdictCommand(
             duelId,

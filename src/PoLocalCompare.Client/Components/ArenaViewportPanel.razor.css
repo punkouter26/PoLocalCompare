@@ -45,3 +45,10 @@
        match nothing and it falls back to two columns, which is the correct degradation. */
     container: telemetry / inline-size;
 }
+
+/* The side that won. Static on purpose — a looping shimmer here was a non-compositor animation
+   (background-position) running beside a WebGPU tab. */
+.arena-panel__box--winner {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 28px color-mix(in srgb, var(--accent-green) 35%, transparent);
+}

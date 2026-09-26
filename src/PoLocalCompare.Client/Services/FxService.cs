@@ -3,16 +3,14 @@ using Microsoft.JSInterop;
 namespace PoLocalCompare.Client.Services;
 
 /// <summary>
-/// JS interop wrapper for the canvas effects in <c>wwwroot/js/fx.js</c>: the one-shot bursts,
-/// the photo-finish strip and the shader backdrop.
+/// JS interop wrapper for the confetti burst in <c>wwwroot/js/fx.js</c>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Browser models run WebLLM inference over WebGPU in this same tab, and the tok/s the race
-/// reports is measured while that is happening. So every effect in the module checks the GPU
-/// lease (<c>window.poGpuLease</c>, held by <c>webllm-interop.js</c> for the life of a worker)
-/// and does nothing while it is held, and the one continuous effect — the backdrop — stops its
-/// loop outright rather than idling. Callers do not gate any of that, nor reduced motion.
+/// reports is measured while that is happening. So the burst checks the GPU lease
+/// (<c>window.poGpuLease</c>, held by <c>webllm-interop.js</c> for the life of a worker) and does
+/// nothing while it is held. Callers do not gate that, nor reduced motion.
 /// </para>
 /// <para>
 /// <b>The module is imported as an <see cref="IJSObjectReference"/>.</b> Until 2026-09-22
@@ -24,7 +22,7 @@ namespace PoLocalCompare.Client.Services;
 /// </remarks>
 public sealed class FxService(IJSRuntime js) : IAsyncDisposable
 {
-    private const string ModulePath = "/js/fx.js?v=5";
+    private const string ModulePath = "/js/fx.js?v=7";
 
     private Task<IJSObjectReference>? _module;
 
@@ -38,49 +36,6 @@ public sealed class FxService(IJSRuntime js) : IAsyncDisposable
 
     /// <summary>A larger burst for a tournament champion — the final should outweigh a duel.</summary>
     public Task ChampionBurstAsync(string selector) => BurstFromAsync(selector, count: 160);
-
-    /// <summary>Fires an expanding radial shockwave ripple from an element.</summary>
-    public Task ShockwaveAsync(string selector, string? color = null) =>
-        color is null ? CallAsync("shockwaveFrom", selector) : CallAsync("shockwaveFrom", selector, new { color });
-
-    /// <summary>Fires a 2.5D directional shard shatter burst from the element.</summary>
-    public Task ShardShatterAsync(string selector) => CallAsync("shardShatterFrom", selector);
-
-    /// <summary>Triggers multi-stage 3D tumbling confetti ribbons and golden embers.</summary>
-    public Task ChampionPyrotechnicsAsync(string selector) => CallAsync("championPyrotechnicsFrom", selector);
-
-    /// <summary>Transfers glowing kinetic motes from the losing card to the winner's Elo badge.</summary>
-    public Task MoteTransferAsync(string fromSelector, string toSelector) =>
-        CallAsync("moteTransfer", fromSelector, toSelector);
-
-    /// <summary>
-    /// The finish-line camera strip: both sides' tok/s history as slit-scan lanes, with the
-    /// margin. The caller states the same margin as text; this is the decorative half.
-    /// </summary>
-    public Task PhotoFinishAsync(
-        string leftName, IReadOnlyList<double> leftHistory,
-        string rightName, IReadOnlyList<double> rightHistory,
-        string winner, double marginMs) =>
-        CallAsync("photoFinish", new
-        {
-            left = new { name = leftName, history = leftHistory },
-            right = new { name = rightName, history = rightHistory },
-            winner,
-            marginMs,
-        });
-
-    /// <summary>Initializes the shader backdrop. A no-op without WebGL2.</summary>
-    public Task InitLivingCanvasAsync(string canvasId = "po-living-canvas") =>
-        CallAsync("initLivingCanvas", canvasId);
-
-    /// <summary>'idle' or 'victory' — a crowned champion turns the wash gold.</summary>
-    public Task SetLivingStateAsync(string state) => CallAsync("setLivingState", state);
-
-    /// <summary>
-    /// Tells the backdrop where the app is. It refuses to run on routes where a browser model
-    /// could be inferring (/arena, /tournament), whether or not one is right now.
-    /// </summary>
-    public Task SetLivingRouteAsync(string path) => CallAsync("setLivingRoute", path);
 
     private async Task CallAsync(string identifier, params object?[] args)
     {

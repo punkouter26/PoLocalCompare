@@ -35,7 +35,8 @@
     gap: var(--space-smd);
 }
 
-.navmenu__brand {
+/* ::deep — the element is rendered by <BrandMark>, outside this file's scope id. */
+::deep .navmenu__brand {
     /* Geometry-only hook for <BrandMark />: flex, gap, the touch-target min-height, and a
        hover accent. The brand glyph and label live in BrandMark.razor.css. */
     display: flex;
@@ -51,14 +52,8 @@
     letter-spacing: -0.02em;
 }
 
-.navmenu__brand:hover {
+::deep .navmenu__brand:hover {
     color: var(--accent-green);
-}
-
-.navmenu__brand-mark,
-.navmenu__brand-text {
-    /* The PL tile + wordmark moved into <BrandMark />; this selector is kept as a
-       no-op so the markup doesn't accidentally grow new uses that style nothing. */
 }
 
 .navmenu__toggler {
@@ -146,7 +141,8 @@
 
 /* ── Mobile collapsed menu ──────────────────────────────────────────────────── */
 /* ── Known debt: Bootstrap-era breakpoints ────────────────────────────────
-   767.98 / 991.98 / 1279.98 are Bootstrap's off-by-0.02 boundaries, left from before Bootstrap
+   767.98 / 991.98 are Bootstrap's off-by-0.02 boundaries (1279.98 went with the old
+   right-hand cluster), left from before Bootstrap
    was removed. They are NOT on the app's 640/1024/1400 scale. The fractional part is
    load-bearing here rather than cosmetic — each pairs with a `min-width: 768px` rule, and
    rounding one side without the other opens a gap where neither matches.
@@ -163,6 +159,7 @@
 
     .navmenu__toggler {
         display: inline-flex;
+        margin-inline-start: auto;
     }
 
     .navmenu__collapse {
@@ -196,21 +193,23 @@
     }
 }
 
-/* ── USING MOCK DATA banner (standards §7) ─────────────────────────────────── */
-.navmenu__mock-banner {
-    background: var(--accent-red);
-    /* --on-accent, not a literal #ffffff. The fill is always --accent-red, but that token
-       is #c62828 in light and #ef4444 in dark, and white on the dark value measures 3.76:1
-       — under SC 1.4.3 for this 13px bold text. --on-accent is white on the light palette
-       and black on the dark one, which is 5.62 and 5.58 respectively. */
-    color: var(--on-accent);
+/* ── USING MOCK DATA chip (standards §7) ────────────────────────────────────
+   A compact status tint beside the brand, not a full-width row: the full sentence is in the
+   title and a visually-hidden span. Opaque --danger-* tokens, so --accent-red text keeps the
+   same contrast on it in both themes. */
+.navmenu__mock-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: var(--radius-full);
+    border: 1px solid var(--danger-border);
+    background: var(--danger-surface);
+    color: var(--accent-red);
+    font-size: var(--text-xs);
     font-weight: 700;
-    text-align: center;
-    padding: var(--space-xs) var(--space-md);
     letter-spacing: 0.05em;
-    font-size: var(--text-sm);
-    width: 100%;
-    display: block;
+    cursor: help;
 }
 
 /* ── Auth / GUEST identity (standards §6) ──────────────────────────────────── */
@@ -227,10 +226,6 @@
 .navmenu__auth > .po-btn {
     flex: 0 0 auto;
     white-space: nowrap;
-}
-
-.navmenu__theme-toggle {
-    padding-inline: var(--space-smd);
 }
 
 .navmenu__user-badge {
@@ -282,54 +277,119 @@
     border: 1px solid var(--success-border);
 }
 
-/* ── Theme toggle (System → Light → Dark) ────────────────────────────────────
-   The Microsoft sign-in button is now <MicrosoftSignInButton /> with its
-   styling in MicrosoftSignInButton.razor.css. */
-.navmenu__theme-glyph {
+/* ── User menu (<details>) ─────────────────────────────────────────────────────
+   Theme, sound, Catalog and Logout behind the identity badge (a gear when signed out).
+   Focus rings and the 24px/44px target floor for button and summary come from app.css;
+   only the NavLink anchor needs the floor restated. */
+.navmenu__menu {
+    position: relative;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.navmenu__menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    max-width: 100%;
+    padding: var(--space-2xs);
+    border-radius: var(--radius-full);
+    color: var(--text);
+    cursor: pointer;
+    list-style: none;           /* drops the disclosure triangle (Firefox) */
+}
+
+.navmenu__menu-trigger::-webkit-details-marker {
+    display: none;              /* ...and in Chromium/WebKit */
+}
+
+.navmenu__menu-trigger:hover {
+    background: var(--surface-1);
+}
+
+.navmenu__menu-caret {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    transition: transform 0.15s ease;
+}
+
+.navmenu__menu[open] .navmenu__menu-caret {
+    transform: rotate(180deg);
+}
+
+.navmenu__menu-panel {
+    position: absolute;
+    inset-inline-end: 0;
+    inset-block-start: calc(100% + var(--space-xs));
+    z-index: 110;
+    display: flex;
+    flex-direction: column;
+    min-width: max-content;
+    padding: var(--space-xs);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--glass-shadow);
+}
+
+/* ::deep because the Catalog entry is a NavLink, whose anchor renders outside this
+   component's scope id; the buttons match it too. */
+::deep .navmenu__menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    min-block-size: var(--target-min);
+    padding: var(--space-sm) var(--space-smd);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-md);
+    text-align: start;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+::deep .navmenu__menu-item:hover {
+    background: var(--surface-2);
+    text-decoration: none;
+}
+
+::deep .navmenu__menu-item.active {
+    color: var(--accent-green);
+    font-weight: 600;
+}
+
+.navmenu__menu-item--logout {
+    border-top: 1px solid var(--border);
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+}
+
+.navmenu__menu-glyph {
     font-size: var(--text-lg);
     line-height: 1;
 }
 
-@media (max-width: 640px) {
-    /* Keep the glyph as the affordance on narrow screens; the label is redundant with aria-label. */
-    .navmenu__theme-label {
-        display: none;
-    }
+.navmenu__menu-state {
+    margin-inline-start: auto;
+    padding-inline-start: var(--space-md);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
 }
 
-/* The Catalog link lives in the user menu, not in the top nav. Sized like the badge —
-   small, ghost, no border — so it reads as "this is part of the identity area", not a
-   fifth primary destination. Hidden below 768px because the auth controls collapse
-   differently on phones (the user badge stops showing the local part). */
-.navmenu__user-menu-link {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2xs);
-    padding: var(--space-2xs) var(--space-sm);
-    border-radius: 9999px;
-    border: 1px solid var(--border);
-    background: var(--surface-1);
-    color: var(--text);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-500, 500);
-    text-decoration: none;
-    min-height: 1.5rem;        /* 24px touch target */
+/* E2E-UI hook (ThemeUiTests) — styled entirely by .navmenu__menu-item. */
+.navmenu__theme-toggle {
 }
 
-.navmenu__user-menu-link:hover {
-    border-color: var(--accent-green);
-    color: var(--accent-green);
-    text-decoration: none;
-}
-
-.navmenu__user-menu-link:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-}
-
+/* In the phone drawer the panel expands in place rather than floating over the page. */
 @media (max-width: 767.98px) {
-    .navmenu__user-menu-link {
-        display: none;
+    .navmenu__menu-panel {
+        position: static;
+        margin-block-start: var(--space-xs);
     }
 }
 
@@ -405,81 +465,26 @@
     50%      { opacity: 0.25; }
 }
 
-/* The newest event. Truncates rather than wraps: the nav bar has a fixed height and a long
-   model name must not push the auth controls onto a second row. */
-.navmenu__ticker-latest {
-    color: var(--text-muted);
-    text-decoration: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    /* The one part of the strip allowed to shrink — it ellipsises, so losing width
-       degrades gracefully instead of overflowing. */
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 22ch;
-}
-
-.navmenu__ticker-latest:hover {
-    color: var(--text);
-    text-decoration: underline;
-}
-
-.navmenu__ticker-latest:focus-visible {
-    outline: none;
-    box-shadow: var(--focus-ring);
-    border-radius: 4px;
-}
-
-/* ── Desktop crowding ───────────────────────────────────────────────────────
-   Between the nav breakpoint and a comfortable width the bar carries brand + four
-   links + ticker + theme + identity + logout on one row. Rather than let them all
-   squeeze, the ticker — the only optional content, and duplicated on /archive —
-   drops out. Below 768px it moves into the collapsed menu and comes back in full.
-   The 1280px figure is measured, not guessed: brand + links + both pills + the auth
-   controls need ~1210px of intrinsic width, so below that the pills would be clipped
-   mid-word rather than merely tightened. */
-@media (min-width: 768px) and (max-width: 1279.98px) {
+/* ── Tablet crowding ────────────────────────────────────────────────────────
+   Between the hamburger and 992px the bar carries brand + four links + ticker + the menu
+   trigger on one row. The ticker (duplicated on /archive) and the wordmark drop out; the
+   anchor's name comes from its aria-label, so hiding the text costs a screen reader nothing.
+   The theme-label, link-padding and badge-width trims that used to live here up to 1280px
+   went with the right-hand cluster, which is now a single trigger. */
+@media (min-width: 768px) and (max-width: 991.98px) {
     .navmenu__ticker {
         display: none;
     }
 
-    /* Without the ticker the bar still overran the viewport here — the links and the auth
-       controls alone need more than ~870px — and the overflow was clipped, shearing the
-       Logout button in half. These three trims recover ~120px. */
-    .navmenu__theme-label {
-        display: none;
-    }
-
-    ::deep .navmenu__link {
-        padding-inline: var(--space-sm);
-    }
-
-    .navmenu__user-badge {
-        max-width: 150px;
-    }
-}
-
-/* Last resort before the hamburger: drop the wordmark and keep the PL mark. The anchor's
-   name comes from its aria-label, so hiding the text costs nothing to a screen reader.
-   Targets the BrandMark component's label class so the same hide rule still fires now
-   the wordmark is rendered inside <BrandMark>. */
-@media (min-width: 768px) and (max-width: 991.98px) {
-    .navmenu__brand .brand-mark__label {
+    ::deep .navmenu__brand .brand-mark__label {
         display: none;
     }
 }
 
-/* Below the nav breakpoint the ticker sits inside the collapsed menu, where horizontal space
-   is no longer scarce but vertical space is — so it stays on one row and drops the excerpt. */
+/* Below the nav breakpoint the ticker sits inside the collapsed menu. */
 @media (max-width: 767.98px) {
     .navmenu__ticker {
         margin: var(--space-sm) 0 0;
-        flex-wrap: wrap;
-    }
-
-    .navmenu__ticker-latest {
-        max-width: 100%;
     }
 }
 

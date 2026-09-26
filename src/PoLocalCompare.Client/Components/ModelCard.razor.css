@@ -51,7 +51,7 @@
 
 .model-card__slot-badge {
     font-size: var(--text-2xs);
-    font-weight: 700;
+    font-weight: var(--weight-bold);
     width: 1.25rem;
     height: 1.25rem;
     border-radius: 50%;
@@ -82,78 +82,19 @@
 
 .model-card__name {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     font-size: var(--text-lg);
 }
 
-.model-card__badge {
-    font-size: var(--text-2xs);
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-sm);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3em;
+/* Rating + record, one line. */
+.model-card__meta {
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
 }
-
-.model-card__badge::before {
-    content: 'o';
-    font-size: 0.6em;
-}
-
-/* The three type chips keep their literal gradients on purpose: they are saturated
-   brand-ish fills that read the same against a white or a black page, and swapping
-   them for the muted light-mode accents would make them harder to tell apart, which
-   is the one job they have.
-
-   This block used to claim "white text sits on all three at well past 4.5:1". Measured,
-   it did not: white on #3b82f6 (the REMOTE gradient's light end) is 3.68:1 and white on
-   #06b6d4 (OLLAMA's) is 2.43:1, and a gradient is judged at its lightest point because
-   that is where the text is thinnest against it. Both ends of both gradients are darkened
-   below; the chips stay three clearly different hues (violet / blue / teal) and every stop
-   now clears 4.5:1 — 10.95 and 5.70 for local, 6.70 and 5.17 for remote, 5.47 and 5.36 for
-   localservice. Re-measure BOTH stops if these are ever retuned. */
-.model-card__badge--local {
-    background: linear-gradient(135deg, #4c1d95, #7c3aed);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
-}
-.model-card__badge--local::before { color: #c4b5fd; }
-
-.model-card__badge--remote {
-    background: linear-gradient(135deg, #1d4ed8, #2563eb);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
-}
-.model-card__badge--remote::before { color: #93c5fd; }
-
-.model-card__badge--localservice {
-    background: linear-gradient(135deg, #0f766e, #0e7490);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
-}
-.model-card__badge--localservice::before { color: #6ee7b7; }
 
 .model-card__elo {
     color: var(--text);
-    font-size: var(--text-md);
-    margin-bottom: var(--space-xs);
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-/* Wraps the rating and the record. Transparent at desktop width — the two children keep
-   their own block layout — and becomes a single row on a phone. */
-.model-card__meta {
-    min-width: 0;
-}
-
-.model-card__stats {
-    color: var(--text-muted);
-    font-size: var(--text-sm);
 }
 
 .model-card__params {
@@ -164,7 +105,7 @@
 
 .model-card__params-value {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
 }
 
 /* No opacity on any of these. The tokens are contrast-checked per theme, and multiplying them
@@ -268,7 +209,7 @@
    which is a different question. Below 1080px the Home layout collapses to one column and
    the picker becomes a bounded 40dvh window — so on a 390x844 phone the catalog is a 337px
    porthole, and at 178px per card that showed ONE AND A HALF of 26 models. (Measured
-   side-effect: the "Load starter duel" onboarding button, which sits under the grid, was at
+   side-effect: the "Load starter duel" onboarding button, which then sat under the grid, was at
    y=3735 inside that window. Nobody was ever going to reach it.)
 
    The card keeps its name, type chip, rating and record — everything the aria-label already
@@ -280,17 +221,6 @@
     .model-card {
         padding: var(--space-sm) var(--space-smd);
         margin-bottom: var(--space-xs);
-    }
-
-    .model-card__meta {
-        display: flex;
-        align-items: baseline;
-        gap: var(--space-sm);
-        flex-wrap: wrap;
-    }
-
-    .model-card__elo {
-        margin-bottom: 0;
     }
 
     /* display: none, not visibility or opacity — the point is to reclaim the space. Nothing

@@ -1,4 +1,5 @@
 // GoF: Entity
+using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Api.Features.Models;
@@ -115,4 +116,21 @@ public sealed class Model
             ETag = ETag
         };
     }
+
+    public ModelDto ToDto() => new()
+    {
+        ModelId = ModelId,
+        DisplayName = DisplayName,
+        ModelType = ModelType,
+        CurrentElo = CurrentElo,
+        DuelCount = DuelCount,
+        WinCount = WinCount,
+        DrawCount = DrawCount,
+        TdpWatts = TdpWatts,
+        ApiEndpointRef = ApiEndpointRef,
+        WebLlmModelId = WebLlmModelId,
+        InputTokenPricePerMillion = InputTokenPricePerMillion,
+        OutputTokenPricePerMillion = OutputTokenPricePerMillion,
+        CreatedAt = CreatedAt,
+    };
 }

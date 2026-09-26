@@ -16,10 +16,6 @@ namespace PoLocalCompare.Client.Services;
 /// </remarks>
 public sealed class LobbyTickerService(HttpClient http) : IAsyncDisposable
 {
-    /// <summary>Ticker depth. It is a glance surface — older entries belong in the Archive.</summary>
-    private const int MaxEvents = 12;
-
-    private readonly List<LobbyEventDto> _events = [];
     private readonly HashSet<DuelId> _running = [];
     private readonly HashSet<DuelId> _awaitingVerdict = [];
 
@@ -28,8 +24,6 @@ public sealed class LobbyTickerService(HttpClient http) : IAsyncDisposable
 
     /// <summary>Raised on every change; the UI re-renders from the properties below.</summary>
     public event Action? OnChanged;
-
-    public IReadOnlyList<LobbyEventDto> Events => _events;
 
     /// <summary>Duels currently generating.</summary>
     public int RunningCount => _running.Count;
@@ -132,9 +126,6 @@ public sealed class LobbyTickerService(HttpClient http) : IAsyncDisposable
                 _awaitingVerdict.Remove(evt.DuelId);
                 break;
         }
-
-        _events.Insert(0, evt);
-        if (_events.Count > MaxEvents) _events.RemoveRange(MaxEvents, _events.Count - MaxEvents);
 
         OnChanged?.Invoke();
     }

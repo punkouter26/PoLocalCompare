@@ -36,8 +36,7 @@ if missing:
 wanted = (os.environ.get("MODELS") or "all").strip()
 if wanted and wanted != "all":
     if wanted == "small":
-        keep = {"SmolLM2-135M-Instruct-q0f32-MLC", "SmolLM2-360M-Instruct-q4f32_1-MLC",
-                "Qwen2.5-0.5B-Instruct-q4f32_1-MLC"}
+        keep = {"SmolLM2-360M-Instruct-q4f32_1-MLC", "Qwen2.5-0.5B-Instruct-q4f32_1-MLC"}
     else:
         keep = {w.strip() for w in wanted.split(",") if w.strip()}
     unknown = keep - {e["dir"] for e in entries}

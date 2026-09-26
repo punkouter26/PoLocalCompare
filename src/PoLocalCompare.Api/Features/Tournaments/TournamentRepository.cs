@@ -1,5 +1,4 @@
 // GoF: Repository pattern
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Azure;
 using Azure.Data.Tables;
@@ -7,15 +6,7 @@ using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Api.Features.Tournaments;
 
-public interface ITournamentRepository
-{
-    Task<Tournament?> GetByIdAsync(TournamentId tournamentId);
-    Task SaveAsync(Tournament tournament);
-    Task UpdateAsync(Tournament tournament);
-    Task<IEnumerable<Tournament>> ListRecentAsync(int limit);
-}
-
-public sealed class TournamentRepository : ITournamentRepository
+public sealed class TournamentRepository
 {
     private const string TableName = "Tournaments";
 
@@ -26,9 +17,6 @@ public sealed class TournamentRepository : ITournamentRepository
     /// query instead of a fan-out across months.
     /// </summary>
     private const string PartitionKey = "Tournament";
-
-    /// <inheritdoc cref="DuelRepository"/>
-    private static readonly ConcurrentDictionary<string, Task> TableEnsured = new();
 
     /// <summary>
     /// Matches are stored as one JSON column. See <see cref="Tournament"/> for why a bracket is
@@ -47,9 +35,6 @@ public sealed class TournamentRepository : ITournamentRepository
         _tableClient = tableServiceClient.GetTableClient(TableName);
     }
 
-    private Task EnsureTableAsync() =>
-        TableEnsured.GetOrAdd(_tableClient.Uri.ToString(), _ => _tableClient.CreateIfNotExistsAsync());
-
     /// <summary>
     /// Reads one bracket. A filtered single-partition query rather than a point read, because
     /// the RowKey is time-ordered rather than the id (see <see cref="RowKeyFor"/>) — the id
@@ -57,8 +42,6 @@ public sealed class TournamentRepository : ITournamentRepository
     /// </summary>
     public async Task<Tournament?> GetByIdAsync(TournamentId tournamentId)
     {
-        await EnsureTableAsync();
-
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
             filter: TableClient.CreateQueryFilter(
                 $"PartitionKey eq {PartitionKey} and TournamentId eq {tournamentId.Value}"),
@@ -72,8 +55,6 @@ public sealed class TournamentRepository : ITournamentRepository
 
     public async Task SaveAsync(Tournament tournament)
     {
-        await EnsureTableAsync();
-
         try
         {
             await _tableClient.AddEntityAsync(MapToEntity(tournament));
@@ -86,8 +67,6 @@ public sealed class TournamentRepository : ITournamentRepository
 
     public async Task UpdateAsync(Tournament tournament)
     {
-        await EnsureTableAsync();
-
         var entity = MapToEntity(tournament);
         var etag = string.IsNullOrEmpty(tournament.ETag) ? ETag.All : new ETag(tournament.ETag);
 
@@ -98,8 +77,6 @@ public sealed class TournamentRepository : ITournamentRepository
     /// <summary>Newest first — the RowKey is inverted ticks, so storage order is already right.</summary>
     public async Task<IEnumerable<Tournament>> ListRecentAsync(int limit)
     {
-        await EnsureTableAsync();
-
         var tournaments = new List<Tournament>();
         await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
             filter: TableClient.CreateQueryFilter($"PartitionKey eq {PartitionKey}"),

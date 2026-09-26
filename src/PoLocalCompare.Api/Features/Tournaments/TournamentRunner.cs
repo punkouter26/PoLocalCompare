@@ -74,7 +74,7 @@ public sealed class TournamentRunner(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var repository = scope.ServiceProvider.GetRequiredService<ITournamentRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
 
             var tournament = await repository.GetByIdAsync(tournamentId);
             if (tournament is null)
@@ -135,7 +135,7 @@ public sealed class TournamentRunner(
     /// </remarks>
     private async Task PlayBatchAsync(
         IServiceProvider services,
-        ITournamentRepository repository,
+        TournamentRepository repository,
         Tournament tournament,
         IReadOnlyList<TournamentMatch> batch,
         CancellationToken cancellationToken)
@@ -174,7 +174,7 @@ public sealed class TournamentRunner(
     /// </param>
     private async Task StartMatchAsync(
         IServiceProvider services,
-        ITournamentRepository repository,
+        TournamentRepository repository,
         Tournament tournament,
         TournamentMatch match,
         CancellationToken cancellationToken)
@@ -321,7 +321,7 @@ public sealed class TournamentRunner(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var repository = scope.ServiceProvider.GetRequiredService<ITournamentRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
 
             var tournament = await repository.GetByIdAsync(tournamentId);
             if (tournament is null) return;

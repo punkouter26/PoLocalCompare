@@ -41,13 +41,13 @@
 | **Remote AI** | Azure AI Foundry (Azure OpenAI) |
 | **Local AI** | Ollama HTTP (`http://localhost:11434`) |
 | **Real-time** | SignalR (`DuelHub`) |
-| **Storage (local)** | Azurite Docker container (ports 10000–10002) |
+| **Storage (local)** | Azurite Docker container (10000 blob, 10002 table) |
 | **Storage (Azure)** | Azure Table Storage |
 | **Secrets** | Azure Key Vault (`kv-poshared`, shared, **access-policy mode**) + App Service settings fallback |
 | **Identity** | System-assigned Managed Identity (per §5.4); Bicep grants Storage Table/Blob RBAC + kv-poshared access |
 | **Auth** | Microsoft OAuth (Prod) + GUEST mode (Dev/Test) |
 | **Logging** | Serilog → Console (all envs) + rolling File (Development only) |
-| **Telemetry** | None. OpenTelemetry + the App Insights sinks were removed 2026-08-23 (§9) |
+| **Telemetry** | Serilog only; one App Insights sink for the shared sign-in record (OTel removed 2026-08-23) |
 | **Versioning** | MinVer (Git tag driven, prefix `v`) |
 | **Styling** | Scoped `.razor.css` + design tokens; system-aware light/dark with an explicit override |
 
@@ -103,24 +103,22 @@ PoLocalCompare.slnx
 │   │   ├── Prompts/                    ← PromptLibrary (curated starter prompts)
 │   │   ├── Tournaments/                ← BracketPlanner (pure, seeded bracket layout; sizes 2/8)
 │   │   └── Presentation/               ← view-models, enums and helpers the .razor files lean
-│   │                                     on (ModelDiagState, ModelTypeGroup, FailureReasonText,
+│   │                                     on (ArenaPhase, ModelTypeGroup, FailureReasonText,
 │   │                                     HealthBadgeText, ArenaFormatting, SideMetrics,
 │   │                                     RenderCoalescer). Moved out of Client/ so the Unit
 │   │                                     tier can reach them at all.
 │   └── PoLocalCompare.Client/          ← Blazor WASM (hosted by Api)
-│       ├── Pages/                      ← Home, Arena, Leaderboard, Archive, Tournament,
+│       ├── Pages/                      ← Home, Arena, Leaderboard, Archive, Catalog, Tournament,
 │       │                                 ModelProfile, Login, NotFound
 │       │                                 (model health moved to the /diag Razor Page 2026-08-23)
-│       │                                 (model-health is a Home section; Arena both
-│       │                                  streams a running duel and judges it)
-│       ├── Components/                 ← incl. TokenRace, PromptPicker, SandboxedViewport,
-│       │                                 ModelCard, ArenaViewportPanel, ArenaVoteButtons,
-│       │                                 ArenaFailureCard, TelemetryHud, EloShiftBadge, RankMedals
+│       │                                 (Arena both streams a running duel and judges it)
+│       ├── Components/                 ← incl. PromptPicker, SandboxedViewport, ModelCard,
+│       │                                 ArenaViewportPanel, ArenaVoteButtons, ArenaStatusBand,
+│       │                                 ArenaFailureCard, TelemetryHud
 │       ├── Services/                   ← DuelApiClient, BffAuthenticationStateProvider,
 │       │                                 WebLlmService, SignalRDuelClient, LobbyTickerService,
 │       │                                 LocalInferenceDriver, AudioService, FxService,
-│       │                                 WebGpuCapability,
-│       │                                 InferenceSessionStore, CorrelationHandler, ThemeService
+│       │                                 WebGpuCapability, CorrelationHandler, ThemeService
 │       └── Layout/
 ├── tests/
 │   ├── PoLocalCompare.Unit/            ← Pure logic, no I/O (xUnit + Moq; no Docker)
@@ -147,12 +145,13 @@ PoLocalCompare.slnx
   public endpoints opt out explicitly with `.AllowAnonymous()`.
 - Table Storage writes are idempotent + ETag-safe (§5.5): creates swallow 409, updates are
   If-Match conditional (entities carry `ETag`), and duel writers re-read + reapply on 412.
-- Telemetry: none. The OTel tracing/metrics pipeline, its two exporters and the
-  `Serilog.Sinks.ApplicationInsights` sink were removed on 2026-08-23 — two independent paths to
-  one App Insights resource on a single-instance F1 plan. Serilog to console is the whole story.
+- Telemetry: Serilog. The OTel tracing/metrics pipeline and its exporters were removed on
+  2026-08-23; the one exporter left is a `Serilog.Sinks.ApplicationInsights` sink, added only when
+  a connection string is configured, so the cross-app `UserSignedIn` record reaches App Insights.
 - HttpClients (§5.4/§5.6): Foundry/Ollama proxies are typed clients with retry-only resilience
   (no per-attempt timeout — it would abort SSE streams); named "Foundry"/"Ollama"/"OllamaStatus"
-  clients cover the remaining callers. Non-dev startup fail-fasts on unreachable Table Storage.
+  clients cover the remaining callers. Startup creates every table (`StorageTables`) and fail-fasts
+  on unreachable Table Storage in every environment.
 - The client stamps `X-Session-ID`/`X-Correlation-ID` on every request (§6.9) via `CorrelationHandler`.
 
 ### 4.2 Storage Strategy
@@ -168,7 +167,7 @@ Dynamic switching is automatic based on `ASPNETCORE_ENVIRONMENT`.
 ### 4.3 AI Model Categories
 | Category | When Available | Notes |
 |---|---|---|
-| **Remote** | Always (Azure AI Foundry) | Requires `AzureAiFoundry:ApiKey` or Managed Identity |
+| **Remote** | Always (Azure AI Foundry) | Requires `AzureAiFoundry:ApiKey` or Managed Identity. A `gemini-*` `ApiEndpointRef` routes to Google's OpenAI-compatible endpoint instead (`Gemini:ApiKey`); Gemini models seed only when that key is set |
 | **Browser** | When browser has WebGPU | WebLLM, runs in WASM, first-run download |
 | **Ollama** | Only when running locally | `http://localhost:11434`, checked at runtime |
 
@@ -228,12 +227,15 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `ConnectionStrings:AzureBlobStorage` | Key Vault | App Service setting |
 | `AzureAiFoundry:ApiKey` | Key Vault | `appsettings.Development.json` / `AzureAiFoundry__ApiKey` env var |
 | `Elo:KFactor` | `appsettings.json` | — (default 32) |
-| `Duel:TimeLimitSeconds` | `appsettings.json` | — (default 300) |
+| `Duel:TimeLimitSeconds` | `appsettings.json` | — (900; per-model execution watchdog) |
 | `Ollama:BaseUrl` | `appsettings.json` | — (`http://localhost:11434`) |
 | `AiJudge:Enabled` | `appsettings.json` | — (default `false` in code, `true` in appsettings) |
 | `AiJudge:DelaySeconds` | `appsettings.json` | — (**10**; code default also 10) |
 | `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-mini`; must accept image input when vision judging is on) |
 | `AiJudge:VisionEnabled` | `appsettings.json` | — (false; true in Development — needs headless Chromium) |
+| `AiJudge:TextOnlyDeployment` | `appsettings.json` | — (`gpt-4.1-nano`; used, and stamped as `JudgeModel`, whenever vision is off) |
+| `Gemini:ApiKey` | Key Vault | `Gemini__ApiKey` env var. Optional — without it no Gemini models are seeded |
+| `Gemini:Endpoint` | `appsettings.json` | — (`https://generativelanguage.googleapis.com/v1beta/openai`) |
 
 ---
 
@@ -241,7 +243,7 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 
 ```bash
 # 1. Start Azurite
-docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
+docker run -p 10000:10000 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
 
 # 2. (Optional) Download browser model assets - weights + .wasm libs, ~5 GB.
 #     Retries/resumes through the reset-prone TLS path; MODELS=small for a 1 GB subset.
@@ -300,8 +302,8 @@ app purely over HTTP.
 | E2E UI | `tests/PoLocalCompare.E2EUI` | Playwright, headed Chrome, mobile + desktop viewports |
 
 **Ratio contract (100 / 50 / 25 / 25).** Unit is the baseline; integration ≈ 50% of unit, each
-E2E tier ≈ 25%. Current (2026-08-23): **100 unit / 50 integration / 25 E2E-API / 25 E2E-UI** —
-exactly on contract, verified by running each suite. Counts are test *cases*, so a `[Theory]`
+E2E tier ≈ 25%. Current (2026-09-26): **100 unit / 38 integration / 25 E2E-API / 23 E2E-UI**,
+all passing, and `SCRIPTS/check-clean.ps1` fails the build if a tier goes over. Counts are test *cases*, so a `[Theory]`
 contributes one per `InlineData`, and E2E-UI counts methods × 2 viewports.
 
 The suite was 171/101/41 on 2026-08-22 and was cut back on 2026-08-23. Roughly a third of that
@@ -377,12 +379,12 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 
 | File | Purpose |
 |---|---|
-| [Program.cs](src/PoLocalCompare.Api/Program.cs) | Composition root, Key Vault bootstrap, Serilog, OTel |
+| [Program.cs](src/PoLocalCompare.Api/Program.cs) | Composition root, Key Vault bootstrap, Serilog |
 | [ServiceCollectionExtensions.cs](src/PoLocalCompare.Api/ServiceCollectionExtensions.cs) | DI registrations |
 | [InfrastructureServiceExtensions.cs](src/PoLocalCompare.Api/InfrastructureServiceExtensions.cs) | Storage clients, typed HttpClients + resilience, repository DI |
 | [DuelHub.cs](src/PoLocalCompare.Api/Features/Duels/DuelHub.cs) | SignalR hub |
 | [DuelExecutionService.cs](src/PoLocalCompare.Api/Features/Duels/DuelExecutionService.cs) | Core duel orchestration |
-| [AzuriteSetup.cs](src/PoLocalCompare.Api/Common/Persistence/AzuriteSetup.cs) | Local storage bootstrap |
+| [StorageTables.cs](src/PoLocalCompare.Api/Common/Persistence/StorageTables.cs) | Creates every table at startup (all environments) |
 | [BffAuthentication.cs](src/PoLocalCompare.Api/Auth/BffAuthentication.cs) | BFF OIDC flow, session cookie, dev fake-auth guard |
 | [BffAuthenticationStateProvider.cs](src/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
 | [WebLlmService.cs](src/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |

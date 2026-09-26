@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
 using PoLocalCompare.Client;
-using Radzen;
 using PoLocalCompare.Client.Services;
-using ThemeService = PoLocalCompare.Client.Services.ThemeService;
 using System;
 
 try
@@ -41,11 +39,6 @@ try
     // Single-flight WebGPU capability probe, so
     // only one adapter/device request is made even when both mount on the same page.
     builder.Services.AddScoped<WebGpuCapability>();
-
-    // Radzen.Blazor services (re-added 2026-09-02). Registers the dialog/notification/tooltip
-    // hosts its components expect; the Archive grid and the profile chart both need it present
-    // even though neither opens a dialog, because RadzenComponent resolves them in OnInitialized.
-    builder.Services.AddRadzenComponents();
     await builder.Build().RunAsync();
 }
 catch (Exception ex)

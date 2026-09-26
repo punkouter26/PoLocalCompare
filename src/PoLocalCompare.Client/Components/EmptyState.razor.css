@@ -21,12 +21,12 @@
 .empty-state__title {
     margin: 0;
     font-size: var(--text-xl);
-    font-weight: var(--weight-700);
+    font-weight: var(--weight-bold);
 }
 
 .empty-state__hint {
     margin: 0;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     max-inline-size: 36rem;
 }
 

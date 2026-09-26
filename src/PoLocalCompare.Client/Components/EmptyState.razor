@@ -15,7 +15,14 @@
     }
     @if (!string.IsNullOrEmpty(Title))
     {
-        <h2 class="empty-state__title">@Title</h2>
+        @if (IsPageHeading)
+        {
+            <h1 class="empty-state__title">@Title</h1>
+        }
+        else
+        {
+            <h2 class="empty-state__title">@Title</h2>
+        }
     }
     @if (!string.IsNullOrEmpty(Hint))
     {
@@ -47,6 +54,9 @@
     [Parameter] public string? Hint { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public IReadOnlyList<EmptyStateAction> Actions { get; set; } = [];
+
+    /// <summary>True when the empty state IS the page (404) — the title becomes its h1.</summary>
+    [Parameter] public bool IsPageHeading { get; set; }
 }
 
 @* Types live in EmptyState.razor.cs so the consuming .razor files don't need

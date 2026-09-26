@@ -1,6 +1,5 @@
 using Azure.Data.Tables;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Azure;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
 using Azure.Identity;
 using Polly;
@@ -11,7 +10,6 @@ using PoLocalCompare.Api.Platform;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
-using System.IO;
 
 // ─── Bootstrap logger (before DI) ───────────────────────────────────────────
 Log.Logger = new LoggerConfiguration()
@@ -97,7 +95,7 @@ try
 
     if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(builder.Configuration["AzureAiFoundry:ApiKey"]))
     {
-        Log.Warning("AzureAiFoundry:ApiKey is empty. Configure AzureAiFoundry__ApiKey via user-secrets or environment variables for remote model duels.");
+        Log.Warning("AzureAiFoundry:ApiKey is empty. Configure AzureAiFoundry__ApiKey in appsettings.Development.json or an environment variable for remote model duels.");
     }
 
     // No CORS: the Blazor WASM client is hosted from this same origin (single-origin
@@ -136,6 +134,11 @@ try
             HealthStatus.Unhealthy,
             [HealthCheckTags.Dependency],
             "KeyVault:Uri", "Key Vault");
+
+    // RFC 7807 bodies for unhandled exceptions (UseExceptionHandler below), stamped with the
+    // request id so a user-reported error can be found in the log.
+    builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = c =>
+        c.ProblemDetails.Extensions["correlationId"] = c.HttpContext.TraceIdentifier);
 
     // ─── JSON serialization — string enum values for API consumers ───────────
     builder.Services.ConfigureHttpJsonOptions(opts =>
@@ -196,41 +199,10 @@ try
     // ─── Build ───────────────────────────────────────────────────────────────
     var app = builder.Build();
 
-    ProgramBootstrapVerifier.VerifyClientBootstrapAssets(app);
-
-    // ─── Dev-only: ensure Azurite tables exist (T036) ────────────────────────
-    if (app.Environment.IsDevelopment())
-    {
-        await AzuriteSetup.EnsureTablesExistAsync(app.Services);
-        if (!app.Configuration.GetValue<bool>("Testing:SkipSeeding"))
-        {
-            await ModelSeeder.SeedAsync(app.Services);
-
-            // Runs after seeding, because it matches orphaned duel history against the catalog
-            // the seeder has just written. It is a no-op once there is nothing left to remap,
-            // so it is cheap to leave in the startup path rather than making it a manual step
-            // someone has to know about. Never fatal: bad history is worth less than a
-            // running app, and the endpoint below can retry it.
-            using var remapScope = app.Services.CreateScope();
-            var remapper = remapScope.ServiceProvider.GetRequiredService<OrphanModelIdRemapper>();
-            try
-            {
-                await remapper.RunAsync();
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Orphaned model-id remap failed at startup; POST /api/dev/remap-model-ids to retry.");
-            }
-        }
-    }
-    else
-    {
-        // Fail-fast startup (standards §5.6): an unreachable storage dependency should stop
-        // the process now, not surface as request-time 500s later.
-        var tables = app.Services.GetRequiredService<TableServiceClient>();
-        using var startupCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await tables.GetTableClient("Models").CreateIfNotExistsAsync(startupCts.Token);
-    }
+    // Every table, every environment, before the first request — fail-fast (standards §5.6).
+    await StorageTables.EnsureAllAsync(app.Services.GetRequiredService<TableServiceClient>());
+    if (app.Environment.IsDevelopment() && !app.Configuration.GetValue<bool>("Testing:SkipSeeding"))
+        await ModelSeeder.SeedAsync(app.Services);
 
     // ─── Startup recovery: settle duels the previous process left behind ──────
     // Runs in every environment — a mid-duel process death is the production case (App Service
@@ -287,36 +259,12 @@ try
         };
     });
 
-    // ─── Global exception handler (T088) — RFC 7807 problem+json ────────────
-    app.UseExceptionHandler(exceptionApp =>
+    // ─── Global exception handler — RFC 7807 problem+json via AddProblemDetails ──
+    // A request the framework could not bind (`?verdict=Won`, an empty `?before=`) is the
+    // caller's fault, so it keeps its 400 instead of falling through to a 500.
+    app.UseExceptionHandler(new ExceptionHandlerOptions
     {
-        exceptionApp.Run(async ctx =>
-        {
-            ctx.Response.ContentType = "application/problem+json";
-            var feature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
-            var ex = feature?.Error;
-            var env = ctx.RequestServices.GetRequiredService<IWebHostEnvironment>();
-            var logger = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
-            var correlationId = ctx.TraceIdentifier;
-
-            logger.LogError(ex,
-                "Unhandled exception. CorrelationId: {CorrelationId}, Environment: {Environment}, UserId: anonymous",
-                correlationId, env.EnvironmentName);
-
-            ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
-
-            var problem = new
-            {
-                type = "https://tools.ietf.org/html/rfc7807",
-                title = "An unexpected error occurred.",
-                status = StatusCodes.Status500InternalServerError,
-                detail = env.IsDevelopment() ? ex?.Message : "An internal server error occurred.",
-                correlationId,
-                stackTrace = env.IsDevelopment() ? ex?.StackTrace : null,
-            };
-
-            await ctx.Response.WriteAsJsonAsync(problem);
-        });
+        StatusCodeSelector = ex => ex is BadHttpRequestException bad ? bad.StatusCode : StatusCodes.Status500InternalServerError,
     });
 
     // ─── Content-Security-Policy: frame-ancestors 'self' (T089) ─────────────
@@ -378,57 +326,8 @@ try
     app.MapOllamaEndpoints();
     app.MapTournamentsEndpoints(allowAnonymousWrites: allowAnonymousWrites);
 
-    // ─── Dev-only: wipe duels/results/elo and reset model stats ─────────────
-    // Gated twice on purpose. The Development check keeps these out of a published app, and
-    // RequireAuthorization puts them behind the same session every other write needs — they
-    // were AllowAnonymous until 2026-08-23, which made an unauthenticated table wipe exactly
-    // one ASPNETCORE_ENVIRONMENT slip away from live data. In Development the fake-auth
-    // handler satisfies the policy from a header, so this costs a local caller nothing.
     if (app.Environment.IsDevelopment())
-    {
-        static async Task ClearTableEntitiesAsync(TableClient tableClient)
-        {
-            await foreach (var entity in tableClient.QueryAsync<TableEntity>())
-            {
-                try
-                {
-                    await tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey);
-                }
-                catch (RequestFailedException ex)
-                    when (ex.Status == 404)
-                {
-                    // Entity already removed; continue.
-                }
-            }
-        }
-
-        app.MapPost("/api/dev/reset", async (TableServiceClient tsc) =>
-        {
-            foreach (var t in new[] { "Duels", "DuelResults", "EloHistory" })
-            {
-                var table = tsc.GetTableClient(t);
-                await table.CreateIfNotExistsAsync();
-                await ClearTableEntitiesAsync(table);
-            }
-
-            var mc = tsc.GetTableClient("Models");
-            await mc.CreateIfNotExistsAsync();
-            await foreach (var e in mc.QueryAsync<TableEntity>(x => x.PartitionKey == "model"))
-            {
-                e["CurrentElo"] = 1200.0;
-                e["DuelCount"] = 0;
-                e["WinCount"] = 0;
-                e["DrawCount"] = 0;
-                await mc.UpsertEntityAsync(e, TableUpdateMode.Replace);
-            }
-            return Results.Ok(new { reset = true, message = "Duels/results/elo cleared; model ELO reset to 1200" });
-        }).RequireAuthorization();
-
-        // Manual retry for the startup remap. Idempotent — running it twice reports zero
-        // orphans the second time.
-        app.MapPost("/api/dev/remap-model-ids", async (OrphanModelIdRemapper remapper, CancellationToken ct) =>
-            Results.Ok(await remapper.RunAsync(ct))).RequireAuthorization();
-    }
+        app.MapDevEndpoints();
 
     // ─── Blazor WASM static assets + fallback (T014) ─────────────────────────
     app.MapStaticAssets().AllowAnonymous();
@@ -448,53 +347,3 @@ finally
 }
 
 public partial class Program { }
-
-static class ProgramBootstrapVerifier
-{
-    public static void VerifyClientBootstrapAssets(WebApplication app)
-    {
-        var logger = app.Services.GetRequiredService<ILogger<Program>>();
-        var candidates = new[]
-        {
-            Path.Combine(AppContext.BaseDirectory, "PoLocalCompare.Client.staticwebassets.endpoints.json"),
-            Path.Combine(AppContext.BaseDirectory, "PoLocalCompare.Api.staticwebassets.endpoints.json"),
-        };
-
-        string? manifestPath = candidates.FirstOrDefault(File.Exists);
-        if (manifestPath is null)
-        {
-            logger.LogError("Startup verification failed: static web asset manifest was not found in {BaseDirectory}", AppContext.BaseDirectory);
-            return;
-        }
-
-        string manifestContent;
-        try
-        {
-            manifestContent = File.ReadAllText(manifestPath);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Startup verification failed: could not read static web asset manifest at {ManifestPath}", manifestPath);
-            return;
-        }
-
-        bool hasFingerprintedBootstrap = manifestContent.Contains("_framework/blazor.webassembly.", StringComparison.OrdinalIgnoreCase)
-            && manifestContent.Contains(".js", StringComparison.OrdinalIgnoreCase);
-        bool hasNonFingerprintedBootstrap = manifestContent.Contains("_framework/blazor.webassembly.js", StringComparison.OrdinalIgnoreCase);
-
-        if (!hasFingerprintedBootstrap)
-        {
-            logger.LogError("Startup verification failed: no Blazor WebAssembly bootstrap asset mapping was found in {ManifestPath}", manifestPath);
-            return;
-        }
-
-        if (!hasNonFingerprintedBootstrap)
-        {
-            logger.LogWarning("Startup verification: manifest has only fingerprinted Blazor bootstrap mappings. Ensure index.html resolves the fingerprinted _framework/blazor.webassembly asset.");
-        }
-        else
-        {
-            logger.LogInformation("Startup verification: Blazor bootstrap static asset mappings were found in {ManifestPath}", manifestPath);
-        }
-    }
-}

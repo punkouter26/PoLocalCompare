@@ -9,7 +9,7 @@
     gap: var(--space-sm);
     text-decoration: none;
     color: inherit;
-    font-weight: var(--weight-700, 700);
+    font-weight: var(--weight-bold);
     line-height: 1;
 }
 
@@ -21,7 +21,7 @@
     color: var(--on-accent);
     border-radius: var(--radius-sm, 4px);
     font-size: var(--text-md);
-    font-weight: var(--weight-700, 700);
+    font-weight: var(--weight-bold);
     letter-spacing: 0.04em;
     inline-size: 2rem;
     block-size: 2rem;

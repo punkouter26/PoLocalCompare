@@ -10,18 +10,20 @@
 <PageTitle>Archive — PoLocalCompare</PageTitle>
 
 <div class="archive po-page po-page--wide">
-    <h1 class="archive__title po-title">Lab Archive</h1>
+    <PageHeader Title="Archive" TitleHook="archive__title" />
 
     @if (_loading)
     {
         <p class="po-status">Loading archive...</p>
     }
-    else if (!string.IsNullOrEmpty(_error))
+    else if (_duels.Count == 0 && !string.IsNullOrEmpty(_error))
     {
         <p class="po-error">@_error</p>
     }
-    else if (_duels.Count == 0)
+    else if (_duels.Count == 0 && _verdictFilter == "All")
     {
+        @* Only for "All": the verdict chips filter on the server now, so an empty filtered page
+           means "none of THAT kind" and keeps the chips on screen to switch back. *@
         @* EmptyState — Archive's "no duels yet" card. The new card shares its layout
            with Leaderboard and Model Profile so a viewer sees the same shape anywhere
            in the app a list is empty. *@
@@ -29,7 +31,7 @@
                     Title="No duels recorded yet"
                     Hint="Archive snapshots, verdicts, and lab reports will appear here once a duel completes."
                     Actions="@(new[] {
-                        new EmptyStateAction("⚔ Start a New Duel", "/", EmptyStateActionVariant.Ghost)
+                        new EmptyStateAction("⚔ Start a duel", "/", EmptyStateActionVariant.Ghost)
                     })" />
     }
     else
@@ -44,155 +46,87 @@
                 <button type="button"
                         class="po-btn po-btn--sm po-btn--chip"
                         aria-pressed="@(_verdictFilter == label ? "true" : "false")"
-                        @onclick="() => SetVerdictFilter(label)">
+                        @onclick="() => SelectFilter(label)">
                     @label
                 </button>
             }
         </div>
-        @if (_filteredDuels.Count == 0)
-        {
-            @* Filtered-empty. PageActions carries the reset button so the geometry is
-               shared with the terminal-empty list above. *@
-            <div class="archive__filtered-empty">
-                <p>No duels match the <strong>@_verdictFilter</strong> filter.</p>
-                <PageActions Align="PageActionsAlign.End"
-                             Actions="@(new[] {
-                                 new PageActionDescriptor("Show all duels", OnClick: ResetFiltersCallback())
-                             })" />
-            </div>
-        }
-        @* Clicking a row navigates straight to /arena/{id} so both model outputs are
-           visible side-by-side (no intermediate "Duel Details" panel). Re-run and
-           Lab report sit inline as per-row icon buttons so the two side features the
-           panel used to host don't quietly disappear. *@
-        @* RadzenDataGrid — re-added 2026-09-02 after the owner re-took the payload decision
-           this table's previous comment recorded. What it buys that the hand-rolled .po-table
-           could not: per-column sorting, per-column filtering and row virtualisation, which is
-           exactly the "the Archive does not scale past ~100 duels" gap.
+        @* One search box over the loaded rows, matching the prompt or either model's name.
+           It replaced the Radzen grid's per-column filters when Radzen was removed on
+           2026-09-26; the verdict chips above still filter on the server. *@
+        <input type="search" class="archive__search" placeholder="Search prompt or model…"
+               aria-label="Search loaded duels by prompt or model name"
+               @bind="_search" @bind:event="oninput" />
 
-           Three settings are load-bearing:
-             • Responsive="true" is what preserves the mobile behaviour the .po-table--cards
-               treatment gave us — Radzen stacks each cell into a labelled row below its
-               breakpoint, so a phone still gets cards rather than a horizontal scroller.
-             • AllowVirtualization with a fixed height is the point of the grid on a long
-               archive; without a height it renders every row and the virtualiser is inert.
-               The height itself lives in app.css under the Radzen token bridge
-               (.archive__grid), NOT as an inline Style here: it needs min() against dvh so
-               the grid cannot grow taller than the phone viewport and stack a second
-               scrollbar inside the page's own, and a CSS custom-property-free inline style
-               cannot express that.
-             • RowSelect keeps rows navigable. The old markup used role="link" + tabindex on
-               <tr>; Radzen renders its own row semantics, and RowSelect fires for both click
-               and keyboard, so the behaviour survives without us fighting the component.
-
-           The grid inherits the app's design tokens: index.html loads Radzen's STRUCTURAL
-           base stylesheet only, never a colour theme, and the overrides in Archive.razor.css
-           map its surfaces onto --surface-*/--text-*/--border. *@
-        @* The wrapper is what lets the grid absorb the leftover viewport height: .archive is a
-           flex column and this is its flex: 1 item, so the grid ends where the page does
-           instead of at a fixed 55dvh with a dead band underneath. It has to be a real element
-           in THIS file — Blazor stamps a scoped stylesheet with its own component's scope id,
-           so a rule here can never reach the div RadzenDataGrid renders. *@
-        <div class="archive__grid-wrap">
-        <RadzenDataGrid @ref="_grid"
-                        TItem="DuelSummaryDto"
-                        Data="@_filteredDuels"
-                        AllowSorting="true"
-                        AllowFiltering="true"
-                        AllowColumnResize="true"
-                        FilterMode="FilterMode.Simple"
-                        FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                        AllowVirtualization="true"
-                        Responsive="true"
-                        EmptyText="No duels match this filter."
-                        RowSelect="@(d => Nav.NavigateTo($"/arena/{d.DuelId}"))"
-                        class="archive__grid">
-            <Columns>
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Date" Property="StartedAt" Width="11rem">
-                    <Template Context="d">
-                        @d.StartedAt.ToString("yyyy-MM-dd HH:mm") <span class="archive__tz">UTC</span>
-                    </Template>
-                </RadzenDataGridColumn>
-
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Prompt" Property="PromptSummary" />
-
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Left model" Property="LeftModelName" Width="12rem">
-                    <Template Context="d">
-                        <span class="archive__model @(IsUnresolvedModelName(d.LeftModelName, d.LeftModelId) ? "archive__model--unresolved" : "")"
-                              title="@d.LeftModelId">
-                            @FormatModelName(d.LeftModelName, d.LeftModelId)
-                        </span>
-                    </Template>
-                </RadzenDataGridColumn>
-
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Right model" Property="RightModelName" Width="12rem">
-                    <Template Context="d">
-                        <span class="archive__model @(IsUnresolvedModelName(d.RightModelName, d.RightModelId) ? "archive__model--unresolved" : "")"
-                              title="@d.RightModelId">
-                            @FormatModelName(d.RightModelName, d.RightModelId)
-                        </span>
-                    </Template>
-                </RadzenDataGridColumn>
-
-                @* Filterable="false": the chip row above IS the verdict filter, and it also
-                   backs the ?verdict= deep link the nav's "N awaiting judgment" pill uses. With
-                   the column filter left on, the page shipped two controls for one field forty
-                   pixels apart — a Select… dropdown in the grid header directly under four
-                   chips — that could be set to contradict each other, with no indication which
-                   had won. One field, one control. Sorting stays: that is a different question. *@
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="Verdict" Property="Verdict" Filterable="false" Width="11rem">
-                    <Template Context="d">
-                        @* Names the winner. "Left" made you map a chip back to a column
-                           to learn anything, which is the one thing this column is for. *@
-                        @if (d.Verdict is DuelVerdict.Left or DuelVerdict.Right)
-                        {
-                            <span class="archive__verdict archive__verdict--win" title="Winner of this duel">
-                                🏆 @GetWinnerName(d)
-                            </span>
-                        }
-                        else if (d.Verdict == DuelVerdict.Tie)
-                        {
-                            <span class="archive__verdict archive__verdict--tie"
-                                  title="The judge compared both outputs and found them equivalent. No rating moved.">
-                                🤝 Tie
-                            </span>
-                        }
-                        else
-                        {
-                            <a class="po-btn po-btn--sm po-btn--primary archive__judge-btn"
-                               href="@($"/arena/{d.DuelId}")"
-                               title="Open both outputs and pick a winner"
-                               @onclick:stopPropagation="true">
-                                ⚖ Judge
-                            </a>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-
-                <RadzenDataGridColumn TItem="DuelSummaryDto" Title="" Sortable="false" Filterable="false" Width="6rem">
-                    <Template Context="d">
-                        <div class="archive__row-actions">
-                            @* Re-run: same prompt, same two models, fresh duel. *@
-                            <button type="button"
-                                    class="archive__row-btn"
-                                    aria-label="@($"Re-run {d.LeftModelName} vs {d.RightModelName} with the same prompt")"
-                                    title="Re-run with the same prompt"
-                                    @onclick="@(() => GoToRerun(d))"
-                                    @onclick:stopPropagation="true">⚔</button>
-                            @* Same-origin GET carries the BFF cookie, so the browser
-                               does the whole download with no interop. *@
-                            <a class="archive__row-btn archive__row-btn--link"
-                               href="@($"/api/duels/{d.DuelId}/report")"
-                               aria-label="Download lab report (HTML)"
-                               title="Download lab report (HTML)"
-                               download="@($"lab-report-{d.DuelId}.html")"
-                               @onclick:stopPropagation="true">⬇</a>
-                        </div>
-                    </Template>
-                </RadzenDataGridColumn>
-            </Columns>
-        </RadzenDataGrid>
+        @* A plain .po-table: it becomes labelled cards below 640px via data-label, and the
+           prompt cell's link opens the duel in the Arena. *@
+        <div class="po-table-wrap">
+            <table class="po-table po-table--cards">
+                <caption class="visually-hidden">Duels, newest first — open a prompt to see both outputs</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Date (UTC)</th>
+                        <th scope="col">Prompt</th>
+                        <th scope="col">Matchup</th>
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in VisibleRows)
+                    {
+                        var d = r.Duel;
+                        <tr @key="d.DuelId">
+                            <td data-label="Date" class="archive__date">@d.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td data-label="Prompt"><a href="@($"/arena/{d.DuelId}")">@d.PromptSummary</a></td>
+                            <td data-label="Matchup">
+                                <span class="archive__matchup">
+                                    @Side(d.LeftModelName, d.LeftModelId, d.Verdict == DuelVerdict.Left)
+                                    <span class="archive__vs">vs</span>
+                                    @Side(d.RightModelName, d.RightModelId, d.Verdict == DuelVerdict.Right)
+                                    @if (d.Verdict == DuelVerdict.Tie)
+                                    {
+                                        <span class="archive__verdict archive__verdict--tie"
+                                              title="The judge compared both outputs and found them equivalent. No rating moved.">
+                                            <span aria-hidden="true">🤝</span> Tie
+                                        </span>
+                                    }
+                                    else if (d.Verdict == DuelVerdict.Pending)
+                                    {
+                                        <a class="po-btn po-btn--sm po-btn--primary archive__judge-btn"
+                                           href="@($"/arena/{d.DuelId}")"
+                                           title="Open both outputs and pick a winner">
+                                            <span aria-hidden="true">⚖</span> Judge
+                                        </a>
+                                    }
+                                </span>
+                            </td>
+                            <td class="po-cell--bare">
+                                <div class="archive__row-actions">
+                                    @* Re-run: same prompt, same two models, fresh duel. *@
+                                    <button type="button"
+                                            class="po-btn po-btn--sm archive__row-btn"
+                                            aria-label="@($"Re-run {d.LeftModelName} vs {d.RightModelName} with the same prompt")"
+                                            title="Re-run with the same prompt"
+                                            disabled="@_rerunning"
+                                            @onclick="@(() => RerunAsync(d))"><span aria-hidden="true">⚔</span></button>
+                                    @* Same-origin GET carries the BFF cookie, so the browser
+                                       does the whole download with no interop. *@
+                                    <a class="po-btn po-btn--sm archive__row-btn"
+                                       href="@($"/api/duels/{d.DuelId}/report")"
+                                       aria-label="Download lab report (HTML)"
+                                       title="Download lab report (HTML)"
+                                       download="@($"lab-report-{d.DuelId}.html")"><span aria-hidden="true">⬇</span></a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
+        @if (!VisibleRows.Any())
+        {
+            <p class="po-hint">No duels match — choose All, or clear the search.</p>
+        }
 
         <div class="archive__pagination">
             @* The old copy read "Showing 20 of 20 duels — more available", because the first
@@ -202,9 +136,17 @@
             <span class="archive__count">@CountSummary</span>
             @if (_hasMore)
             {
-                <button type="button" class="po-btn" @onclick="LoadMoreAsync">Load More</button>
+                @* Disabled while any list request is in flight: a double-click used to fire two
+                   requests from the same cursor and append the same page twice. *@
+                <button type="button" class="po-btn" disabled="@_fetching" @onclick="LoadMoreAsync">
+                    @(_fetching ? "Loading…" : "Load More")
+                </button>
             }
         </div>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="po-error">@_error</p>
+        }
     }
 </div>
 
@@ -222,140 +164,155 @@
     /// </summary>
     [SupplyParameterFromQuery(Name = "verdict")] public string? VerdictQuery { get; set; }
 
+    /// <summary>Everything loaded for the current filter, newest first by id — the server's paging key.</summary>
     private List<DuelSummaryDto> _duels = [];
+
+    /// <summary>First load only; it replaces the page. Later loads keep the grid on screen.</summary>
     private bool _loading = true;
+
+    /// <summary>Any list request in flight. Guards Load More against a double-click.</summary>
+    private bool _fetching;
+
+    /// <summary>
+    /// Bumped per list request. A response whose version is stale — a chip switched while the
+    /// previous filter's page was still in flight — is dropped instead of overwriting the rows.
+    /// </summary>
+    private int _loadVersion;
+
+    private bool _rerunning;
     private string? _error;
     private bool _hasMore;
     private const int PageSize = 20;
 
-    /// <summary>Grid handle — held so a filter change can reset paging/scroll position.</summary>
-    private RadzenDataGrid<DuelSummaryDto>? _grid;
+    /// <summary>Null until the first OnParametersSetAsync applies the query.</summary>
+    private string? _verdictFilter;
 
-    private string _verdictFilter = "All";
-
-    // Materialised once per change instead of per read: the markup wants this list three times
-    // (empty check, grid data, footer count), and re-sorting on every incidental re-render —
-    // a row selection, say — was pure waste.
-    private List<DuelSummaryDto> _filteredDuels = [];
-
-    // Bound into the PageActions primitive so the filtered-empty can reuse the row geometry.
-    private EventCallback _resetFilterCallback = default;
-    private EventCallback ResetFiltersCallback()
-    {
-        if (_resetFilterCallback.Equals(default(EventCallback)))
-        {
-            _resetFilterCallback = EventCallback.Factory.Create(this, ResetFilters);
-        }
-        return _resetFilterCallback;
-    }
-
-    private void ApplyFilter()
-    {
-        IEnumerable<DuelSummaryDto> query = _verdictFilter switch
-        {
-            "Won" => _duels.Where(d => d.Verdict is DuelVerdict.Left or DuelVerdict.Right),
-            "Tie" => _duels.Where(d => d.Verdict == DuelVerdict.Tie),
-            "Unjudged" => _duels.Where(d => d.Verdict == DuelVerdict.Pending),
-            _ => _duels
-        };
-        _filteredDuels = query
-            .OrderByDescending(d => d.StartedAt)
-            .ToList();
-    }
+    // Materialised once per change instead of per read: re-projecting on every incidental
+    // re-render — a row selection, say — was pure waste.
+    private List<ArchiveRow> _rows = [];
 
     /// <summary>
-    /// One population per sentence: how many rows are on screen, and — only when a filter is
-    /// actually hiding something — how many were loaded in total.
+    /// A row: the duel plus its "A vs B" text, which the search box matches, so a model name
+    /// finds the duel whichever side it played on.
     /// </summary>
-    private string CountSummary
+    private sealed record ArchiveRow(DuelSummaryDto Duel, string Matchup);
+
+    private string _search = string.Empty;
+
+    private IEnumerable<ArchiveRow> VisibleRows => string.IsNullOrWhiteSpace(_search)
+        ? _rows
+        : _rows.Where(r => r.Matchup.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+                        || r.Duel.PromptSummary.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// What each chip asks the server for. The filter runs server-side, before the page limit:
+    /// filtering the twenty loaded rows meant "Unjudged" — the nav pill's deep link — could show
+    /// nothing while unjudged duels sat one Load More away.
+    /// </summary>
+    private static DuelVerdict[]? VerdictsFor(string? filter) => filter switch
     {
-        get
-        {
-            var shown = _filteredDuels.Count;
-            var noun = shown == 1 ? "duel" : "duels";
-            return _filteredDuels.Count == _duels.Count
-                ? $"{shown} {noun}"
-                : $"{shown} of {_duels.Count} loaded {noun}";
-        }
+        "Won" => new[] { DuelVerdict.Left, DuelVerdict.Right },
+        "Tie" => new[] { DuelVerdict.Tie },
+        "Unjudged" => new[] { DuelVerdict.Pending },
+        _ => null,
+    };
+
+    /// <summary>How many rows are on screen. Load More says whether there are more.</summary>
+    private string CountSummary => $"{_rows.Count} {(_rows.Count == 1 ? "duel" : "duels")}";
+
+    /// <summary>
+    /// A chip writes the query string rather than the field, so the URL is the one source of
+    /// truth: OnParametersSetAsync does the loading, and clicking the nav's "awaiting judgment"
+    /// pill after picking another chip still changes the URL and still takes effect.
+    /// </summary>
+    private void SelectFilter(string label) =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("verdict", label == "All" ? null : label), replace: true);
+
+    /// <summary>
+    /// Runs on every navigation to /archive, including a query-only one — the nav pill clicked
+    /// while already here. The query used to be read in OnInitializedAsync, which runs once per
+    /// component instance, so that deep link did nothing unless you arrived from another page.
+    /// Skips when the filter is unchanged, so an unrelated re-render never refetches.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        var requested = Filters.FirstOrDefault(f => string.Equals(f, VerdictQuery, StringComparison.OrdinalIgnoreCase)) ?? "All";
+        if (requested == _verdictFilter) return;
+
+        _verdictFilter = requested;
+        await LoadPageAsync(append: false);
     }
 
-    private void SetVerdictFilter(string label)
+    private Task LoadMoreAsync() => LoadPageAsync(append: true);
+
+    /// <summary>
+    /// Loads the first page for the current filter, or (append) the page strictly older than
+    /// the oldest row held. The cursor is that row's id: ids are ULIDs, so id order is time
+    /// order, and it is the key the server sorts and pages on. The old cursor was the row's
+    /// yyyyMM, which the server matched with `le` — the whole current month again, every time.
+    /// </summary>
+    private async Task LoadPageAsync(bool append)
     {
-        _verdictFilter = label;
-        ApplyFilter();
-    }
+        if (append && (_fetching || _duels.Count == 0)) return;
 
-    private void ResetFilters() => SetVerdictFilter("All");
-
-    protected override async Task OnInitializedAsync()
-    {
-        // Before LoadAsync, which applies the filter as part of loading.
-        if (Filters.FirstOrDefault(f => string.Equals(f, VerdictQuery, StringComparison.OrdinalIgnoreCase)) is { } match)
-            _verdictFilter = match;
-
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
-    {
-        _loading = true;
+        var version = ++_loadVersion;
+        _fetching = true;
         _error = null;
+        if (!append)
+        {
+            // A new filter must not keep the old filter's rows: if its request fails they sat
+            // under the newly pressed chip, and Load More then paged from the wrong cursor.
+            _duels = [];
+            _rows = [];
+            _hasMore = false;
+        }
         try
         {
-            var results = await ApiClient.ListDuelsAsync(PageSize + 1);
-            if (results is not null)
-            {
-                _hasMore = results.Count > PageSize;
-                _duels = results.Take(PageSize).ToList();
-                ApplyFilter();
-            }
+            DuelId? cursor = append ? _duels[^1].DuelId : null;
+            var page = await ApiClient.ListDuelsAsync(PageSize + 1, cursor, VerdictsFor(_verdictFilter));
+            if (version != _loadVersion || page is null) return;
+
+            _hasMore = page.Count > PageSize;
+            var batch = page.Take(PageSize);
+
+            // DistinctBy is defensive — the cursor already makes pages disjoint — and the sort
+            // keeps _duels[^1] the oldest row, which is what the next cursor reads.
+            _duels = (append ? _duels.Concat(batch) : batch)
+                .DistinctBy(d => d.DuelId)
+                .OrderByDescending(d => d.DuelId)
+                .ToList();
+            _rows = _duels
+                .Select(d => new ArchiveRow(d,
+                    $"{FormatModelName(d.LeftModelName, d.LeftModelId)} vs {FormatModelName(d.RightModelName, d.RightModelId)}"))
+                .ToList();
         }
         catch (Exception ex)
         {
-            _error = $"Failed to load archive: {ex.Message}";
+            if (version == _loadVersion)
+                _error = append ? $"Failed to load more: {ex.Message}" : $"Failed to load archive: {ex.Message}";
         }
         finally
         {
-            _loading = false;
-        }
-    }
-
-    private async Task LoadMoreAsync()
-    {
-        if (_duels.Count == 0) return;
-        var oldest = _duels.Last();
-        var before = oldest.StartedAt.ToString("yyyyMM");
-        try
-        {
-            var more = await ApiClient.ListDuelsAsync(PageSize + 1, before);
-            if (more is not null)
+            // A superseded request leaves the flags to the one that replaced it.
+            if (version == _loadVersion)
             {
-                _hasMore = more.Count > PageSize;
-                _duels.AddRange(more.Take(PageSize));
-                ApplyFilter();
+                _fetching = false;
+                _loading = false;
             }
         }
-        catch (Exception ex)
-        {
-            _error = $"Failed to load more: {ex.Message}";
-        }
     }
 
-    /// <summary>Keyboard equivalent of clicking a row (SC 2.1.1). Triggers the same
-    /// navigation as a pointer click, so Enter or Space opens /arena/{id}.</summary>
-    private void OnRowKeyDown(KeyboardEventArgs e, string href)
-    {
-        if (e.Key is "Enter" or " ")
-            Nav.NavigateTo(href);
-    }
-
-    private static string GetWinnerName(DuelSummaryDto d)
-    {
-        if (d.WinnerModelId is null) return "—";
-        if (d.WinnerModelId == d.LeftModelId) return FormatModelName(d.LeftModelName, d.LeftModelId);
-        if (d.WinnerModelId == d.RightModelId) return FormatModelName(d.RightModelName, d.RightModelId);
-        return ShortModelId(d.WinnerModelId);
-    }
+    /// <summary>
+    /// One side of the matchup. The winner is bold with a trophy; the trophy is decoration, so
+    /// the win is also stated in text for assistive tech rather than carried by glyph and weight.
+    /// </summary>
+    private static RenderFragment Side(string? modelName, ModelId modelId, bool won) =>
+        @<span class="archive__model @(IsUnresolvedModelName(modelName, modelId) ? "archive__model--unresolved" : "") @(won ? "archive__model--winner" : "")">
+            @FormatModelName(modelName, modelId)@if (won)
+            {
+                <span aria-hidden="true"> 🏆</span><span class="visually-hidden"> (winner)</span>
+            }
+        </span>;
 
     // Both delegate to the one shared resolver rather than restating its rules here; see
     // ModelDisplayName for why an unresolved id shows as "Retired model".
@@ -365,20 +322,36 @@
     private static string FormatModelName(string? modelName, ModelId modelId) =>
         ModelDisplayName.ResolveForDisplay(modelName, null, modelId);
 
-    private static string ShortModelId(string? modelId)
+    /// <summary>
+    /// Starts a fresh duel with the same pairing and the FULL prompt, then opens it — what the
+    /// Arena's Retry does. This used to pre-fill Home from <c>PromptSummary</c>, which the list
+    /// truncates to 80 characters, so every re-run of a longer prompt ran a different one; and
+    /// a prompt of up to 10,000 characters does not belong on a query string anyway.
+    /// PromptText, not PromptFull: the server appends its CDN instruction itself.
+    /// </summary>
+    private async Task RerunAsync(DuelSummaryDto d)
     {
-        if (string.IsNullOrWhiteSpace(modelId)) return "id: n/a";
-        return modelId.Length <= 10 ? $"id: {modelId}" : $"id: {modelId[..4]}…{modelId[^4..]}";
-    }
+        if (_rerunning) return;
 
-    private void GoToRerun(DuelSummaryDto d)
-    {
-        // Re-run repeats the same pairing with the same prompt. The Compare page expects
-        // the prompt on the query string, so this stays text-only - the user can still swap
-        // models on the landing page before launching.
-        var prompt = Uri.EscapeDataString(d.PromptSummary);
-        var leftId = Uri.EscapeDataString(d.LeftModelId);
-        var rightId = Uri.EscapeDataString(d.RightModelId);
-        Nav.NavigateTo($"/?prompt={prompt}&leftModelId={leftId}&rightModelId={rightId}");
+        _rerunning = true;
+        _error = null;
+        try
+        {
+            var prompt = string.IsNullOrWhiteSpace(d.PromptText) ? d.PromptSummary : d.PromptText;
+            var rerun = await ApiClient.CommenceDuelAsync(d.LeftModelId, d.RightModelId, prompt);
+            if (rerun is not null)
+            {
+                Nav.NavigateTo($"/arena/{rerun.DuelId}");
+                return;
+            }
+
+            _error = "Could not start the re-run. Please try again.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to start the re-run: {ex.Message}";
+        }
+
+        _rerunning = false;
     }
 }

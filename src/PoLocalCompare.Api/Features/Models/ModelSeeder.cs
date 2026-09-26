@@ -14,13 +14,20 @@ public static class ModelSeeder
     private static readonly List<Model> DefaultModels =
     [
         // ── Local WebLLM (in-browser) ──────────────────────────────────────
-        new Model(ModelId.From("01SEED0000000000000000001"), "SmolLM2 135M",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-135M-Instruct-q0f32-MLC"),
+        // 001 (SmolLM2 135M) is retired, not reused: at 135M parameters it does not produce a
+        // working page, so every duel it entered was a walkover that taught the leaderboard
+        // nothing, and it still cost a 580 MB download. Existing rows are left alone.
+        //
+        // 010 is the one code-tuned model in the browser tier. General chat models of this
+        // size mostly return prose or broken markup for "build a single HTML file"; a coder
+        // fine-tune of the same size is the cheapest quality lift the WebGPU tier has.
         new Model(ModelId.From("01SEED0000000000000000002"), "SmolLM2 360M",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-360M-Instruct-q4f32_1-MLC"),
         new Model(ModelId.From("01SEED0000000000000000003"), "SmolLM2 1.7B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "SmolLM2-1.7B-Instruct-q4f16_1-MLC"),
         new Model(ModelId.From("01SEED0000000000000000004"), "Qwen2.5 0.5B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen2.5-0.5B-Instruct-q4f32_1-MLC"),
         new Model(ModelId.From("01SEED0000000000000000005"), "Qwen3 1.7B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen3-1.7B-q4f16_1-MLC"),
         new Model(ModelId.From("01SEED0000000000000000006"), "Llama 3.2 1B",  ModelType.Local, tdpWatts: 115, webLlmModelId: "Llama-3.2-1B-Instruct-q4f16_1-MLC"),
         new Model(ModelId.From("01SEED0000000000000000009"), "Gemma 2 2B",    ModelType.Local, tdpWatts: 115, webLlmModelId: "gemma-2-2b-it-q4f16_1-MLC"),
+        new Model(ModelId.From("01SEED0000000000000000010"), "Qwen2.5 Coder 1.5B", ModelType.Local, tdpWatts: 115, webLlmModelId: "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC"),
 
         // Ids 007 (Llama 3.2 3B) and 008 (Phi-3.5 Mini) are retired, not reused. Both failed to
         // load in the browser across three independent runs, each on a dedicated cold browser:
@@ -111,6 +118,19 @@ public static class ModelSeeder
         // account, which is why 4-6 is the intended middle rung.
     ];
 
+    /// <summary>
+    /// Google models over the Gemini API's OpenAI-compatible endpoint (see
+    /// <c>FoundryChatRequest.IsGemini</c>). Seeded only when <c>Gemini:ApiKey</c> is configured,
+    /// so a machine without a key gets no permanently-failing entries. 2.5 Flash-Lite is the
+    /// cheapest multimodal model on any provider here and can run with thinking off; 3.5
+    /// Flash-Lite is its successor, which cannot. Added 2026-09-26.
+    /// </summary>
+    private static readonly List<Model> GeminiModels =
+    [
+        new Model(ModelId.From("01SEED0000000000000000011"), "Gemini 2.5 Flash-Lite", ModelType.Remote, apiEndpointRef: "gemini-2.5-flash-lite", inputTokenPricePerMillion: 0.10m, outputTokenPricePerMillion: 0.40m),
+        new Model(ModelId.From("01SEED0000000000000000012"), "Gemini 3.5 Flash-Lite", ModelType.Remote, apiEndpointRef: "gemini-3.5-flash-lite", inputTokenPricePerMillion: 0.30m, outputTokenPricePerMillion: 2.50m),
+    ];
+
     public static async Task SeedAsync(IServiceProvider services)
     {
         var logger = services.GetRequiredService<ILogger<ModelSeederMarker>>();
@@ -124,6 +144,8 @@ public static class ModelSeeder
         var modelsToSeed = environment.IsDevelopment()
             ? DefaultModels
             : DefaultModels.Where(m => m.ModelType != ModelType.LocalService).ToList();
+        if (!string.IsNullOrWhiteSpace(services.GetRequiredService<IConfiguration>()["Gemini:ApiKey"]))
+            modelsToSeed = [.. modelsToSeed, .. GeminiModels];
 
         var existing = (await repo.GetAllAsync()).ToList();
 

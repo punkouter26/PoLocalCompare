@@ -16,17 +16,6 @@
 @using PoLocalCompare.Shared.Ids
 @using PoLocalCompare.Shared.Models
 
-@* Radzen.Blazor — re-added 2026-09-02 for the Archive data grid and the model-profile
-   rating chart. See PoLocalCompare.Client.csproj for the payload it costs. *@
-@using Radzen
-@using Radzen.Blazor
-
-@* Radzen ships its own ThemeService, which collides with ours (NavMenu injects the app's
-   one to drive the light/dark toggle). Alias rather than fully-qualifying at each use site,
-   so the ~10 references in NavMenu and Program.cs stay readable. If Radzen's theming is ever
-   adopted, this alias is the line to revisit. *@
-@using ThemeService = PoLocalCompare.Client.Services.ThemeService
-
 @* Require an authenticated session for every routable page (BFF cookie). *@
 @* Non-routed components ignore this; the Login view is rendered via NotAuthorized. *@
 @attribute [Authorize]

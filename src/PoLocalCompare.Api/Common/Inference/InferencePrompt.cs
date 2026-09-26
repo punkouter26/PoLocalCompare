@@ -25,14 +25,12 @@ namespace PoLocalCompare.Api.Common.Inference;
 /// </para>
 ///
 /// <para>
-/// <b>This string is now <c>const</c> on purpose.</b> Azure AI Foundry (and every other
-/// vendor that exposes an OpenAI-compatible chat endpoint) keys prompt-cache hits on prefix
-/// equality — a chat call whose first N tokens match a cached call gets to skip the prefill on
-/// them. The system prompt is the prefix that varies the least in this app (it is byte-equal
-/// across every duel side), so a stable system prompt is the foundation of the cache working
-/// at all. Keeping the whole string in one place and <c>const</c>-folding it guarantees the
-/// compiler cannot emit a divergent copy under any code path. Edit with care: a whitespace
-/// change here invalidates the cache for every cached call.
+/// <b>This string is <c>const</c> so there is exactly one copy</b> — the fairness argument above
+/// is the reason, and <c>const</c>-folding guarantees no code path can emit a divergent one.
+/// It is NOT a prompt-caching win, although an earlier version of this comment said so: Azure
+/// OpenAI only caches prompts of 1,024 tokens or more, and this one is about 250 tokens plus a
+/// short user prompt, so no duel call is ever cache-eligible. Don't pad it to cross the line —
+/// the extra prefill would cost more than a cache hit on it could save.
 /// </para>
 /// </remarks>
 public static class InferencePrompt

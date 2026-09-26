@@ -10,7 +10,7 @@
     background: #fff;
     color: #5e5e5e;
     border: 1px solid #8c8c8c;
-    font-weight: var(--weight-500, 500);
+    font-weight: var(--weight-medium);
     text-decoration: none;
 }
 

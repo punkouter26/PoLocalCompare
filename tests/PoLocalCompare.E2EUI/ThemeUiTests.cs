@@ -36,7 +36,7 @@ public sealed class ThemeUiTests : UiTestBase
         Assert.Null(await ThemeAttributeAsync(page));
         Assert.Equal(DarkBackground, await BodyBackgroundAsync(page));
 
-        await OpenNavIfCollapsedAsync(page);
+        await OpenUserMenuAsync(page);
         var toggle = page.Locator(".navmenu__theme-toggle");
 
         await Assertions.Expect(toggle).ToHaveAttributeAsync(
@@ -73,7 +73,7 @@ public sealed class ThemeUiTests : UiTestBase
         await page.GotoAsync(SeedAuthUrl("/"));
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle, new() { Timeout = 45_000 });
 
-        await OpenNavIfCollapsedAsync(page);
+        await OpenUserMenuAsync(page);
         await page.Locator(".navmenu__theme-toggle").ClickAsync();   // store an explicit Light
 
         await page.ReloadAsync();
@@ -94,7 +94,7 @@ public sealed class ThemeUiTests : UiTestBase
         await Assertions.Expect(header).ToBeVisibleAsync(new() { Timeout = 30_000 });
         var lightColor = await header.EvaluateAsync<string>("el => getComputedStyle(el).color");
 
-        await OpenNavIfCollapsedAsync(page);
+        await OpenUserMenuAsync(page);
         await page.Locator(".navmenu__theme-toggle").ClickAsync();   // Light → Dark
         await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
         var darkColor = await header.EvaluateAsync<string>("el => getComputedStyle(el).color");

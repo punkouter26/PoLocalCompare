@@ -5,6 +5,7 @@
 @* SC 2.1.1 Keyboard / 4.1.2 Name-Role-Value: the card is a toggle button, so it is
    focusable, Enter/Space operable, and exposes its selected + disabled state. *@
 <div class="@_cardClass"
+     id="@ElementId(Model.ModelId)"
      role="button"
      tabindex="@(IsDisabled ? -1 : 0)"
      aria-pressed="@AriaPressed"
@@ -23,25 +24,20 @@
             {
                 <span class="model-card__slot-badge model-card__slot-badge--right" title="Right player">R</span>
             }
-            <span class="model-card__badge model-card__badge--@ModelTypeGroup.CssModifier(Model.ModelType)">
-                @ModelTypeGroup.ShortLabel(Model.ModelType)
-            </span>
+            <ModelTypeBadge Type="Model.ModelType" />
         </div>
     </div>
-    @* The rating and the record are one unit — "how good is it" — so they share a wrapper.
-       Below 640px that wrapper becomes a single row and the two blocks below it are dropped,
-       which is what takes the card from ~178px to ~80px on a phone. See the stylesheet. *@
+    @* Rating and record on one line — "how good is it" is one unit. *@
     <div class="model-card__meta">
-        <div class="model-card__elo">
-            ELO: <strong>@Model.CurrentElo.ToString("F0")</strong>
-        </div>
-        <div class="model-card__stats">
-            Duels: @Model.DuelCount &nbsp;|&nbsp; W/L: @Model.WinCount/@(Math.Max(Model.DuelCount - Model.WinCount - Model.DrawCount, 0))@(Model.DrawCount > 0 ? $"/{Model.DrawCount}" : "")
-        </div>
+        ELO <strong class="model-card__elo">@Model.CurrentElo.ToString("F0")</strong>
+        · @Model.DuelCount duels · W/L @Model.WinCount/@(Math.Max(Model.DuelCount - Model.WinCount - Model.DrawCount, 0))@(Model.DrawCount > 0 ? $"/{Model.DrawCount}" : "")
     </div>
-    <div class="model-card__params">
-        Params: <span class="model-card__params-value">@GetParameterLabel()</span>
-    </div>
+    @if (GetParameterLabel() is { } paramLabel)
+    {
+        <div class="model-card__params">
+            Params: <span class="model-card__params-value">@paramLabel</span>
+        </div>
+    }
     @if (Model.InputTokenPricePerMillion.HasValue || Model.OutputTokenPricePerMillion.HasValue)
     {
         <div class="model-card__pricing" title="Microsoft Foundry list rates — used to estimate cost per duel.">
@@ -63,6 +59,9 @@
     [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
 
+    /// <summary>The card's DOM id, so a caller can hand focus back to it (Home's replace popover).</summary>
+    public static string ElementId(ModelId id) => $"model-card-{id.Value}";
+
     // Rendered as strings, not bools. Blazor treats a bool-valued attribute as an HTML boolean
     // attribute and OMITS it when false — so an unselected card exposed no pressed state at
     // all, failing SC 4.1.2.
@@ -77,7 +76,7 @@
     {
         get
         {
-            var css = "model-card";
+            var css = "model-card po-reveal";
             if (IsSelected) css += " model-card--selected";
             if (IsDisabled) css += " model-card--disabled";
             return css;
@@ -110,15 +109,10 @@
         price == 0 ? "0" : price < 1 ? price.ToString("G4") : price.ToString("0.##");
 
     /// <summary>
-    /// Local and Ollama models aren't billed per token, so the pricing row is replaced with
-    /// a "free" label that explains why and points to the energy cost the duel itself surfaces.
+    /// Local and Ollama models aren't billed per token. The label is just "Free"; the
+    /// tooltip says why.
     /// </summary>
-    private string FreeLabel => Model.ModelType switch
-    {
-        ModelType.Local => "free — runs in your browser (no token cost)",
-        ModelType.LocalService => "free — runs via your local Ollama daemon (no token cost)",
-        _ => "rate not set"
-    };
+    private string FreeLabel => Model.ModelType is ModelType.Local or ModelType.LocalService ? "Free" : "rate not set";
 
     private string FreeTooltip => Model.ModelType switch
     {
@@ -127,7 +121,7 @@
         _ => "No Foundry list rate has been assigned to this model yet."
     };
 
-    private string GetParameterLabel()
+    private string? GetParameterLabel()
     {
         // Prefer explicit known values for select open models.
         var known = (Model.ApiEndpointRef ?? string.Empty).ToLowerInvariant() switch
@@ -147,6 +141,6 @@
         if (match.Success)
             return $"{match.Groups[1].Value}{match.Groups[2].Value.ToUpperInvariant()}";
 
-        return "Undisclosed";
+        return null;
     }
 }

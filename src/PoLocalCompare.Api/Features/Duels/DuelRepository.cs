@@ -1,5 +1,4 @@
 // GoF: Repository pattern
-using System.Collections.Concurrent;
 using Azure;
 using Azure.Data.Tables;
 using NUlid;
@@ -11,14 +10,6 @@ public sealed class DuelRepository : IDuelRepository
 {
     private const string TableName = "Duels";
 
-    /// <summary>
-    /// One create-check per table endpoint for the life of the process. The table is already
-    /// provisioned at startup (AzuriteSetup in dev, the storage bootstrap in Production); doing
-    /// it per operation cost an extra round-trip on every duel read, write and list.
-    /// Keyed by endpoint so a test host pointed at a different Azurite instance still ensures its own.
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, Task> TableEnsured = new();
-
     private readonly TableClient _tableClient;
 
     public DuelRepository(TableServiceClient tableServiceClient)
@@ -26,13 +17,8 @@ public sealed class DuelRepository : IDuelRepository
         _tableClient = tableServiceClient.GetTableClient(TableName);
     }
 
-    private Task EnsureTableAsync() =>
-        TableEnsured.GetOrAdd(_tableClient.Uri.ToString(), _ => _tableClient.CreateIfNotExistsAsync());
-
     public async Task<Duel?> GetByIdAsync(DuelId duelId)
     {
-        await EnsureTableAsync();
-
         // PartitionKey is YYYYMM derived from ULID timestamp
         var partitionKey = GetPartitionKey(duelId);
         try
@@ -53,8 +39,6 @@ public sealed class DuelRepository : IDuelRepository
 
     public async Task SaveAsync(Duel duel)
     {
-        await EnsureTableAsync();
-
         var entity = MapToEntity(duel);
         try
         {
@@ -68,41 +52,48 @@ public sealed class DuelRepository : IDuelRepository
 
     public async Task UpdateAsync(Duel duel)
     {
-        await EnsureTableAsync();
-
         var entity = MapToEntity(duel);
         // ETag-conditional replace (standards §5.5): a concurrent writer surfaces as 412 instead of a lost update.
         await _tableClient.UpdateEntityAsync(entity, TableETag.Parse(duel.ETag), TableUpdateMode.Replace);
     }
 
-    public async Task<IEnumerable<Duel>> ListAsync(int limit, string? beforeMonth)
+    public async Task<IEnumerable<Duel>> ListAsync(
+        int limit,
+        string? beforeMonth,
+        DuelId? before = null,
+        IReadOnlyCollection<DuelVerdict>? verdicts = null)
     {
-        await EnsureTableAsync();
-
         limit = Math.Clamp(limit, 1, 100);
         var duels = new List<Duel>();
 
-        // Azure Table Storage doesn't honour cross-partition ordering, and the SDK returns
-        // whatever the first partition yields when `maxPerPage` matches the requested limit —
-        // so a `limit=20` query previously returned 20 rows from a single partition and never
-        // touched the month that actually held the newest duel. Fetch a generous upper bound,
-        // sort in memory by the timestamp the page actually renders, and take the top `limit`.
-        // The cap is still small (a duel row is ~1 KB), so the memory cost is negligible.
-        await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
-            filter: string.IsNullOrEmpty(beforeMonth)
+        // Keyset cursor. Ids are ULIDs, so ordinal id order IS creation order and "strictly
+        // older than the last row the client has" is `RowKey lt cursor` — in the cursor's own
+        // month partition and every earlier one. The old cursor was a bare yyyyMM `le`, which
+        // re-included the whole current month: Load More returned the same rows forever.
+        var filter = before is { IsEmpty: false } cursor
+            ? TableClient.CreateQueryFilter($"PartitionKey le {GetPartitionKey(cursor)} and RowKey lt {cursor.Value}")
+            : string.IsNullOrEmpty(beforeMonth)
                 ? null
-                : TableClient.CreateQueryFilter($"PartitionKey le {beforeMonth}"),
-            maxPerPage: 1000))
+                : TableClient.CreateQueryFilter($"PartitionKey le {beforeMonth}");
+
+        // Table Storage doesn't order across partitions, so every matching row is read and the
+        // newest `limit` taken in memory. The verdict filter runs here rather than in OData
+        // because MapToDuel reads a row with no Verdict column as Pending, and an OData
+        // `Verdict eq 'Pending'` would miss exactly those rows.
+        // ponytail: full scan per page (~1 KB a row); walk month partitions newest-first and
+        // stop at `limit` once the table holds more than a few thousand duels.
+        await foreach (var entity in _tableClient.QueryAsync<TableEntity>(filter: filter, maxPerPage: 1000))
         {
-            duels.Add(MapToDuel(entity));
+            var duel = MapToDuel(entity);
+            if (verdicts is not { Count: > 0 } || verdicts.Contains(duel.Verdict))
+                duels.Add(duel);
         }
 
-        // Sort newest first by the timestamp the page renders. The ULID lexicographic order
-        // would also work, but `CompletedAt` is what the Archive shows and people occasionally
-        // back-date a record, so displaying the same sort the UI uses keeps page and API in
-        // lockstep even when the implementation drifts.
+        // Newest first by id, the same key the cursor pages on and the Archive sorts by. It was
+        // `CompletedAt ?? StartedAt` while the client sorted by StartedAt, so page boundaries
+        // and on-screen order disagreed whenever a duel finished out of start order.
         return duels
-            .OrderByDescending(d => d.CompletedAt ?? d.StartedAt)
+            .OrderByDescending(d => d.DuelId)
             .Take(limit);
     }
 

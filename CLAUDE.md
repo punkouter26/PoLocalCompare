@@ -30,9 +30,8 @@ a rule is being violated.
   fail; none of that shows up in a successful compile.
 - **No `dotnet user-secrets`.** Local values go in `appsettings.Development.json` or an environment
   variable (`AzureAiFoundry__ApiKey`); anything genuinely secret goes in **Azure Key Vault**, already
-  wired through `KeyVault:Uri`. The `UserSecretsId` still in
-  [PoLocalCompare.Api.csproj](src/PoLocalCompare.Api/PoLocalCompare.Api.csproj) is legacy — don't add
-  new values to that store. Secrets never go in code, logs or committed files.
+  wired through `KeyVault:Uri`. The legacy `UserSecretsId` was removed from the Api csproj on
+  2026-09-26 — don't add it back. Secrets never go in code, logs or committed files.
 
 ## Commands
 
@@ -53,14 +52,15 @@ used to sit here and was deleted in the 2026-08-13 prune: it still expected the 
 layout and failed on a healthy tree. Don't reintroduce it.)
 
 ```powershell
-pwsh SCRIPTS/check-clean.ps1    # repo-hygiene gate: test budgets, dead CSS classes, cache-busters
+pwsh SCRIPTS/check-clean.ps1    # repo-hygiene gate: budgets, dead/unused CSS, unreferenced types, cache-busters
 ```
 
-`check-clean.ps1` is not a linter — it is the three things that had already gone wrong silently and
-that nothing else watches: a tier over its test budget, a class applied in markup that no stylesheet
-defines (nothing warns; the element just renders unstyled), and a stylesheet or script loaded
-without a `?v=` cache-buster. It reads source only, so it is deterministic and cheap, and the
-`test` job in [deploy.yml](.github/workflows/deploy.yml) runs it before the suites.
+`check-clean.ps1` is not a linter — it is the things that had already gone wrong silently and that
+nothing else watches: a tier over its test budget; a class applied in markup that no stylesheet
+defines (the element just renders unstyled); a class a stylesheet defines that nothing applies; a
+C# type named nowhere but its own declaration; and a stylesheet or script loaded without a `?v=`
+cache-buster. It reads source only, so it is deterministic and cheap, and the `hygiene` job in
+[deploy.yml](.github/workflows/deploy.yml) runs it beside the suites.
 
 ### Tests
 
@@ -87,12 +87,11 @@ touching UI markup.
 AGENT.MD §8 fixes a **ratio contract of 100 / 50 / 25 / 25** — integration ≈ half of unit, each E2E
 tier ≈ a quarter. Counts are test *cases*, so a `[Theory]` contributes one per `InlineData` and each
 UI method counts twice (two viewports). Keep new tests inside those proportions rather than piling
-onto whichever tier is easiest to write. **The suite now sits exactly at the cap** (100/40/25/24 as
-of 2026-09-10; 100/40/25/23 on 2026-09-22) and `SCRIPTS/check-clean.ps1` fails when a tier exceeds
-its budget, so the contract is enforced rather than remembered. The practical consequence is that
-**Unit and E2EAPI have no headroom at all**: a pure function extracted into `Shared` for the express
-purpose of being unit-testable — `ArenaPhaseResolver` is the current example — cannot get its table
-test without the owner re-taking the ratio. Say so rather than quietly raising the cap.
+onto whichever tier is easiest to write. **Unit and E2EAPI sit exactly at the cap**
+(100/38/25/23 as of 2026-09-26) and `SCRIPTS/check-clean.ps1` fails when a tier exceeds its
+budget, so the contract is enforced rather than remembered. A new Unit test has to displace a
+weaker one — that is how `ArenaPhaseResolverTests` got in on 2026-09-26 (six trivial id/label
+cases made way). Say so rather than quietly raising the cap.
 
 **E2E-UI needs the machine to itself.** The suite drives a real browser against the one running dev
 instance, and `SignedInPageAsync` waits for `NetworkIdle` with a 45-second budget. Anything else
@@ -111,10 +110,11 @@ Two async traps in the server-side suites, both of which were causing real failu
   rows (`DuelTestFlow.WaitForBothResultsAsync` in Integration, `WaitForBothResultsAsync` in
   `DuelContractTests`) instead of racing them. That race was costing 7–9 of the 50 integration
   cases per run.
-- **`BackgroundTaskService` is a SINGLE consumer, and `AutoJudge` runs inline inside it.** So
-  anything that makes a queue item wait stalls every later test: a grace window
-  (`AiJudge:DelaySeconds`), or a browser-model duel waiting for a client result that a headless
-  test never posts. That is why the E2EAPI fixture keeps a short watchdog and why its duel suite
+- **`BackgroundTaskService` is a SINGLE consumer.** `AutoJudge` runs inline inside it only
+  when the grace window is 0 (tournaments); with a window it is detached since 2026-09-26, so a
+  standalone duel no longer holds the worker through `AiJudge:DelaySeconds` plus the judge call.
+  Anything else that makes a queue item wait still stalls every later test — a browser-model
+  duel waiting for a client result that a headless test never posts. That is why the E2EAPI fixture keeps a short watchdog and why its duel suite
   runs in its own collection with the judge off — tournaments cannot run without the judge and
   duels cannot run with it, so they get one host each.
 
@@ -175,6 +175,17 @@ the rendered page — a generated page's dead CDN reference must not become an o
 the server, nor eat the settle window in timeouts. The judge deployment must accept image input;
 `AiJudge:Deployment` is `gpt-5.4-mini` for that reason as well as for accuracy.
 
+**Every verdict is two judge calls, and they must agree.** `FoundryDuelJudge` asks once with
+the left page in slot A and once with it in slot B, in parallel; a pick that flips with the
+order is recorded as a **Tie** ("too close to call"), and one call failing defers to the other.
+The coin flip it replaced only spread position bias evenly — it never removed it from a verdict.
+The schema also puts `reason` **before** `winner`, so the verdict is written after the checklist
+rather than rationalised after it. With screenshots on, both sides render in parallel and a page
+that looks animated is shot as **two frames 800 ms apart**, because one frame cannot show a
+cube that is supposed to rotate. `POST /api/dev/judge-calibration?take=N` replays the current
+judge over human-decided duels and reports the agreement rate — run it before and after any
+judge change; it never writes a verdict.
+
 This reverses the original human-only rule; PRD §9 item 7 records why it was that way and item 9 why
 it changed. **`AiJudge:DelaySeconds` is 10** (PRD §9 item 21) — short on purpose, so a duel resolves
 while you are still looking at it. At that width the judge decides nearly every duel and the human
@@ -192,6 +203,11 @@ additionally need a matching `prebuiltAppConfig` entry in
 `SCRIPTS/plan-webllm-artifacts.py` parses both files, is the single source of the model list for
 `download-models.py`, and exits non-zero when they disagree — run it after any catalog edit. Retired seed IDs are commented out, never reused (007/008 are burnt).
 Ollama (`ModelType.LocalService`) models seed in **Development only**, so Production has no dead entries.
+Gemini models seed only when `Gemini:ApiKey` is set: a `gemini-*` `ApiEndpointRef` is a Remote
+model served by Google's OpenAI-compatible endpoint (`FoundryChatRequest.IsGemini` picks the URL
+and the Bearer header), not a separate `ModelType`. `DefaultPriceBook` matches the **longest**
+key — it used to take the first prefix hit, priced GPT-5.4 Mini as GPT-5.4 and overwrote the
+correct seed rates with that on every startup.
 
 **Home renders the catalog before the health probe lands.** `GET /api/models/availability`
 sends a real 16-token completion to every Foundry deployment before it answers — measured at
@@ -206,8 +222,9 @@ rule without wiping Azurite. `GET /api/models/discover` lists browser builds par
 vendored `web-llm.js` (`WebLlmBundleCatalog` — the same parse as `plan-webllm-artifacts.py`),
 ranked by Hugging Face Hub download counts, plus pulled Ollama tags in Development.
 `POST /api/models/discovered` **re-checks** the id against the bundle or the daemon before
-registering, which is the point of it being separate from `POST /api/models` (that one takes any
-`WebLlmModelId`, typos included). A runtime-added model is not in `ModelSeeder`, so
+registering, and it is the only way to add a model: the unchecked `POST /api/models` (any
+`WebLlmModelId`, typos included) and `DELETE /api/models/{id}` were removed on 2026-09-26 — tests
+seed the registry through the repository (`TestModels` in each server-side test project). A runtime-added model is not in `ModelSeeder`, so
 `download-models.py` will not vendor its weights — it streams from the CDN unless you also add it to
 the seeder.
 
@@ -249,9 +266,15 @@ was a FIXED `height: calc(100dvh - 6.5rem)` whatever it contained — 796px on a
 desktop, of which ~278px was empty glass between the prompt-library button and the Compare
 footer. A maximum keeps everything the fixed height was there for (the foot stays pinned, only
 the middle scrolls, it can never grow past the fold) and lets it shrink to its content. Below
-640px the picker is capped at `52dvh` and `ModelCard` drops its parameter and pricing rows, so
-the window shows ~4 models rather than 1.5; the starter-duel block is pulled to the top of that
-window and compacted to a single row, because at the bottom of an unbounded list it measured at
+1080px (one column) the picker is capped at `52dvh` — it was only below 640px until 2026-09-26,
+so tablets still had the whole catalog above the prompt — and `home__console-foot` becomes a
+**`position: fixed` bottom bar**, because on a 390px phone Compare measured at y≈1050, below the
+fold, and a sticky foot cannot escape a console whose own top is below the fold. The console
+drops `.po-glass`'s `backdrop-filter` there: a filtered ancestor is the containing block for
+`position: fixed`, so the bar would pin to the console instead of the viewport. Below 640px
+`ModelCard` drops its parameter and pricing rows, so the window shows ~4 models rather than
+1.5; the starter-duel control is a single button beside
+the picker heading, because at the bottom of an unbounded list it measured at
 y=3735 inside a 337px box — the one control aimed at a first-time user was the least reachable
 thing in the app.
 
@@ -280,14 +303,15 @@ exclusive arms in two separate `@if` chains, each carrying its own `role="status
 regions on one page, several able to fire in the same frame. Consistency came from arm
 *order*, which is a property you cannot test and cannot see; the same trap already documented
 on Home's `CompareHint`. It is in `Shared` rather than beside the page for the reason given
-below: `PoLocalCompare.Unit` cannot reach anything under `src/PoLocalCompare.Client/`. **The
-Unit tier is at its 100/100 budget, so the resolver currently ships with no test** — adding
-one means re-taking the ratio contract in AGENT.MD §8.
+below: `PoLocalCompare.Unit` cannot reach anything under `src/PoLocalCompare.Client/`.
+`ArenaPhaseResolverTests` pins the precedences that were load-bearing.
 
 **The Arena is the whole duel — streaming and judging.** `/processing` no longer exists; `POST
-/api/duels` navigates straight to `/arena/{id}`, which connects to `DuelHub`, shows the live
-`TokenRace` and streaming previews while `_duelStillRunning`, then swaps to the verdict UI on
-`DuelComplete`. Critically, **Arena drives browser-model inference**: it handles
+/api/duels` navigates straight to `/arena/{id}`, which connects to `DuelHub`, shows live
+tokens and tok/s inside each panel's `TelemetryHud` (the separate `TokenRace` panel was folded
+in on 2026-09-26 — it showed the same numbers the HUD shows afterwards) with the race ticker in
+the status band, then swaps to the verdict UI on `DuelComplete`. The winner is marked once:
+the ELO delta rides in the viewport's WINNER/LOSER badge (`EloShiftBadge` is gone). Critically, **Arena drives browser-model inference**: it handles
 `OnStartLocalInference`, runs `WebLlmService`, and POSTs to `/api/duels/{id}/local-result`. A
 change that breaks that handler stalls every WebGPU pairing at `Initializing` with no error.
 
@@ -346,22 +370,22 @@ Archive's chips and the grid's own Verdict column filter were two controls for o
 pixels apart, so the column is now `Filterable="false"` — the chips own verdict, and they back
 the `?verdict=` deep link the nav's "awaiting judgment" pill uses.
 
-**The four page-title hooks carry one shared layout-only rule.** `home__title`,
+**Every page title is `<PageHeader>`, and the four title hooks carry no styling.** `home__title`,
 `archive__title`, `arena__title` and `leaderboard__title` exist so E2E-UI can address one
-page's h1; all four had drifted back into full rulesets layered over the `.po-title` on the same
-element (measured: 43px, 43px and 31px h1s on one desktop, two of them at `font-weight: 800`,
-a face the app does not load — so the browser was synthesising it). `app.css` now gives the
-group `margin-block-end` and nothing else. Anything visual added there is the drift restarting.
+page's h1; they are passed as `<PageHeader TitleHook="…">` and have no rule anywhere. All four
+once drifted into full rulesets over `.po-title` (43px, 43px and 31px h1s on one desktop); the
+gap under a title belongs to `.page-header`. ModelProfile is the one exception — its header is
+a shareable card (`.po-header` + `profile__card`), not a page title row.
 
 **Fonts load from `index.html`, not from an `@import` in `app.css`.** An `@import` inside a
 stylesheet is invisible to the preload scanner — it cannot be discovered until `app.css` has
 been fetched *and* parsed — so the font request was serialised behind it. The weights requested
 are the ones actually declared (400/600/700/800 Space Grotesk, 400 JetBrains Mono); the old
-request carried a 500 no rule uses and omitted the 800 that `.not-found__icon` does.
+request carried a 500 no rule uses and omitted the 800 that `.home__slot-vs` does.
 
 **Shared text and layout primitives, same rule as `.po-btn`.** `.po-page` (+`--narrow`/`--wide`),
 `.po-header`, `.po-title`, `.po-subtitle`, `.po-section-title`, `.po-section`, `.po-hint`,
-`.po-status`, `.po-error`, `.po-empty`, `.po-chip`, `.po-glass`, `.po-lift`, `.po-glow`. These
+`.po-status`, `.po-error`, `.po-empty`, `.po-glass`, `.po-lift`, `.po-glow`. These
 replaced ~55 per-surface classes doing eight jobs (11 different `__title`, 9 `__error`,
 8 `__status`, 7 `__header`…) — the identical drift that produced twelve competing button
 classes. A surface that needs a tweak adds a **layout-only** class alongside the primitive.
@@ -369,75 +393,43 @@ Note `home__title`, `archive__title`, `arena__title` and `leaderboard__title` ar
 E2E-UI selector hooks and carry no styling; that suite is not in CI, so removing one fails
 silently.
 
-**The Radzen grids' reflow mode is styled to match `.po-table--cards`.** Below its internal
-breakpoint `RadzenDataGrid` stacks each cell with the column title *above* the value, which for
-the Archive's six columns was twelve lines and ~330px per duel — nine duels came to 3,119px
-inside a 464px window on a phone. `app.css` puts the label and value on one line and gives each
-row a card edge, matching the hand-rolled treatment exactly (~150px per row). Two mobile-table
-breakpoints still exist, for the reason already recorded; they no longer look like two
-different components.
-
 **Wide tables become cards below 640px.** `.po-table--cards` turns each `<td>` into a labelled
 row using `data-label` on the cell. The table stays a real `<table>` with real `<th scope>`, so
 the accessibility tree is unchanged and `::before` content is not announced twice; only the
 visual presentation changes. Cells opt out with `.po-cell--bare`, hide with
-`.po-cell--secondary`, and **pair onto one line with `.po-cell--half`** — the leaderboard's W
-and L were a full-width row each, 48px per model times 26 models, for two single digits. The
-card row is a wrapping flex container rather than a block precisely so a pair can share a line;
-two `inline-flex` cells at 50% do not pair, because the markup whitespace between them takes
-width and the second wraps. Only pair cells that are narrow *by nature*. A table without
+`.po-cell--secondary`. Prefer merging narrow cells over pairing them: the leaderboard's W and L
+became one `W–L` Record cell on 2026-09-26, which removed the only `.po-cell--half` caller. A table without
 `data-label` degrades to the old horizontal scroll rather than breaking.
 
-**Two shapes for a bounded grid, and the difference is which one the page is.** `/archive` fixes
-its own height (`calc(100dvh - var(--nav-height) - …)`), makes itself a flex column and hands the
-remainder to the grid, because there the grid *is* the page — a fixed 55dvh left 170px of blank
-page below it on a desktop and 190px on a phone, with a row clipped in half at its own bottom
-edge. `/catalog` does the opposite: it has two independent lists, so the page scrolls normally
-and the browser-model grid is a bounded window (`min(34rem, 60dvh)`), the same shape and the
-same argument as `.home__picker` — a picker is a list you scan *within*. Either way the height
-must be **definite**. `AllowVirtualization` resolves its `height: 100%` against the containing
-block, a `min-height` is not definite, and with one the percentage falls back to `auto`, the
-virtualiser goes inert and every row renders: measured, that put `/catalog` at 24,014px — 28
-screens — on a phone.
+**There is no component library — `.po-btn` and `.po-table` are the primitives.** Radzen has now
+been added and removed twice. The last removal (2026-09-26) took out `Radzen.Blazor` — +3.26 MB,
++25.7% of the gzipped download — for two grids and one chart: the Archive and Catalog are plain
+`.po-table--cards` tables and the profile's rating curve is an inline-SVG polyline. Do not bring a
+component library back without re-taking that payload decision.
 
-**There is no component library — `.po-btn` is the only button.** Radzen was removed wholesale
-in an earlier pass, re-added on 2026-08-22 for `RadzenDataGrid` (Archive) and `RadzenChart` (model
-profile), then **removed again on 2026-08-23** because `Radzen.Blazor` cost 1.43 MB gzipped —
-11.9% of the app's entire download — for two components. It was **re-added a second time on
-2026-09-02** after the owner re-took that payload decision (see `PoLocalCompare.Client.csproj`):
-the Archive grid is a `RadzenDataGrid` again and the profile chart is a `RadzenChart` again, so
-this repo DOES ship Radzen today. The sanctioned set is `RadzenDataGrid` and `RadzenChart`;
-do not reintroduce *other* Radzen components without re-taking the decision again. Adding more
-**uses** of those two is not the same decision and costs nothing: `/catalog`'s browser-model list
-became a third `RadzenDataGrid` on 2026-09-22, because it was the longest list in the app
-(measured at 4,911px — 5.8 screens — on a phone for a list truncated to 25 of ~150 rows, with a
-live `<input>` mounted per row) while the nine-row Archive already had the virtualised grid. The
-payload was already paid for.
+**`/catalog`'s browser list is a bounded window that virtualises.** It is the longest list in the
+app (~150 WebLLM builds, each with a live name `<input>`), so it renders through Blazor's own
+`<Virtualize>` inside `.catalog__grid-wrap` (`min(34rem, 60dvh)`, the same shape as
+`.home__picker` — a picker is a list you scan *within*). The height must be **definite**: with
+only a max-height the virtualiser has nothing to measure against and renders every row — measured
+once at 24,014px (28 screens) on a phone. The Archive needs no virtualiser: it pages 20 at a time.
 
-Because Radzen is present, one consequence matters when reading the stylesheet: swapping the
-profile chart back to inline SVG would save **nothing** on download. The chart and the grid live in
-the same assembly, so the payload is already paid for by the grid being there. The only way the
-payload argument bites is to remove *both*, which means replacing the grid too.
+**The Archive pages by duel id.** Ids are ULIDs, so id order is creation order: `GET /api/duels`
+takes `before=<duelId>` and returns rows with `RowKey lt` that id, newest first. It used to send a
+`yyyyMM` month with `PartitionKey le`, which includes the current month, so Load More returned
+the same rows forever. The verdict chips are server-side and live in `?verdict=` (read in
+`OnParametersSetAsync`, so the nav pill works while already on `/archive`). Re-run starts the
+duel directly with the full prompt, like the Arena's Retry — it used to pre-fill Home with the
+80-character summary through an unescaped query string.
 
-Two Radzen facts worth not re-deriving — both were checked against the package rather than guessed,
-after a first attempt used API that does not exist: `RadzenDataGrid` has **no** `Breakpoint`
-property (its `Responsive` mode applies its own internal breakpoint, and the `rz-datatable-reflow`
-class on the rendered table is how you can tell it is active), and `FilterProperty` exists on
-`RadzenDataGridColumn` (filter on a different property than the column binds — it is not the
-grid-level filter API, which is `RadzenDataFilter`/`RadzenDataFilterProperty`). The Archive's Date
-column gets a **typed calendar filter**, not a free-text box, because `StartedAt` is a
-`DateTimeOffset` — there is no string-vs-display mismatch to fix there. There IS a genuine timezone
-seam in the same place: the cell renders UTC (`… UTC`), the filter picker is a local-time date, so
-for a viewer behind UTC a duel stored late in the UTC day is shown as one date and matched by
-another. Fixing that is a product decision (render local, or make the filter UTC-aware), not a
-one-line change. Buttons and tables are `.po-btn` and `.po-table` in
+Buttons and tables are `.po-btn` and `.po-table` in
 [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css), styled from design tokens. Twelve
 per-surface button classes (`wizard__btn`, `h2h__btn`, `lab__btn`, `source-compare__btn`
 …) had each reimplemented the same thing locally and drifted apart; they were folded into `.po-btn`
 plus modifiers (`--sm --lg --block --primary --success --secondary --ghost --warn`; `--danger`
 went with the model-health panel's Cancel button on 2026-08-23, its only caller). A
-surface that needs a tweak adds a **layout-only** class alongside `.po-btn` — `arena__action-btn`,
-`archive__btn`, `leaderboard__sort-btn` and `lab-card__icon-btn` are the pattern. New *visual*
+surface that needs a tweak adds a **layout-only** class alongside `.po-btn` — `leaderboard__row-btn`
+and `archive__row-btn` are the pattern. New *visual*
 variants go in `app.css` as a modifier, never in a `.razor.css`. The two exceptions are deliberate:
 `login__ms-btn` and `navmenu__ms-btn` restate a fixed white field because the Microsoft mark is
 trademarked artwork with a mandated presentation. Note also the app has no reflective component
@@ -461,22 +453,23 @@ constant (`VerdictBandSelector`), so at least the uses cannot drift apart.
 **Classes in markup with no rule anywhere are a recurring defect.** The nav bar carried
 `nav-item`, `btn-sm` and `btn-outline-warning` long after Bootstrap was gone, and
 `arena__source-btn`, `arena__generating-notice`, `auth-spinner`, `h2h__sparkline-col` and
-`scorecard__findings-col` all styled nothing. Nothing warns. To check the whole app, diff the
-classes used in `.razor` markup against the selectors defined in any `.css`.
+`scorecard__findings-col` all styled nothing. `check-clean.ps1` now checks both directions — markup
+classes no stylesheet defines, and stylesheet classes nothing applies (eight of those had piled up
+by 2026-09-26, `.po-chip` among them).
 
 **Scoped CSS is per-`.razor`-file, and nothing warns when it isn't.** The since-deleted
 `ModelHealthPanel.razor.css` spent a long time styling `LabModelCard`'s markup, which silently
 matched nothing because Blazor stamps each stylesheet with its own component's scope id.
 
 It happened again, and on the Arena. `ArenaViewportPanel`, `ArenaFailureCard`,
-`ArenaVoteButtons` and `EloShiftBadge` were extracted out of `Arena.razor` but left their
+`ArenaVoteButtons` and `EloShiftBadge` (since deleted) were extracted out of `Arena.razor` but left their
 `arena__*` rules behind in `Arena.razor.css`, so **none of those rules had ever applied** —
 verified in a browser on 2026-09-22, where the panel computed `display: block` against the
 declared `flex` and `.arena__hud` computed `container-type: normal` against the declared
 `inline-size`, which means `TelemetryHud`'s `@container` queries had been matching nothing for
 the whole life of the component. Each of the four now has its own `.razor.css` **and its own
 block named after its file** (`arena-panel__`, `arena-failure__`, `arena-vote__`,
-`elo-shift__`, plus `arena-band__` for the new status band) — sharing one `arena__` prefix
+plus `arena-band__` for the status band) — sharing one `arena__` prefix
 across five files is exactly what let the rules end up in the wrong stylesheet.
 **`check-clean.ps1` cannot catch this**: it asks whether a rule exists *somewhere*, not whether
 it can reach the markup. Moving markup into a child component means moving its rules too. If you move markup into a child
@@ -488,8 +481,8 @@ scan, so check for those before deleting a rule.
 
 **Client code that isn't a component doesn't live in `Components/`.**
 `src/PoLocalCompare.Shared/Presentation/` holds the view-models, enums and static helpers that
-`.razor` files lean on (`ModelDiagState`, `ModelTypeGroup`, `SourceViewMode`, `RuntimeProbeReport`,
-`FailureReasonText`, `RenderCoalescer`). It used to be `Client/Presentation/`, which put it in the
+`.razor` files lean on (`ArenaPhase`, `ModelTypeGroup`, `SideMetrics`, `FailureReasonText`,
+`RenderCoalescer`). It used to be `Client/Presentation/`, which put it in the
 one assembly no tier but E2E-UI can reach — the same trap as the note above, so it moved wholesale.
 `src/PoLocalCompare.Client/Services/` keeps what genuinely needs the browser: JS interop, the
 SignalR client, and `LocalInferenceDriver` (which runs a WebGPU model in the tab and POSTs the
@@ -497,9 +490,8 @@ result back — extracted out of `Arena.razor`, which was the only thing that kn
 
 **The Arena's scorecard must never feed ELO.** `OutputAnalysis.CompletenessScore` is presentational
 and deliberately separate from the persisted `OutputQualityScore` — tightening a heuristic there must
-not retroactively change a stored duel. Likewise, the runtime probe injects a reporter `<script>` into
-the sandboxed *preview* only; the raw output is what gets persisted, analysed, diffed and shown by
-"View Source", so nothing a person judges or exports contains it.
+not retroactively change a stored duel. (The runtime probe that used to inject a reporter `<script>` into the preview is gone —
+`SandboxedViewport` renders the model's document untouched.)
 
 **Tournaments run on the server, except the browser matches.** `/tournament` draws a seeded
 single-elimination bracket over 2 (a plain 1v1) or 8 models and `TournamentRunner` plays it to
@@ -558,29 +550,37 @@ implementation of the Arena's streaming UI whose only distinguishing feature was
 the tab, and it wrote real duels into the leaderboard while pretending to be a demo.)
 
 **Motion is compositor-only, and that is a correctness constraint, not a style rule.** Browser
-models run WebLLM inference over **WebGPU in this same tab**, and the tok/s the `TokenRace` reports
+models run WebLLM inference over **WebGPU in this same tab**, and the tok/s the Arena reports
 is measured while that is happening. A render loop competing for the GPU would not merely drop
 frames, it would **make the number the app exists to report wrong** and slow a browser model's own
-generation while it is being timed. (The original justification was stronger — a `MaxSeconds`
-challenge budget whose miss forfeited the duel and moved ELO — but the rule outlived challenge
-mode's removal on 2026-09-10 and is still worth keeping.) So:
-continuous motion is CSS transform/opacity only (`body::before` aurora drift, `.po-lift`,
-`.po-glow` in [app.css](src/PoLocalCompare.Client/wwwroot/css/app.css)); `backdrop-filter` is fine
-(compositor, not the 3D pipeline); and the only canvas work in the app —
-[fx.js](src/PoLocalCompare.Client/wwwroot/js/fx.js) — is one-shot and fires only after inference
-has finished (verdict landed, champion crowned). Audio is exempt: it runs on the audio thread and
-never touches the GPU, which is why `PlayTokenBlipAsync` is safe to call mid-duel. **Do not add
-Three.js, PixiJS, Rapier or a WebGL/WebGPU render loop** without re-deciding this trade-off —
-it was considered and declined for exactly this reason.
+generation while it is being timed. So continuous motion is CSS transform/opacity only
+(`body::before` aurora drift, `.po-lift`, `.po-glow` in
+[app.css](src/PoLocalCompare.Client/wwwroot/css/app.css)); `backdrop-filter` is fine (compositor,
+not the 3D pipeline); and the only canvas work in the app — the confetti burst in
+[fx.js](src/PoLocalCompare.Client/wwwroot/js/fx.js) — is one-shot, fires only after inference has
+finished (verdict landed, champion crowned) and stands down while the GPU lease
+(`window.poGpuLease`) is held. **Do not add Three.js, PixiJS, Rapier or a WebGL/WebGPU render loop**
+without re-deciding this trade-off — the WebGL backdrop that was the one exception went in the
+2026-09-26 prune, along with infinite `box-shadow`/`background-position` animations that were not
+compositor-only either.
 
-**Audio is synthesised, never a file.** [audio.js](src/PoLocalCompare.Client/wwwroot/js/audio.js)
-builds every cue from oscillators and noise buffers at play time. The previous version fetched
-`/audio/snare-roll.wav` and `/audio/success.wav`, both of which were **44-byte stubs** — a RIFF
-header with a zero-length data chunk — so every "sound" the app played was silence, invisibly,
-for as long as those cues existed. Synthesis removes the class of failure: there is no asset to be
-present-but-empty. Note `audio.js` and `fx.js` are `import()`ed with their own `?v=` cache-buster,
-the same trap as the `<script src>` tags — bump it when you edit them or the browser serves the
-old module.
+**Audio is three synthesised cues, never a file.** [audio.js](src/PoLocalCompare.Client/wwwroot/js/audio.js)
+builds a click tick, a verdict arpeggio and a tie from oscillators at play time. An earlier version
+fetched two WAVs that were **44-byte stubs**, so every "sound" was silence, invisibly; synthesis
+removes the class of failure. It runs on the audio thread and never touches the GPU. Note `audio.js`
+and `fx.js` are `import()`ed with their own `?v=` cache-buster, the same trap as the `<script src>`
+tags — bump it when you edit them or the browser serves the old module.
+
+**The 2026-09-26 prune cut the decoration.** Gone, each as cost with no user-facing job: the
+sound design beyond the three cues (drone, per-model duet melodies, heartbeat, crowd roar, gavel,
+fanfares), fx.js's photo-finish strip, shard/mote/pyrotechnic effects and WebGL backdrop, the
+Arena's picture-in-picture race window, haptics, the typewriter rationale, ELO "upset" odds
+(`EloUpset` duplicated the server's K-factor on the client), the leaderboard time machine, the
+profile's holographic trading card and PNG export, and the bracket comet/camera. Server side:
+`OrphanModelIdRemapper` + `/api/dev/remap-model-ids` (a one-shot local-data repair),
+`ProgramBootstrapVerifier`, an unused `SecretClient` registration, `GET /api/ollama/available-models`,
+and the hand-rolled SSE framing (`SseChatStreamReader` now sits on `System.Net.ServerSentEvents.SseParser`).
+Don't reintroduce any of it without a user-facing reason.
 
 **Vertical slices.** Server code lives in `src/PoLocalCompare.Api/Features/<Feature>/` — endpoint,
 handlers, entities, and repository flat in one folder. `Common/` is only for genuinely cross-slice
@@ -616,20 +616,24 @@ the `Integration` collection builds its own `IntegrationHost` against the *same*
 that asserts on a global projection — `board[0]`, `Assert.Empty(board)`, a leaderboard position —
 passes or fails on execution order, because sibling tests legitimately contribute rows. Scope
 assertions to the models the test created (`board.Single(r => r.ModelId == a)`) and assert
-*relative* order rather than absolute position.
+*relative* order rather than absolute position. Tournaments are the sharpest case: only one may be
+in flight, and with the judge off a bracket never finishes on its own, so `TournamentTests` abandons
+whatever an earlier test left running before each test.
 
 **Observability is Serilog and nothing else.** OpenTelemetry (tracing + metrics, the AspNetCore
-and HttpClient instrumentations, the OTLP and Azure Monitor exporters) and the
-`Serilog.Sinks.ApplicationInsights` sink were all removed on 2026-08-23 — six packages and ~100
-lines of `Program.cs` shipping to one App Insights resource by two independent paths, for a
-single-instance Free-tier App Service. `RateLimitedSampler` and `InferenceTelemetry` went with
-them, so `Common/Telemetry/` no longer exists. What is left is Serilog to console (App Service's
-log stream picks that up) plus daily rolling files in Development only. If you need distributed
+and HttpClient instrumentations, the OTLP and Azure Monitor exporters) was removed on 2026-08-23 —
+two independent paths to one App Insights resource on a single-instance Free-tier App Service.
+`RateLimitedSampler` and `InferenceTelemetry` went with it. What is left is Serilog to console
+(App Service's log stream), daily rolling files in Development only, and ONE
+`Serilog.Sinks.ApplicationInsights` sink — re-added with the shared Po platform conventions so the
+cross-app `UserSignedIn` record (`Auth/SignInTelemetry.cs`) reaches the shared App Insights; it is
+only added when a connection string is configured. Keep it the single exporter. If you need distributed
 traces back, re-add the OTel packages — don't half-restore one exporter. OpenAPI/Scalar is
 untouched and still mounts at `/scalar` in Development.
 
-**The `/api/dev/*` endpoints require a session.** `POST /api/dev/reset` wipes Duels, DuelResults
-and EloHistory and resets every model to 1200. It and `/api/dev/remap-model-ids` are gated on
+**The `/api/dev/*` endpoints require a session.** They live in `Features/Diagnostics/DevEndpoints.cs`.
+`POST /api/dev/reset` wipes Duels, DuelResults and EloHistory and resets every model to 1200;
+`POST /api/dev/judge-calibration` is the judge agreement check. Both are gated on
 `IsDevelopment()` *and* `RequireAuthorization()`; they were `AllowAnonymous` until 2026-08-23,
 which put an unauthenticated table wipe one `ASPNETCORE_ENVIRONMENT` slip from live data. In
 Development the fake-auth handler satisfies the policy from a header, so this costs nothing
@@ -656,7 +660,9 @@ rendering empty.
 409, updates are If-Match conditional, and duel writers re-read and reapply on 412. `HybridCache`
 (30s TTL, tag-invalidated on verdict) fronts leaderboard and model-availability reads — invalidate it
 when you add a write path that affects those. Typed HttpClients use **retry-only** resilience
-pipelines; adding a per-attempt timeout will abort SSE streams.
+pipelines; adding a per-attempt timeout will abort SSE streams. Every table is created once at
+startup, in every environment, by `StorageTables.EnsureAllAsync` (fail-fast after five 2 s retries,
+which covers Azurite still starting); repositories do not create their own tables.
 
 ## Constraints worth knowing before you edit
 
@@ -672,7 +678,9 @@ pipelines; adding a per-attempt timeout will abort SSE streams.
 - Never store local config with `dotnet user-secrets` — `appsettings.Development.json`, an
   environment variable, or Azure Key Vault.
 - `/health` and `/diag` exist but must have **no UI links**. `/diag` masks secret values.
-- When `Features:UseRealAi` is off, the `USING MOCK DATA` banner must render (`NavMenu.razor`).
+- When `Features:UseRealAi` is off, the `USING MOCK DATA` indicator must render (`NavMenu.razor` —
+  a compact MOCK chip beside the brand since 2026-09-26, the full sentence in its title and a
+  visually-hidden span).
 - UI targets **WCAG 2.2 Level AA**: keyboard-operable custom controls, `:focus-visible` ring, 24×24
   minimum target size, `role="status"` for live updates, `aria-hidden` on decorative glyphs. Colour
   contrast is not automatically checked — verify new palette tokens by hand, **in both themes and
@@ -705,8 +713,8 @@ pipelines; adding a per-attempt timeout will abort SSE streams.
   `scrollHeight` 972 against `innerHeight` 900 on all six routes). The viewport guarantee belongs to
   `.page` alone; a descendant that needs a floor must use `calc(100dvh - var(--nav-height))`.
 - **`index.html` cache-busts the stylesheets with `?v=N`**, matching what the `<script src>` tags
-  already did. There is a service worker, so without it the browser serves the previous build's CSS
-  and a change simply does not appear — this cost real time when verifying the box-sizing fix, which
+  already did. Without it the browser serves the previous build's CSS from its HTTP cache (the
+  `service-worker.js` WebLLM registers is a pass-through no-op) and a change simply does not appear — this cost real time when verifying the box-sizing fix, which
   was briefly "confirmed" against a stale sheet. **Bump the number on every CSS edit.**
 
 ## Known stale documentation

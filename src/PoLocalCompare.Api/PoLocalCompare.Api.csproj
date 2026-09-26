@@ -2,7 +2,10 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <UserSecretsId>PoLocalCompare-Api-Dev</UserSecretsId>
+    <!-- The vision judge's Playwright driver is a ~77 MB Node binary. Vision judging is off in
+         Production (AiJudge:VisionEnabled), so a Release publish ships no driver at all; the
+         renderer degrades to source-only judging if it is ever asked. -->
+    <PlaywrightPlatform Condition="'$(Configuration)' == 'Release'">none</PlaywrightPlatform>
   </PropertyGroup>
 
   <ItemGroup>

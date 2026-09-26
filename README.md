@@ -26,7 +26,7 @@ Optional extras:
 
 ```powershell
 python SCRIPTS/download-models.py                 # pre-download WebLLM browser model assets
-dotnet user-secrets set "AzureAiFoundry:ApiKey" "<key>" --project src/PoLocalCompare.Api   # enable remote duels
+$env:AzureAiFoundry__ApiKey = "<key>"   # enable remote duels (or appsettings.Development.json; never user-secrets)
 ```
 
 ## Tests

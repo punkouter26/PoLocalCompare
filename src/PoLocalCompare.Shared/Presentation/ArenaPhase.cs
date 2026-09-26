@@ -185,13 +185,4 @@ public static class ArenaPhaseResolver
     /// </summary>
     public static bool JudgeIsLooking(ArenaPhase phase) =>
         phase is ArenaPhase.JudgeCountdown or ArenaPhase.JudgeDeciding;
-
-    /// <summary>Whether the phase is one of the terminal, verdict-recorded states.</summary>
-    public static bool IsDecided(ArenaPhase phase) =>
-        phase is ArenaPhase.VerdictOptimistic
-              or ArenaPhase.VerdictVoided
-              or ArenaPhase.VerdictTie
-              or ArenaPhase.VerdictWalkover
-              or ArenaPhase.VerdictByAi
-              or ArenaPhase.VerdictByHuman;
 }

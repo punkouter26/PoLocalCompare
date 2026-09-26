@@ -26,13 +26,19 @@
     text-align: start;
 }
 
+/* Rank medals — size and glow. */
 .leaderboard__rank { font-size: var(--text-xl); }
-.leaderboard__rank--gold   { filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.7)); }
-.leaderboard__rank--silver { filter: drop-shadow(0 0 4px rgba(180, 180, 180, 0.6)); }
-.leaderboard__rank--bronze { filter: drop-shadow(0 0 4px rgba(180, 100, 40, 0.5)); }
+/* Glow colours are mixed from the theme's accents (the same color-mix(…, transparent) form
+   app.css uses for its own glows) rather than frozen rgba literals. Bronze has no accent of
+   its own, so it is yellow pulled toward red. */
+.leaderboard__rank--gold   { filter: drop-shadow(0 0 var(--space-xs) color-mix(in srgb, var(--accent-yellow) 70%, transparent)); }
+.leaderboard__rank--silver { filter: drop-shadow(0 0 var(--space-xs) color-mix(in srgb, var(--text-dim) 60%, transparent)); }
+.leaderboard__rank--bronze { filter: drop-shadow(0 0 var(--space-xs) color-mix(in srgb, color-mix(in srgb, var(--accent-yellow) 60%, var(--accent-red)) 50%, transparent)); }
 
-/* Spacing-only hook for the ModelTypeBadge that follows a model name in the row. */
-.leaderboard__type-badge-spacing {
+/* Spacing-only hook for the ModelTypeBadge that follows a model name in the row. ::deep for
+   the same reason as the medals: the badge's element belongs to ModelTypeBadge's scope, so
+   as a bare selector this rule never applied. */
+.leaderboard__grid ::deep .leaderboard__type-badge-spacing {
     margin-left: var(--space-sm);
 }
 
@@ -54,38 +60,6 @@
    winning, and by how much" without them, and the full figures remain on the model's own
    profile one tap away. Desktop keeps every column; nothing is lost, only deferred. */
 
-.po-empty h2 {
-    margin: 0 0 var(--space-xs);
-    color: var(--text);
-    font-size: var(--text-xl);
-}
-
-.po-empty p {
-    margin: 0;
-}
-
-.leaderboard__summary {
-    display: flex;
-    gap: var(--space-xl);
-    flex-wrap: wrap;
-    padding: var(--space-smd) var(--space-md);
-    background: var(--surface-1);
-    border: 1px solid var(--surface-2);
-    border-radius: 8px;
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    margin-bottom: var(--space-md);
-}
-
-.leaderboard__summary strong {
-    color: var(--text);
-}
-
-@keyframes leaderboard-fade {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
 /* Placeholder shown in a grid cell that has no value yet. */
 .leaderboard__no-data {
     color: var(--text-muted);
@@ -98,7 +72,7 @@
 .leaderboard__value {
     text-align: right;
     font-variant-numeric: tabular-nums;
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
 }
 
 
@@ -127,44 +101,92 @@
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-size: var(--text-2xs);
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     letter-spacing: 0.04em;
     vertical-align: middle;
 }
 
-/* W / L read as figures to compare down the column, so they get tabular figures and sit
+/* Records read as figures to compare down the column, so they get tabular figures and sit
    right-aligned against each other rather than ragged. */
 .leaderboard__record {
     font-variant-numeric: tabular-nums;
     text-align: right;
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────────────
-   No media query existed here either. The board is one wide table plus a summary
-   strip; .po-table--cards handles the table below 640px, but the summary strip was
-   built as a single flex row with a --space-xl gap, which on a phone produces one
-   item per line separated by 2rem of nothing. */
-
-@media (max-width: 1024px) {
-    .leaderboard__summary {
-        gap: var(--space-lg);
-    }
-}
+/* ── Responsive ────────────────────────────────────────────────────────────── */
 
 @media (max-width: 640px) {
-    /* Two columns rather than one: these are short "label value" pairs, so a single
-       column wastes half the width and makes the strip taller than the first table row. */
-    .leaderboard__summary {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--space-sm) var(--space-md);
-        padding: var(--space-sm) var(--space-smd);
-    }
-
     /* The medal glyph is the row's anchor in card mode — keep it at heading size while
        everything around it shrinks. */
     .leaderboard__rank {
         font-size: var(--text-2xl);
+    }
+
+    /* ── Two-line card ────────────────────────────────────────────────
+       .po-table--cards gives every cell its own labelled line, which here was the medal on
+       one line and Model / ELO / Record under it — ~110px per model, 3 screens for the board
+       on a 390px phone. Each field is self-evident in this layout (a name, a rating with its
+       ±, a W–L), so the row becomes a grid instead:
+
+           🥇 │ GPT-5.4 Nano [REMOTE]
+              │ 1262 ±432 provisional · 4–0
+
+       Still a real <table> with its <th scope> headers — only the boxes move. The medal
+       spans both lines; the rank-shift badge stacks under it. Secondary cells stay hidden
+       by .po-cell--secondary. */
+    .leaderboard__grid tr {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: center;
+        column-gap: var(--space-sm);
+    }
+
+    .leaderboard__grid td {
+        padding-block: 0;
+        border-bottom: none;
+        gap: 0;
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    /* The labels restate what the layout already says. */
+    .leaderboard__grid td[data-label]::before {
+        content: none;
+    }
+
+    /* td.-qualified so they outrank the `.leaderboard__grid td` reset above. */
+    td.leaderboard__rank-cell {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+    }
+
+    td.leaderboard__name-cell {
+        grid-column: 2 / -1;
+        grid-row: 1;
+        min-width: 0;
+    }
+
+    td.leaderboard__elo {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    td.leaderboard__record-cell {
+        grid-column: 3;
+        grid-row: 2;
+        gap: var(--space-xs);
+        color: var(--text-muted);
+    }
+
+    /* Separator between rating and record. Alt text "" (the `/ ""` form) keeps it out of the
+       accessible name where supported; the first declaration is the fallback for engines
+       that reject that syntax and drop the second. */
+    .leaderboard__grid td.leaderboard__record-cell[data-label]::before {
+        content: "·";
+        content: "·" / "";
     }
 }
 

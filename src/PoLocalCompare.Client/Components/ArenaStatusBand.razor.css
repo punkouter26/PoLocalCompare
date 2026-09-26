@@ -23,7 +23,7 @@
    evidence above it is taller than any screen. */
 .arena-band__box--verdict {
     color: var(--accent-green);
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     font-size: var(--text-lg);
     padding: var(--space-sm) var(--space-lg);
     background: var(--success-surface);
@@ -80,7 +80,7 @@
     display: block;
     margin-top: var(--space-xs);
     color: var(--accent-green);
-    font-weight: 400;
+    font-weight: var(--weight-normal);
     font-size: var(--text-md);
     font-style: italic;
 }
@@ -90,4 +90,18 @@
     color: var(--text-muted);
     font-size: var(--text-sm);
     margin-top: var(--space-xs);
+}
+
+/* The auto-judge beat the user's pick. It has to read as a correction, not as flavour text —
+   the click genuinely did not count. Was .arena__override-notice, a second live region. */
+.arena-band__notice {
+    display: block;
+    margin-top: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    color: var(--accent-yellow);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    background: var(--warn-surface);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-sm);
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using PoLocalCompare.Api.Auth;
+using static PoLocalCompare.Api.Auth.AnonymousWrites;
 using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Api.Features.Tournaments;
@@ -16,14 +17,11 @@ public static class TournamentsEndpoints
     {
         var group = app.MapGroup("/api/tournaments").WithTags("Tournaments").RequireAuthorization();
 
-        static RouteHandlerBuilder OpenIf(bool allow, RouteHandlerBuilder builder) =>
-            allow ? builder.AllowAnonymous() : builder;
-
         OpenIf(allowAnonymousWrites, group.MapPost("/", async (
             [FromBody] CreateTournamentRequest request,
             HttpContext httpContext,
             [FromServices] CreateTournamentHandler handler,
-            [FromServices] ITournamentRepository repository,
+            [FromServices] TournamentRepository repository,
             [FromServices] TournamentRunner runner,
             [FromServices] IBackgroundTaskQueue taskQueue) =>
         {
@@ -86,7 +84,7 @@ public static class TournamentsEndpoints
 
         group.MapGet("/{tournamentId}", async (
             TournamentId tournamentId,
-            [FromServices] ITournamentRepository repository) =>
+            [FromServices] TournamentRepository repository) =>
         {
             var tournament = await repository.GetByIdAsync(tournamentId);
             return tournament is null ? Results.NotFound() : Results.Ok(tournament.ToDto());
@@ -98,7 +96,7 @@ public static class TournamentsEndpoints
 
         group.MapGet("/", async (
             [FromQuery] int? limit,
-            [FromServices] ITournamentRepository repository) =>
+            [FromServices] TournamentRepository repository) =>
         {
             var tournaments = await repository.ListRecentAsync(Math.Clamp(limit ?? 10, 1, 50));
             return Results.Ok(tournaments.Select(t => t.ToDto()).ToList());

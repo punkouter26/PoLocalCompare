@@ -7,10 +7,10 @@
    failure, telemetry, view-source button, ELO badge — is identical, so it lifts cleanly.
 
    Two render branches: failure shows an `ArenaFailureCard` instead of the sandboxed
-   viewport, and the ELO badge sits in the panel's foot in both cases. The page passes
-   the panel a single `Result` row; nothing on this component reads sibling state. *@
+   viewport. The ELO shift rides on the viewport's WINNER/LOSER badge. The page passes the
+   panel a single `Result` row; nothing on this component reads sibling state. *@
 
-<div class="arena-panel__box @((Result?.IsFailure == true) ? "arena-panel__box--failed po-bg--err" : "") @(IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena-panel__box--winner-holo" : "")">
+<div class="arena-panel__box @((Result?.IsFailure == true) ? "arena-panel__box--failed po-bg--err" : "") @(IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena-panel__box--winner" : "")">
     @if (Result?.IsFailure == true)
     {
         <ArenaFailureCard DisplayName="@DisplayName"
@@ -25,23 +25,26 @@
             IsLoser="@(LoserModelId == PanelModelId)"
             ShowWinner="@(IsVerdictRecorded && WinnerModelId == PanelModelId)"
             IsAwaitingResult="@(StreamingHtml is null && Result is null)"
+            IsStreaming="@(Result is null)"
+            EloShift="@EloShiftDisplay"
             />
 
         <div class="arena-panel__hud">
-            <TelemetryHud Result="Result" TotalCost="TotalCost" />
+            <TelemetryHud Result="Result" Live="Live" Progress="Progress" />
         </div>
 
         @if (!string.IsNullOrEmpty(Result?.HtmlOutputRaw))
         {
             <div>
-                <button class="po-btn po-btn--sm" @onclick="() => OnViewSourceAsync(Result!.HtmlOutputRaw)">
-                    &lt;/&gt; View Source
+                @* Two of these on the page, so the side goes in the accessible name. *@
+                <button type="button" class="po-btn po-btn--sm"
+                        aria-label="@($"View source of {DisplayName}")"
+                        @onclick="() => OnViewSourceAsync(Result!.HtmlOutputRaw)">
+                    <span aria-hidden="true">&lt;/&gt;</span> View Source
                 </button>
             </div>
         }
     }
-
-    <EloShiftBadge Value="EloShiftDisplay" />
 </div>
 
 @code {
@@ -72,9 +75,11 @@
     /// <summary>The ELO shift to display (already animated by the page).</summary>
     [Parameter] public double? EloShiftDisplay { get; set; }
 
-    /// <summary>Sum of both sides' API costs. Page sets this only on the right panel so the
-    /// "Duel cost" row doesn't render twice.</summary>
-    [Parameter] public double? TotalCost { get; set; }
+    /// <summary>This side's streaming telemetry while the duel runs; null once it has finished.</summary>
+    [Parameter] public SideMetrics? Live { get; set; }
+
+    /// <summary>Race-track position, 0–100, for the live HUD.</summary>
+    [Parameter] public double Progress { get; set; }
 
 
     /// <summary>View-source click handler. The page opens the raw HTML in a new tab.</summary>

@@ -26,6 +26,6 @@
     /// <summary>Per-item class (e.g. .home__skeleton) — the geometry lives on this.</summary>
     [Parameter] public string ItemClass { get; set; } = string.Empty;
 
-    /// <summary>Optional outer container class — defaults to a CSS grid sized like the picker grid.</summary>
-    [Parameter] public string OuterClass { get; set; } = "home__grid";
+    /// <summary>Outer container class — the caller supplies its own grid (Home passes home__grid).</summary>
+    [Parameter] public string OuterClass { get; set; } = string.Empty;
 }

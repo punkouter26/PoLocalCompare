@@ -3,7 +3,7 @@
     Fails when the repository has drifted from the conventions the 2026-09-10 clean-up pass set.
 
 .DESCRIPTION
-    Three checks, each of which exists because the corresponding defect had already happened and
+    Four checks, each of which exists because the corresponding defect had already happened and
     nothing warned about it:
 
       1. Test budget. AGENT.MD §8 fixes 100 / 50 / 25 / 25 cases per tier. The contract used to be
@@ -18,9 +18,12 @@
          other classes styled nothing. Classes built by interpolation are skipped — they read as
          dead to any text scan but are real.
 
-      3. Cache-buster parity. Every stylesheet and script the browser loads must carry a `?v=`.
-         The app ships a service worker, so without one the browser serves the previous build and
-         a change appears to do nothing — which cost real time when the box-sizing fix was briefly
+      3. Unused CSS rules. The reverse of 2: a class a stylesheet defines that no markup, C# or JS
+         applies. They pile up silently when a feature or component goes and its rules stay.
+
+      4. Cache-buster parity. Every stylesheet and script the browser loads must carry a `?v=`.
+         Without one the browser serves the previous build from its HTTP cache and a change
+         appears to do nothing — which cost real time when the box-sizing fix was briefly
          "verified" against a stale sheet.
 
 .PARAMETER SkipTests
@@ -137,7 +140,83 @@ if ($dead.Count -eq 0) {
     $failures.Add("$($dead.Count) class(es) in .razor markup have no rule in any .css.")
 }
 
-# ── 3. Cache-buster parity ────────────────────────────────────────────────────
+# ── 3. Unused CSS rules ───────────────────────────────────────────────────────
+# The reverse of check 2: a class a stylesheet defines that nothing applies. Eight of these had
+# piled up by 2026-09-26 (.po-chip, .po-bg--ok, .arena--thermal-alert…) — dead weight nobody
+# could delete with confidence, because nothing said they were dead.
+
+Write-Header 'Unused CSS rules (defined in a stylesheet, applied nowhere)'
+
+$usageFiles = Get-SourceFiles 'src' @('*.razor', '*.cs', '*.js', '*.html', '*.cshtml') |
+    Where-Object { $_.Name -ne 'web-llm.js' }
+$usage = ($usageFiles | ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
+
+# Classes the framework applies, not our markup: NavLink's active state and Blazor's form states.
+$frameworkClasses = @('active', 'valid', 'invalid', 'modified', 'validation-message')
+
+$unused = [System.Collections.Specialized.OrderedDictionary]::new()
+foreach ($file in $cssFiles) {
+    # Comments mention file names (`app.css`, `wow.js`) that would read as class selectors.
+    $css = [regex]::Replace((Get-Content $file.FullName -Raw), '(?s)/\*.*?\*/', '')
+    foreach ($match in [regex]::Matches($css, '\.(?<name>[a-zA-Z_][\w-]*)')) {
+        $name = $match.Groups['name'].Value
+        if ($name -match '^rz-' -or $frameworkClasses -contains $name -or $unused.Contains($name)) { continue }
+        if ($usage -match "(?<![\w-])$([regex]::Escape($name))(?![\w-])") { continue }
+
+        # Built by interpolation (`tourney__status--@_tournament.Status`,
+        # `arena__viewports--focus-@_mobileFocus`): some prefix ending in `-` appears in markup
+        # followed by a Razor expression.
+        $interpolated = $false
+        for ($i = $name.IndexOf('-'); $i -gt 0; $i = $name.IndexOf('-', $i + 1)) {
+            if ($usage.Contains($name.Substring(0, $i + 1) + '@')) { $interpolated = $true; break }
+        }
+        if ($interpolated) { continue }
+
+        $unused[$name] = $file.Name
+    }
+}
+
+if ($unused.Count -eq 0) {
+    Write-Host '  none' -ForegroundColor Green
+} else {
+    foreach ($entry in $unused.GetEnumerator()) {
+        Write-Host ("  .{0}  (in {1})" -f $entry.Key, $entry.Value) -ForegroundColor Yellow
+    }
+    $failures.Add("$($unused.Count) CSS class(es) are defined but applied nowhere.")
+}
+
+# ── 3b. Unreferenced types ────────────────────────────────────────────────────
+# A type whose name appears nowhere but its own declaration is dead (ModelDiagState sat unused
+# for a month). Text-only, so it errs toward silence: any other mention — a test, a comment,
+# a use in the same file — counts. Static classes are skipped: they hold extension methods and
+# [LoggerMessage] partials, which are called by member name, never by type name.
+
+Write-Header 'Unreferenced types (named only in their own declaration)'
+
+$csFiles = @(Get-SourceFiles 'src' @('*.cs', '*.razor', '*.cshtml')) + @(Get-SourceFiles 'tests' @('*.cs'))
+$corpus = ($csFiles | ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
+
+$orphans = [System.Collections.Generic.List[string]]::new()
+foreach ($file in ($csFiles | Where-Object { $_.Extension -eq '.cs' -and $_.FullName -match '[\\/]src[\\/]' })) {
+    $text = Get-Content $file.FullName -Raw
+    foreach ($match in [regex]::Matches($text, '(?m)^\s*(?:public|internal)\s+(?<mods>(?:sealed\s+|static\s+|abstract\s+|partial\s+|readonly\s+)*)(?:class|record|struct|enum|interface)\s+(?<name>\w+)')) {
+        if ($match.Groups['mods'].Value -match 'static') { continue }
+        $name = $match.Groups['name'].Value
+        if ($name -eq 'Program') { continue }
+        if ([regex]::Matches($corpus, "(?<!\w)$([regex]::Escape($name))(?!\w)").Count -le 1) {
+            $orphans.Add("$name  (in $($file.Name))")
+        }
+    }
+}
+
+if ($orphans.Count -eq 0) {
+    Write-Host '  none' -ForegroundColor Green
+} else {
+    foreach ($item in $orphans) { Write-Host "  $item" -ForegroundColor Yellow }
+    $failures.Add("$($orphans.Count) type(s) are named nowhere but their own declaration.")
+}
+
+# ── 4. Cache-buster parity ────────────────────────────────────────────────────
 
 Write-Header 'Cache-buster parity (?v= on every loaded asset)'
 

@@ -9,13 +9,6 @@ public static class OllamaEndpoints
     {
         var group = app.MapGroup("/api/ollama").WithTags("Ollama").RequireAuthorization();
 
-        group.MapGet("/available-models", async (
-            [FromServices] ListOllamaModelsHandler handler,
-            CancellationToken ct) => Results.Ok(await handler.HandleAsync(ct)))
-        .WithName("GetOllamaAvailableModels")
-        .WithSummary("Lists all models pulled in the local Ollama instance.")
-        .Produces<string[]>();
-
         group.MapPost("/benchmark", async (
             [FromBody] OllamaBenchmarkRequest request,
             [FromServices] BenchmarkOllamaModelHandler handler,

@@ -11,32 +11,49 @@
         @* A score for an empty document is a fabricated number: empty HTML scored 20/100
            through the renderability deductions, so a side that had not produced a single
            token displayed "Quality 20/100 — Model produced no renderable output" while the
-           race was still warming up. Score only what exists; while a result is merely
-           pending, the header carries the name and nothing else. *@
-        @if (!string.IsNullOrWhiteSpace(_normalizedHtml))
+           race was still warming up. Score only what exists, and only once it is final — a
+           half-streamed document is missing its closing tags by definition, so mid-run the
+           score and its findings were a running commentary on an unfinished page.
+
+           The findings used to be a row of chips under the header, a second strip of chrome
+           over every preview. They are the reasons behind the score, so they ride on it: the
+           score becomes a disclosure (a title tooltip alone is out of reach for a keyboard or
+           touch user) whose panel lists them over the top of the frame. *@
+        @if (!IsStreaming && !string.IsNullOrWhiteSpace(_normalizedHtml))
         {
-            <span class="sandboxed-viewport__score" title="Heuristic quality score based on renderability checks">
-                Quality @_qualityScore/100
-            </span>
+            @if (_diagnosticItems.Count == 0)
+            {
+                <span class="sandboxed-viewport__score" title="Heuristic quality score based on renderability checks">
+                    Quality @_qualityScore/100
+                </span>
+            }
+            else
+            {
+                <details class="sandboxed-viewport__score sandboxed-viewport__score--findings">
+                    <summary title="Heuristic quality score — open for the findings">
+                        Quality @_qualityScore/100 <span aria-hidden="true">⚠</span>
+                    </summary>
+                    <ul class="sandboxed-viewport__findings">
+                        @foreach (var item in _diagnosticItems)
+                        {
+                            <li>@item</li>
+                        }
+                    </ul>
+                </details>
+            }
         }
+        @* The verdict is marked here and nowhere else in the panel. The ELO shift used to be a
+           separate full-width row at the panel's foot, a second "who won" signal under the one
+           in this header. *@
         @if (IsLoser)
         {
-            <span class="sandboxed-viewport__badge sandboxed-viewport__badge--loser">LOSER</span>
+            <span class="sandboxed-viewport__badge sandboxed-viewport__badge--loser">LOSER @EloText</span>
         }
         else if (ShowWinner)
         {
-            <span class="sandboxed-viewport__badge sandboxed-viewport__badge--winner">WINNER</span>
+            <span class="sandboxed-viewport__badge sandboxed-viewport__badge--winner">WINNER @EloText</span>
         }
     </div>
-    @if (_diagnosticItems.Count > 0)
-    {
-        <div class="sandboxed-viewport__diagnostics">
-            @foreach (var item in _diagnosticItems)
-            {
-                <span class="sandboxed-viewport__diagnostic-item">@item</span>
-            }
-        </div>
-    }
     @if (string.IsNullOrWhiteSpace(_normalizedHtml))
     {
         @* Two very different reasons for an empty frame. While the run is still in flight the
@@ -45,7 +62,8 @@
            only for the run that genuinely finished without usable output. *@
         @if (IsAwaitingResult)
         {
-            <div class="sandboxed-viewport__empty" role="status">
+            @* No role="status": the Arena's status band is the page's one live region. *@
+            <div class="sandboxed-viewport__empty">
                 <span class="sandboxed-viewport__empty-icon" aria-hidden="true">⏳</span>
                 <span>Generating — preview appears with the first tokens…</span>
             </div>
@@ -60,14 +78,18 @@
     }
     else
     {
-        <iframe
-            srcdoc="@_frameHtml"
-            sandbox="allow-scripts"
-            allow="accelerometer; gyroscope"
-            title="@ModelName output"
-            class="sandboxed-viewport__frame"
-            loading="lazy">
-        </iframe>
+        @* The stage is the frame's box at display size; the iframe inside keeps its layout
+           size and is scaled up to fill it (see --preview-scale in the stylesheet). *@
+        <div class="sandboxed-viewport__stage">
+            <iframe
+                srcdoc="@_frameHtml"
+                sandbox="allow-scripts"
+                allow="accelerometer; gyroscope"
+                title="@ModelName output"
+                class="sandboxed-viewport__frame"
+                loading="lazy">
+            </iframe>
+        </div>
     }
 </div>
 
@@ -84,6 +106,16 @@
     /// </summary>
     [Parameter] public bool IsAwaitingResult { get; set; }
 
+    /// <summary>The run has no final result yet — hides the score, which would grade a half-written page.</summary>
+    [Parameter] public bool IsStreaming { get; set; }
+
+    /// <summary>This side's ELO shift (animated by the page); folded into the WINNER/LOSER badge.</summary>
+    [Parameter] public double? EloShift { get; set; }
+
+    private string EloText => EloShift is { } v
+        ? $"{(v >= 0 ? "+" : "−")}{ArenaFormatting.FormatElo(Math.Abs(v))}"
+        : string.Empty;
+
     private readonly List<string> _diagnosticItems = [];
     private string _normalizedHtml = string.Empty;
     private string _frameHtml = string.Empty;
@@ -93,7 +125,7 @@
     // parameter set can only produce an identical frame. The sentinel makes the first pass
     // always process (a genuinely empty HtmlContent must still be analysed once).
     private string? _lastRaw;
-    private (string Name, bool Loser, bool Winner, bool Awaiting) _lastChrome;
+    private (string Name, bool Loser, bool Winner, bool Awaiting, bool Streaming, double? Elo) _lastChrome;
     private bool _renderDirty = true;
 
     /// <summary>
@@ -107,19 +139,17 @@
     protected override void OnParametersSet()
     {
         var raw = HtmlContent ?? string.Empty;
-        var chrome = (ModelName, IsLoser, ShowWinner, IsAwaitingResult);
+        var chrome = (ModelName, IsLoser, ShowWinner, IsAwaitingResult, IsStreaming, EloShift);
+        var sameDocument = _lastRaw is not null && string.Equals(raw, _lastRaw, StringComparison.Ordinal);
 
         // Cheap ordinal gate before the four regex passes below: while a duel streams, most
-        // parent renders carry a document identical to the one already on screen.
-        if (_lastRaw is not null && string.Equals(raw, _lastRaw, StringComparison.Ordinal) && chrome == _lastChrome)
-        {
-            _renderDirty = false;
-            return;
-        }
+        // parent renders carry a document identical to the one already on screen — and the ELO
+        // count-up changes only the header, which needs a render but not a re-analysis.
+        _renderDirty = !sameDocument || chrome != _lastChrome;
+        _lastChrome = chrome;
+        if (sameDocument) return;
 
         _lastRaw = raw;
-        _lastChrome = chrome;
-        _renderDirty = true;
 
         _diagnosticItems.Clear();
 

@@ -89,7 +89,6 @@ public sealed class GetDuelHandler
             LoserModelId = duel.LoserModelId,
             EloShiftWinner = duel.EloShiftWinner,
             EloShiftLoser = duel.EloShiftLoser,
-            TimeLimitSeconds = 300,
             Results = resultDtos,
             VerdictSource = duel.VerdictSource,
             JudgeRationale = duel.JudgeRationale,

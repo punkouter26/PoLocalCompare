@@ -7,7 +7,6 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddScoped<RegisterModelHandler>();
-        services.AddScoped<ListModelsHandler>();
         services.AddScoped<DiscoverModelsHandler>();
         services.AddScoped<AddDiscoveredModelHandler>();
         services.AddScoped<CommenceDuelHandler>();
@@ -22,8 +21,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BenchmarkOllamaModelHandler>();
         services.AddSingleton<DuelExecutionService>();
         services.AddScoped<AutoJudge>();
+        services.AddScoped<JudgeCalibrationHandler>();
         services.AddScoped<LobbyNotifier>();
-        services.AddScoped<OrphanModelIdRemapper>();
         services.AddScoped<DuelRecoverySweeper>();
         services.AddHostedService<TournamentResumeService>();
         services.AddScoped<CreateTournamentHandler>();

@@ -1,26 +1,20 @@
-/* ── Page shell ─────────────────────────────────────────────────────────────
-   There isn't one: the page is a plain `.po-page--wide`, in ordinary flow. The Archive fixes
-   its own height and hands the whole remainder to its grid because there the grid IS the
-   page; this page has TWO independent lists (browser builds and Ollama tags), so squeezing
-   them into one viewport would starve whichever came second. */
+/* ── The browser-model list ──────────────────────────────────────────────────
+   A bounded window, the same shape as .home__picker: a list you scan within to pick one row,
+   so a second scroll area is the ordinary case. The page itself scrolls normally, because it
+   has two independent lists and the Ollama one must stay reachable.
 
-/* ── The browser-model grid ──────────────────────────────────────────────────
-   A bounded window, not a page-filling one — the same shape as .home__picker, and for the
-   same reason that comment gives: this is a PICKER, a long list you scan within to choose
-   one row from, which is the ordinary case for a second scroll area. The Archive's grid is
-   not a picker, which is why it gets the opposite treatment.
+   The height must be DEFINITE, not a max: <Virtualize> measures against this box, and with
+   only a max-height it sees no bound and renders all ~150 builds. min() so a short viewport
+   gets a proportion and a tall one stops at 34rem. */
+.catalog__grid-wrap {
+    height: min(34rem, 60dvh);
+    overflow-y: auto;
+}
 
-   The height must be DEFINITE, not a max — that is what AllowVirtualization resolves its
-   `height: 100%` against. Measured with a min-height instead: the percentage fell back to
-   auto, the virtualiser went inert, and all ~150 builds rendered at once for a page 24,014px
-   tall on a phone. 28 screens, from the rule that was supposed to bound it.
-
-   min() so a short viewport gets a proportion and a tall one stops at 34rem; below that the
-   page would be mostly grid and the Ollama section would never be visible without scrolling
-   past the whole bundle. */
-/* .catalog__grid-wrap was a no-op wrapper around .po-grid--bounded — folded into the shared
-   modifier in app.css. The class is kept here as a selector hook for the page so future
-   additions have somewhere to land without re-touching app.css. */
+.catalog__input.catalog__search {
+    inline-size: auto;
+    min-inline-size: 14rem;
+}
 
 .catalog__filters {
     display: flex;

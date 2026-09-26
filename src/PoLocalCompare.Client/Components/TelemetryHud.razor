@@ -1,14 +1,37 @@
 @using PoLocalCompare.Shared.DTOs
 @using PoLocalCompare.Shared.Enums
 @using PoLocalCompare.Client.Services
-@inject AudioService AudioService
+@using System.Globalization
 
 @* Speed, cost and the green figures are what a duel is judged on; the shape-of-the-output
    numbers are diagnostics and wait behind a disclosure. A failed result renders nothing at
    all — every metric here reads zero on failure, and the Arena's failure card is the one
-   place that explains why. *@
-<div class="telemetry-hud @(IsHighEco ? "telemetry-hud--eco-pulse" : "")">
-    @if (Result is null)
+   place that explains why.
+
+   While the side is still streaming (Live set, no Result yet) it carries what the separate
+   TokenRace panel used to: a progress track scaled to the front-runner and the live token
+   count and tok/s. That panel restated both model names and both lanes above the two
+   panels that already name them; this is the same number, under the output it describes. *@
+<div class="telemetry-hud">
+    @if (Result is null && Live is not null)
+    {
+        @* Decorative: every number it encodes is in the readout beside it. *@
+        <div class="telemetry-hud__track" aria-hidden="true">
+            <div class="telemetry-hud__fill @(Live.Status == DuelStatus.Failed ? "telemetry-hud__fill--failed" : "")"
+                 style="--pos: @Progress.ToString("F1", CultureInfo.InvariantCulture)%"></div>
+        </div>
+        <div class="telemetry-hud__grid">
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Tokens</span>
+                <span class="telemetry-hud__value">@Live.TokenCount.ToString("N0")</span>
+            </div>
+            <div class="telemetry-hud__item">
+                <span class="telemetry-hud__label">Token Velocity</span>
+                <span class="telemetry-hud__value">@((Live.TokenVelocity ?? 0).ToString("F1", CultureInfo.InvariantCulture)) tok/s</span>
+            </div>
+        </div>
+    }
+    else if (Result is null)
     {
         <div class="telemetry-hud__pending">Awaiting results…</div>
     }
@@ -32,17 +55,6 @@
                 </div>
             }
 
-            @* Duel cost summary: shown only when BOTH sides have results and at least one has
-               a rate. The page passes TotalCost only into the right-side HUD so the row
-               never appears twice. *@
-            @if (TotalCost.HasValue)
-            {
-                <div class="telemetry-hud__item telemetry-hud__item--duel-total"
-                     aria-label="@($"Estimated total cost for this duel, {TotalCost:F4} USD")">
-                    <span class="telemetry-hud__label">Duel cost</span>
-                    <span class="telemetry-hud__value telemetry-hud__value--yellow">$@TotalCost.Value.ToString("F4")</span>
-                </div>
-            }
         </div>
 
         <details class="telemetry-hud__more">
@@ -102,30 +114,26 @@
 @code {
     [Parameter] public DuelResultDto? Result { get; set; }
 
-    /// <summary>Optional total of the two sides' API costs. The Arena page passes this only
-    /// into the right-side HUD so the row never appears twice. Null hides it.</summary>
-    [Parameter] public double? TotalCost { get; set; }
+    /// <summary>This side's streaming telemetry while the duel runs; null once it has finished.</summary>
+    [Parameter] public SideMetrics? Live { get; set; }
 
-    private bool IsHighEco =>
-        Result is not null && !Result.IsFailure && (!Result.ApiCostUsd.HasValue || Result.ApiCostUsd.Value <= 0.0001);
+    /// <summary>Track position, 0–100, scaled to the front-runner by the page.</summary>
+    [Parameter] public double Progress { get; set; }
 
-    private bool _chimePlayed;
 
-    // The HUD shows post-run numbers, so it has nothing to say while tokens are streaming —
-    // but it sits inside the Arena's render tree and was being rebuilt on every frame anyway.
+    // Sits inside the Arena's render tree, which re-renders on a timer while streaming. Live is
+    // a mutable object, so its values — not its reference — decide whether anything changed.
     private DuelResultDto? _lastResult;
+    private (int, double?, DuelStatus, double)? _lastLive;
     private bool _renderDirty = true;
 
     protected override bool ShouldRender() => _renderDirty;
 
     protected override void OnParametersSet()
     {
-        _renderDirty = !ReferenceEquals(Result, _lastResult);
-        if (_renderDirty && IsHighEco && !_chimePlayed)
-        {
-            _chimePlayed = true;
-            _ = AudioService.PlayHarmonicChimeAsync();
-        }
+        (int, double?, DuelStatus, double)? live = Live is null ? null : (Live.TokenCount, Live.TokenVelocity, Live.Status, Progress);
+        _renderDirty = !ReferenceEquals(Result, _lastResult) || live != _lastLive;
+        _lastLive = live;
         _lastResult = Result;
     }
 

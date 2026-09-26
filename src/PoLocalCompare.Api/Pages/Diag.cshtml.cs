@@ -50,8 +50,6 @@ public class DiagModel(HealthCheckService healthChecks, IConfiguration configura
         ConfigItems =
         [
             new("Elo:KFactor", _configuration["Elo:KFactor"] ?? "(not set)"),
-            new("Elo:StartingRating", _configuration["Elo:StartingRating"] ?? "(not set)"),
-            new("GreenStats:DefaultTdpWatts", _configuration["GreenStats:DefaultTdpWatts"] ?? "(not set)"),
             new("Duel:TimeLimitSeconds", _configuration["Duel:TimeLimitSeconds"] ?? "(not set)"),
             new("Features:UseRealAi", _configuration["Features:UseRealAi"] ?? "(not set)"),
             new("KeyVault:Uri", MaskValue(KeyVaultUri)),

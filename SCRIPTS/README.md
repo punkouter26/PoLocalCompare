@@ -33,7 +33,7 @@ pwsh SCRIPTS/setup.ps1
 
 **Purpose:** Downloads WebLLM MLC model weights and WebGPU model libraries from HuggingFace.
 
-**When to run:** First-time setup on any new development PC before using Local Model Lab.
+**When to run:** First-time setup on any new development PC, before running browser-model duels.
 
 **Usage:**
 ```bash

@@ -3,7 +3,9 @@ using Microsoft.JSInterop;
 namespace PoLocalCompare.Client.Services;
 
 /// <summary>
-/// JS interop wrapper for the synthesised Web Audio cues in <c>wwwroot/js/audio.js</c>.
+/// JS interop wrapper for the three synthesised Web Audio cues in <c>wwwroot/js/audio.js</c>:
+/// a click tick, a verdict, and a tie. The rest of the sound design (drone, token melodies,
+/// heartbeat, crowd roar, fanfares…) was cut on 2026-09-26 as decoration nobody asked for.
 /// </summary>
 /// <remarks>
 /// Every cue is synthesised at play time — there are no audio assets. The previous version
@@ -27,87 +29,18 @@ namespace PoLocalCompare.Client.Services;
 /// </remarks>
 public sealed class AudioService(IJSRuntime js) : IAsyncDisposable
 {
-    private const string ModulePath = "/js/audio.js?v=5";
+    private const string ModulePath = "/js/audio.js?v=7";
 
     private Task<IJSObjectReference>? _module;
-
-    /// <summary>Pre-duel snare roll — accelerating noise hits into an accent.</summary>
-    public Task PlaySnareRollAsync() => CallAsync("playSnareRoll");
 
     /// <summary>Verdict recorded — a bright major arpeggio.</summary>
     public Task PlaySuccessAsync() => CallAsync("playSuccess");
 
-    /// <summary>Tournament champion — longer and wider than a duel verdict, because it is.</summary>
-    public Task PlayFanfareAsync() => CallAsync("playFanfare");
-
     /// <summary>A judged draw — deliberately unresolved, neither up nor down.</summary>
     public Task PlayTieAsync() => CallAsync("playTie");
 
-    /// <summary>A model failed, or a tournament run was abandoned.</summary>
-    public Task PlayDefeatAsync() => CallAsync("playDefeat");
-
-    /// <summary>Short UI tick for selection. Quiet on purpose — it fires often.</summary>
+    /// <summary>Short UI tick for a click. Quiet on purpose — it fires often.</summary>
     public Task PlayTickAsync() => CallAsync("playTick");
-
-    /// <summary>Swept-noise whoosh for a panel or view change.</summary>
-    public Task PlayWhooshAsync() => CallAsync("playWhoosh");
-
-    /// <summary>Quantum ignition sub-bass drop (85 Hz down to 22 Hz).</summary>
-    public Task PlaySubDropAsync() => CallAsync("playSubDrop");
-
-    /// <summary>Pre-duel ignition clash with dual panned sweeps and metallic accent.</summary>
-    public Task PlayIgnitionClashAsync() => CallAsync("playIgnitionClash");
-
-    /// <summary>Photo-finish supersonic crack and bass boom.</summary>
-    public Task PlayShockwaveAsync() => CallAsync("playShockwave");
-
-    /// <summary>AI Judge verdict gavel impact and major chord resolution.</summary>
-    public Task PlayGavelImpactAsync() => CallAsync("playGavelImpact");
-
-    /// <summary>Elo rating transfer coin cascade chimes.</summary>
-    public Task PlayCoinCascadeAsync() => CallAsync("playCoinCascade");
-
-    /// <summary>Green score resonance pure harmonic chime (528 Hz Solfeggio + fifth).</summary>
-    public Task PlayHarmonicChimeAsync() => CallAsync("playHarmonicChime");
-
-    /// <summary>Tactile dual-action mechanical keyboard switch click.</summary>
-    public Task PlayMechanicalClickAsync(bool isDown = true) => CallAsync("playMechanicalClick", isDown);
-
-    /// <summary>Starts or stops the low ambient drone that sits under a live duel.</summary>
-    public Task SetAmbientDroneAsync(bool enabled) => CallAsync("setAmbientDrone", enabled);
-
-    /// <summary>
-    /// Gives each side of the duel its own musical voice, derived from the model id so a model
-    /// always sounds the same. Call once per duel, before the first token blip.
-    /// </summary>
-    public Task SetDuetVoicesAsync(string leftSeed, string rightSeed) =>
-        CallAsync("setDuetVoices", leftSeed, rightSeed);
-
-    /// <summary>
-    /// One note of a side's melody. Faster generation plays more notes, higher.
-    /// </summary>
-    /// <remarks>
-    /// Safe to call on every token batch: the module throttles per side, which it has to,
-    /// because batches arrive many times a second on both sides at once. Safe to call
-    /// <em>during inference</em> too — this runs on the audio thread and never touches the
-    /// WebGPU device WebLLM is generating on, so it cannot skew tok/s.
-    /// </remarks>
-    public Task PlayTokenBlipAsync(double velocity, string side) => CallAsync("playTokenBlip", velocity, side);
-
-    /// <summary>One judge-countdown heartbeat; <paramref name="urgency"/> runs 0 → 1 as time runs out.</summary>
-    public Task PlayHeartbeatAsync(double urgency) => CallAsync("playHeartbeat", urgency);
-
-    /// <summary>The rising scan under the judge's reticle.</summary>
-    public Task PlayScanSweepAsync() => CallAsync("playScanSweep");
-
-    /// <summary>A leaderboard rank change since the viewer last looked; positive is up.</summary>
-    public Task PlayRankShiftAsync(int direction) => CallAsync("playRankShift", direction);
-
-    /// <summary>A bracket winner advancing to the next round.</summary>
-    public Task PlayAdvanceAsync() => CallAsync("playAdvance");
-
-    /// <summary>A bracket loser dropping out.</summary>
-    public Task PlayKnockoutAsync() => CallAsync("playKnockout");
 
     /// <summary>Reads the persisted mute preference.</summary>
     public async Task<bool> IsMutedAsync()

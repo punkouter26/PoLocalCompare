@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using System.IO;
+using System.Net.ServerSentEvents;
 using System.Text;
 using System.Text.Json;
 
@@ -17,11 +17,9 @@ namespace PoLocalCompare.Api.Common.Inference;
 /// helper rather than a service — it holds no state between calls and takes the already-connected
 /// response, which keeps each proxy in charge of its own auth, retry and logging policy.
 ///
-/// Hot path: at ~120 tok/s the previous implementation allocated two <see cref="JsonDocument"/>
-/// per frame. Every allocation on the hot path costs the GC another collection and the duel
-/// another stop-the-world pause; the readers below reuse a single per-frame UTF-8 byte slice and
-/// parse with <see cref="Utf8JsonReader"/> once per frame, allocating nothing for normal
-/// delta frames. The metadata path only fires on terminal frames.
+/// Hot path: at ~120 tok/s every allocation costs the GC another collection, so each frame is
+/// parsed once with <see cref="Utf8JsonReader"/> over the parser's own UTF-8 slice — one string
+/// per visible token and nothing else. The metadata path only fires on terminal frames.
 /// </remarks>
 internal static class SseChatStreamReader
 {
@@ -52,90 +50,36 @@ internal static class SseChatStreamReader
         Func<int, long, HtmlStreamStats?, Task> onTokenUpdate,
         CancellationToken cancellationToken)
     {
-        var state = new FrameState();
-        state.Counters = new HtmlStreamCounters();
-        state.LastCallbackAt = -CallbackThrottleMs; // trigger first callback immediately
-        state.LastPreviewTokenCount = -PreviewEveryNTokens; // ...and a preview with it
-        state.FinishReason = null;
-        state.ProviderCompletionTokens = null;
-        state.ProviderPromptTokens = null;
-        state.ProviderReasoningTokens = null;
+        var state = new FrameState
+        {
+            LastCallbackAt = -CallbackThrottleMs, // trigger first callback immediately
+            LastPreviewTokenCount = -PreviewEveryNTokens, // ...and a preview with it
+        };
 
         try
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
-            // Reuse one buffer across frames. Largest frame we've seen in production is
-            // ~10 KB; 32 KB is comfortable headroom. Larger frames grow the array.
-            var buffer = new byte[32 * 1024];
-
-            // Bytes in [scanPos, writePos) have arrived but are not yet parsed: a read appends
-            // at writePos, the scanner advances scanPos past each complete line, and whatever
-            // partial line is left gets compacted back to index 0 before the next read.
-            //
-            // Both counters have to move. An earlier version reset the scan to 0 after every
-            // read and never advanced the compaction cursor, so each read re-parsed every frame
-            // already seen — duplicating output — and never freed buffer space, which meant a
-            // response longer than the buffer ended up reading into a zero-length destination
-            // and stopping silently at 32 KB as if the stream had reached EOF.
-            int scanPos = 0;
-            int writePos = 0;
-
-            while (true)
+            // SseParser owns the framing (line splitting, partial reads, CRLF, multi-line data).
+            // The item parser runs per event on the parser's own buffer, so a delta frame still
+            // costs one string and nothing else; metadata frames are read straight into state.
+            var parser = SseParser.Create(stream, (_, data) =>
             {
-                // Throw rather than exit the loop quietly. Cancellation here is the duel
-                // watchdog or a user abort, and falling out of the loop would land on the
-                // empty-output path below and report a timeout as "Inference completed without
-                // output" — a model failure, attributed to the wrong thing.
-                cancellationToken.ThrowIfCancellationRequested();
+                if (data.SequenceEqual("[DONE]"u8)) return (Token: null, Done: true);
+                var token = TryReadContentDelta(data);
+                if (token is null) TryReadTerminalMetadata(data, state);
+                return (Token: token, Done: false);
+            });
 
-                // Compact: discard already-parsed bytes.
-                if (scanPos > 0)
-                {
-                    var remaining = writePos - scanPos;
-                    if (remaining > 0)
-                        Buffer.BlockCopy(buffer, scanPos, buffer, 0, remaining);
-                    scanPos = 0;
-                    writePos = remaining;
-                }
-
-                // A single frame larger than the whole buffer leaves nowhere to read into, and
-                // a zero-length read is indistinguishable from EOF. Grow instead of truncating.
-                if (writePos == buffer.Length)
-                    Array.Resize(ref buffer, buffer.Length * 2);
-
-                var read = await stream.ReadAsync(buffer.AsMemory(writePos), cancellationToken);
-                if (read == 0) break; // EOF
-                writePos += read;
-
-                while (true)
-                {
-                    var nl = IndexOfByte(buffer, (byte)'\n', scanPos, writePos);
-                    if (nl < 0) break; // partial line — wait for the rest of it
-
-                    var lineEnd = nl > scanPos && buffer[nl - 1] == (byte)'\r' ? nl - 1 : nl;
-                    var lineLen = lineEnd - scanPos;
-
-                    if (lineLen > 0 && StartsWithDataPrefix(buffer, scanPos, lineLen))
-                    {
-                        var payloadStart = scanPos + 6;
-                        var payloadLen = lineLen - 6;
-                        if (payloadLen == 6 && IsDoneMarker(buffer, payloadStart))
-                        {
-                            scanPos = nl + 1;
-                            goto endOfStream;
-                        }
-
-                        await ParseFrame(
-                            buffer, payloadStart, payloadLen,
-                            onTokenUpdate, cancellationToken,
-                            state, sw);
-                    }
-
-                    scanPos = nl + 1;
-                }
+            // Cancellation throws rather than ending the loop quietly: it is the duel watchdog or
+            // a user abort, and falling through would land on the empty-output path below and
+            // report a timeout as "Inference completed without output" — the wrong failure.
+            await foreach (var item in parser.EnumerateAsync(cancellationToken))
+            {
+                if (item.Data.Done) break;
+                if (item.Data.Token is { } token) await OnTokenAsync(token, onTokenUpdate, state, sw);
             }
-        endOfStream:;
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException ex)
         {
@@ -178,15 +122,11 @@ internal static class SseChatStreamReader
         return null;
     }
 
-    /// <summary>
-    /// Mutable accumulator shared across frames. A class (not a struct) because async methods
-    /// cannot have <c>ref</c> parameters, and we want one state object threaded through every
-    /// per-frame call so the throttle counters cannot drift apart.
-    /// </summary>
+    /// <summary>Mutable accumulator shared across frames, so the throttle counters cannot drift apart.</summary>
     private sealed class FrameState
     {
         public readonly StringBuilder Sb = new();
-        public HtmlStreamCounters Counters = new();
+        public readonly HtmlStreamCounters Counters = new();
         public int TokenCount;
         public long? FirstTokenMs;
         public long LastCallbackAt;
@@ -197,51 +137,32 @@ internal static class SseChatStreamReader
         public int? ProviderReasoningTokens;
     }
 
-    /// <summary>Per-frame work that mutates the accumulators. Allocation-free for delta frames.</summary>
-    /// <remarks>
-    /// Takes the live <see cref="Stopwatch"/> by ref-state rather than by parameter so the call
-    /// site stays in the inner while loop without a closure allocation per frame.
-    /// </remarks>
-    private static async Task ParseFrame(
-        byte[] buffer, int payloadStart, int payloadLen,
+    /// <summary>Accumulates one visible token and fires the throttled progress callback.</summary>
+    private static async Task OnTokenAsync(
+        string token,
         Func<int, long, HtmlStreamStats?, Task> onTokenUpdate,
-        CancellationToken cancellationToken,
         FrameState state,
         Stopwatch sw)
     {
-        var token = TryReadContentDelta(buffer.AsSpan(payloadStart, payloadLen));
+        state.Sb.Append(token);
+        state.TokenCount++;
 
-        if (token is not null)
+        var elapsed = sw.ElapsedMilliseconds;
+        state.FirstTokenMs ??= elapsed;
+
+        state.Counters.Accumulate(token);
+
+        if (elapsed - state.LastCallbackAt < CallbackThrottleMs) return;
+        state.LastCallbackAt = elapsed;
+
+        string? preview = null;
+        if (state.TokenCount - state.LastPreviewTokenCount >= PreviewEveryNTokens)
         {
-            state.Sb.Append(token);
-            state.TokenCount++;
-
-            var elapsed = sw.ElapsedMilliseconds;
-            state.FirstTokenMs ??= elapsed;
-
-            state.Counters.Accumulate(token);
-
-            if (elapsed - state.LastCallbackAt >= CallbackThrottleMs)
-            {
-                state.LastCallbackAt = elapsed;
-
-                string? preview = null;
-                if (state.TokenCount - state.LastPreviewTokenCount >= PreviewEveryNTokens)
-                {
-                    state.LastPreviewTokenCount = state.TokenCount;
-                    preview = state.Sb.ToString(0, Math.Min(PreviewMaxChars, state.Sb.Length));
-                }
-
-                await onTokenUpdate(state.TokenCount, elapsed, state.Counters.ToStats(preview));
-            }
+            state.LastPreviewTokenCount = state.TokenCount;
+            preview = state.Sb.ToString(0, Math.Min(PreviewMaxChars, state.Sb.Length));
         }
-        else
-        {
-            // No `delta.content` ⇒ likely the terminal frame (usage + finish_reason).
-            TryReadTerminalMetadata(
-                buffer.AsSpan(payloadStart, payloadLen),
-                state);
-        }
+
+        await onTokenUpdate(state.TokenCount, elapsed, state.Counters.ToStats(preview));
     }
 
     /// <summary>Pulls <c>choices[0].delta.content</c> out of one SSE payload.</summary>
@@ -427,37 +348,5 @@ internal static class SseChatStreamReader
                     state.ProviderReasoningTokens = rt;
             }
         }
-    }
-
-    private static int IndexOfByte(byte[] buffer, byte target, int start, int end)
-    {
-        for (var i = start; i < end; i++)
-        {
-            if (buffer[i] == target) return i;
-        }
-        return -1;
-    }
-
-    private static bool StartsWithDataPrefix(byte[] buffer, int start, int length)
-    {
-        if (length < 6) return false;
-        return buffer[start] == (byte)'d'
-            && buffer[start + 1] == (byte)'a'
-            && buffer[start + 2] == (byte)'t'
-            && buffer[start + 3] == (byte)'a'
-            && buffer[start + 4] == (byte)':'
-            && buffer[start + 5] == (byte)' ';
-    }
-
-    private static bool IsDoneMarker(byte[] buffer, int start)
-    {
-        // "[DONE]" is six bytes; the caller has already stripped "data: " from the start.
-        return start + 6 <= buffer.Length
-            && buffer[start] == '['
-            && buffer[start + 1] == 'D'
-            && buffer[start + 2] == 'O'
-            && buffer[start + 3] == 'N'
-            && buffer[start + 4] == 'E'
-            && buffer[start + 5] == ']';
     }
 }

@@ -3,6 +3,8 @@ using Microsoft.Extensions.Configuration;
 using PoLocalCompare.Client.Services;
 using PoLocalCompare.Shared.DTOs;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
+using System.Threading.Channels;
 
 namespace PoLocalCompare.Client.Services;
 
@@ -12,7 +14,7 @@ public sealed class WebLlmService : IAsyncDisposable
 {
     private readonly IJSRuntime _js;
     private readonly string[] _cdnBaseUrlTemplates;
-    private readonly InferenceSessionStore _sessions = new();
+    private readonly Dictionary<ModelId, InferenceSession> _sessions = [];
     private DotNetObjectReference<WebLlmService>? _selfRef;
 
     public WebLlmService(IJSRuntime js, IConfiguration configuration)
@@ -40,7 +42,7 @@ public sealed class WebLlmService : IAsyncDisposable
     {
         _selfRef ??= DotNetObjectReference.Create(this);
 
-        var session = _sessions.CreateOrReplace(modelId);
+        var session = _sessions[modelId] = new InferenceSession();
 
         await _js.InvokeVoidAsync("startWebLlmInference", cancellationToken, _selfRef, modelId, webLlmModelId, prompt, _cdnBaseUrlTemplates);
 
@@ -59,7 +61,7 @@ public sealed class WebLlmService : IAsyncDisposable
     /// <summary>Returns the full result payload (including HTML) after inference completes.</summary>
     public Task<DuelResultPayload?> GetResultAsync(ModelId modelId, CancellationToken cancellationToken = default)
     {
-        if (_sessions.TryGet(modelId, out var session))
+        if (_sessions.TryGetValue(modelId, out var session))
             return session.CompletionSource.Task.WaitAsync(cancellationToken)
                 .ContinueWith(t => t.IsCompletedSuccessfully ? t.Result : null, TaskScheduler.Default);
         return Task.FromResult<DuelResultPayload?>(null);
@@ -81,7 +83,7 @@ public sealed class WebLlmService : IAsyncDisposable
             htmlTagCount, openTagDepth, styleRuleCount, repetitionScore,
             prefillSpeedTps > 0 ? prefillSpeedTps : null, cacheHit, htmlPreview);
         var id = ModelId.From(modelId);
-        if (_sessions.TryGet(id, out var session))
+        if (_sessions.TryGetValue(id, out var session))
             session.Channel.Writer.TryWrite(update);
         OnStatusUpdate?.Invoke(id, update);
     }
@@ -89,7 +91,7 @@ public sealed class WebLlmService : IAsyncDisposable
     [JSInvokable]
     public void ReceiveComplete(string modelId, string htmlOutput, int tokenCount, long totalMs, long warmUpMs)
     {
-        if (_sessions.TryGet(ModelId.From(modelId), out var session))
+        if (_sessions.TryGetValue(ModelId.From(modelId), out var session))
         {
             session.Channel.Writer.TryWrite(new WebLlmStatusUpdate("Done", tokenCount, totalMs, null));
             session.CompletionSource.TrySetResult(new DuelResultPayload(htmlOutput, tokenCount, totalMs, warmUpMs));
@@ -99,7 +101,7 @@ public sealed class WebLlmService : IAsyncDisposable
     [JSInvokable]
     public void ReceiveError(string modelId, string reason)
     {
-        if (_sessions.TryGet(ModelId.From(modelId), out var session))
+        if (_sessions.TryGetValue(ModelId.From(modelId), out var session))
         {
             session.Channel.Writer.TryWrite(new WebLlmStatusUpdate("Failed", 0, 0, reason));
             session.CompletionSource.TrySetException(new InvalidOperationException(reason));
@@ -129,3 +131,14 @@ public sealed record WebLlmStatusUpdate(
     bool CacheHit = false,
     string? HtmlPreview = null);
 public sealed record DuelResultPayload(string HtmlOutput, int TokenCount, long TotalMs, long WarmUpMs);
+
+/// <summary>One model's in-flight run: its status stream and its final result.</summary>
+internal sealed class InferenceSession
+{
+    public Channel<WebLlmStatusUpdate> Channel { get; } =
+        System.Threading.Channels.Channel.CreateUnbounded<WebLlmStatusUpdate>();
+
+    [JsonIgnore]
+    public TaskCompletionSource<DuelResultPayload> CompletionSource { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+}

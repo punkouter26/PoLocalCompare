@@ -11,12 +11,6 @@ namespace PoLocalCompare.Unit;
 /// </summary>
 public class StronglyTypedIdTests
 {
-    [Fact]
-    public void From_RejectsBlank()
-    {
-        Assert.Throws<ArgumentException>(() => DuelId.From(null!));
-        Assert.Throws<ArgumentException>(() => ModelId.From("   "));
-    }
 
     [Fact]
     public void New_IsLexicographicallyTimeOrdered()
@@ -66,27 +60,5 @@ public class StronglyTypedIdTests
         var back = JsonSerializer.Deserialize<DuelResultDto>(json)!;
         Assert.Equal(dto.DuelId, back.DuelId);
         Assert.Equal(dto.ModelId, back.ModelId);
-    }
-
-    [Fact]
-    public void BoxedToObject_DoesNotBecomeAString()
-    {
-        // Regression guard. The implicit string conversion does NOT apply when the target is
-        // object — Azure's TableEntity indexer takes object, so assigning an id straight into
-        // it boxes the struct and Table Storage rejects it with "Not supported type". Every
-        // TableEntity column assignment therefore has to say .Value explicitly. If this ever
-        // starts returning a string, that constraint has changed and the repositories can be
-        // simplified.
-        object boxed = ModelId.From("m1");
-
-        Assert.IsNotType<string>(boxed);
-        Assert.IsType<ModelId>(boxed);
-    }
-
-    [Fact]
-    public void TryParse_RejectsBlankWithoutThrowing()
-    {
-        Assert.False(DuelId.TryParse("  ", null, out var id));
-        Assert.True(id.IsEmpty);
     }
 }

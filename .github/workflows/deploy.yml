@@ -54,8 +54,6 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
-      - run: dotnet workload restore ${{ env.API_PROJECT_PATH }}
-
       # The three suites do not depend on each other, so they run as parallel legs rather than in
       # sequence: same gates, roughly a third of the wall clock. Integration and E2EAPI spin
       # Azurite via Testcontainers, and the ubuntu runner ships a Docker daemon.
@@ -109,7 +107,6 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
           restore-keys: nuget-${{ runner.os }}-
-      - run: dotnet workload restore ${{ env.API_PROJECT_PATH }}
       # publish implies restore + build — no separate steps needed.
       - run: dotnet publish ${{ env.API_PROJECT_PATH }} -c Release -o publish
       - uses: actions/upload-artifact@v4
@@ -135,11 +132,10 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      # Ensure the App Service exists before pushing code. Steady-state: skip (the CI identity
-      # is scoped to this RG and cannot re-assign the cross-RG shared managed identity, so a
-      # full bicep converge would fail on an already-provisioned site). If the site is missing,
-      # attempt to recreate it from the template — recovery requires the deploy principal to
-      # hold 'Managed Identity Operator' on PoShared/mi-poshared-containerapps.
+      # Ensure the App Service exists before pushing code. Steady-state: skip — the CI identity
+      # is scoped to this RG, and the template also writes role assignments on the shared Key
+      # Vault in PoShared, which it cannot converge. If the site is missing, recreate it from
+      # the template; that recovery needs a principal with rights on PoShared too.
       - name: Ensure infrastructure
         run: |
           if az webapp show -n "$AZURE_WEBAPP_NAME" -g "$AZURE_RESOURCE_GROUP" >/dev/null 2>&1; then
@@ -187,7 +183,7 @@ jobs:
           # the buster does not require touching this workflow.
           #
           # Without this the step could pass against a site that silently kept serving the
-          # previous build — which is the exact failure mode the service worker makes easy.
+          # previous build — which is the exact failure mode an HTTP cache makes easy.
           EXPECTED=$(grep -o 'css/app\.css?v=[0-9]*' src/PoLocalCompare.Client/wwwroot/index.html | head -1)
           SERVED=$(echo "$ROOT" | grep -o 'css/app\.css?v=[0-9]*' | head -1)
           echo "cache-buster in commit: '$EXPECTED' / served: '$SERVED'"

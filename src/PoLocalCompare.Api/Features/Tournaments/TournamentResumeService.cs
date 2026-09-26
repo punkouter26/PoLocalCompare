@@ -29,7 +29,7 @@ public sealed class TournamentResumeService(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var repository = scope.ServiceProvider.GetRequiredService<ITournamentRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
 
             // Recent window only: a bracket older than the retention window on this page is
             // either finished or already abandoned; ListRecentAsync is the same read the

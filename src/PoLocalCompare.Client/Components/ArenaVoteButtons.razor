@@ -10,13 +10,13 @@
 <div class="arena-vote__row">
     <button type="button" class="po-btn po-btn--lg po-btn--success arena-vote__btn"
             disabled="@Disabled"
-            @onclick="@(async () => { _ = AudioService.PlayMechanicalClickAsync(true); await OnVote.InvokeAsync(DuelVerdict.Left); })">
-        👈 Winner: @LeftDisplayName
+            @onclick="@(async () => { _ = AudioService.PlayTickAsync(); await OnVote.InvokeAsync(DuelVerdict.Left); })">
+        <span aria-hidden="true">👈</span> Winner: @LeftDisplayName
     </button>
     <button type="button" class="po-btn po-btn--lg po-btn--success arena-vote__btn"
             disabled="@Disabled"
-            @onclick="@(async () => { _ = AudioService.PlayMechanicalClickAsync(true); await OnVote.InvokeAsync(DuelVerdict.Right); })">
-        Winner: @RightDisplayName 👉
+            @onclick="@(async () => { _ = AudioService.PlayTickAsync(); await OnVote.InvokeAsync(DuelVerdict.Right); })">
+        Winner: @RightDisplayName <span aria-hidden="true">👉</span>
     </button>
 </div>
 

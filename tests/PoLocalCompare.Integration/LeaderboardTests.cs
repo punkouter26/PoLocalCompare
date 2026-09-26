@@ -33,20 +33,7 @@ public sealed class LeaderboardTests : IAsyncLifetime
 
     // ── Helper: register a remote model ───────────────────────────────────
 
-    private async Task<string> RegisterRemoteModelAsync(string name)
-    {
-        var response = await _client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = name,
-            ModelType = "Remote",
-            ApiEndpointRef = "https://test.endpoint/v1",
-            InputTokenPricePerMillion = 1.0m,
-            OutputTokenPricePerMillion = 3.0m,
-        });
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return body.GetProperty("modelId").GetString()!;
-    }
+    private Task<string> RegisterRemoteModelAsync(string name) => TestModels.RemoteAsync(_host.Services, name);
 
     // ── Helper: run a duel and record verdict ─────────────────────────────
 

@@ -1,0 +1,82 @@
+using PoLocalCompare.Shared.Enums;
+
+namespace PoLocalCompare.Api.Features.Judging;
+
+/// <param name="Human">What the person picked.</param>
+/// <param name="Judge">What the judge picks today, or null when it could not decide.</param>
+public sealed record JudgeCalibrationRow(string DuelId, DuelVerdict Human, DuelVerdict? Judge, string? Rationale);
+
+/// <param name="AgreementRate">Agreed / Decided, or null when the judge decided nothing.</param>
+public sealed record JudgeCalibrationReport(
+    string JudgeModel,
+    int Sampled,
+    int Decided,
+    int Agreed,
+    double? AgreementRate,
+    IReadOnlyList<JudgeCalibrationRow> Rows);
+
+/// <summary>
+/// Replays the current judge over duels a human decided and reports how often it agrees.
+/// </summary>
+/// <remarks>
+/// Human verdicts are the only labelled data this app has, so they are the only way to tell
+/// whether a judge change — a new prompt, both-orderings agreement, screenshots, a cheaper
+/// deployment — made verdicts better or merely different. Read-only: the replay goes through
+/// <see cref="IDuelJudge"/> directly, never <see cref="AutoJudge"/> or RecordVerdictHandler,
+/// so nothing it produces can reach a duel row or ELO. Calls run one at a time so a sample
+/// does not trip the judge's rate limit; a 429 ends the sample early with what it has.
+/// </remarks>
+public sealed class JudgeCalibrationHandler(
+    IDuelRepository duels,
+    IDuelResultRepository results,
+    IDuelJudge judge,
+    Microsoft.Extensions.Options.IOptions<AutoJudgeOptions> options)
+{
+    public const int MaxTake = 50;
+
+    public async Task<JudgeCalibrationReport> HandleAsync(int take, CancellationToken cancellationToken)
+    {
+        take = Math.Clamp(take, 1, MaxTake);
+
+        // Newest decided duels; the source filter is client-side because the list query only
+        // filters on verdict. 500 is a scan cap, not a sample size.
+        var decided = await duels.ListAsync(500, beforeMonth: null,
+            verdicts: [DuelVerdict.Left, DuelVerdict.Right, DuelVerdict.Tie]);
+
+        var rows = new List<JudgeCalibrationRow>();
+        foreach (var duel in decided.Where(d => d.VerdictSource == VerdictSource.Human))
+        {
+            if (rows.Count >= take) break;
+
+            var pair = await results.GetByDuelIdAsync(duel.DuelId);
+            var left = pair.FirstOrDefault(r => r.ModelId == duel.LeftModelId);
+            var right = pair.FirstOrDefault(r => r.ModelId == duel.RightModelId);
+            // A walkover is arithmetic, not a judgment — nothing to calibrate against.
+            if (left is null || right is null || left.IsFailure || right.IsFailure
+                || string.IsNullOrWhiteSpace(left.HtmlOutputRaw) || string.IsNullOrWhiteSpace(right.HtmlOutputRaw))
+                continue;
+
+            JudgeDecision? decision;
+            try
+            {
+                decision = await judge.JudgeAsync(
+                    string.IsNullOrWhiteSpace(duel.PromptFull) ? duel.PromptText : duel.PromptFull,
+                    left.HtmlOutputRaw, right.HtmlOutputRaw, cancellationToken);
+            }
+            catch (JudgeRateLimitedException)
+            {
+                break;
+            }
+
+            rows.Add(new JudgeCalibrationRow(duel.DuelId.ToString(), duel.Verdict, decision?.Verdict, decision?.Rationale));
+        }
+
+        var judged = rows.Count(r => r.Judge is not null);
+        var agreed = rows.Count(r => r.Judge == r.Human);
+        return new JudgeCalibrationReport(
+            options.Value.EffectiveDeployment(options.Value.VisionEnabled),
+            rows.Count, judged, agreed,
+            judged == 0 ? null : Math.Round((double)agreed / judged, 3),
+            rows);
+    }
+}

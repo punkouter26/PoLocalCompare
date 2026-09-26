@@ -58,9 +58,9 @@ public abstract class UiTestBase : IAsyncLifetime
     }
 
     /// <summary>
-    /// Opens the collapsed nav drawer on narrow viewports. Below 768px the session controls and
-    /// the theme toggle live inside <c>.navmenu__collapse</c>, which is display:none until the
-    /// hamburger is pressed — so a mobile test has to press it, exactly as a person would.
+    /// Opens the collapsed nav drawer on narrow viewports. Below 768px the session controls
+    /// live inside <c>.navmenu__collapse</c>, which is display:none until the hamburger is
+    /// pressed — so a mobile test has to press it, exactly as a person would.
     /// A no-op on desktop, where the bar is always expanded.
     /// </summary>
     protected static async Task OpenNavIfCollapsedAsync(IPage page)
@@ -71,6 +71,17 @@ public abstract class UiTestBase : IAsyncLifetime
             await toggler.ClickAsync();
             await page.Locator(".navmenu__collapse--open").WaitForAsync(new() { Timeout = 5_000 });
         }
+    }
+
+    /// <summary>
+    /// Opens the nav's user menu — a native &lt;details&gt; holding the theme and sound toggles,
+    /// Catalog and Logout — opening the phone drawer first where there is one.
+    /// </summary>
+    protected static async Task OpenUserMenuAsync(IPage page)
+    {
+        await OpenNavIfCollapsedAsync(page);
+        if (await page.Locator(".navmenu__menu[open]").CountAsync() == 0)
+            await page.Locator(".navmenu__menu-trigger").ClickAsync();
     }
 
     /// <summary>Identity the dev-only fake-auth route signs the browser in as.</summary>

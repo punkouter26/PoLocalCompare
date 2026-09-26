@@ -30,11 +30,16 @@ public sealed class WebGpuCapability
     {
         try
         {
+            // Loaded on demand rather than by a <script> tag on every page: Home is its only
+            // Blazor caller. It is a classic script that assigns window globals, which is also
+            // valid as a module, so importing it defines checkWebGpu exactly as the tag did.
+            // The ?v= must match /diag's tag in Diag.cshtml — bump both together.
+            await _js.InvokeAsync<IJSObjectReference>("import", "/js/diag-interop.js?v=6");
             return await _js.InvokeAsync<WebGpuInfo>("checkWebGpu");
         }
         catch (JSException)
         {
-            // diag-interop.js not loaded — treat as unsupported so callers default to
+            // diag-interop.js failed to load — treat as unsupported so callers default to
             // a safe path rather than racing on an undefined promise.
             return new WebGpuInfo { Supported = false, Reason = "WebGPU probe unavailable." };
         }

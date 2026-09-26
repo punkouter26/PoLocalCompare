@@ -11,9 +11,9 @@ public static class ModelsEndpoints
         var group = app.MapGroup("/api/models").WithTags("Models").RequireAuthorization();
 
         group.MapGet("/", async (
-            [FromServices] ListModelsHandler handler,
+            [FromServices] IModelRepository repository,
             [FromServices] IWebHostEnvironment env) =>
-            Results.Ok(ModelVisibility.Filter(await handler.HandleAsync(), env)))
+            Results.Ok(ModelVisibility.Filter((await repository.GetAllAsync()).Select(m => m.ToDto()), env)))
         .WithName("ListModels")
         .WithSummary("Returns all registered models with current ELO and duel counts.")
         .Produces<IEnumerable<ModelDto>>();
@@ -24,47 +24,6 @@ public static class ModelsEndpoints
         .WithName("GetModelAvailability")
         .WithSummary("Returns per-model runtime availability so only confirmed working models can be selected.")
         .Produces<IEnumerable<ModelAvailabilityDto>>();
-
-        group.MapPost("/", async (
-            [FromBody] RegisterModelRequest request,
-            [FromServices] RegisterModelHandler handler) =>
-        {
-            if (string.IsNullOrWhiteSpace(request.DisplayName))
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["DisplayName"] = ["DisplayName is required."]
-                });
-
-            var command = new RegisterModelCommand(
-                request.DisplayName,
-                request.ModelType,
-                request.TdpWatts,
-                request.WebLlmModelId,
-                request.ApiEndpointRef,
-                request.InputTokenPricePerMillion,
-                request.OutputTokenPricePerMillion);
-
-            try
-            {
-                var dto = await handler.HandleAsync(command);
-                return Results.Created($"/api/models/{dto.ModelId}", dto);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Results.Conflict(new { error = ex.Message });
-            }
-            catch (ArgumentException ex)
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["Request"] = [ex.Message]
-                });
-            }
-        })
-        .WithName("RegisterModel")
-        .WithSummary("Registers a new model in the Model Registry.")
-        .Produces<ModelDto>(StatusCodes.Status201Created)
-        .ProducesValidationProblem();
 
         // ── Runtime discovery ────────────────────────────────────────────────────
         // The catalog page's feed. ModelSeeder only seeds an empty table, so without these
@@ -104,20 +63,6 @@ public static class ModelsEndpoints
         .Produces(StatusCodes.Status409Conflict)
         .ProducesValidationProblem();
 
-        group.MapDelete("/{modelId}", async (
-            [FromRoute] ModelId modelId,
-            [FromServices] IModelRepository repository) =>
-        {
-            var model = await repository.GetByIdAsync(modelId);
-            if (model is null) return Results.NotFound();
-            await repository.DeleteAsync(modelId);
-            return Results.NoContent();
-        })
-        .WithName("DeleteModel")
-        .WithSummary("Removes a model from the registry.")
-        .Produces(StatusCodes.Status204NoContent)
-        .Produces(StatusCodes.Status404NotFound);
-
         // GET /api/models/download-status/{webLlmModelId} — whether the per-model weights directory
         // is present on disk under wwwroot/models/. The JS interop (diag-interop.js, webllm-interop.js)
         // calls this on every page load to skip the CDN probe when the model is already local.
@@ -148,12 +93,3 @@ public static class ModelsEndpoints
         return app;
     }
 }
-
-public sealed record RegisterModelRequest(
-    string DisplayName,
-    ModelType ModelType,
-    double? TdpWatts,
-    string? WebLlmModelId,
-    string? ApiEndpointRef,
-    decimal? InputTokenPricePerMillion,
-    decimal? OutputTokenPricePerMillion);

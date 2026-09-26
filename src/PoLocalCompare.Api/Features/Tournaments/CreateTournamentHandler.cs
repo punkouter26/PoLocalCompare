@@ -7,7 +7,7 @@ namespace PoLocalCompare.Api.Features.Tournaments;
 /// <summary>Draws a bracket from a chosen field and persists it, ready for the runner.</summary>
 public sealed class CreateTournamentHandler(
     IModelRepository modelRepository,
-    ITournamentRepository tournamentRepository)
+    TournamentRepository tournamentRepository)
 {
     /// <summary>
     /// Model types a bracket may contain — all of them, since 2026-08-23.

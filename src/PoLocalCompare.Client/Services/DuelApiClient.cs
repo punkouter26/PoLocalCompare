@@ -78,13 +78,20 @@ public sealed class DuelApiClient
         }
     }
 
-    /// <summary>Subset of <c>Microsoft.AspNetCore.Mvc.ProblemDetails</c> we care about.</summary>
+    /// <summary>
+    /// Every error body this client reads, as far as it reads them: RFC 7807 problem details
+    /// (Title/Detail, and Errors for a validation problem), the <c>{ error }</c> body of the API's
+    /// 409s, and the running bracket's id on a tournament 409. Declared here rather than using
+    /// <c>ValidationProblemDetails</c>, which lives in the MVC assembly the client does not reference.
+    /// </summary>
     public sealed class ProblemDetailsLite
     {
         public string? Title { get; init; }
         public string? Detail { get; init; }
         // ASP.NET's ValidationProblemDetails nests per-field errors here.
         public Dictionary<string, string[]>? Errors { get; init; }
+        public string? Error { get; init; }
+        public string? TournamentId { get; init; }
 
         /// <summary>
         /// First non-empty field error if present (this is what the API surfaces for the
@@ -167,11 +174,21 @@ public sealed class DuelApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<IReadOnlyList<DuelSummaryDto>?> ListDuelsAsync(int limit = 20, string? before = null)
+    /// <param name="before">Keyset cursor: the oldest duel id already loaded. Only strictly older duels come back.</param>
+    /// <param name="verdicts">When non-empty, only duels with one of these verdicts.</param>
+    public async Task<IReadOnlyList<DuelSummaryDto>?> ListDuelsAsync(
+        int limit = 20,
+        DuelId? before = null,
+        IEnumerable<DuelVerdict>? verdicts = null)
     {
         var url = $"/api/duels?limit={limit}";
-        if (!string.IsNullOrEmpty(before))
-            url += $"&before={before}";
+        if (before is { IsEmpty: false } cursor)
+            url += $"&before={Uri.EscapeDataString(cursor.Value)}";
+        if (verdicts is not null)
+        {
+            foreach (var verdict in verdicts)
+                url += $"&verdict={verdict}";
+        }
         return await _http.GetFromJsonAsync<IReadOnlyList<DuelSummaryDto>>(url, JsonOptions);
     }
 
@@ -227,39 +244,19 @@ public sealed class DuelApiClient
 
         if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
         {
-            var problem = await response.Content.ReadFromJsonAsync<ValidationProblemShape>(JsonOptions);
-            var detail = problem?.Errors?.SelectMany(e => e.Value).FirstOrDefault();
-            throw new InvalidOperationException(detail ?? "That bracket could not be drawn.");
+            var problem = await TryReadProblemAsync(response);
+            throw new InvalidOperationException(problem?.FirstMessage() ?? "That bracket could not be drawn.");
         }
 
         if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
             // The body is a small anonymous object the endpoint hands back to identify the
             // running bracket by id — that is what the page links the user to.
-            var conflict = await TryReadConflictAsync(response);
-            throw new TournamentInFlightException(conflict);
+            throw new TournamentInFlightException(await TryReadProblemAsync(response));
         }
 
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<TournamentDto>(JsonOptions);
-    }
-
-    /// <summary>
-    /// What the tournaments POST returns on a 409. Kept narrow: the page only needs the
-    /// running tournament's id (to link to it) and a short message to show the user.
-    /// </summary>
-    public sealed record TournamentConflictPayload(string? Title, string? Detail, string? TournamentId);
-
-    private static async Task<TournamentConflictPayload?> TryReadConflictAsync(HttpResponseMessage response)
-    {
-        try
-        {
-            return await response.Content.ReadFromJsonAsync<TournamentConflictPayload>(JsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     /// <summary>
@@ -271,7 +268,7 @@ public sealed class DuelApiClient
     {
         public string? RunningTournamentId { get; }
 
-        public TournamentInFlightException(TournamentConflictPayload? payload)
+        public TournamentInFlightException(ProblemDetailsLite? payload)
             : base(payload?.Detail ?? payload?.Title ?? "Another tournament is already running.")
         {
             RunningTournamentId = payload?.TournamentId;
@@ -323,14 +320,13 @@ public sealed class DuelApiClient
 
         if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
         {
-            var problem = await response.Content.ReadFromJsonAsync<ValidationProblemShape>(JsonOptions);
-            throw new InvalidOperationException(
-                problem?.Errors?.SelectMany(e => e.Value).FirstOrDefault() ?? "That model cannot be added.");
+            var problem = await TryReadProblemAsync(response);
+            throw new InvalidOperationException(problem?.FirstMessage() ?? "That model cannot be added.");
         }
 
         if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            var conflict = await response.Content.ReadFromJsonAsync<ConflictShape>(JsonOptions);
+            var conflict = await TryReadProblemAsync(response);
             throw new InvalidOperationException(conflict?.Error ?? "That model is already in the catalog.");
         }
 
@@ -370,23 +366,4 @@ public sealed class DuelApiClient
         public int LocalService { get; set; }
         public bool CloudMode { get; set; }
     }
-}
-
-/// <summary>
-/// The RFC 7807 validation-problem shape, only as far as this client reads it.
-/// </summary>
-/// <remarks>
-/// Declared here rather than using <c>ValidationProblemDetails</c>: that type lives in the MVC
-/// assembly, which the WebAssembly client does not reference, and one endpoint reading one field
-/// does not justify pulling it in.
-/// </remarks>
-internal sealed class ValidationProblemShape
-{
-    public Dictionary<string, string[]>? Errors { get; set; }
-}
-
-/// <summary>The <c>{ error }</c> body the API's 409 responses carry.</summary>
-internal sealed class ConflictShape
-{
-    public string? Error { get; set; }
 }

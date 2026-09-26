@@ -14,17 +14,9 @@
 <PageTitle>Arena — PoLocalCompare</PageTitle>
 
 <div class="arena po-page po-page--wide">
-    @* The way back to the bracket, when the duel was opened from one. Above the title and
-       rendered in every state — loading, streaming, judged — because a tournament viewer
-       dips into a match and returns, and the bracket keeps running while they are here. *@
-    @if (_tournamentId is { } tournamentId)
-    {
-        <a class="arena__back po-btn po-btn--sm po-btn--ghost" href="@($"/tournament/{tournamentId}")">
-            <span aria-hidden="true">←</span> Back to bracket@(_tournamentMatchLabel is null ? "" : $" · {_tournamentMatchLabel}")
-        </a>
-    }
-
-    <h1 class="arena__title po-title">Arena — Judge the Duel</h1>
+    @* "Left vs Right" once the duel is known — the two names the whole page is about — and a
+       plain "Arena" while it loads or when it cannot. *@
+    <PageHeader Title="@(_duel is null ? "Arena" : $"{LeftDisplayName} vs {RightDisplayName}")" TitleHook="arena__title" />
 
     @if (_loading)
     {
@@ -46,10 +38,17 @@
                "Try again" button — the only recovery on a transient load failure — did
                nothing at all when clicked. *@
             <button type="button" class="po-btn po-btn--primary" @onclick="RetryLoadAsync" disabled="@_reloading">
-                @(_reloading ? "Reloading…" : "↻ Try again")
+                @if (_reloading)
+                {
+                    @:Reloading…
+                }
+                else
+                {
+                    <text><span aria-hidden="true">↻</span> Try again</text>
+                }
             </button>
-            <a class="po-btn" href="/">⚔ Start a new duel</a>
-            <a class="po-btn" href="/archive">📁 Browse the archive</a>
+            <a class="po-btn" href="/"><span aria-hidden="true">⚔</span> Start a new duel</a>
+            <a class="po-btn" href="/archive"><span aria-hidden="true">📁</span> Browse the archive</a>
         </PageActions>
     }
     else if (_duel is null)
@@ -58,57 +57,49 @@
                     Title="Duel not found"
                     Hint="That duel no longer exists — it may have been wiped with the local storage, or the link may be mistyped." />
         <PageActions Align="PageActionsAlign.Center">
-            <a class="po-btn po-btn--primary" href="/">⚔ Start a new duel</a>
-            <a class="po-btn" href="/archive">📁 Browse the archive</a>
+            <a class="po-btn po-btn--primary" href="/"><span aria-hidden="true">⚔</span> Start a new duel</a>
+            <a class="po-btn" href="/archive"><span aria-hidden="true">📁</span> Browse the archive</a>
         </PageActions>
     }
     else
     {
-        <p class="arena__prompt-label">Prompt: <em>@_duel.PromptText</em></p>
-        @if (!string.IsNullOrWhiteSpace(_duel.OwnerId))
-        {
-            <p class="arena__owner-line">Started by <strong>@_duel.OwnerId</strong></p>
-        }
-
-        @* ── Live race ────────────────────────────────────────────────────
-           Only while generating. Previously this, the streaming previews and the whole
-           telemetry read-out lived on a separate /processing page that navigated here the
-           instant the duel finished; folding it in removes the page swap mid-duel. *@
-        @if (_duelStillRunning)
-        {
-            <TokenRace
-                LeftName="@LeftDisplayName"
-                RightName="@RightDisplayName"
-                LeftStatus="@_sides[(int)Side.Left].Status"
-                RightStatus="@_sides[(int)Side.Right].Status"
-                LeftTokenCount="@_sides[(int)Side.Left].TokenCount"
-                RightTokenCount="@_sides[(int)Side.Right].TokenCount"
-                LeftVelocity="@_sides[(int)Side.Left].TokenVelocity"
-                RightVelocity="@_sides[(int)Side.Right].TokenVelocity"
-                LeftPeakVelocity="@_sides[(int)Side.Left].PeakVelocity"
-                RightPeakVelocity="@_sides[(int)Side.Right].PeakVelocity"
-                LeftHistory="_sides[(int)Side.Left].VelocityHistory"
-                RightHistory="_sides[(int)Side.Right].VelocityHistory" />
-
-            @* The one diagnostic worth keeping from the old panels: without it, a browser model
-               compiling shaders for 30 s is indistinguishable from a hung page. *@
-            @if (_sides[(int)Side.Left].StallDetail is not null || _sides[(int)Side.Right].StallDetail is not null)
+        @* One line, clamped; the full prompt is in the title and in the DOM (the clamp is
+           visual only). The owner rides at the end of the same line instead of a second one. *@
+        <p class="arena__prompt-label" title="@_duel.PromptText">
+            <span class="arena__prompt-text">Prompt: <em>@_duel.PromptText</em></span>
+            @if (!string.IsNullOrWhiteSpace(_duel.OwnerId))
             {
-                <div class="arena__stall-note" role="status">
-                    @(_sides[(int)Side.Left].StallDetail ?? _sides[(int)Side.Right].StallDetail)
-                </div>
+                <span class="arena__owner">· by <strong>@_duel.OwnerId</strong></span>
             }
+        </p>
+
+        @* ── Status band ──────────────────────────────────────────────────
+           One region, one role="status", one sentence. This was two @if chains and a loose
+           "duel in progress" notice, branching across nine flags and carrying a live region
+           EACH — ten on this page, several able to update in the same frame. The branching
+           moved to ArenaPhaseResolver in Shared/Presentation (where the Unit tier can reach
+           it, unlike anything under Client/); the wording moved verbatim into
+           ArenaStatusBand. While streaming it carries the race ticker that TokenRace used to
+           announce in its own live region; after a verdict, the override correction rides on
+           it too. *@
+        <ArenaStatusBand Phase="@Phase"
+                         AutoJudgeRemaining="@_autoJudgeRemaining"
+                         WinnerDisplayName="@ResolveDisplayName(_winnerModelId)"
+                         JudgeRationale="@_judgeRationale"
+                         VerdictBy="@_duel.VerdictBy"
+                         JudgeModel="@_duel.JudgeModel"
+                         RaceTicker="@(_duelStillRunning ? RaceTicker : null)"
+                         RaceAnnouncement="@(_duelStillRunning ? RaceAnnouncement : null)"
+                         Notice="@_overriddenNotice" />
+
+        @* The one diagnostic worth keeping from the old panels: without it, a browser model
+           compiling shaders for 30 s is indistinguishable from a hung page. Not a live region:
+           it re-words itself every 2 s, and the band is the page's one status message. *@
+        @if (_duelStillRunning && (_sides[(int)Side.Left].StallDetail ?? _sides[(int)Side.Right].StallDetail) is { } stall)
+        {
+            <p class="arena__stall-note">@stall</p>
         }
 
-        @* The Arena shows the rendered result and nothing else. The Code and Diff views, and
-           the switcher that reached them, were removed on 2026-08-23 — the per-panel
-           "View Source" button still opens either document in full when you want the source.
-
-           A failed side renders its failure card INSTEAD of the viewport and telemetry, not
-               on top of them. The same failure used to be stated three times per side — the
-               viewport's "produced no renderable output" placeholder, the HUD's red FAILED
-               banner, and this card repeating the identical message — over a metric grid
-               reading 0.0 tok/s / 0ms / 0 tokens / 0 B. *@
         @* ── Mobile panel focus ────────────────────────────────────────────
            Shown only below 640px (CSS-hidden above), where the two panels stack and a
            phone screen holds roughly one and a half of them — so comparing means
@@ -119,37 +110,36 @@
            behaviour the .arena__viewports rules argue for. This only lets you collapse
            to one side when you want the whole viewport for it. It is a filter over
            presentation, not over the DOM — both panels stay mounted and streaming, so
-           switching never restarts a preview or drops a token batch. *@
+           switching never restarts a preview or drops a token batch.
+
+           Short labels (Both / L / R): a model name per button wrapped the row onto two lines
+           on the very screen it exists to save space on. The name is the accessible name. *@
         <div class="arena__focus" role="group" aria-label="Which output to show">
             @foreach (var (value, label) in MobileFocusOptions)
             {
+                var fullName = value switch
+                {
+                    "left" => $"Show {LeftDisplayName}",
+                    "right" => $"Show {RightDisplayName}",
+                    _ => "Show both outputs",
+                };
                 <button type="button"
-                        class="po-btn po-btn--sm arena__focus-btn @(_mobileFocus == value ? "arena__focus-btn--active" : "")"
-                        aria-pressed="@(_mobileFocus == value)"
+                        class="po-btn po-btn--sm po-btn--chip"
+                        aria-pressed="@(_mobileFocus == value ? "true" : "false")"
+                        aria-label="@fullName"
+                        title="@fullName"
                         @onclick="() => _mobileFocus = value">
-                    @(value switch
-                    {
-                        "left" => LeftDisplayName,
-                        "right" => RightDisplayName,
-                        _ => label
-                    })
+                    @label
                 </button>
             }
         </div>
-
-        @if (_photoFinishText is not null)
-        {
-            <p class="arena__photo-finish" role="status">
-                <span aria-hidden="true">📸</span> @_photoFinishText
-            </p>
-        }
 
         @* The judge's reticle: while the grace window runs (and while the AI judge is
            deciding) a scan beam sweeps both panels — the outputs being weighed are the ones
            on screen. Compositor-only, and by now inference is finished anyway. *@
         <div class="arena__viewports arena__viewports--focus-@_mobileFocus @(JudgeIsLooking ? "arena__viewports--judging" : "")">
             <div class="arena__viewport-slot arena__viewport-slot--left">
-            <ArenaViewportPanel
+                <ArenaViewportPanel
                     Result="@_leftResult"
                     DisplayName="@LeftDisplayName"
                     StreamingHtml="@_leftStreamingHtml"
@@ -158,6 +148,8 @@
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
                     EloShiftDisplay="@(_eloShiftLeft.HasValue ? _eloDisplayLeft : null)"
+                    Live="@(_duelStillRunning ? _sides[(int)Side.Left] : null)"
+                    Progress="@RaceProgress(Side.Left)"
                     OnViewSource="(html) => OpenSourceAsync(html, LeftDisplayName)" />
             </div>
 
@@ -171,17 +163,28 @@
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
                     EloShiftDisplay="@(_eloShiftRight.HasValue ? _eloDisplayRight : null)"
-                    TotalCost="@DuelTotalCostParam"
+                    Live="@(_duelStillRunning ? _sides[(int)Side.Right] : null)"
+                    Progress="@RaceProgress(Side.Right)"
                     OnViewSource="(html) => OpenSourceAsync(html, RightDisplayName)" />
             </div>
         </div>
+
+        @* ── Duel cost ────────────────────────────────────────────────────
+           Once, under both panels. It used to be an extra row in the right-hand HUD only,
+           which made the two panels different heights for a figure that belongs to neither. *@
+        @if (DuelTotalCostParam is { } duelCost)
+        {
+            <p class="arena__cost">Duel cost <strong>$@duelCost.ToString("F4")</strong></p>
+        }
 
         @* ── The judge's eye ───────────────────────────────────────────
            The exact 320×180 screenshots the vision judge is shown, rendered server-side by
            HtmlScreenshotRenderer. Vision is off in Production (no browser on the Free tier),
            so the endpoint 404s there and the strip hides itself on the first image error —
-           the scan over the live panels above carries the moment alone. *@
-        @if (JudgeIsLooking && !_judgeEyeUnavailable && BothOutputsPresent())
+           the scan over the live panels above carries the moment alone. Only while the judge
+           is actually deciding: after the verdict the panels' own WINNER/LOSER badges say it,
+           and a second framed copy of both outputs was a third place the winner was marked. *@
+        @if (Phase is ArenaPhase.JudgeDeciding && !_judgeEyeUnavailable && BothOutputsPresent())
         {
             <section class="arena__judge-eye" aria-label="What the AI judge sees">
                 <span class="arena__judge-eye-label"><span aria-hidden="true">👁</span> What the judge sees</span>
@@ -194,40 +197,6 @@
                          width="320" height="180" @onerror="() => _judgeEyeUnavailable = true" />
                 </div>
             </section>
-        }
-
-        @* ── Duel cost summary ─────────────────────────────────────────────
-           Sums the two sides' API costs once both have a value. Was a separate band above the
-           scorecard carrying its own role="status" — a live region that fired every time the
-           second result arrived and added a third cost signal on top of the two per-side ones
-           in the telemetry HUDs.
-
-           Now the HUD itself totals: when both result rows are present and at least one has a
-           rate, the right side's HUD lights up an extra "Duel cost: $0.0042 (≈ 2× L)" row that
-           sits inside the same live region as that side's per-row API cost line, so the
-           announcement is the same frame. The breakdown name is informational on a screen
-           reader via aria-label; visible callers don't need a separate band. *@
-
-        @* ── Status band ──────────────────────────────────────────────────
-           One region, one role="status", one sentence. This was two @if chains and a loose
-           "duel in progress" notice, branching across nine flags and carrying a live region
-           EACH — ten on this page, several able to update in the same frame. The branching
-           moved to ArenaPhaseResolver in Shared/Presentation (where the Unit tier can reach
-           it, unlike anything under Client/); the wording moved verbatim into
-           ArenaStatusBand. Neither changed what any state says. *@
-        <ArenaStatusBand Phase="@Phase"
-                         AutoJudgeRemaining="@_autoJudgeRemaining"
-                         WinnerDisplayName="@ResolveDisplayName(_winnerModelId)"
-                         JudgeRationale="@_judgeRationale"
-                         VerdictBy="@_duel.VerdictBy"
-                         JudgeModel="@_duel.JudgeModel" />
-
-        @* A pick that lost the race to the auto-judge has to be corrected visibly, not
-           silently swapped underneath the person who made it. Kept separate from the band:
-           it is a correction OF the band, so the two have to be able to appear together. *@
-        @if (_overriddenNotice is not null)
-        {
-            <div class="arena__override-notice" role="status">@_overriddenNotice</div>
         }
 
         @* Two tiers. Voting is the page's primary action and gets the large buttons — but only
@@ -250,9 +219,9 @@
         }
 
         @* ── Follow-ups ────────────────────────────────────────────────────
-           Nothing here while the duel is still streaming: the page is a live view at that
-           point and every one of these was either disabled or hidden anyway, so the row was
-           an empty band under the race.
+           While the duel streams the page is a live view and the only exit worth offering is
+           the way back to the bracket, for a match opened from one — the bracket keeps running
+           while you watch. That link used to be duplicated above the title; it is here alone.
 
            Once it has finished, the exits are New duel and Archive — two, both leading
            somewhere. The old row carried five same-weight buttons (Retry / Share / Head-to-head
@@ -262,38 +231,46 @@
            are not exits — went with the Archive row, which is where a duel is looked up after
            the fact. GET /api/duels/{id}/report is reachable from there and nowhere else, so
            ArenaUiTests asserts that anchor on the Archive page. *@
-        @if (!_duelStillRunning)
+        @if (!_duelStillRunning || _tournamentId is not null)
         {
             <PageActions Align="PageActionsAlign.Center">
                 @if (_tournamentId is { } bracketId)
                 {
-                    <a class="po-btn po-btn--primary" href="@($"/tournament/{bracketId}")">🏆 Back to bracket</a>
-                    <a class="po-btn" href="/">⚔ New duel</a>
+                    <a class="po-btn po-btn--primary" href="@($"/tournament/{bracketId}")">
+                        <span aria-hidden="true">🏆</span> Back to bracket@(_tournamentMatchLabel is null ? "" : $" · {_tournamentMatchLabel}")
+                    </a>
                 }
-                else
+                @if (!_duelStillRunning)
                 {
-                    <a class="po-btn po-btn--primary" href="/">⚔ New duel</a>
-                }
-                <a class="po-btn" href="/archive">📁 Archive</a>
+                    <a class="po-btn @(_tournamentId is null ? "po-btn--primary" : "")" href="/"><span aria-hidden="true">⚔</span> New duel</a>
+                    <a class="po-btn" href="/archive"><span aria-hidden="true">📁</span> Archive</a>
 
-                @* Re-runs the same pairing and prompt as a brand-new duel. Shown only when a
-                   model failed, because a transient failure (model load, cache, rate limit) is
-                   the situation it exists for — on a clean duel it competed with New duel while
-                   meaning almost the same thing. *@
-                @if (EitherSideFailed())
-                {
-                    <button type="button" class="po-btn po-btn--warn"
-                            disabled="@(_retrying || _submitting)"
-                            @onclick="RetryDuelAsync">
-                        @(_retrying ? "Starting…" : "🔄 Retry duel")
-                    </button>
+                    @* Re-runs the same pairing and prompt as a brand-new duel. Shown only when a
+                       model failed, because a transient failure (model load, cache, rate limit) is
+                       the situation it exists for — on a clean duel it competed with New duel while
+                       meaning almost the same thing. *@
+                    @if (EitherSideFailed())
+                    {
+                        <button type="button" class="po-btn po-btn--warn"
+                                disabled="@(_retrying || _submitting)"
+                                @onclick="RetryDuelAsync">
+                            @if (_retrying)
+                            {
+                                @:Starting…
+                            }
+                            else
+                            {
+                                <text><span aria-hidden="true">🔄</span> Retry duel</text>
+                            }
+                        </button>
+                    }
                 }
             </PageActions>
         }
 
         @if (_retryError is not null)
         {
-            <p class="arena__error" role="status">@_retryError</p>
+            <p class="arena__error" role="alert">@_retryError</p>
         }
     }
 </div>
@@ -303,11 +280,20 @@
     // text and it is narrowed to DuelId here instead of at every call site.
     [Parameter] public string DuelIdText { get; set; } = string.Empty;
 
-    // Derived, not assigned in OnParametersSet: Blazor runs OnInitializedAsync *before*
-    // OnParametersSet, so a field set there is still default() during the initial load. That
-    // sent GET /api/duels/ with an empty id, which matched the list route, returned a JSON
-    // array, and blew up deserializing it into a single DuelDto.
+    // Derived, never cached in a field. It used to matter because the load ran in
+    // OnInitializedAsync, which Blazor runs *before* OnParametersSet — a field set there was
+    // still default() during the initial load, which sent GET /api/duels/ with an empty id,
+    // matched the list route, and blew up deserializing a JSON array into one DuelDto. The load
+    // now runs in OnParametersSetAsync (see there), and derived is still the safe shape: a
+    // cached copy is one more thing a duel-id change would have to remember to reset.
     private DuelId _duelId => DuelId.From(DuelIdText);
+
+    /// <summary>
+    /// The route id the page last loaded. "Retry duel" navigates to /arena/{new id} — the same
+    /// route — so Blazor keeps this component and only sets parameters again; OnInitializedAsync
+    /// never re-runs. Loading is keyed on a change of this instead.
+    /// </summary>
+    private string? _loadedDuelIdText;
 
     /// <summary>
     /// The bracket this duel was opened from, carried as <c>?tournament=</c> by the Tournament
@@ -337,16 +323,15 @@
     private string _mobileFocus = "both";
 
     /// <summary>
-    /// Options for the focus switcher. The two model buttons take their label from the live
-    /// display name rather than "Left"/"Right", which is what a person is actually choosing
-    /// between — except in Blind mode, where the display names are masked and the labels
-    /// mask with them for free.
+    /// Options for the focus switcher. Visible labels are short; each button's accessible
+    /// name (and title) carries the model's display name, which is what a person is actually
+    /// choosing between.
     /// </summary>
     private static readonly (string Value, string Label)[] MobileFocusOptions =
     [
         ("both", "Both"),
-        ("left", "Left"),
-        ("right", "Right"),
+        ("left", "L"),
+        ("right", "R"),
     ];
     private bool _retrying;
     private string? _retryError;
@@ -356,8 +341,6 @@
     private double? _eloShiftLeft;
     private double? _eloShiftRight;
 
-    // ── Comparison views ──────────────────────────────────────────────────────
-
     // ── Optimistic verdict ────────────────────────────────────────────────────
     // The click flips the UI immediately and the server confirms afterwards. _optimistic marks
     // the window where what is on screen is a prediction, so a losing race can be corrected
@@ -365,8 +348,7 @@
     private bool _optimistic;
     private string? _overriddenNotice;
 
-    // Animated ELO readouts. The badge counts up to the real shift instead of snapping, which
-    // is the only part of a verdict with any weight behind it.
+    // Animated ELO readouts. The badge counts up to the real shift instead of snapping.
     private double _eloDisplayLeft;
     private double _eloDisplayRight;
     private CancellationTokenSource? _eloAnimationCts;
@@ -394,8 +376,9 @@
     /// <summary>The judge-view endpoint failed (vision is off) — stop asking for the screenshots.</summary>
     private bool _judgeEyeUnavailable;
 
-    /// <summary>The margin, as text, when both sides finished within <see cref="PhotoFinish.Window"/>.</summary>
-    private string? _photoFinishText;
+    // Who is ahead on tok/s, for the race announcement. Held 3 s against jitter.
+    private Side? _leader;
+    private DateTimeOffset _leaderChangedAt;
 
     /// <summary>
     /// The single state this page is in, derived from the flags rather than re-branched on
@@ -419,7 +402,7 @@
     });
 
     /// <summary>
-    /// The settled-verdict band, as a selector for the payoff effects in fx.js. Named rather
+    /// The settled-verdict band, as a selector for the confetti burst in fx.js. Named rather
     /// than written inline at each call site so the two uses cannot drift apart, and so a
     /// rename has one place to land — fx.js silently does nothing when a selector misses.
     /// </summary>
@@ -453,11 +436,7 @@
     private bool CanStillVote =>
         !_verdictRecorded && !BothSidesFailed() && !_duelStillRunning && _duel?.CompletedAt is not null;
 
-    /// <summary>One result is in but the duel is not terminal — the other model is still going.</summary>
-    private bool WaitingForOtherModel =>
-        !_duelStillRunning && !_verdictRecorded && _duel is { Verdict: DuelVerdict.Pending, CompletedAt: null };
-
-    /// <summary>The model's actual name, whether or not the duel is currently masked.</summary>
+    /// <summary>The model's name.</summary>
     /// <remarks>
     /// Resolution order: result row's <c>ModelName</c> (only present once inference has
     /// landed), then the snapshotted <c>LeftModelName</c> on the duel DTO (always present for
@@ -465,26 +444,18 @@
     /// too), then the id as a last-ditch fallback so the page never renders a ULID on its own
     /// for a side whose name the user has no way to look up.
     /// </remarks>
-    private string LeftRealName =>
+    private string LeftDisplayName =>
         _leftResult?.ModelName
         ?? (string.IsNullOrEmpty(_duel?.LeftModelName) ? null : _duel!.LeftModelName)
         ?? _duel?.LeftModelId.ToString()
         ?? "Left";
 
-    /// <inheritdoc cref="LeftRealName"/>
-    private string RightRealName =>
+    /// <inheritdoc cref="LeftDisplayName"/>
+    private string RightDisplayName =>
         _rightResult?.ModelName
         ?? (string.IsNullOrEmpty(_duel?.RightModelName) ? null : _duel!.RightModelName)
         ?? _duel?.RightModelId.ToString()
         ?? "Right";
-
-    // Every surface that names a side — viewport caption, race lanes, scorecard columns, cost
-    // breakdown, failure card, View Source tab title, vote buttons — resolves its name through
-    // these two rather than reading _leftResult.ModelName directly. Kept as an indirection after
-    // Blind mode was removed on 2026-08-23 so the fallback chain (result → duel snapshot → id)
-    // stays in one place instead of being restated at every call site.
-    private string LeftDisplayName => LeftRealName;
-    private string RightDisplayName => RightRealName;
 
     /// <summary>
     /// Sums the two sides' API costs. Models without a Foundry rate return null and contribute
@@ -493,18 +464,12 @@
     private double DuelTotalCost() =>
         (_leftResult?.ApiCostUsd ?? 0) + (_rightResult?.ApiCostUsd ?? 0);
 
-    /// <summary>Null when only one side has results or neither has a rate; only then the
-    /// right-panel HUD hides its "Duel cost" row.</summary>
+    /// <summary>Null when only one side has results or neither has a rate; the page then
+    /// shows no "Duel cost" line.</summary>
     private double? DuelTotalCostParam =>
         BothOutputsPresent() && (_leftResult?.ApiCostUsd.HasValue == true || _rightResult?.ApiCostUsd.HasValue == true)
             ? DuelTotalCost()
             : (double?)null;
-
-    // Formatting helpers live in ArenaFormatting so the share card can render the same
-    // numbers without forking the rules.
-    private static string FormatCost(double? value) => ArenaFormatting.FormatCost(value);
-    private static string FormatElo(double value) => ArenaFormatting.FormatElo(value);
-    private static string? FirstLine(string? reason) => FailureReasonText.FirstLine(reason);
 
     // ── Live duel state ───────────────────────────────────────────────────────
     // The streaming half of this page used to be the /processing page. It lives here because a
@@ -528,32 +493,84 @@
         new SideMetrics(),
     ];
 
-    private ModelId _leftLocalModelId;
-    private ModelId _rightLocalModelId;
-    private bool _leftIsBrowserModel;
-    private bool _rightIsBrowserModel;
-    private DuelStatus _leftPrevStatus = DuelStatus.Initializing;
-    private DuelStatus _rightPrevStatus = DuelStatus.Initializing;
-    /// <summary>Browser-side warm-up timing captured at the Initializing → Generating edge;
-    /// stays outside SideMetrics because it is set once per run and read in the velocity
-    /// calculation, not surfaced in the markup.</summary>
-    private long? _leftWarmUpMs;
-    private long? _rightWarmUpMs;
-    private DateTimeOffset _leftLastTokenAt = DateTimeOffset.UtcNow;
-    private DateTimeOffset _rightLastTokenAt = DateTimeOffset.UtcNow;
-    private DateTimeOffset _leftLastUpdateAt = DateTimeOffset.UtcNow;
-    private DateTimeOffset _rightLastUpdateAt = DateTimeOffset.UtcNow;
+    private string DisplayName(Side side) => side == Side.Left ? LeftDisplayName : RightDisplayName;
 
-    // Rolling tok/s samples behind the race sparklines. Bounded because status updates arrive
-    // per token batch for the whole run — an unbounded list would grow for 15 minutes and the
-    // sparkline only has ~100 horizontal units to draw into anyway.
-    private const int VelocityHistoryLength = 60;
-
-    private static void PushVelocity(List<double> history, double? velocity)
+    /// <summary>
+    /// Where a side's marker sits on its HUD track. Scaled to whoever is ahead so both move as
+    /// the leader advances, rather than creeping toward a fixed token target neither may reach;
+    /// the leader sits at 88% so it keeps visibly moving instead of looking finished.
+    /// </summary>
+    private double RaceProgress(Side side)
     {
-        if (velocity is not > 0) return;
-        history.Add(velocity.Value);
-        if (history.Count > VelocityHistoryLength) history.RemoveAt(0);
+        var metrics = _sides[(int)side];
+        if (metrics.Status is DuelStatus.Done or DuelStatus.Failed) return 100;
+        const double leaderPosition = 88;
+        var frontRunner = Math.Max(_sides[(int)Side.Left].TokenCount, _sides[(int)Side.Right].TokenCount);
+        return frontRunner <= 0 ? 0 : Math.Clamp(metrics.TokenCount / (double)frontRunner * leaderPosition, 0, leaderPosition);
+    }
+
+    private static bool IsFinished(SideMetrics metrics) => metrics.Status is DuelStatus.Done or DuelStatus.Failed;
+
+    /// <summary>One sentence on the race for the status band — who is ahead, or who finished.</summary>
+    private string RaceTicker
+    {
+        get
+        {
+            var l = _sides[(int)Side.Left];
+            var r = _sides[(int)Side.Right];
+            var leftDone = IsFinished(l);
+            var rightDone = IsFinished(r);
+
+            // DuelComplete, not "both done", ends the race: the results are still being read.
+            if (leftDone && rightDone) return "Both finished — loading the results…";
+            if (leftDone) return $"{LeftDisplayName} finished first — {RightDisplayName} still generating";
+            if (rightDone) return $"{RightDisplayName} finished first — {LeftDisplayName} still generating";
+
+            var left = l.TokenVelocity ?? 0;
+            var right = r.TokenVelocity ?? 0;
+            if (left <= 0 && right <= 0) return "Warming up — waiting for the first tokens…";
+
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            // Speed comparison only means something once both have a real rate; before that a
+            // "10× faster" reading is just one model having started earlier.
+            if (left > 0 && right > 0)
+            {
+                var ratio = left >= right ? left / right : right / left;
+                if (ratio >= 1.15)
+                    return $"{(left >= right ? LeftDisplayName : RightDisplayName)} is {ratio.ToString("F1", inv)}× faster right now";
+
+                var gap = Math.Abs(l.TokenCount - r.TokenCount);
+                if (gap == 0) return "Neck and neck";
+                return $"Dead heat on pace — {(l.TokenCount > r.TokenCount ? LeftDisplayName : RightDisplayName)} leads by {gap:N0} tokens";
+            }
+
+            return left > 0
+                ? $"{LeftDisplayName} away first at {left.ToString("F0", inv)} tok/s"
+                : $"{RightDisplayName} away first at {right.ToString("F0", inv)} tok/s";
+        }
+    }
+
+    /// <summary>
+    /// What the status band's live region says during the race. <see cref="RaceTicker"/>
+    /// re-words itself on every coalesced render ("1.3× faster", "1.4× faster"…), and a polite
+    /// region re-reads the whole sentence each time. This changes only when the story does:
+    /// warm-up, a lead change (<see cref="_leader"/>, already held for 3 s against jitter), a
+    /// side finishing.
+    /// </summary>
+    private string RaceAnnouncement
+    {
+        get
+        {
+            var leftDone = IsFinished(_sides[(int)Side.Left]);
+            var rightDone = IsFinished(_sides[(int)Side.Right]);
+            if (leftDone && rightDone) return "Both finished — loading the results…";
+            if (leftDone) return $"{LeftDisplayName} finished first — {RightDisplayName} still generating";
+            if (rightDone) return $"{RightDisplayName} finished first — {LeftDisplayName} still generating";
+            if (_leader is { } ahead) return $"{DisplayName(ahead)} is ahead";
+            return (_sides[(int)Side.Left].TokenVelocity ?? 0) > 0 || (_sides[(int)Side.Right].TokenVelocity ?? 0) > 0
+                ? "Neck and neck"
+                : "Warming up — waiting for the first tokens…";
+        }
     }
 
     // Owns running a WebGPU model in this tab and posting its result back. Per-Arena, because
@@ -568,7 +585,10 @@
 
     private IDisposable? _locationChangingReg;
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>prefers-reduced-motion, read once — it gated every ELO count-up with a JS round-trip.</summary>
+    private bool? _reduceMotion;
+
+    protected override void OnInitialized()
     {
         // UX#7: Block navigation away when verdict is still pending. The prompt only fires
         // when the user has time to vote — AutoJudgeDelaySeconds > 0 means the auto-judge
@@ -585,17 +605,113 @@
                 if (!confirmed) ctx.PreventNavigation();
             }
         });
+    }
+
+    /// <summary>
+    /// Loads the duel the route names, and again whenever that changes. OnParametersSetAsync
+    /// rather than OnInitializedAsync, same as Tournament and ModelProfile: "Retry duel" goes to
+    /// /arena/{new id}, Blazor reuses this instance, and an initialiser never ran for the rerun —
+    /// the page kept the old duel, its hub group, its timers and <c>_retrying</c>, and a browser
+    /// model in the rerun never got StartLocalInference. Keyed on the id so a query-only change
+    /// (<c>?tournament=</c>) does not reload.
+    /// </summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DuelIdText == _loadedDuelIdText) return;
+        var isReload = _loadedDuelIdText is not null;
+        _loadedDuelIdText = DuelIdText;
+
+        if (isReload)
+        {
+            // Detach first, synchronously, so no handler of the old duel can write into the
+            // fresh state below; then reset, so the render at the first await shows "Loading".
+            var previousHub = DetachFromDuel();
+            ResetDuelState();
+            if (previousHub is not null) await previousHub.DisposeAsync();
+        }
 
         _ = LoadTournamentMatchLabelAsync();
 
+        var loading = DuelIdText;
         try
         {
             await LoadDuelAsync();
         }
         finally
         {
-            _loading = false;
+            // A superseded load must not clear the spinner of the one that replaced it.
+            if (loading == DuelIdText) _loading = false;
         }
+    }
+
+    /// <summary>
+    /// Stops everything the current duel has running — countdown, count-up, stall ticker,
+    /// render coalescer, WebLLM and hub subscriptions — and hands back
+    /// the hub connection for the caller to dispose (leaving the connection leaves its group).
+    /// Shared by an id change and by DisposeAsync so the two cannot drift apart.
+    /// </summary>
+    private SignalRDuelClient? DetachFromDuel()
+    {
+        StopAutoJudgeCountdown();
+        _eloAnimationCts?.Cancel();
+        _eloAnimationCts?.Dispose();
+        _eloAnimationCts = null;
+        StopStallTimer();
+        _streamRender?.Dispose();
+        _streamRender = null;
+        WebLlm.OnStatusUpdate -= OnLocalStatusUpdate;
+
+        var hub = _signalR;
+        _signalR = null;
+        if (hub is not null)
+        {
+            hub.OnModelStatusUpdate -= OnStatusUpdate;
+            hub.OnDuelComplete -= OnDuelComplete;
+            hub.OnVerdictRecorded -= OnVerdictRecorded;
+            hub.OnStartLocalInference -= OnStartLocalInference;
+        }
+        return hub;
+    }
+
+    /// <summary>
+    /// Returns every per-duel field to its initial value before a different duel loads. The
+    /// child panels need no reset: <c>_loading</c> unmounts them, so the next duel gets fresh
+    /// instances. <c>_mobileFocus</c> is a viewing preference, not duel state, and survives.
+    /// </summary>
+    private void ResetDuelState()
+    {
+        _loading = true;
+        _loadFailed = false;
+        _duel = null;
+        _leftResult = null;
+        _rightResult = null;
+        _tournamentMatchLabel = null;
+        _submitting = false;
+        _retrying = false;
+        _retryError = null;
+
+        _verdictRecorded = false;
+        _optimistic = false;
+        _overriddenNotice = null;
+        _verdictSource = VerdictSource.Human;
+        _verdictValue = DuelVerdict.Pending;
+        _judgeRationale = null;
+        _winnerModelId = null;
+        _loserModelId = null;
+        _eloShiftLeft = null;
+        _eloShiftRight = null;
+        _eloDisplayLeft = 0;
+        _eloDisplayRight = 0;
+        _judgeEyeUnavailable = false;
+
+        _duelStillRunning = false;
+        _completionHandled = false;
+        _leftStreamingHtml = null;
+        _rightStreamingHtml = null;
+        _sides[(int)Side.Left] = new SideMetrics();
+        _sides[(int)Side.Right] = new SideMetrics();
+        _leader = null;
+        _leaderChangedAt = default;
     }
 
     /// <summary>
@@ -627,16 +743,22 @@
     }
 
     /// <summary>
-    /// Loads the duel and wires the streaming path. Split from <see cref="OnInitializedAsync"/>
+    /// Loads the duel and wires the streaming path. Split from <see cref="OnParametersSetAsync"/>
     /// so a transient failure can be retried from the page instead of stranding it on the
     /// "duel no longer exists" branch — a fetch that failed says nothing about whether the
     /// duel exists.
     /// </summary>
     private async Task LoadDuelAsync()
     {
+        var duelId = _duelId;
         try
         {
-            _duel = await ApiClient.GetDuelAsync(_duelId);
+            var duel = await ApiClient.GetDuelAsync(duelId);
+            // The route moved on while this was in flight; the newer load owns the page.
+            // ponytail: only the first await is guarded — a change during ConnectAsync below
+            // could still leave one extra hub connection until the page is disposed.
+            if (duelId != _duelId) return;
+            _duel = duel;
             if (_duel is not null)
             {
                 _leftResult = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.LeftModelId);
@@ -658,12 +780,6 @@
                     // the race from its stored row rather than leaving it at Initializing.
                     SeedFinishedSide(Side.Left, _leftResult);
                     SeedFinishedSide(Side.Right, _rightResult);
-                    NoteBrowserModels(_duel);
-
-                    // Each model's melody is derived from its id, so it sounds the same every
-                    // duel. The drone sits under the race and is ducked by the payoff cues.
-                    _ = AudioService.SetDuetVoicesAsync(_duel.LeftModelId.ToString(), _duel.RightModelId.ToString());
-                    _ = AudioService.SetAmbientDroneAsync(true);
 
                     _streamRender = new RenderCoalescer(() => InvokeAsync(StateHasChanged));
                     _localInference = new LocalInferenceDriver(WebLlm, ApiClient);
@@ -676,20 +792,26 @@
                     // would sit at Initializing forever for any WebGPU pairing.
                     _signalR.OnStartLocalInference += OnStartLocalInference;
                     WebLlm.OnStatusUpdate += OnLocalStatusUpdate;
-                    await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), _duelId);
+                    await _signalR.ConnectAsync(Nav.BaseUri.TrimEnd('/'), duelId);
+
+                    // Independent ticker: worker silence is exactly when the UI must keep talking.
+                    // Started before the catch-up read below, so a duel that turns out to be
+                    // complete already stops it in OnDuelComplete rather than leaving it running.
+                    // Guarded because DuelComplete can already have landed during ConnectAsync.
+                    if (_duelStillRunning)
+                    {
+                        _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+                        _ = RunStallTimerAsync(_stallTimer);
+                    }
 
                     // DuelComplete goes once, to whoever is in the group at that moment. A duel
                     // that finished between the read above and joining the group is never
                     // announced to this page, which then shows a race that never ends — most
                     // likely exactly when one side was already done at load. Re-read once now
                     // that the page is subscribed: any later completion will be pushed.
-                    var current = await ApiClient.GetDuelAsync(_duelId);
+                    var current = await ApiClient.GetDuelAsync(duelId);
                     if (current?.CompletedAt is not null)
                         OnDuelComplete(current);
-
-                    // Independent ticker: worker silence is exactly when the UI must keep talking.
-                    _stallTimer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-                    _ = RunStallTimerAsync(_stallTimer);
                 }
                 // If a verdict already exists, restore it; otherwise a finished duel resumes
                 // the judge's countdown.
@@ -705,6 +827,7 @@
         {
             // A failed fetch is NOT evidence that the duel is gone. Distinguish the two so a
             // network blip offers a retry instead of the misleading "wiped" message.
+            if (duelId != _duelId) return;
             _duel = null;
             _loadFailed = true;
         }
@@ -739,11 +862,16 @@
 
         try
         {
-            var prompt = string.IsNullOrWhiteSpace(_duel.PromptFull) ? _duel.PromptText : _duel.PromptFull;
+            // PromptText is what the user typed; PromptFull is that plus the CDN instruction
+            // CommenceDuelHandler appends to every duel. Re-sending PromptFull appended it again
+            // on each retry, and could push a long prompt past the 10,000-character limit.
+            var prompt = string.IsNullOrWhiteSpace(_duel.PromptText) ? _duel.PromptFull : _duel.PromptText;
             var rerun = await ApiClient.CommenceDuelAsync(_duel.LeftModelId, _duel.RightModelId, prompt);
 
             if (rerun is not null)
             {
+                // Same route, so this component stays: OnParametersSetAsync sees the new id,
+                // tears the old duel down and loads the rerun (which also clears _retrying).
                 Nav.NavigateTo($"/arena/{rerun.DuelId}");
                 return;
             }
@@ -782,10 +910,7 @@
         _winnerModelId = verdict == DuelVerdict.Left ? _duel.LeftModelId : _duel.RightModelId;
         _loserModelId = verdict == DuelVerdict.Left ? _duel.RightModelId : _duel.LeftModelId;
         StateHasChanged();
-
-        // Confirmation feedback fires now, not after the response, for the same reason.
-        await PulseAsync(30);
-        _ = AudioService.PlaySuccessAsync();
+        _ = AudioService.PlayTickAsync();
 
         try
         {
@@ -870,18 +995,14 @@
         // Only on the transition into a settled verdict. Re-adopting the same verdict happens
         // on every reconcile and poll, and replaying the celebration each time would turn the
         // payoff moment into a stutter.
-        if (!wasAlreadyFinal) _ = CelebrateVerdictAsync(verdict);
+        if (!wasAlreadyFinal)
+            _ = CelebrateVerdictAsync(verdict);
     }
 
     /// <summary>
     /// The duel's payoff: a burst over the verdict banner and a cue that matches the outcome.
+    /// Safe here because generation has finished — the burst is Canvas2D and one-shot.
     /// </summary>
-    /// <remarks>
-    /// Safe here specifically because generation has finished — the burst is Canvas2D and
-    /// one-shot, and the GPU it would otherwise contend with is no longer running inference.
-    /// Nothing is awaited by the caller; a browser with no AudioContext or no canvas simply
-    /// does not celebrate.
-    /// </remarks>
     private async Task CelebrateVerdictAsync(DuelVerdict verdict)
     {
         try
@@ -892,20 +1013,10 @@
                 return;
             }
 
-            // Gavel impact + 2.5D Shard Shatter + Mote Transfer, and a knock you can feel on a
-            // phone — pulses shaped like the gavel's sub-punch and chord.
-            _ = AudioService.PlayGavelImpactAsync();
-            _ = PulsePatternAsync([28, 40, 18, 40, 60]);
-            // The status band's verdict treatment. A CSS class used as a JS selector is a
-            // dependency a rename does not break loudly — these pointed at
-            // ".arena__verdict-recorded" until that block was folded into ArenaStatusBand, and
-            // fx.js answers a selector that matches nothing by doing nothing at all.
-            await Fx.ShardShatterAsync(VerdictBandSelector);
+            _ = AudioService.PlaySuccessAsync();
+            // A CSS class used as a JS selector: fx.js answers a selector that matches nothing
+            // by doing nothing at all, so a rename of the band's class silently kills this.
             await Fx.BurstFromAsync(VerdictBandSelector);
-
-            var winnerSlot = _winnerModelId == _duel?.LeftModelId ? ".arena__viewport-slot--left" : ".arena__viewport-slot--right";
-            var loserSlot = _loserModelId == _duel?.LeftModelId ? ".arena__viewport-slot--left" : ".arena__viewport-slot--right";
-            _ = Fx.MoteTransferAsync(loserSlot, winnerSlot);
         }
         catch (Exception ex) when (ex is JSException or TaskCanceledException or ObjectDisposedException)
         {
@@ -926,20 +1037,7 @@
         _eloAnimationCts = new CancellationTokenSource();
         var token = _eloAnimationCts.Token;
 
-        _ = AudioService.PlayCoinCascadeAsync();
-
-        bool reduceMotion;
-        try
-        {
-            reduceMotion = await JS.InvokeAsync<bool>(
-                "eval", "window.matchMedia('(prefers-reduced-motion: reduce)').matches");
-        }
-        catch (JSException)
-        {
-            reduceMotion = false;
-        }
-
-        if (reduceMotion)
+        if (await PrefersReducedMotionAsync())
         {
             SettleEloDisplay();
             StateHasChanged();
@@ -973,34 +1071,31 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    /// <summary>
+    /// Read once per page and cached. No <c>eval</c>: matchMedia is called directly and its
+    /// <c>matches</c> read through .NET 10's IJSObjectReference.GetValueAsync.
+    /// </summary>
+    private async Task<bool> PrefersReducedMotionAsync()
+    {
+        if (_reduceMotion is { } cached) return cached;
+        bool reduce;
+        try
+        {
+            await using var query = await JS.InvokeAsync<IJSObjectReference>("matchMedia", "(prefers-reduced-motion: reduce)");
+            reduce = await query.GetValueAsync<bool>("matches");
+        }
+        catch (JSException)
+        {
+            reduce = false;
+        }
+        _reduceMotion = reduce;
+        return reduce;
+    }
+
     private void SettleEloDisplay()
     {
         _eloDisplayLeft = _eloShiftLeft ?? 0;
         _eloDisplayRight = _eloShiftRight ?? 0;
-    }
-
-    private async Task PulsePatternAsync(int[] pattern)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("hapticPulse", pattern);
-        }
-        catch (JSException)
-        {
-            // No Vibration API — the sound and the visual already carry the verdict.
-        }
-    }
-
-    private async Task PulseAsync(int milliseconds)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("hapticPulse", milliseconds);
-        }
-        catch (JSException)
-        {
-            // No Vibration API here — the sound and the visual flip already carry the feedback.
-        }
     }
 
     // ── Auto-judge countdown ──────────────────────────────────────────────────
@@ -1039,16 +1134,10 @@
     {
         try
         {
-            if (seconds > 0) _ = AudioService.PlayScanSweepAsync();
-
-            var window = Math.Max(1, _duel?.AutoJudgeDelaySeconds ?? seconds);
             for (var remaining = seconds; remaining > 0; remaining--)
             {
                 _autoJudgeRemaining = remaining;
                 await InvokeAsync(StateHasChanged);
-                // A heartbeat per second that climbs as the window closes — the clock is the
-                // only thing between the viewer and the AI deciding for them.
-                _ = AudioService.PlayHeartbeatAsync(1 - (remaining - 1) / (double)window);
                 await Task.Delay(1000, cancellationToken);
             }
 
@@ -1063,7 +1152,12 @@
             for (var attempt = 0; attempt < 45 && !_verdictRecorded; attempt++)
             {
                 await Task.Delay(1000, cancellationToken);
-                if (await RefreshVerdictFromServerAsync())
+                bool landed;
+                // One transient 5xx or network blip used to end this fire-and-forget loop
+                // silently, leaving the page on "the AI judge is deciding…" for good.
+                try { landed = await RefreshVerdictFromServerAsync(); }
+                catch (HttpRequestException) { continue; }
+                if (landed)
                 {
                     await AnimateEloAsync();
                     return;
@@ -1163,28 +1257,40 @@
         if (side is null) return;
 
         var metrics = _sides[(int)side.Value];
-        metrics.NoteStatus(update.Status, DateTimeOffset.UtcNow);
+
+        // For a browser side the server only knows the model is running, so its 500 ms
+        // heartbeat carries TokenCount 0. Once the in-tab worker has reported real figures,
+        // that heartbeat must not overwrite them (the HUD flickered to 0 tok/s every tick).
+        if (update.Status == DuelStatus.Generating && update.TokenCount == 0 && metrics.TokenCount > 0)
+            return;
+
+        metrics.Status = update.Status;
         metrics.TokenCount = update.TokenCount;
         if (update.TokenVelocity.HasValue) metrics.TokenVelocity = update.TokenVelocity;
-        PushVelocity(metrics.VelocityHistory, update.TokenVelocity);
-        if (update.PeakTokenVelocity.HasValue) metrics.PeakVelocity = update.PeakTokenVelocity;
-        if (update.WarmUpMs.HasValue) metrics.WarmUpMs = update.WarmUpMs;
-        if (side == Side.Left && !string.IsNullOrEmpty(update.HtmlPreview))
-            _leftStreamingHtml = update.HtmlPreview;
-        else if (!string.IsNullOrEmpty(update.HtmlPreview))
-            _rightStreamingHtml = update.HtmlPreview;
-
-        if (side == Side.Left) _leftLastTokenAt = DateTimeOffset.UtcNow;
-        else _rightLastTokenAt = DateTimeOffset.UtcNow;
+        if (!string.IsNullOrEmpty(update.HtmlPreview)) SetStreamingHtml(side.Value, update.HtmlPreview);
 
         // Coalesced, not immediate: this fires once per token batch on both sides at once.
         _streamRender?.Request();
+        NoteLead();
+    }
 
-        // Audio runs on the browser's audio thread and never touches the WebGPU device WebLLM
-        // is generating on, so — unlike a particle effect — this is safe to fire mid-duel. The
-        // module throttles to one blip per 130 ms per side; batches arrive far faster.
-        if (update.TokenVelocity is { } velocity && velocity > 0)
-            _ = AudioService.PlayTokenBlipAsync(velocity, update.Side);
+    /// <summary>
+    /// Tracks who is ahead on tok/s for <see cref="RaceAnnouncement"/>. A lead must be clear
+    /// (10% of the combined rate) and last 3 s before it changes hands, so jitter is not news.
+    /// </summary>
+    private void NoteLead()
+    {
+        var left = _sides[(int)Side.Left].TokenVelocity ?? 0;
+        var right = _sides[(int)Side.Right].TokenVelocity ?? 0;
+        if (left + right <= 0) return;
+
+        var lead = (left - right) / (left + right);
+        var now = DateTimeOffset.UtcNow;
+        Side? leader = lead > 0.1 ? Side.Left : lead < -0.1 ? Side.Right : null;
+        if (leader is not { } ahead || ahead == _leader || now - _leaderChangedAt < TimeSpan.FromSeconds(3)) return;
+
+        _leader = ahead;
+        _leaderChangedAt = now;
     }
 
     /// <summary>
@@ -1218,8 +1324,6 @@
         if (result is null) return;
 
         var metrics = _sides[(int)side];
-        // Status, not NoteStatus: that stamps FinishedAt with *now*, and PhotoFinish would then
-        // compare the moment this page loaded against the other side's real finish.
         metrics.Status = result.IsFailure ? DuelStatus.Failed : DuelStatus.Done;
         metrics.TokenCount = result.TokenCount;
         metrics.TokenVelocity = result.TokenVelocity;
@@ -1229,11 +1333,16 @@
     private static Side? ParseSide(string side) =>
         side == "Left" ? Side.Left : side == "Right" ? Side.Right : null;
 
-    /// <summary>Records which sides run in the browser so the stall hint can explain the silence.</summary>
-    private void NoteBrowserModels(DuelDto duel)
+    /// <summary>
+    /// The side a model id occupies. Anything that is not the left model counts as the right
+    /// one — the rule the two copy-pasted branches this replaced already applied.
+    /// </summary>
+    private Side SideOf(ModelId modelId) => modelId == _duel?.LeftModelId ? Side.Left : Side.Right;
+
+    private void SetStreamingHtml(Side side, string html)
     {
-        _leftLocalModelId = ModelId.From(duel.LeftModelId);
-        _rightLocalModelId = ModelId.From(duel.RightModelId);
+        if (side == Side.Left) _leftStreamingHtml = html;
+        else _rightStreamingHtml = html;
     }
 
     /// <summary>
@@ -1242,9 +1351,9 @@
     /// </summary>
     private void OnLocalStatusUpdate(ModelId modelId, WebLlmStatusUpdate update)
     {
-        // The first browser update names the side: before it lands, neither id is known.
-        var isLeft = modelId == _leftLocalModelId;
-        if (isLeft) _leftIsBrowserModel = true; else _rightIsBrowserModel = true;
+        var side = SideOf(modelId);
+        var metrics = _sides[(int)side];
+        metrics.IsBrowserModel = true;
 
         var status = update.Status switch
         {
@@ -1255,55 +1364,22 @@
         };
 
         // No pause call here: webllm-interop.js holds the GPU lease for the life of the worker,
-        // so the backdrop and every canvas effect stand down on their own — on this page and on
-        // the Tournament page alike, which the old per-page pause never covered.
+        // so the confetti burst stands down on its own — on this page and on Tournament alike.
 
-        if (isLeft)
-        {
-            _leftLastUpdateAt = DateTimeOffset.UtcNow;
-            // Warm-up is the elapsed time at the Initializing → Generating edge.
-            if (_leftPrevStatus == DuelStatus.Initializing && status == DuelStatus.Generating)
-                _leftWarmUpMs = update.ElapsedMs;
-            _leftPrevStatus = status;
+        metrics.LastLocalUpdateAt = DateTimeOffset.UtcNow;
+        // Warm-up is the elapsed time at the worker's own Initializing → Generating edge.
+        if (metrics.LocalStatus == DuelStatus.Initializing && status == DuelStatus.Generating)
+            metrics.WarmUpMs = update.ElapsedMs;
+        metrics.LocalStatus = status;
 
-            var metrics = _sides[(int)Side.Left];
-            metrics.NoteStatus(status, DateTimeOffset.UtcNow);
-            metrics.TokenCount = update.TokenCount;
-
-            var velocity = GenerationVelocity(update, _leftWarmUpMs);
-            metrics.TokenVelocity = velocity;
-            PushVelocity(metrics.VelocityHistory, velocity);
-            if (velocity > (metrics.PeakVelocity ?? 0)) metrics.PeakVelocity = velocity;
-            if (update.TokenCount > 0) _leftLastTokenAt = DateTimeOffset.UtcNow;
-            if (update.HtmlPreview is not null) _leftStreamingHtml = update.HtmlPreview;
-        }
-        else
-        {
-            _rightLastUpdateAt = DateTimeOffset.UtcNow;
-            if (_rightPrevStatus == DuelStatus.Initializing && status == DuelStatus.Generating)
-                _rightWarmUpMs = update.ElapsedMs;
-            _rightPrevStatus = status;
-
-            var metrics = _sides[(int)Side.Right];
-            metrics.NoteStatus(status, DateTimeOffset.UtcNow);
-            metrics.TokenCount = update.TokenCount;
-
-            var velocity = GenerationVelocity(update, _rightWarmUpMs);
-            metrics.TokenVelocity = velocity;
-            PushVelocity(metrics.VelocityHistory, velocity);
-            if (velocity > (metrics.PeakVelocity ?? 0)) metrics.PeakVelocity = velocity;
-            if (update.TokenCount > 0) _rightLastTokenAt = DateTimeOffset.UtcNow;
-            if (update.HtmlPreview is not null) _rightStreamingHtml = update.HtmlPreview;
-        }
+        metrics.Status = status;
+        metrics.TokenCount = update.TokenCount;
+        metrics.TokenVelocity = GenerationVelocity(update, metrics.WarmUpMs);
+        if (update.HtmlPreview is not null) SetStreamingHtml(side, update.HtmlPreview);
 
         // Same reasoning as the hub handler: the WebLLM worker reports per token batch.
         _streamRender?.Request();
-
-        var blipVelocity = isLeft
-            ? _sides[(int)Side.Left].TokenVelocity
-            : _sides[(int)Side.Right].TokenVelocity;
-        if (blipVelocity is { } sampled && sampled > 0)
-            _ = AudioService.PlayTokenBlipAsync(sampled, isLeft ? "Left" : "Right");
+        NoteLead();
     }
 
     /// <summary>Tokens per second excluding warm-up, so a slow model load does not read as slow generation.</summary>
@@ -1320,22 +1396,32 @@
         while (await timer.WaitForNextTickAsync())
         {
             var now = DateTimeOffset.UtcNow;
-            _sides[(int)Side.Left].StallDetail = StallDetail(_leftIsBrowserModel, _sides[(int)Side.Left].Status, _sides[(int)Side.Left].TokenCount, _leftLastUpdateAt, now, LeftDisplayName);
-            _sides[(int)Side.Right].StallDetail = StallDetail(_rightIsBrowserModel, _sides[(int)Side.Right].Status, _sides[(int)Side.Right].TokenCount, _rightLastUpdateAt, now, RightDisplayName);
+            for (var i = 0; i < _sides.Length; i++)
+                _sides[i].StallDetail = StallDetail(_sides[i], now, DisplayName((Side)i));
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    /// <summary>
+    /// The ticker exists only for the race. Left running it re-rendered the whole Arena every
+    /// 2 s for the life of the page.
+    /// Disposing it ends the WaitForNextTickAsync loop above.
+    /// </summary>
+    private void StopStallTimer()
+    {
+        _stallTimer?.Dispose();
+        _stallTimer = null;
     }
 
     /// <summary>
     /// Explains pre-first-token silence for browser models. Server-side models stream steadily,
     /// so an empty return here is the normal case and the note simply does not render.
     /// </summary>
-    private static string? StallDetail(
-        bool isBrowserModel, DuelStatus status, int tokenCount, DateTimeOffset lastUpdate, DateTimeOffset now, string name)
+    private static string? StallDetail(SideMetrics metrics, DateTimeOffset now, string name)
     {
-        if (!isBrowserModel || status != DuelStatus.Generating || tokenCount > 0) return null;
+        if (!metrics.IsBrowserModel || metrics.Status != DuelStatus.Generating || metrics.TokenCount > 0) return null;
 
-        var secondsSince = (int)(now - lastUpdate).TotalSeconds;
+        var secondsSince = (int)(now - metrics.LastLocalUpdateAt).TotalSeconds;
         if (secondsSince < 3) return null;   // suppress for the first few seconds
 
         return $"⏳ {name}: GPU compiling shaders / pre-filling — last worker signal {secondsSince}s ago. Waiting for first token…";
@@ -1349,8 +1435,7 @@
         // A hub reconnect replays this signal; the driver owns the de-duplication.
         if (!_localInference.TryClaim(payload.ModelId)) return;
 
-        if (payload.ModelId == _leftLocalModelId) _leftIsBrowserModel = true;
-        else _rightIsBrowserModel = true;
+        _sides[(int)SideOf(payload.ModelId)].IsBrowserModel = true;
 
         // Fire-and-forget; every failure path is handled inside the driver and reported to
         // the server, so there is no outcome here worth awaiting.
@@ -1363,13 +1448,17 @@
         if (_completionHandled) return;
         _completionHandled = true;
 
+        // Only a duel that was running while this page watched is news; the catch-up read of an
+        // already-finished one is not.
+        var wasRunning = _duelStillRunning;
         _duelStillRunning = false;
-        _ = AudioService.SetAmbientDroneAsync(false);
-        CheckPhotoFinish();
+        StopStallTimer();
         var duelId = _duelId;
         InvokeAsync((Func<Task>)(async () =>
         {
-            _duel = await ApiClient.GetDuelAsync(duelId);
+            var fresh = await ApiClient.GetDuelAsync(duelId);
+            if (duelId != _duelId) return;   // the page moved to another duel meanwhile
+            _duel = fresh;
             if (_duel is not null)
             {
                 _leftResult  = _duel.Results.FirstOrDefault(r => r.ModelId == _duel.LeftModelId);
@@ -1388,46 +1477,17 @@
             _streamRender?.Dispose();
             _streamRender = null;
             StateHasChanged();
+            if (wasRunning)
+                await JS.InvokeVoidAsync("poNotify.notify", "Duel finished",
+                    $"{LeftDisplayName} vs {RightDisplayName} — both outputs are in.");
         }));
-    }
-
-    /// <summary>
-    /// Both models finished within a second of each other: state the margin in a status line
-    /// and fire the finish-line strip. Runs at DuelComplete, so neither side is still inferring.
-    /// </summary>
-    private void CheckPhotoFinish()
-    {
-        if (PhotoFinish.Detect(_sides[(int)Side.Left], _sides[(int)Side.Right]) is not { } finish) return;
-
-        var first = finish.First == Side.Left ? LeftDisplayName : RightDisplayName;
-        var margin = finish.Margin.TotalSeconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-        _photoFinishText = $"Photo finish — {first} finished generating first, by {margin} s.";
-
-        _ = AudioService.PlayShockwaveAsync();
-        _ = Fx.PhotoFinishAsync(
-            LeftDisplayName, _sides[(int)Side.Left].VelocityHistory.ToArray(),
-            RightDisplayName, _sides[(int)Side.Right].VelocityHistory.ToArray(),
-            first, finish.Margin.TotalMilliseconds);
     }
 
     // UX#7: Dispose location-changing handler and SignalR connection.
     public async ValueTask DisposeAsync()
     {
         _locationChangingReg?.Dispose();
-        _ = AudioService.SetAmbientDroneAsync(false);
-        StopAutoJudgeCountdown();
-        _eloAnimationCts?.Cancel();
-        _eloAnimationCts?.Dispose();
-        _stallTimer?.Dispose();
-        _streamRender?.Dispose();
-        WebLlm.OnStatusUpdate -= OnLocalStatusUpdate;
-        if (_signalR is not null)
-        {
-            _signalR.OnModelStatusUpdate -= OnStatusUpdate;
-            _signalR.OnDuelComplete -= OnDuelComplete;
-            _signalR.OnVerdictRecorded -= OnVerdictRecorded;
-            _signalR.OnStartLocalInference -= OnStartLocalInference;
-            await _signalR.DisposeAsync();
-        }
+        var hub = DetachFromDuel();
+        if (hub is not null) await hub.DisposeAsync();
     }
 }

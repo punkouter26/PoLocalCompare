@@ -34,7 +34,7 @@
    the grid placement rules in Home.razor.css (column 1, row 1) continue to work. *@
         <div class="home__header">
             <PageHeader Title="Compare two models"
-                        Subtitle="Pick your contenders, write a prompt, and watch them battle."
+                        TitleHook="home__title"
                         Warning="@(_health is not null && !_healthHasRemotes ? "⚠ Remote (Azure OpenAI) deployments are unavailable. Use a Browser or Ollama model to run duels." : null)">
                 <StatusContent>
                     @if (_health is not null)
@@ -57,20 +57,33 @@
         <section class="home__picker" aria-labelledby="home-models-heading">
             <div class="home__section-head">
                 <h2 id="home-models-heading" class="po-section-title">Choose two models</h2>
-                <p class="po-hint">Click a card to assign it. Click a selected card to remove it.</p>
+                @* Top of the picker, not below the catalog: below it, it sat at y=3735 inside a
+                   337px phone window. Shown only while nothing is picked. *@
+                @if (_models.Count > 0 && _leftModel is null && _rightModel is null)
+                {
+                    <button type="button" class="po-btn po-btn--sm po-btn--secondary"
+                            title="Loads a working prompt and two lightweight models"
+                            @onclick="LoadStarterDuel">
+                        <span aria-hidden="true">⚡</span> Load starter duel
+                    </button>
+                }
             </div>
 
             @* Replace-popover: both slots full and the user clicks a third model. *@
             @if (_replacePopoverModel is not null && _leftModel is not null && _rightModel is not null)
             {
-                <div class="home__popover" role="dialog" aria-label="Choose which slot to replace">
+                @* Focus moves in when it opens (the first button), Escape cancels, and focus goes
+                   back to the card that opened it on close — a role="dialog" that did none of
+                   this left a keyboard user on a card that no longer mattered. *@
+                <div class="home__popover" role="dialog" aria-label="Choose which slot to replace"
+                     @onkeydown="OnPopoverKeyDown">
                     <p class="home__popover-text">Replace which slot with <strong>@_replacePopoverModel.DisplayName</strong>?</p>
                     <div class="home__popover-actions">
-                        <button class="po-btn po-btn--sm po-btn--secondary" @onclick="CancelReplace">Cancel</button>
-                        <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("left"))">
+                        <button type="button" class="po-btn po-btn--sm po-btn--secondary" @ref="_popoverFirstButton" @onclick="CancelReplace">Cancel</button>
+                        <button type="button" class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("left"))">
                             ← Replace Left (@_leftModel.DisplayName)
                         </button>
-                        <button class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("right"))">
+                        <button type="button" class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("right"))">
                             Replace Right (@_rightModel.DisplayName) →
                         </button>
                     </div>
@@ -83,8 +96,8 @@
             }
             else if (_loadError is not null)
             {
-                <p class="home__error">@_loadError</p>
-                <button class="po-btn po-btn--secondary" @onclick="LoadAsync">Retry</button>
+                <p class="home__error" role="alert">@_loadError</p>
+                <button type="button" class="po-btn po-btn--secondary" @onclick="LoadAsync">Retry</button>
             }
             else if (_models.Count == 0)
             {
@@ -117,7 +130,6 @@
                 {
                     <div class="home__group-header" @key="_group.Key">
                         <span class="home__group-name">@ModelTypeGroup.Label(_group.Key)</span>
-                        <span class="home__group-count">@_group.Count() model@(_group.Count() == 1 ? "" : "s")</span>
                     </div>
                     <div class="home__grid">
                         @foreach (var model in _group)
@@ -164,20 +176,6 @@
                 }
             }
 
-
-            @* Shown only while nothing is picked. This was the empty-state branch of the
-               recent-duels list, which was removed on 2026-08-23; the affordance is worth
-               keeping on its own, but only when it has nothing to compete with. *@
-            @if (_leftModel is null && _rightModel is null)
-            {
-                <EmptyState Icon="⚡"
-                            Title="Try a starter duel"
-                            Hint="New here? Click below to load a working prompt and two lightweight models.">
-                    <button class="po-btn po-btn--secondary" @onclick="LoadStarterDuel">
-                        ⚡ Load starter duel
-                    </button>
-                </EmptyState>
-            }
         </section>
 
         @* ── Right: the console (slots, prompt, Compare) ─────────────────
@@ -188,12 +186,14 @@
             <div class="home__console-scroll">
                 <div class="home__slots">
                     <div class="home__slot home__slot--left @(_leftModel is not null ? "home__slot--set" : "")">
-                        <span class="home__slot-tag home__slot-tag--left">Left</span>
+                        <span class="home__slot-tag home__slot-tag--left" aria-hidden="true">L</span>
+                        <span class="visually-hidden">Left:</span>
                         <span class="home__slot-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
                     </div>
                     <span class="home__slot-vs" aria-hidden="true">vs</span>
                     <div class="home__slot home__slot--right @(_rightModel is not null ? "home__slot--set" : "")">
-                        <span class="home__slot-tag home__slot-tag--right">Right</span>
+                        <span class="home__slot-tag home__slot-tag--right" aria-hidden="true">R</span>
+                        <span class="visually-hidden">Right:</span>
                         <span class="home__slot-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
                     </div>
                 </div>
@@ -201,7 +201,6 @@
                 <section class="home__prompt" aria-labelledby="home-prompt-heading">
                     <div class="home__section-head">
                         <h2 id="home-prompt-heading" class="po-section-title">Write your prompt</h2>
-                        <p class="po-hint">Both models will receive the same prompt.</p>
                     </div>
 
                     <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
@@ -209,13 +208,13 @@
                               aria-describedby="home-prompt-counter"
                               placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
                               rows="5"
-                              maxlength="4000"
+                              maxlength="@PromptRules.MaxPromptLength"
                               @bind="_prompt"
                               @bind:event="oninput"></textarea>
                     <div class="home__textarea-meta">
                         <span id="home-prompt-counter"
                               class="@(_promptLongWarning ? "home__textarea-counter home__textarea-counter--warn" : "home__textarea-counter")">
-                            @_prompt.Length / 4000
+                            @_prompt.Length / @PromptRules.MaxPromptLength
                         </span>
                         @if (_promptLongWarning)
                         {
@@ -229,21 +228,18 @@
             </div>
 
             <div class="home__console-foot">
-                <section class="home__compare" aria-labelledby="home-compare-heading">
+                <section class="home__compare" aria-label="Compare">
                     <div class="home__compare-row">
-                        <div class="home__compare-copy">
-                            <h2 id="home-compare-heading" class="po-section-title">Compare</h2>
-                            <p class="po-hint">@CompareHint</p>
-                        </div>
-                        <button class="po-btn po-btn--success po-btn--lg @(CanCompare ? "po-btn--laser" : "")"
-                                disabled="@(!CanCompare)"
+                        <p class="po-hint home__compare-copy">@CompareHint</p>
+                        <button type="button" class="po-btn po-btn--success po-btn--lg"
+                                disabled="@(!CanCompare || _starting)"
                                 @onclick="StartDuelAsync">
                             Compare →
                         </button>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(_error))
                     {
-                        <span class="home__error">@_error</span>
+                        <span class="home__error" role="alert">@_error</span>
                     }
                 </section>
             </div>
@@ -253,11 +249,11 @@
 
 @code {
     [SupplyParameterFromQuery] public string? Prompt { get; set; }
-    // Two named parameters bind the slot ids separately. A quirk in the Blazor
-    // querystring-matcher makes order sensitive (the first-wins binding drops the second
-    // name), so OnAfterRenderAsync re-reads both from NavigationManager as a fallback and
-    // picks whichever copy disagrees with the bound value. The bound values are still used
-    // when they are already correct, so the normal path is unchanged.
+    // Bound straight from the query string. These used to be ignored in favour of ~50 lines
+    // that fetched window.location over JS interop and hand-parsed it, on the theory that the
+    // framework's matcher drops the second of two named parameters. The likelier culprit was
+    // Archive's re-run link, which put the prompt into the URL unescaped, so a prompt
+    // containing '&' or '=' corrupted every parameter after it.
     [SupplyParameterFromQuery(Name = "leftModelId")] public string? LeftModelId { get; set; }
     [SupplyParameterFromQuery(Name = "rightModelId")] public string? RightModelId { get; set; }
 
@@ -273,6 +269,12 @@
     private IReadOnlyList<ModelAvailabilityDto>? _availability;
     private bool _healthHasRemotes;
     private ModelDto? _replacePopoverModel;
+    private ElementReference _popoverFirstButton;
+    private bool _focusPopover;
+
+    // Held for the whole CommenceDuel round-trip. Without it the button stayed enabled until
+    // the Arena navigation landed, so a double-click started two duels.
+    private bool _starting;
     private bool? _webGpuSupported;   // null = not yet probed
 
 
@@ -298,7 +300,7 @@
         (false, _, _, _) => "Pick two models above to enable Compare.",
         (true, false, false, _) => "Write a prompt above to enable Compare.",
         (true, false, true, false) => $"Prompt must be at least {PromptRules.MinPromptLength} characters.",
-        (true, false, true, _) => $"Ready: {_leftModel!.DisplayName} vs {_rightModel!.DisplayName}."
+        (true, false, true, _) => "Ready."
     };
 
     // ── Model-type filter for the picker (keeps the mobile list scannable) ──
@@ -361,68 +363,17 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_focusPopover)
+        {
+            _focusPopover = false;
+            await _popoverFirstButton.FocusAsync();
+        }
         if (!firstRender) return;
         // Probe real WebGPU capability so Browser models can be gated when they can't run.
         // Goes through WebGpuCapability so the adapter/device is requested once per page load.
         var probe = await WebGpu.GetAsync();
         _webGpuSupported = probe?.Supported;
         StateHasChanged();
-    }
-
-    /// <summary>
-    /// Reads `leftModelId` / `rightModelId` from the current URL regardless of parameter
-    /// order. The bound `LeftModelId` / `RightModelId` properties are the public API but
-    /// get dropped by the framework's first-match-wins matcher when both names are present;
-    /// this is the same call running through NavigationManager so the answer is consistent.
-    /// </summary>
-    private async Task<(string? Left, string? Right)> ReadSlotIdsFromQueryAsync()
-    {
-        // Belt-and-braces: the framework's NavigationManager sometimes reports a different
-        // URI than the browser's window.location during the initial load. Try the browser
-        // address first (via JS interop) and fall back to Nav.Uri if the JS call fails.
-        var raw = await TryGetBrowserUrlAsync();
-        if (string.IsNullOrEmpty(raw)) raw = Nav.Uri;
-        if (string.IsNullOrEmpty(raw)) return (null, null);
-
-        var queryIdx = raw.IndexOf('?');
-        if (queryIdx < 0) return (null, null);
-        var query = raw.Substring(queryIdx + 1);
-        if (string.IsNullOrEmpty(query)) return (null, null);
-
-        return ParseQuery(query);
-    }
-
-    private static (string? Left, string? Right) ParseQuery(string query)
-    {
-        string? left = null;
-        string? right = null;
-        if (string.IsNullOrEmpty(query)) return (null, null);
-        var trimmed = query.TrimStart('?');
-        if (string.IsNullOrEmpty(trimmed)) return (null, null);
-        foreach (var pair in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var eq = pair.IndexOf('=');
-            if (eq < 0) continue;
-            var key = Uri.UnescapeDataString(pair.Substring(0, eq));
-            var value = Uri.UnescapeDataString(pair.Substring(eq + 1));
-            if (string.Equals(key, "leftModelId", StringComparison.Ordinal)) left = value;
-            else if (string.Equals(key, "rightModelId", StringComparison.Ordinal)) right = value;
-        }
-        return (left, right);
-    }
-
-    /// <summary>Returns the browser's current URL (which always has the real query string),
-    /// or null if the JS interop is unavailable.</summary>
-    private async Task<string?> TryGetBrowserUrlAsync()
-    {
-        try
-        {
-            return await JS.InvokeAsync<string?>("getLocationHref");
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     /// <summary>
@@ -463,17 +414,10 @@
 
             _models = (await modelsTask)?.ToList() ?? [];
 
-            // Brute-force the slot lookup from the URL. The named-supply-parameter binding
-            // is order-sensitive in this framework version (the first match wins, the second
-            // is dropped), so reading both names from the browser address bar directly via
-            // JS is the version that survives any parameter order. See the comment on the
-            // property declarations for the gory details.
-            var (leftId, rightId) = await ReadSlotIdsFromQueryAsync();
-
-            if (!string.IsNullOrWhiteSpace(leftId))
-                _leftModel = _models.FirstOrDefault(m => string.Equals(m.ModelId.Value, leftId, StringComparison.Ordinal));
-            if (!string.IsNullOrWhiteSpace(rightId))
-                _rightModel = _models.FirstOrDefault(m => string.Equals(m.ModelId.Value, rightId, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(LeftModelId))
+                _leftModel = _models.FirstOrDefault(m => string.Equals(m.ModelId.Value, LeftModelId, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(RightModelId))
+                _rightModel = _models.FirstOrDefault(m => string.Equals(m.ModelId.Value, RightModelId, StringComparison.Ordinal));
         }
         catch (Exception ex)
         {
@@ -499,10 +443,16 @@
     {
         try
         {
-            _health = await healthTask;
-            _availability = await availabilityTask;
+            // Assigned together, after BOTH land. _health used to be set the moment the fast
+            // call returned, and for the ~5 s the availability probe takes _healthHasRemotes was
+            // still false — so any render in that window claimed Azure was down and moved every
+            // remote model under "can't run here" (and the starter duel picked around them).
+            var health = await healthTask;
+            var availability = await availabilityTask;
             _healthHasRemotes = _models.Any(m => m.ModelType == ModelType.Remote)
-                && _health?.Models.CloudMode != true; // CloudMode hides remotes if Azure is up
+                && health?.Models.CloudMode != true; // CloudMode hides remotes if Azure is up
+            _availability = availability;
+            _health = health;
         }
         catch
         {
@@ -519,7 +469,7 @@
     private void AssignModel(ModelDto model)
     {
         // Tactile mechanical switch click confirmation.
-        _ = AudioService.PlayMechanicalClickAsync(true);
+        _ = AudioService.PlayTickAsync();
 
         // Both slots full + clicking a 3rd → show replace popover instead of silently overwriting.
         if (_leftModel is not null && _rightModel is not null
@@ -527,6 +477,7 @@
             && model.ModelId != _rightModel.ModelId)
         {
             _replacePopoverModel = model;
+            _focusPopover = true;
             return;
         }
 
@@ -541,26 +492,45 @@
 
     private void ConfirmReplace(string slot)
     {
-        _ = AudioService.PlayMechanicalClickAsync(false);
+        _ = AudioService.PlayTickAsync();
         if (_replacePopoverModel is null) return;
         if (slot == "left") _leftModel = _replacePopoverModel;
         else _rightModel = _replacePopoverModel;
-        _replacePopoverModel = null;
+        CloseReplacePopover();
     }
 
     private void CancelReplace()
     {
-        _ = AudioService.PlayMechanicalClickAsync(false);
+        _ = AudioService.PlayTickAsync();
+        CloseReplacePopover();
+    }
+
+    private void OnPopoverKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CancelReplace();
+    }
+
+    /// <summary>Closes the popover and hands focus back to the card that opened it.</summary>
+    private void CloseReplacePopover()
+    {
+        if (_replacePopoverModel is { } opener)
+            _ = JS.InvokeVoidAsync("focusElement", ModelCard.ElementId(opener.ModelId)).AsTask();
         _replacePopoverModel = null;
     }
 
     private void LoadStarterDuel()
     {
-        _ = AudioService.PlayMechanicalClickAsync(true);
+        _ = AudioService.PlayTickAsync();
         // Pre-fill prompt and pick two models. Prefer Remote (Azure) if available so starter
         // duel works on any device. Fall back to Ollama, then whatever is available.
+        // Only models this device can run and the health probe has not failed — the picker
+        // hides the rest, so the starter duel must not quietly hand them back.
         var ordered = _models
+            .Where(m => !IsUnavailable(m) && _availability?.FirstOrDefault(a => a.ModelId == m.ModelId)?.IsAvailable != false)
             .OrderBy(m => m.ModelType switch { ModelType.Remote => 0, ModelType.LocalService => 1, _ => 2 })
+            // Cheapest priced models first, unpriced last: in catalog order a first-time user's
+            // one click could land on GPT-5.5 at $40/M output tokens for a click counter.
+            .ThenBy(m => m.OutputTokenPricePerMillion ?? decimal.MaxValue)
             .ToList();
         _leftModel ??= ordered.ElementAtOrDefault(0);
         _rightModel ??= ordered.FirstOrDefault(m => m.ModelId != _leftModel?.ModelId);
@@ -569,19 +539,19 @@
 
     private async Task StartDuelAsync()
     {
-        if (!CanCompare) return;
+        if (!CanCompare || _starting) return;
         if (SameModelSelected)
         {
             _error = "Pick two different models — a duel against the same model twice is not a duel.";
             return;
         }
         _error = null;
+        _starting = true;
 
         try
         {
-            // Quantum Ignition: Sub-drop + Dual charge clash
-            _ = AudioService.PlaySubDropAsync();
-            _ = AudioService.PlayIgnitionClashAsync();
+            await JS.InvokeVoidAsync("poNotify.ask");
+            _ = AudioService.PlayTickAsync();
             _ = Fx.BurstFromAsync(".home__compare .po-btn", 40);
 
             var dto = await ApiClient.CommenceDuelAsync(
@@ -594,6 +564,12 @@
         catch (Exception ex)
         {
             _error = $"Failed to start duel: {ex.Message}";
+        }
+        finally
+        {
+            // Left set on success: the page is navigating away, and re-enabling the button for
+            // the frames before it does is exactly the double-start window being closed.
+            if (_error is not null) _starting = false;
         }
     }
 

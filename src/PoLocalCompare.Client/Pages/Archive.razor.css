@@ -1,84 +1,44 @@
 /* ── Page shell ─────────────────────────────────────────────────────────────
-   Geometry comes from .po-page--wide on the element, the same as every other route. This
-   was its own shell at max-width 1400 with a raw 24px pad, which composed with the article
-   gutter into 36px per side — measured, /archive had the narrowest content column in the
-   app on a phone (318px of a 390px screen) while claiming to be the WIDEST page.
-
-   What is left here is the one thing the primitive cannot do: make the page a flex column
-   so the grid can absorb the leftover height. See .rz-datatable.archive__grid in app.css. */
+   Geometry comes from .po-page--wide on the element, the same as every other route. The
+   page scrolls normally; a flex column only so one gap spaces the blocks. */
 .archive {
     display: flex;
     flex-direction: column;
-    /* One gap instead of a per-block margin-bottom on each child. */
     gap: var(--space-md);
-    /* height, NOT min-height — and the difference is load-bearing rather than stylistic.
-       A percentage height on a child resolves against a DEFINITE height on its containing
-       block, and a min-height is not definite. With min-height here the grid's `height: 100%`
-       fell back to auto, which left AllowVirtualization inert and rendered every row:
-       measured, /catalog went to 24,014px (28 screens) on a phone and /archive to 1,916px.
-       A definite height on the shell is what makes the flex child definite in turn.
+}
 
-       Sanctioned form: never a bare 100dvh inside <main>, which already starts below the
-       sticky nav. --space-md twice is the article's padding-top plus .po-page's own. */
-    height: calc(100dvh - var(--nav-height) - var(--space-md) * 2);
+/* PageHeader brings its own bottom margin; here the flex gap already spaces the header from
+   the chips, and the two added together doubled it. ::deep because the header's root is
+   PageHeader's markup, which this file's scope id never reaches. */
+.archive ::deep .page-header {
+    margin-block-end: 0;
 }
 
 /* .archive__title carries NO styling — E2E-UI selector hook only, and .po-title on the same
    element is the size. It had a --text-2xl and a raw `margin-bottom: 24px` (the only raw px
    length left in this file) layered over that primitive. */
 
+/* Lines the two row buttons up. */
 .archive__row-actions {
-    white-space: nowrap;
-    text-align: right;
-    padding: var(--space-xs) var(--space-sm);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-xs);
 }
 
+/* Layout only — the look is .po-btn .po-btn--sm's. They were a private 32px button with raw
+   px sizes and their own hover colour; a square minimum keeps the glyph-only pair from
+   reading as two different widths. */
 .archive__row-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    cursor: pointer;
-    font-size: var(--text-lg);
-    line-height: 1;
-    text-decoration: none;
-    margin-left: var(--space-xs);
-    transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.archive__row-btn:hover,
-.archive__row-btn:focus-visible {
-    background: var(--surface-1);
-    border-color: var(--accent-green);
-}
-
-.archive__row-btn--link {
-    /* Keep the link button visually consistent with its <button> sibling. */
-    text-decoration: none;
-}
-
-@keyframes archive-rise {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
+    flex: 0 0 auto;
+    min-width: var(--target-min);
 }
 
 .archive__verdict {
     display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: var(--radius-sm);
     font-size: var(--text-sm);
-    font-weight: 600;
-}
-
-.archive__verdict--win {
-    background: var(--success-surface);
-    color: var(--accent-green);
-    border: 1px solid var(--success-border);
+    font-weight: var(--weight-semibold);
 }
 
 /* A judged tie is an outcome, so it reads as one — coloured and bordered like a win rather
@@ -99,23 +59,35 @@
     color: var(--text);
 }
 
+/* The winner reads by weight AND by the trophy beside it, and the markup states it in text
+   as well — no single cue carries it (SC 1.4.1). */
+.archive__model--winner {
+    font-weight: var(--weight-bold);
+}
+
+.archive__matchup {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-xs);
+}
+
+.archive__vs {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
 .archive__model--unresolved {
     color: var(--text-muted);
     font-style: italic;
 }
 
-.archive__tz {
-    font-size: 0.7em;
-    opacity: 0.55;
-    letter-spacing: 0.03em;
-}
-
+/* No margin-top: .archive's flex gap already spaces it from the table. */
 .archive__pagination {
-    margin-top: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: var(--space-md);
 }
 
 .archive__count {
@@ -123,14 +95,19 @@
     font-size: var(--text-md);
 }
 
-/* The grid is the page. flex: 1 1 auto with min-height: 0 hands it whatever is left of the
-   viewport after the title, the chips and the footer, which is what removes the dead band
-   that a fixed height left underneath it — 170px on a desktop, 190px on a phone. */
-.archive__grid-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
+.archive__search {
+    max-width: 24rem;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    color: var(--text);
+    font: inherit;
+}
+
+.archive__date {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .archive__filters {
@@ -139,54 +116,19 @@
     flex-wrap: wrap;
 }
 
-
-.archive__filtered-empty {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-    margin-bottom: var(--space-smd);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-2);
-    padding: var(--space-sm) var(--space-smd);
-    color: var(--text);
-}
-
-.archive__filtered-empty p {
-    margin: 0;
-}
-
-
-
 /* ── Responsive ──────────────────────────────────────────────────────────────
    This file had no media query at all. The table itself degraded (.po-table--cards
    in app.css turns each cell into a labelled row below 640px), but nothing around
    it did — the filter chip row, the row-action buttons and the timestamp column all
    kept their desktop shape inside a card that is now a third of the width. */
 
-/* Tablet: the page is a single table, so it only needs the chips to stop competing
-   with the title for one line. */
-@media (max-width: 1024px) {
-    .archive__filters {
-        flex-wrap: wrap;
-    }
-}
-
 @media (max-width: 640px) {
     /* Inside a card row, right-aligning the actions strands them against an edge with
-       the label on the far side. Left-align so they read as part of their own row. */
+       the label on the far side. Left-align so they read as part of their own row, and
+       wrap rather than overflow. --target-min is already 44px here (pointer: coarse), so
+       they are finger-sized without any per-file sizing. */
     .archive__row-actions {
-        text-align: left;
-        white-space: normal;
-        padding-inline: 0;
-    }
-
-    /* The action buttons wrap rather than overflow. --target-min is already 44px here
-       (pointer: coarse), so they are finger-sized without any per-file sizing. */
-    .archive__row-actions,
-    .archive__empty-actions {
-        display: flex;
+        justify-content: flex-start;
         flex-wrap: wrap;
         gap: var(--space-sm);
     }
@@ -195,11 +137,5 @@
        nobody wants. It keeps nowrap — the row it sits in is what wraps now. */
     .archive__judge-btn {
         flex: 0 0 auto;
-    }
-
-    /* The timezone suffix is the least important glyph on a phone and the one most
-       likely to force a second line in a card cell. */
-    .archive__tz {
-        display: none;
     }
 }

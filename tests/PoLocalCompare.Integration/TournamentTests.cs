@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using PoLocalCompare.Api.Features.Tournaments;
+using PoLocalCompare.Shared.DTOs;
 
 namespace PoLocalCompare.Integration;
 
@@ -20,36 +23,37 @@ public sealed class TournamentTests(AzuriteFixture azurite) : IAsyncLifetime
     private IntegrationHost _host = null!;
     private HttpClient _client = null!;
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         _host = new IntegrationHost(azurite.ConnectionString);
         _client = _host.Client;
-        return Task.CompletedTask;
+        await AbandonInFlightAsync();
+    }
+
+    /// <summary>
+    /// Only one tournament may be in flight, and with the judge off here an earlier test's
+    /// bracket never finishes on its own — it waits for the next host's startup sweep to void
+    /// its duel, which is a race against this test's first draw. So every test starts clean.
+    /// </summary>
+    private async Task AbandonInFlightAsync()
+    {
+        using var scope = _host.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
+        foreach (var t in await repository.ListRecentAsync(50))
+        {
+            if (t.Status is not (TournamentStatus.Pending or TournamentStatus.Running)) continue;
+            t.Abandon("Left in flight by an earlier test.");
+            t.ETag = null; // unconditional: a resumed runner may have touched it since the read
+            await repository.UpdateAsync(t);
+        }
     }
 
     public async Task DisposeAsync() => await _host.DisposeAsync();
 
     private const string Prompt = "Build a self-contained single HTML file with a click counter.";
 
-    private async Task<string> RegisterModelAsync(string name, string modelType = "Remote")
-    {
-        // A Local model must carry TdpWatts — the registry rejects one without it (the green-stats
-        // calculator has nothing to work from otherwise), and WebLlmModelId must be unique, so a
-        // shared literal 400s the moment a test registers two browser models.
-        object body = modelType == "Local"
-            ? new
-            {
-                DisplayName = name,
-                ModelType = modelType,
-                WebLlmModelId = $"test-webllm-{name.Replace(" ", "-").ToLowerInvariant()}",
-                TdpWatts = 115.0,
-            }
-            : new { DisplayName = name, ModelType = modelType, ApiEndpointRef = "https://test.endpoint/v1" };
-
-        var response = await _client.PostAsJsonAsync("/api/models", body);
-        response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
-    }
+    private Task<string> RegisterModelAsync(string name, string modelType = "Remote") =>
+        modelType == "Local" ? TestModels.LocalAsync(_host.Services, name) : TestModels.RemoteAsync(_host.Services, name);
 
     private async Task<string[]> RegisterFieldAsync(string prefix, int count) =>
         await Task.WhenAll(Enumerable.Range(1, count).Select(i => RegisterModelAsync($"{prefix} {i}")));

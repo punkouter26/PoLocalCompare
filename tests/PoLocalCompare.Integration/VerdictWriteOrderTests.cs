@@ -36,17 +36,7 @@ public sealed class VerdictWriteOrderTests(AzuriteFixture azurite) : IAsyncLifet
 
     public async Task DisposeAsync() => await _host.DisposeAsync();
 
-    private async Task<string> RegisterAsync(string name)
-    {
-        var r = await _client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = name,
-            ModelType = "Remote",
-            ApiEndpointRef = "https://test.endpoint/v1",
-        });
-        r.EnsureSuccessStatusCode();
-        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
-    }
+    private Task<string> RegisterAsync(string name) => TestModels.RemoteAsync(_host.Services, name);
 
     // Waits for both result rows before recording the verdict — see DuelTestFlow.
     private Task RunDuelAsync(string a, string b, string side) =>

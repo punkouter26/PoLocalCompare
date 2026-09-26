@@ -11,8 +11,8 @@
 @inject AudioService AudioService
 @inject IJSRuntime JS
 
-<div class="leaderboard po-page">
-    <h1 class="leaderboard__title po-title">Leaderboard</h1>
+<div class="leaderboard po-page po-page--wide">
+    <PageHeader Title="Leaderboard" TitleHook="leaderboard__title" />
 
     @if (_loading)
     {
@@ -34,12 +34,16 @@
                         Title="No competitive history yet"
                         Hint="Run your first duel to generate ELO trends, win rates and quality comparisons."
                         Actions="@(new[] {
-                            new EmptyStateAction("⚔ Compare two models", "/", EmptyStateActionVariant.Ghost)
+                            new EmptyStateAction("⚔ Start a duel", "/", EmptyStateActionVariant.Ghost)
                         })" />
         }
         else
         {
-        @* Rows open the kill-list panel, so they are keyboard-operable (SC 2.1.1). *@
+        var judged = _entries.Sum(e => e.DuelCount) / 2;
+        @* The one figure the old three-item summary bar carried that the table does not: the
+           model count is the row count and the top ELO is row one. *@
+        <p class="po-hint">@judged duel@(judged == 1 ? "" : "s") judged</p>
+
         @* Plain .po-table-wrap. This used to also carry a local `leaderboard__grid--scrollable`
            class whose only rule was another `overflow-x: auto` — a second horizontal-scroll
            mechanism competing with the one .po-table-wrap already provides, and with the one
@@ -52,8 +56,7 @@
                         <th scope="col">Rank</th>
                         <th scope="col">Model Name</th>
                         <th scope="col">ELO</th>
-                        <th scope="col" title="Duels won.">W</th>
-                        <th scope="col" title="Duels lost — total duels minus wins minus draws. A model that failed to produce output lost that duel.">L</th>
+                        <th scope="col" title="Wins–losses. Losses are total duels minus wins minus draws; a model that failed to produce output lost that duel.">Record</th>
                         <th scope="col" title="Mean API cost per duel across every priced result this model has. Local and Ollama models run on your own hardware and show &mdash;.">💰 Avg $/duel</th>
                         <th scope="col" title="Mean time to first token across this model's duels. Lower is better; local models with no measured run show &mdash;.">⚡ First token</th>
                         <th scope="col" title="ELO earned per dollar of API spend (CurrentElo / AvgApiCostPerDuel, divisor floored at $0.0001). Higher = more bang per buck. Local/Ollama and unpriced remotes show &mdash;.">💎 Value</th>
@@ -70,9 +73,21 @@
                         var move = _moved.GetValueOrDefault(entry.ModelId.ToString());
                         @* data-rank-row is the FLIP hook (wow.js flipRows): the row is already in its
                            new place, and plays in from where its old rank sits on screen. *@
-                        <tr data-rank-row="@entry.ModelId">
-                            <td class="po-cell--bare">
-                                @RankMedals.Render(dr, "leaderboard")
+                        <tr @key="entry.ModelId" class="po-reveal" data-rank-row="@entry.ModelId">
+                            <td class="po-cell--bare leaderboard__rank-cell">
+                                @* The medal is decoration and the rank is the content: the glyph is
+                                   hidden and the ordinal stated, since a title is not reliably read. *@
+                                @{ var medal = dr switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => null }; }
+                                <span class="leaderboard__rank @(dr switch { 1 => "leaderboard__rank--gold po-glow", 2 => "leaderboard__rank--silver", 3 => "leaderboard__rank--bronze", _ => "" })">
+                                    @if (medal is null)
+                                    {
+                                        @dr
+                                    }
+                                    else
+                                    {
+                                        <span aria-hidden="true">@medal</span><span class="visually-hidden">Rank @dr</span>
+                                    }
+                                </span>
                                 @if (move?.From is int from && move.To is int to && from != to)
                                 {
                                     var up = to < from;
@@ -84,7 +99,7 @@
                                     </span>
                                 }
                             </td>
-                            <td data-label="Model">
+                            <td data-label="Model" class="leaderboard__name-cell">
                                 @* Opens the model's own page. This used to expand a kill-list
                                    drawer under the table; the kill list answers a question about
                                    one model, so it moved to that model's page along with the
@@ -95,12 +110,9 @@
                                    href="@($"/model/{entry.ModelId}")"
                                    data-vt=".profile__card"
                                    title="@($"Open {entry.DisplayName}")"
-                                   @onclick="@(() => AudioService.PlayMechanicalClickAsync(true))">
+                                   @onclick="@(() => AudioService.PlayTickAsync())">
                                     @entry.DisplayName
-                                    @if (_modelTypes.TryGetValue(entry.ModelId, out var mtype))
-                                    {
-                                        <ModelTypeBadge Type="mtype" AdditionalClass="leaderboard__type-badge-spacing" />
-                                    }
+                                    <ModelTypeBadge Type="entry.ModelType" AdditionalClass="leaderboard__type-badge-spacing" />
                                 </a>
                             </td>
                             @* The ± is the half-width of a 95% interval from a Bradley–Terry fit
@@ -123,14 +135,9 @@
                                     <span class="leaderboard__provisional" title="Fewer than 10 judged duels — this rating will still move a lot.">provisional</span>
                                 }
                             </td>
-                            @* W/L rather than "17-2 (89%)" in one cell: they sort and scan as
-                               numbers, and the draw count is deliberately not a third column —
-                               it is recoverable from DuelCount and is near-always zero. *@
-                            @* po-cell--half: below 640px these two share one card row instead of
-                               taking a full-width row each. Two single digits were costing 48px
-                               per model on a phone, times 26 models. *@
-                            <td data-label="W" class="leaderboard__record po-cell--half">@entry.WinCount</td>
-                            <td data-label="L" class="leaderboard__record po-cell--half">@Losses(entry)</td>
+                            @* W–L in one cell. The draw count is deliberately left out — it is
+                               recoverable from DuelCount and is near-always zero. *@
+                            <td data-label="Record" class="leaderboard__record leaderboard__record-cell">@entry.WinCount–@Losses(entry)</td>
                             <td data-label="Avg $/duel" class="po-cell--secondary">
                                 @* Four decimals: a duel on a nano model costs a few ten-thousandths
                                    of a dollar, and rounding to cents renders the whole column as
@@ -173,21 +180,6 @@
                 </tbody>
             </table>
         </div>
-
-        @if (_entries.Count > 0)
-        {
-            var totalDuels = _entries.Sum(e => e.DuelCount) / 2;
-            // Top of the DISPLAYED rows: _entries includes never-duelled catalog entries, so
-            // the old FirstOrDefault() crowned an alphabetical 1200 as "Top ELO" before the
-            // first duel was ever fought.
-            var topModel = _displayedEntries.FirstOrDefault()?.DisplayName ?? "—";
-            <div class="leaderboard__summary">
-                <span>&#x1F4CA; <strong>@_displayedEntries.Count</strong> model@(_displayedEntries.Count == 1 ? "" : "s") ranked</span>
-                <span>&#x2694;&#xFE0F; <strong>@totalDuels</strong> duel@(totalDuels == 1 ? "" : "s") fought</span>
-                <span>&#x1F3C6; @TopLabel: <strong>@topModel</strong></span>
-            </div>
-        }
-
         }
     }
 </div>
@@ -195,7 +187,6 @@
 @code {
     private List<LeaderboardEntryDto> _entries = [];
     private List<LeaderboardEntryDto> _displayedEntries = [];
-    private Dictionary<ModelId, ModelType> _modelTypes = [];
     /// <summary>
     /// Models that have never duelled are hidden. This was a checkbox next to the sort bar and
     /// went with it on 2026-08-23 — it defaulted to on, and an unplayed model is a 1200 with no
@@ -230,8 +221,6 @@
     /// <summary>Sub-second waits read better in ms; past that, seconds.</summary>
     private static string FormatFirstToken(double ms) =>
         ms < 1000 ? $"{ms:F0} ms" : $"{ms / 1000.0:F1} s";
-
-    private const string TopLabel = "Top ELO";
 
     /// <summary>
     /// What moved since this viewer last opened the board, keyed by model id. Comes from
@@ -272,10 +261,6 @@
             {
                 _flipPending = false;
                 await JS.InvokeVoidAsync("poWow.flipRows", _moved);
-
-                var net = _moved.Values.Sum(m => m.From is int f && m.To is int t ? Math.Sign(f - t) : 0);
-                if (_moved.Values.Any(m => m.From != m.To))
-                    _ = AudioService.PlayRankShiftAsync(net >= 0 ? 1 : -1);
             }
         }
         catch (JSException)
@@ -284,14 +269,9 @@
         }
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        var modelsTask = ApiClient.GetModelsAsync();
-        await LoadLeaderboardAsync();
-        var models = await modelsTask;
-        if (models is not null)
-            _modelTypes = models.ToDictionary(m => m.ModelId, m => m.ModelType);
-    }
+    // The row's type badge reads LeaderboardEntryDto.ModelType. This used to fetch the whole
+    // /api/models catalog in parallel purely to look each row's type up by id.
+    protected override Task OnInitializedAsync() => LoadLeaderboardAsync();
 
     private async Task LoadLeaderboardAsync()
     {
@@ -302,9 +282,7 @@
         {
             var rows = await ApiClient.GetLeaderboardAsync(SortBy);
             _entries = rows?.ToList() ?? [];
-            _displayedEntries = ActiveOnly
-                ? _entries.Where(e => e.DuelCount > 0).ToList()
-                : _entries;
+            _displayedEntries = ActiveOnly ? _entries.Where(e => e.DuelCount > 0).ToList() : _entries;
         }
         catch (Exception ex)
         {

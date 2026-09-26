@@ -122,6 +122,41 @@ public sealed class PersistenceTests(AzuriteFixture azurite) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Duel_ListFromCursor_ReturnsOnlyStrictlyOlderDuels()
+    {
+        // The Archive's Load More passes the oldest duel id it holds. The cursor used to be that
+        // row's yyyyMM matched with `le`, which re-served the whole current month: the same rows
+        // came back on every click. Scoped to the three duels created here — the table is shared.
+        var oldest = NewDuel(out _, out _);
+        await Duels.SaveAsync(oldest);
+        await Task.Delay(5);
+        var middle = NewDuel(out _, out _);
+        await Duels.SaveAsync(middle);
+        await Task.Delay(5);
+        var newest = NewDuel(out _, out _);
+        await Duels.SaveAsync(newest);
+
+        var firstPage = (await Duels.ListAsync(limit: 100, beforeMonth: null, before: newest.DuelId))
+            .Select(d => d.DuelId)
+            .ToList();
+
+        Assert.All(firstPage, id => Assert.True(id < newest.DuelId, $"{id} is not older than the cursor."));
+        var middleAt = firstPage.IndexOf(middle.DuelId);
+        Assert.True(middleAt >= 0 && middleAt < firstPage.IndexOf(oldest.DuelId),
+            "Both older duels should come back, newest first.");
+
+        // Paging on from the next cursor must not overlap what the first page already returned.
+        var secondPage = (await Duels.ListAsync(limit: 100, beforeMonth: null, before: middle.DuelId))
+            .Select(d => d.DuelId)
+            .ToList();
+
+        Assert.Contains(oldest.DuelId, secondPage);
+        Assert.DoesNotContain(middle.DuelId, secondPage);
+        Assert.DoesNotContain(newest.DuelId, secondPage);
+        Assert.All(secondPage, id => Assert.True(id < middle.DuelId, $"{id} is not older than the cursor."));
+    }
+
+    [Fact]
     public async Task DuelResult_FailureDetailsPersist()
     {
         var duel = NewDuel(out var left, out _);

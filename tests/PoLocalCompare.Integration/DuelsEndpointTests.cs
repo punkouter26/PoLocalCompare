@@ -36,21 +36,8 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    private async Task<string> SeedRemoteModelAsync(string modelId, string displayName)
-    {
-        var payload = new
-        {
-            DisplayName = displayName,
-            ModelType = "Remote",
-            ApiEndpointRef = "https://test.endpoint/v1",
-            InputTokenPricePerMillion = 1.0m,
-            OutputTokenPricePerMillion = 3.0m,
-        };
-        var response = await _client.PostAsJsonAsync("/api/models", payload);
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return body.GetProperty("modelId").GetString()!;
-    }
+    private Task<string> SeedRemoteModelAsync(string modelId, string displayName) =>
+        TestModels.RemoteAsync(_host.Services, displayName);
 
     // ── POST /api/duels → 202 Accepted ────────────────────────────────────
 

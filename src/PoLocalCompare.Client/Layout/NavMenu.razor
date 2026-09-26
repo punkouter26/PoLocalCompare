@@ -1,24 +1,24 @@
 @implements IDisposable
-@using PoLocalCompare.Shared.DTOs
-@using PoLocalCompare.Shared.Enums
 <nav class="navmenu">
-    @* ── USING MOCK DATA banner (standards §7) — shown when UseRealAi is off ──
-       The wording names which inference paths are simulated on purpose. Browser (WebGPU) models
-       run in this tab and the server never sees them, so they are NOT mocked and a banner
-       claiming all responses were simulated would be the same kind of lie this flag used to be.
-       See MockInferenceProxy for the server half. *@
-    @if (_usingMockData)
-    {
-        <div class="navmenu__mock-banner" role="alert" aria-live="polite">
-            ⚠ USING MOCK DATA — Features:UseRealAi is off. Remote and Ollama responses are simulated.
-        </div>
-    }
     <div class="navmenu__inner">
-        @* aria-label, not the visible wordmark, carries the accessible name: below 992px the
-           wordmark is hidden to buy the bar room and the mark itself is decorative. *@
-        @* Brand mark — shared with Login. The brand-text hides at 992px (rule in app.css),
-   but the mark stays. *@
+        @* aria-label, not the visible wordmark, carries the accessible name: between 768 and
+           992px the wordmark is hidden to buy the bar room (rule in NavMenu.razor.css) and the
+           mark itself is decorative. *@
         <BrandMark Size="BrandMarkSize.Small" Href="" AccessibleLabel="PoLocalCompare home" AdditionalClass="navmenu__brand" />
+
+        @* ── USING MOCK DATA marker (standards §7) — shown when UseRealAi is off ──
+           A compact chip beside the brand rather than a full-width red row above the bar. The
+           visible "MOCK" is aria-hidden; the full sentence is in the title for sighted users and
+           in a visually-hidden span for screen readers, so the literal "USING MOCK DATA" stays
+           in the DOM. The wording names which inference paths are simulated on purpose: browser
+           (WebGPU) models run in this tab and are never mocked. See MockInferenceProxy. *@
+        @if (_usingMockData)
+        {
+            <span class="navmenu__mock-chip" role="status" title="@MockDataText">
+                <span aria-hidden="true">MOCK</span>
+                <span class="visually-hidden">@MockDataText</span>
+            </span>
+        }
 
         <button title="Navigation menu" aria-label="Navigation menu" class="navmenu__toggler" @onclick="ToggleNavMenu" aria-expanded="@NavExpanded" aria-controls="navbarLinks">
             <span class="navmenu__toggler-icon" aria-hidden="true"></span>
@@ -46,99 +46,46 @@
                         <span class="navmenu__link-text">Archive</span>
                     </NavLink>
                 </li>
-                @* Catalog was demoted from the top nav. It is the lowest-traffic route on this
-                   page and grew one slot on a phone-sized bar at the cost of crowding the
-                   others — see consolidation pass #10. The /catalog route is still served and
-                   still reachable from the dropdown above the user identity or from
-                   /leaderboard's tooling line. *@
+                @* Catalog is not a top-nav link: it is the lowest-traffic route and tooling
+                   rather than a primary flow. It lives in the user menu (below), which is
+                   reachable at every width including phones. *@
             </ul>
 
             @* ── Live activity ticker ──────────────────────────────────────
                Polite, not assertive: duels finish while the user is reading, and an assertive
-               region would interrupt them every time one did. *@
-            @if (_tickerVisible)
+               region would interrupt them every time one did. One grouped chip — "N running ·
+               M awaiting" — linking to the awaiting-judgment filter, so the click is meaningful
+               whether or not M is zero. Nothing to say renders nothing at all. *@
+            @if (Ticker.RunningCount > 0 || Ticker.AwaitingVerdictCount > 0)
             {
                 <div class="navmenu__ticker" role="status" aria-live="polite" aria-label="Live duel activity">
-                    @* One grouped chip — "N running · M awaiting". The two stats previously
-                       sat on separate pills on the desktop bar; folding them into one rounds
-                       both numbers into a single visual affordance and gives the bar enough
-                       room to land the auth controls next to it. The link href opens the
-                       awaiting-judgment filter so the click is meaningful regardless of
-                       whether M is zero. *@
-                    @if (Ticker.RunningCount > 0 || Ticker.AwaitingVerdictCount > 0)
-                    {
-                        <a href="archive?verdict=Unjudged" class="navmenu__ticker-pill navmenu__ticker-pill--combined"
-                           title="@TickerSummaryTitle()">
-                            @if (Ticker.RunningCount > 0)
-                            {
-                                <span class="navmenu__ticker-pulse" aria-hidden="true"></span>
-                                <span class="navmenu__ticker-count">@Ticker.RunningCount</span>
-                                <span class="visually-hidden">running</span>
-                            }
-                            @if (Ticker.RunningCount > 0 && Ticker.AwaitingVerdictCount > 0)
-                            {
-                                <span class="navmenu__ticker-sep" aria-hidden="true">·</span>
-                            }
-                            @if (Ticker.AwaitingVerdictCount > 0)
-                            {
-                                <span aria-hidden="true">⚖</span>
-                                <span class="navmenu__ticker-count">@Ticker.AwaitingVerdictCount</span>
-                                <span class="visually-hidden">awaiting judgment</span>
-                            }
-                        </a>
-                    }
-                    @if (_latest is not null)
-                    {
-                        <a href="@LatestHref" class="navmenu__ticker-latest" title="@_latest.PromptSummary">
-                            @LatestText
-                        </a>
-                    }
+                    <a href="archive?verdict=Unjudged" class="navmenu__ticker-pill navmenu__ticker-pill--combined"
+                       title="@TickerSummaryTitle()">
+                        @if (Ticker.RunningCount > 0)
+                        {
+                            <span class="navmenu__ticker-pulse" aria-hidden="true"></span>
+                            <span class="navmenu__ticker-count">@Ticker.RunningCount</span>
+                            <span class="visually-hidden">running</span>
+                        }
+                        @if (Ticker.RunningCount > 0 && Ticker.AwaitingVerdictCount > 0)
+                        {
+                            <span class="navmenu__ticker-sep" aria-hidden="true">·</span>
+                        }
+                        @if (Ticker.AwaitingVerdictCount > 0)
+                        {
+                            <span aria-hidden="true">⚖</span>
+                            <span class="navmenu__ticker-count">@Ticker.AwaitingVerdictCount</span>
+                            <span class="visually-hidden">awaiting judgment</span>
+                        }
+                    </a>
                 </div>
             }
 
             @* ── User identity / auth (standards §6) ── *@
             <div class="navmenu__auth">
-                @* Cycles System → Light → Dark. aria-live is on the label so a screen reader
-                   announces the new state; the glyph itself is decorative. *@
-                <button type="button"
-                        class="po-btn po-btn--sm po-btn--secondary navmenu__theme-toggle"
-                        @onclick="CycleThemeAsync"
-                        title="@ThemeTitle"
-                        aria-label="@ThemeTitle">
-                    <span class="navmenu__theme-glyph" aria-hidden="true">@ThemeGlyph</span>
-                    <span class="navmenu__theme-label">@ThemeLabel</span>
-                </button>
-
-                @if (_identity is not null)
+                @if (_identity is null)
                 {
-                    @* Split at the '@' so the badge can drop the DOMAIN on a narrow screen instead
-                       of ellipsising mid-string. "punkouter26@gmail…." told you nothing the local
-                       part alone doesn't, while looking like a rendering bug; the local part is
-                       the identifying half. The full value stays in the title either way, so
-                       nothing is actually lost — see the --domain rule in the stylesheet. *@
-                    <span class="navmenu__user-badge @(_isGuest ? "navmenu__user-badge--guest" : "navmenu__user-badge--oauth")"
-                          title="@(_identity + (_isGuest ? " (guest session)" : " (signed in via Microsoft)"))">
-                        <span>@IdentityLocalPart</span>@if (IdentityDomain is not null)
-                        {
-                            <span class="navmenu__user-badge-domain">@IdentityDomain</span>
-                        }
-                    </span>
-                    @* Hidden behind the user badge rather than in the top nav — Catalog is
-                       tooling, not a primary flow. Adding a model is something a returning
-                       user does occasionally; surfacing it next to the four core flows made
-                       the bar 110px wider on a phone for a route that already lives under
-                       /leaderboard's "what model did what" mental model. *@
-                    <a class="navmenu__user-menu-link"
-                       href="catalog"
-                       title="Add browser or Ollama models to the catalog">
-                        <span aria-hidden="true">🧪</span> Catalog
-                    </a>
-                    <button class="po-btn po-btn--sm po-btn--secondary" @onclick="LogoutAsync">Logout</button>
-                }
-                else
-                {
-                    @* Same control as the Login card, just sized small so it sits in the navbar
-                       alongside the theme toggle. *@
+                    @* Same control as the Login card, just sized small so it sits in the navbar. *@
                     <MicrosoftSignInButton Size="MicrosoftSignInSize.Small"
                                             Label="Sign in"
                                             OnClick="LoginWithMicrosoft" />
@@ -149,6 +96,77 @@
                         </button>
                     }
                 }
+
+                @* ── One menu for everything session-shaped ──
+                   Native <details>/<summary>: keyboard operable with no script, and it works the
+                   same inside the phone drawer as on the desktop bar — which is what makes
+                   /catalog reachable below 768px. Theme and sound stay available signed out;
+                   the trigger is the identity badge when signed in and a gear when not.
+                   Closing: Escape (OnMenuKeyDown) and any navigation (Catalog) re-key the
+                   element, which recreates it closed. The two toggles deliberately leave it
+                   open so the new state is visible where it was changed. *@
+                <details class="navmenu__menu" @key="_menuKey" @onkeydown="OnMenuKeyDown">
+                    <summary class="navmenu__menu-trigger" @ref="_menuTrigger" aria-label="@MenuLabel">
+                        @if (_identity is not null)
+                        {
+                            @* Split at the '@' so the badge can drop the DOMAIN on a narrow screen
+                               instead of ellipsising mid-string; the local part is the identifying
+                               half. The full value stays in the title either way. *@
+                            <span class="navmenu__user-badge @(_isGuest ? "navmenu__user-badge--guest" : "navmenu__user-badge--oauth")"
+                                  title="@(_identity + (_isGuest ? " (guest session)" : " (signed in via Microsoft)"))">
+                                <span>@IdentityLocalPart</span>@if (IdentityDomain is not null)
+                                {
+                                    <span class="navmenu__user-badge-domain">@IdentityDomain</span>
+                                }
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="navmenu__menu-glyph" aria-hidden="true">⚙</span>
+                        }
+                        <span class="navmenu__menu-caret" aria-hidden="true">▾</span>
+                    </summary>
+
+                    <div class="navmenu__menu-panel">
+                        @* Cycles System → Light → Dark. The accessible name carries the state; the
+                           visible state word is aria-hidden so it is not read twice. *@
+                        <button type="button"
+                                class="navmenu__menu-item navmenu__theme-toggle"
+                                @onclick="CycleThemeAsync"
+                                title="@ThemeTitle"
+                                aria-label="@ThemeTitle">
+                            <span class="navmenu__menu-glyph" aria-hidden="true">@ThemeGlyph</span>
+                            <span>Theme</span>
+                            <span class="navmenu__menu-state" aria-hidden="true">@ThemeLabel</span>
+                        </button>
+
+                        @* aria-pressed = sound on. The name stays "Sound" so the pressed state is
+                           the only thing that changes. *@
+                        <button type="button"
+                                class="navmenu__menu-item"
+                                @onclick="ToggleSoundAsync"
+                                aria-pressed="@(_soundOn ? "true" : "false")">
+                            <span class="navmenu__menu-glyph" aria-hidden="true">@(_soundOn ? "🔊" : "🔇")</span>
+                            <span>Sound</span>
+                            <span class="navmenu__menu-state" aria-hidden="true">@(_soundOn ? "On" : "Off")</span>
+                        </button>
+
+                        @if (_identity is not null)
+                        {
+                            <NavLink class="navmenu__menu-item" href="catalog"
+                                     title="Add browser or Ollama models to the catalog">
+                                <span class="navmenu__menu-glyph" aria-hidden="true">🧪</span>
+                                <span>Catalog</span>
+                            </NavLink>
+                            <button type="button"
+                                    class="navmenu__menu-item navmenu__menu-item--logout"
+                                    @onclick="LogoutAsync">
+                                <span class="navmenu__menu-glyph" aria-hidden="true">⎋</span>
+                                <span>Logout</span>
+                            </button>
+                        }
+                    </div>
+                </details>
             </div>
         </div>
     </div>
@@ -162,8 +180,21 @@
     [Inject] private Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment { get; set; } = default!;
     [Inject] private ThemeService Theme { get; set; } = default!;
     [Inject] private LobbyTickerService Ticker { get; set; } = default!;
+    [Inject] private AudioService Audio { get; set; } = default!;
+
+    private const string MockDataText =
+        "USING MOCK DATA — Features:UseRealAi is off. Remote and Ollama responses are simulated.";
 
     private bool collapseNavMenu = true;
+
+    // Bumped to recreate the <details> closed: Blazor cannot own its `open` attribute (the
+    // browser toggles it), but it can replace the element.
+    private int _menuKey;
+    private bool _refocusTrigger;
+    private ElementReference _menuTrigger;
+    private bool _soundOn = true;
+
+    private string MenuLabel => _identity is null ? "Settings" : $"Account menu for {_identity}";
     private string? _identity;
     private bool _isGuest;
 
@@ -214,15 +245,6 @@
 
     // ── Live ticker ──────────────────────────────────────────────────────────
 
-    private LobbyEventDto? _latest;
-
-    // Nothing to say is rendered as nothing at all: an empty ticker strip would take nav space
-    // on every page to communicate that no duels are happening.
-    private bool _tickerVisible =>
-        Ticker.RunningCount > 0 || Ticker.AwaitingVerdictCount > 0 || _latest is not null;
-
-    private string LatestHref => _latest is null ? "archive" : $"arena/{_latest.DuelId}";
-
     /// <summary>Tooltip for the grouped activity pill. A screen reader hears both counts
     /// from the visually-hidden labels; the tooltip is the same sentence for sighted users.</summary>
     private string TickerSummaryTitle()
@@ -233,33 +255,34 @@
         return string.Join(" — ", parts);
     }
 
-    private string LatestText => _latest switch
-    {
-        null => string.Empty,
-        { Kind: LobbyEventKind.VerdictRecorded, Verdict: DuelVerdict.Tie } e =>
-            $"🤝 {e.LeftModelName} vs {e.RightModelName} — judged a tie",
-        { Kind: LobbyEventKind.VerdictRecorded } e =>
-            $"🏆 {e.WinnerModelName} beat {Opponent(e)}{EloSuffix(e)}",
-        { Kind: LobbyEventKind.DuelCompleted } e =>
-            $"✓ {e.LeftModelName} vs {e.RightModelName} finished",
-        var e => $"⚡ {e.LeftModelName} vs {e.RightModelName} started",
-    };
-
-    private static string Opponent(LobbyEventDto e) =>
-        string.Equals(e.WinnerModelName, e.LeftModelName, StringComparison.Ordinal)
-            ? e.RightModelName
-            : e.LeftModelName;
-
-    private static string EloSuffix(LobbyEventDto e) =>
-        e.EloShiftWinner is { } shift ? $" (+{shift:F1})" : string.Empty;
-
-    private void OnTickerChanged() => InvokeAsync(() =>
-    {
-        _latest = Ticker.Events.FirstOrDefault();
-        StateHasChanged();
-    });
+    private void OnTickerChanged() => InvokeAsync(StateHasChanged);
 
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+
+    // ── User menu ────────────────────────────────────────────────────────────
+
+    private void CloseMenu() => _menuKey++;
+
+    private void OnMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Escape") return;
+        CloseMenu();
+        _refocusTrigger = true;   // the recreated summary, once it exists — see OnAfterRenderAsync
+    }
+
+    // Collapses the phone drawer too. It used to close only the user menu, and the drawer sits
+    // in the page flow, so every route opened from it started pushed below an open menu.
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        InvokeAsync(() => { CloseMenu(); collapseNavMenu = true; StateHasChanged(); });
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_refocusTrigger) return;
+        _refocusTrigger = false;
+        await _menuTrigger.FocusAsync();
+    }
+
+    private async Task ToggleSoundAsync() => _soundOn = !await Audio.SetMutedAsync(_soundOn);
 
     private async Task CycleThemeAsync()
     {
@@ -285,6 +308,8 @@
         // theme.js already painted before Blazor booted; this only syncs the button's label
         // to what it chose, so the two cannot disagree.
         _theme = await Theme.GetAsync();
+        _soundOn = !await Audio.IsMutedAsync();
+        Nav.LocationChanged += OnLocationChanged;
 
         var useRealAi = Config["Features:UseRealAi"];
         _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;
@@ -347,5 +372,6 @@
     {
         AuthState.AuthenticationStateChanged -= OnAuthStateChanged;
         Ticker.OnChanged -= OnTickerChanged;
+        Nav.LocationChanged -= OnLocationChanged;
     }
 }

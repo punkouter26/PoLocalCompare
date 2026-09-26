@@ -24,18 +24,7 @@ public sealed class ModelProfileTests(AzuriteFixture azurite) : IAsyncLifetime
 
     public async Task DisposeAsync() => await _host.DisposeAsync();
 
-    private async Task<string> RegisterRemoteModelAsync(string name)
-    {
-        var response = await _client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = name,
-            ModelType = "Remote",
-            ApiEndpointRef = "https://test.endpoint/v1",
-        });
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return body.GetProperty("modelId").GetString()!;
-    }
+    private Task<string> RegisterRemoteModelAsync(string name) => TestModels.RemoteAsync(_host.Services, name);
 
     // Waits for both result rows before recording the verdict — see DuelTestFlow.
     private Task RunDuelAsync(string leftId, string rightId, string verdictSide) =>

@@ -63,6 +63,10 @@
             <div class="tourney__progress" role="status">
                 <span aria-hidden="true">⚔</span>
                 @_tournament.DecidedCount of @_tournament.TotalMatches matches decided.
+                @if (_pollFailing)
+                {
+                    <span class="po-hint">Reconnecting…</span>
+                }
                 @if (RunningMatch is not null)
                 {
                     <span>
@@ -102,8 +106,6 @@
                         <div class="tourney__round-matches">
                             @foreach (var match in round.OrderBy(m => m.Index))
                             {
-                                @* data-match / data-slot are the comet's addresses (wow.js): a winner's
-                                   light flies from its slot here to the slot it fills next round. *@
                                 @* The whole card is the link to the duel. The earlier design only
                                    rendered a link once a DuelId existed, and the text-only anchor
                                    it used ("Watch live →") sat under the slots where it was easy to
@@ -114,19 +116,22 @@
                                    A's model profile, so clicking "A vs B" before it started landed
                                    on a page about A alone — not the match you clicked. *@
                                 var matchUrl = match.DuelId is { } did ? DuelUrl(did) : null;
-                                <a class="tourney__match po-lift @MatchClass(match)"
+                                @* On a crowned bracket the champion's matches light up round by round —
+                                   --path-step staggers them (Tournament.razor.css). *@
+                                var onPath = OnChampionPath(match);
+                                <a class="tourney__match po-lift @MatchClass(match) @(onPath ? "tourney__match--champion-path" : "")"
+                                   style="@(onPath ? $"--path-step: {match.Round}" : null)"
                                    href="@matchUrl"
                                    aria-label="@MatchAriaLabel(match)"
-                                   @key="@($"{match.Round}-{match.Index}")"
-                                   data-match="@($"{match.Round}-{match.Index}")">
+                                   @key="@($"{match.Round}-{match.Index}")">
                                     @RenderSlot(match, isSlotA: true)
                                     @RenderSlot(match, isSlotA: false)
 
-                                    @if (match.DuelId is { } duelId)
+                                    @* The card is the link, so no "View duel →" text; only a running
+                                       match gets a tag. aria-hidden: MatchAriaLabel already says it. *@
+                                    @if (match.IsRunning)
                                     {
-                                        <span class="tourney__match-link" aria-hidden="true">
-                                            @(match.IsDecided ? "View duel →" : match.IsRunning ? "Watch live →" : "View duel →")
-                                        </span>
+                                        <span class="tourney__match-live" aria-hidden="true">Live</span>
                                     }
                                     @if (match.WonOnSeedTieBreak)
                                     {
@@ -147,13 +152,21 @@
         </div>
 
         <PageActions Align="PageActionsAlign.Center">
-            <a class="po-btn po-btn--primary" href="/tournament">⚔ New tournament</a>
-            <a class="po-btn" href="/leaderboard">📊 Leaderboard</a>
+            <a class="po-btn po-btn--primary" href="/tournament"><span aria-hidden="true">⚔</span> New tournament</a>
         </PageActions>
     }
     else if (_loadingTournament)
     {
         <p class="po-status">Loading bracket…</p>
+    }
+    else if (!string.IsNullOrEmpty(TournamentIdText) && _error is not null)
+    {
+        @* Before the not-found arm: a network failure used to fall through to "Tournament not
+           found", which tells someone watching a live bracket that it no longer exists. *@
+        <p class="po-error" role="alert">@_error</p>
+        <PageActions Align="PageActionsAlign.Center">
+            <button type="button" class="po-btn po-btn--primary" @onclick="LoadBracketAsync">Retry</button>
+        </PageActions>
     }
     else if (!string.IsNullOrEmpty(TournamentIdText))
     {
@@ -168,15 +181,11 @@
     {
         @* ── Draw view ──────────────────────────────────────────────────── *@
         <PageHeader Title="Run a tournament"
-                    Subtitle="Write a prompt and start. Eight models are drawn for you and every match is judged automatically — re-draw if the field is not what you wanted." />
+                    Subtitle="8 models, seeded, auto-judged." />
 
         <section class="po-section" aria-labelledby="tourney-field-heading">
             <div class="tourney__section-head">
                 <h2 id="tourney-field-heading" class="po-section-title">The field — 8 models</h2>
-                <p class="po-hint">
-                    Drawn at random from the remote models, then seeded by rating so the top two
-                    seeds can only meet in the final. Quarter-finals, semis and a final — seven duels.
-                </p>
             </div>
 
             @* The slot reserves the field's height while it loads. Without it this block was one
@@ -213,7 +222,8 @@
                        and how far apart the top two seeds are. Pairings come from the same
                        BracketPlanner the server draws with, so this is the real first round
                        rather than a picture of one. *@
-                    <div class="tourney__draw" role="group" aria-label="First-round pairings">
+                    <div class="tourney__draw" role="group" aria-label="First-round pairings"
+                         title="Drawn at random, then seeded by rating so the top two seeds can only meet in the final.">
                         <div class="tourney__draw-half">
                             @foreach (var pair in FirstRoundPairs.Take(2))
                             {
@@ -252,13 +262,10 @@
 
         <section class="po-section" aria-labelledby="tourney-prompt-heading">
             <h2 id="tourney-prompt-heading" class="po-section-title">The prompt</h2>
-            <p class="po-hint">
-                Every match in the bracket gets this same prompt — that is what makes the winner mean something.
-            </p>
             <textarea class="tourney__textarea"
                       aria-labelledby="tourney-prompt-heading"
                       rows="4"
-                      maxlength="4000"
+                      maxlength="@PromptRules.MaxPromptLength"
                       placeholder="e.g. Build a self-contained single HTML file with a working scientific calculator."
                       @bind="_prompt"
                       @bind:event="oninput"></textarea>
@@ -348,6 +355,14 @@
     private bool _starting;
     private string? _error;
     private List<TournamentDto> _recent = [];
+
+    // Set while polls are failing, cleared by the next one that lands. A poll failure used to
+    // stop polling for good, freezing the bracket with no message.
+    private bool _pollFailing;
+
+    // Dispose can run while a poll is mid-await; this stops that poll from opening a hub
+    // connection after the page is gone, which nothing would ever have closed.
+    private bool _disposed;
 
     /// <summary>
     /// The bracket the server says is already in flight when the page loads — used to gate the
@@ -466,6 +481,10 @@
 
     private TournamentMatchDto? RunningMatch => _tournament?.Matches.FirstOrDefault(m => m.IsRunning);
 
+    private bool OnChampionPath(TournamentMatchDto match) =>
+        _tournament is { Status: TournamentStatus.Complete, ChampionModelId: { } champion }
+        && match.WinnerModelId == champion;
+
     /// <summary>
     /// A match's Arena link, carrying the bracket it came from. A duel row does not record its
     /// tournament, so the query string is the only way the Arena knows to offer the way back.
@@ -528,7 +547,7 @@
             + (lost ? " tourney__slot--lost" : "")
             + (modelId.IsEmpty ? " tourney__slot--empty" : "");
 
-        return @<div class="@css" data-slot="@(isSlotA ? "a" : "b")">
+        return @<div class="@css">
             @if (modelId.IsEmpty)
             {
                 <span class="tourney__slot-name">—</span>
@@ -558,12 +577,19 @@
             return;
         }
 
+        await LoadBracketAsync();
+    }
+
+    private async Task LoadBracketAsync()
+    {
+        StopPolling();
         _loadingTournament = true;
         _tournament = null;
+        _error = null;
 
         try
         {
-            _tournament = await ApiClient.GetTournamentAsync(TournamentId.From(TournamentIdText));
+            _tournament = await ApiClient.GetTournamentAsync(TournamentId.From(TournamentIdText!));
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
@@ -615,22 +641,13 @@
         _selected.Clear();
         if (_entrants.Count == 0) return;
 
-        var remote = _entrants.Where(e => e.ModelType == ModelType.Remote).ToList();
-        var rest = _entrants.Where(e => e.ModelType != ModelType.Remote).ToList();
+        var remote = _entrants.Where(e => e.ModelType == ModelType.Remote).ToArray();
+        var rest = _entrants.Where(e => e.ModelType != ModelType.Remote).ToArray();
 
-        Shuffle(remote);
-        Shuffle(rest);
+        Random.Shared.Shuffle(remote);
+        Random.Shared.Shuffle(rest);
 
         _selected.AddRange(remote.Concat(rest).Take(FieldSize).Select(e => e.ModelId));
-    }
-
-    private static void Shuffle<T>(IList<T> items)
-    {
-        for (var i = items.Count - 1; i > 0; i--)
-        {
-            var j = Random.Shared.Next(i + 1);
-            (items[i], items[j]) = (items[j], items[i]);
-        }
     }
 
     private async Task StartAsync()
@@ -642,7 +659,7 @@
 
         try
         {
-            await AudioService.PlaySnareRollAsync();
+            await JS.InvokeVoidAsync("poNotify.ask");
             var drawn = await ApiClient.CreateTournamentAsync(_selected, _prompt.Trim());
 
             if (drawn is not null)
@@ -704,6 +721,7 @@
             _hub.OnStartLocalInference += OnStartLocalInference;
             await _hub.ConnectAsync(Nav.BaseUri.TrimEnd('/'), runningDuelId.Value);
             _hubDuelId = runningDuelId;
+            if (_disposed) await DisconnectHubAsync();
         }
         catch (Exception)
         {
@@ -749,15 +767,26 @@
         {
             while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                var fresh = await ApiClient.GetTournamentAsync(TournamentId.From(TournamentIdText!));
+                TournamentDto? fresh;
+                try
+                {
+                    fresh = await ApiClient.GetTournamentAsync(TournamentId.From(TournamentIdText!));
+                }
+                catch (HttpRequestException)
+                {
+                    // A failed poll is not a failed run — the bracket is server-side. Keep the
+                    // last good view, say so, and let the next tick retry.
+                    if (!_pollFailing) { _pollFailing = true; await InvokeAsync(StateHasChanged); }
+                    continue;
+                }
+                if (cancellationToken.IsCancellationRequested) return;
+                _pollFailing = false;
                 if (fresh is null) continue;
 
                 var wasComplete = _tournament?.Status == TournamentStatus.Complete;
-                var decidedBefore = DecidedKeys(_tournament);
                 _tournament = fresh;
                 await EnsureHubForRunningMatchAsync();
                 await InvokeAsync(StateHasChanged);
-                await AnimateNewlyDecidedAsync(decidedBefore, fresh);
 
                 if (fresh.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
                 {
@@ -768,16 +797,13 @@
                     {
                         if (fresh.Status == TournamentStatus.Complete)
                         {
-                            _ = AudioService.PlayFanfareAsync();
-                            // Grand 3D tumbling confetti ribbons and golden embers
-                            _ = Fx.ChampionPyrotechnicsAsync(".tourney__champion");
+                            _ = AudioService.PlaySuccessAsync();
                             _ = Fx.ChampionBurstAsync(".tourney__champion");
-                            _ = Fx.SetLivingStateAsync("victory");
+                            await JS.InvokeVoidAsync("poNotify.notify", "Tournament complete", $"{fresh.ChampionName} wins the {SizeLabel(fresh.Size)}.");
                         }
                         else
                         {
-                            // An abandoned run is not a result and must not sound like one.
-                            _ = AudioService.PlayDefeatAsync();
+                            await JS.InvokeVoidAsync("poNotify.notify", "Tournament abandoned", "The bracket could not finish.");
                         }
                     }
 
@@ -793,48 +819,9 @@
         }
         catch (Exception)
         {
-            // A failed poll is not a failed run — the bracket is server-side. Stop refreshing
-            // rather than replacing what is on screen with an error about fetching it.
+            // Anything other than a network failure (those are retried above) is unexpected:
+            // stop refreshing rather than replacing what is on screen with an error about it.
             StopPolling();
-        }
-    }
-
-    private static HashSet<string> DecidedKeys(TournamentDto? tournament) =>
-        tournament is null
-            ? []
-            : tournament.Matches.Where(m => m.IsDecided).Select(m => $"{m.Round}-{m.Index}").ToHashSet();
-
-    /// <summary>
-    /// For each match decided since the last poll: the loser's slot tips and drops, and a
-    /// point of light carries the winner to the slot it now fills in the next round. Only on
-    /// the transition — a page opened mid-bracket does not replay the rounds already played.
-    /// Transform-only (wow.js), so it is safe even if the next browser match has started.
-    /// </summary>
-    private async Task AnimateNewlyDecidedAsync(HashSet<string> decidedBefore, TournamentDto fresh)
-    {
-        var fresher = fresh.Matches
-            .Where(m => m.IsDecided && m.WinnerModelId is not null && !decidedBefore.Contains($"{m.Round}-{m.Index}"))
-            .ToList();
-        if (fresher.Count == 0) return;
-
-        try
-        {
-            foreach (var match in fresher)
-            {
-                var winnerIsA = match.WinnerModelId == match.SlotAModelId;
-                var here = $"[data-match=\"{match.Round}-{match.Index}\"]";
-                var next = $"[data-match=\"{match.Round + 1}-{match.Index / 2}\"] [data-slot=\"{(match.Index % 2 == 0 ? "a" : "b")}\"]";
-
-                await JS.InvokeVoidAsync("poWow.knock", $"{here} [data-slot=\"{(winnerIsA ? "b" : "a")}\"]");
-                await JS.InvokeVoidAsync("poWow.comet", $"{here} [data-slot=\"{(winnerIsA ? "a" : "b")}\"]", next);
-            }
-
-            _ = AudioService.PlayKnockoutAsync();
-            _ = AudioService.PlayAdvanceAsync();
-        }
-        catch (JSException)
-        {
-            // Decoration: the bracket has already updated.
         }
     }
 
@@ -867,6 +854,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         StopPolling();
         // Fire-and-forget: IDisposable cannot await, and the hub's own dispose is best-effort.
         // A browser match already in flight keeps running until its worker finishes, which is

@@ -126,7 +126,7 @@ if (-not $SkipDocker) {
             Write-Ok "Azurite container started"
         } else {
             docker run -d --name azurite `
-                -p 10000:10000 -p 10001:10001 -p 10002:10002 `
+                -p 10000:10000 -p 10002:10002 `
                 mcr.microsoft.com/azure-storage/azurite | Out-Null
             Write-Ok "Azurite container created and started"
         }
@@ -224,6 +224,19 @@ if (-not $SkipModels) {
     } else {
         Write-Warn "download-models.py not found — skipping model download"
     }
+}
+
+# ─── 6. Ollama context window ────────────────────────────────────────────────
+# OllamaInferenceProxy asks for up to 4096 output tokens over the OpenAI-compatible /v1 route,
+# which cannot set num_ctx per request. Ollama's default context is 4096 TOTAL — system prompt,
+# user prompt, any thinking and the document — so long pages were cut off (finish_reason=length,
+# DuelResult.WasTruncated). The server-wide setting is the only knob; Ollama must restart to read it.
+Write-Step "Setting Ollama context window"
+if ([Environment]::GetEnvironmentVariable('OLLAMA_CONTEXT_LENGTH', 'User') -ne '8192') {
+    [Environment]::SetEnvironmentVariable('OLLAMA_CONTEXT_LENGTH', '8192', 'User')
+    Write-Ok "OLLAMA_CONTEXT_LENGTH=8192 (restart Ollama to apply)"
+} else {
+    Write-Ok "OLLAMA_CONTEXT_LENGTH already 8192"
 }
 
 # ─── Done ─────────────────────────────────────────────────────────────────────

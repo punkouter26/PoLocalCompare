@@ -45,8 +45,8 @@ public sealed class NavigationUiTests : UiTestBase
         var problems = await page.EvaluateAsync<string[]>(
             """
             () => {
-                const sel = '.navmenu__brand, .navmenu__link, .navmenu__ticker-pill,'
-                          + ' .navmenu__ticker-latest, .navmenu__user-badge, .navmenu__auth > .po-btn';
+                const sel = '.navmenu__brand, .navmenu__mock-chip, .navmenu__link,'
+                          + ' .navmenu__ticker-pill, .navmenu__menu-trigger';
                 const els = [...document.querySelectorAll(sel)].filter(e => e.offsetParent !== null);
                 const label = e => (e.textContent || e.className).trim().slice(0, 24);
                 const bad = [];
@@ -166,7 +166,7 @@ public sealed class NavigationUiTests : UiTestBase
 
         // Assert on the page's own element: body text also contains the skip link and nav, so
         // a substring match there passes for the wrong reasons and is slow to settle.
-        await Assertions.Expect(page.Locator(".not-found__title")).ToBeVisibleAsync(
+        await Assertions.Expect(page.Locator(".empty-state__title")).ToBeVisibleAsync(
             new() { Timeout = 20_000 });
     }
 }

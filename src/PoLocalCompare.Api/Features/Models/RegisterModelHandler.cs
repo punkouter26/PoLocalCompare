@@ -35,23 +35,6 @@ public sealed class RegisterModelHandler
 
         await _modelRepository.SaveAsync(model);
 
-        return MapToDto(model);
+        return model.ToDto();
     }
-
-    internal static ModelDto MapToDto(Model model) => new()
-    {
-        ModelId = model.ModelId,
-        DisplayName = model.DisplayName,
-        ModelType = model.ModelType,
-        CurrentElo = model.CurrentElo,
-        DuelCount = model.DuelCount,
-        WinCount = model.WinCount,
-        DrawCount = model.DrawCount,
-        TdpWatts = model.TdpWatts,
-        ApiEndpointRef = model.ApiEndpointRef,
-        WebLlmModelId = model.WebLlmModelId,
-        InputTokenPricePerMillion = model.InputTokenPricePerMillion,
-        OutputTokenPricePerMillion = model.OutputTokenPricePerMillion,
-        CreatedAt = model.CreatedAt,
-    };
 }

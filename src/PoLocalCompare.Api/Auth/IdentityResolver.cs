@@ -22,3 +22,13 @@ public static class IdentityResolver
         return string.IsNullOrWhiteSpace(name) ? AnonymousActor : name;
     }
 }
+
+public static class AnonymousWrites
+{
+    /// <summary>
+    /// Opens one write endpoint when <c>Features:AllowAnonymousWrites</c> is on. Applied to the
+    /// endpoint, not the group: AllowAnonymous() on the group loses to its RequireAuthorization().
+    /// </summary>
+    public static RouteHandlerBuilder OpenIf(bool allow, RouteHandlerBuilder builder) =>
+        allow ? builder.AllowAnonymous() : builder;
+}

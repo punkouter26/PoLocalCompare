@@ -78,29 +78,25 @@ window.focusElement = function (id) {
 };
 
 /**
- * Returns the browser's current `window.location.href` as a string. Used by Home.razor when
- * the URL has query parameters (slot ids) that Blazor's named-supply-parameter matcher
- * occasionally drops — having the raw value as a fallback lets the page read the slots
- * regardless of how the framework bound the parameters.
+ * "Your duel/bracket finished" while the tab is in the background. ask() runs from the Compare
+ * and Start clicks because browsers ignore a permission request without a user gesture; notify()
+ * stays silent when the tab is visible, since the page itself is already showing the result.
+ * ponytail: page-level Notification only — Android Chrome throws on the constructor (it requires
+ * ServiceWorkerRegistration.showNotification), so mobile gets nothing; route through the service
+ * worker if that matters.
  */
-window.getLocationHref = function () {
-    return window.location.href;
-};
-
-/**
- * Best-effort haptic tap. Desktop browsers and iOS Safari have no Vibration API, and a browser
- * may refuse without a prior user gesture — a verdict click is a gesture, so this fires there.
- *
- * Moved here from compare.js on 2026-08-23, when that file's other five helpers (the sandbox
- * runtime probe, synced scroll panes, the clipboard copy and the share-card canvas renderer)
- * lost their callers along with the Objective scorecard, the Code/Diff views and the duel
- * export. One function did not justify its own script tag.
- */
-window.hapticPulse = function (pattern) {
-    try {
-        if (navigator.vibrate) navigator.vibrate(pattern);
-    } catch {
-        /* vibration is decoration — never let it surface as an error */
+window.poNotify = {
+    ask() {
+        try {
+            if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+        } catch { /* decoration */ }
+    },
+    notify(title, body) {
+        try {
+            if (document.visibilityState !== 'hidden' || Notification.permission !== 'granted') return;
+            const n = new Notification(title, { body, icon: '/favicon.png' });
+            n.onclick = () => { window.focus(); n.close(); };
+        } catch { /* decoration */ }
     }
 };
 
@@ -109,10 +105,8 @@ window.hapticPulse = function (pattern) {
  *
  * Browser models run WebLLM over WebGPU in this tab, and the tok/s the race reports is measured
  * while that happens. Any render loop that competes for the GPU makes that number wrong, so
- * every continuous effect in the app (the shader backdrop in fx.js, the liquid-glass
- * refraction) asks this before each frame and stops outright while it is held — it does not
- * keep a requestAnimationFrame spinning with the drawing skipped, which is what the old
- * pauseLiving() did.
+ * every canvas effect in the app (fx.js's confetti burst) asks this first and does nothing
+ * while it is held.
  *
  * webllm-interop.js acquires it when a worker starts and releases it when that worker completes,
  * errors or is terminated, so the Arena and the Tournament page (the two places a browser model
@@ -144,3 +138,12 @@ window.poGpuLease = (() => {
         subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     };
 })();
+
+// Light dismiss for the nav's native <details> user menu: a click anywhere outside it closes
+// it. Without this the panel only closed on Escape, navigation or the trigger, and otherwise
+// floated over the page after a theme or sound toggle.
+document.addEventListener('click', (e) => {
+    for (const menu of document.querySelectorAll('details.navmenu__menu[open]')) {
+        if (!menu.contains(e.target)) menu.removeAttribute('open');
+    }
+});

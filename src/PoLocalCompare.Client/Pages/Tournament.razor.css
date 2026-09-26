@@ -101,6 +101,35 @@
     min-width: min-content;
 }
 
+/* The champion's road: each match it won lights up gold, round by round (--path-step). */
+.tourney__match--champion-path {
+    position: relative;
+}
+
+.tourney__match--champion-path::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border: 2px solid var(--accent-yellow);
+    border-radius: inherit;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent-yellow) 45%, transparent);
+    pointer-events: none;
+    opacity: 0;
+    animation: tourney-path 700ms ease-out calc(var(--path-step, 0) * 280ms + 400ms) forwards;
+}
+
+@keyframes tourney-path {
+    from { opacity: 0; transform: scale(1.06); }
+    to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tourney__match--champion-path::after {
+        opacity: 1;
+        animation: none;
+    }
+}
+
 .tourney__round {
     display: flex;
     flex-direction: column;
@@ -214,17 +243,19 @@
     flex: 0 0 auto;
 }
 
-.tourney__match-link {
+/* Shown only on the running match — the card itself is the link. */
+.tourney__match-live {
+    align-self: flex-start;
     margin-top: var(--space-xs);
-    color: var(--text-muted);
-    font-size: var(--text-xs);
-    text-decoration: none;
-}
-
-.tourney__match-link:hover,
-.tourney__match-link:focus-visible {
+    padding: var(--space-2xs) var(--space-sm);
+    border: 1px solid var(--success-border);
+    border-radius: var(--radius-full);
+    background: var(--success-surface);
     color: var(--accent-green);
-    text-decoration: underline;
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 
 .tourney__tiebreak,
@@ -245,35 +276,6 @@
 
 .tourney__section-head {
     margin-bottom: var(--space-sm);
-}
-
-.tourney__entrants {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: var(--space-sm);
-    margin: 0 0 var(--space-smd);
-    padding: 0;
-    list-style: none;
-}
-
-.tourney__entrant {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-sm);
-    width: 100%;
-    padding: var(--space-sm) var(--space-smd);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-1);
-    color: var(--text);
-    font: inherit;
-    font-size: var(--text-md);
-    text-align: left;
-    cursor: pointer;
-}
-
-.tourney__entrant:hover {
-    border-color: var(--accent-green);
 }
 
 /* Matches .home__textarea exactly — the same control, written twice, had drifted on border
@@ -358,26 +360,9 @@
     font-weight: 600;
 }
 
-/* Tablet and small laptop — the missing middle. An 8-model bracket is 3 rounds at 13rem,
-   so about 42rem plus gaps, which fits; the ENTRANT list above it does not, because
-   auto-fill at minmax(15rem, 1fr) puts four cards on a 1024px page and each one then holds
-   a model name at a width that forces a wrap. Two roomier columns read better than four
-   cramped ones. */
-@media (max-width: 1024px) {
-    .tourney__entrants {
-        grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-    }
-}
-
 @media (max-width: 640px) {
     .tourney__bracket {
         grid-template-columns: repeat(var(--rounds, 3), minmax(11rem, 1fr));
-    }
-
-    /* One entrant per row on a phone. auto-fill would still try to fit two at 11rem on a
-       390px screen and clip the names; a single column lets each one wrap in full. */
-    .tourney__entrants {
-        grid-template-columns: minmax(0, 1fr);
     }
 
     /* The bracket is the one thing on the page that legitimately scrolls sideways — three

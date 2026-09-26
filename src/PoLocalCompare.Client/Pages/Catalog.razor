@@ -1,5 +1,6 @@
 @page "/catalog"
 @using PoLocalCompare.Shared.DTOs
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 
 @inject DuelApiClient ApiClient
 
@@ -15,8 +16,9 @@
    stale page cannot register a model that will not load. The Hub counts are decoration. *@
 <div class="po-page po-page--wide">
     <PageHeader Title="Catalog"
-                Subtitle="Add browser (WebGPU) or Ollama models that aren't in the catalog yet. New models start at 1200 and show up on Compare straight away." />
+                Subtitle="Add browser or Ollama models; new ones start at 1200." />
 
+    @* Always mounted: a live region inserted already filled is not announced by most readers. *@
     <p class="po-status" role="status">@_status</p>
 
     @if (_loading)
@@ -42,114 +44,78 @@
             else
             {
                 <p class="po-hint">
-                    Weights stream from the Hugging Face CDN the first time a model runs, unless they are vendored under
-                    <code>wwwroot/models/</code>.
+                    Weights stream from the CDN unless vendored.
                     @if (!_discovery.HubReachable)
                     {
-                        <span> The Hub couldn't be reached, so the list isn't sorted by popularity.</span>
+                        <span> Hub unreachable, so the list isn't sorted by popularity.</span>
                     }
                 </p>
 
-                @* The "Low-VRAM builds only" preset stays as a chip; the free-text box that
-                   used to sit beside it is gone, because the grid below carries a real
-                   per-column filter. Two search affordances for one list was the same
-                   duplication the Archive had between its chips and the grid's Verdict
-                   dropdown. *@
                 <div class="catalog__filters" role="group" aria-label="Filter browser models">
+                    <input type="search" class="catalog__input catalog__search" placeholder="Search builds…"
+                           aria-label="Search browser builds by id"
+                           @bind="_search" @bind:event="oninput" @bind:after="RefreshBrowserRows" />
                     <button type="button"
                             class="po-btn po-btn--sm po-btn--chip"
                             aria-pressed="@(_lowResourceOnly ? "true" : "false")"
-                            @onclick="@(() => _lowResourceOnly = !_lowResourceOnly)">
+                            @onclick="ToggleLowResource">
                         Low-VRAM builds only
                     </button>
                     <span class="po-hint catalog__count">@BrowserCountSummary</span>
                 </div>
 
-                @* ── RadzenDataGrid, virtualised ───────────────────────────────────────
-                   This was a hand-rolled .po-table--cards over `matches.Take(25)` with a
-                   "Show all" button behind it, and it was the worst-fitting page in the app
-                   by a wide margin: measured at 4,911px on a 390x844 phone — 5.8 screens —
-                   for the TRUNCATED list, and the bundle lists ~150 builds, so "Show all"
-                   took it to roughly 26,000px. Every row also mounted a live <input> for the
-                   display name, so the full list meant 150 of them in the DOM at once.
-
-                   The inversion is what made it worth fixing rather than tuning: /archive,
-                   with nine rows, already had the virtualised grid, and this page — the only
-                   genuinely long list in the app — did not. The grid is already in the bundle
-                   for the Archive, so the marginal payload for reusing it here is zero, which
-                   is the whole argument. It brings virtualisation (a dozen rows rendered and
-                   a dozen inputs, whatever the list length), per-column sort on Downloads and
-                   VRAM, and the filter row that replaced the search box above.
-
-                   Same three load-bearing settings as the Archive: Responsive for the phone
-                   card treatment, AllowVirtualization with a definite height (from the flex
-                   wrapper, via .rz-datatable.catalog__grid in app.css), and the height NOT set
-                   inline so it can be derived. *@
-                <div class="catalog__grid-wrap po-grid--bounded">
-                    <RadzenDataGrid TItem="DiscoveredBrowserModelDto"
-                                    Data="@FilteredBrowser()"
-                                    AllowSorting="true"
-                                    AllowFiltering="true"
-                                    FilterMode="FilterMode.Simple"
-                                    FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                    AllowVirtualization="true"
-                                    Responsive="true"
-                                    EmptyText="No browser models match."
-                                    class="catalog__grid">
-                        <Columns>
-                            <RadzenDataGridColumn TItem="DiscoveredBrowserModelDto" Title="Model" Property="WebLlmModelId">
-                                <Template Context="m">
-                                    <span class="catalog__id">@m.WebLlmModelId</span>
-                                    @if (m.HubRepo is not null)
-                                    {
-                                        <a class="catalog__hub" href="@($"https://huggingface.co/{m.HubRepo}")"
-                                           target="_blank" rel="noopener noreferrer"
-                                           @onclick:stopPropagation="true">Hub ↗</a>
-                                    }
-                                </Template>
-                            </RadzenDataGridColumn>
-
-                            <RadzenDataGridColumn TItem="DiscoveredBrowserModelDto" Title="VRAM"
-                                                  Property="VramRequiredMb" Filterable="false" Width="7rem">
-                                <Template Context="m">
-                                    <span class="catalog__num">@FormatVram(m.VramRequiredMb)</span>
-                                </Template>
-                            </RadzenDataGridColumn>
-
-                            <RadzenDataGridColumn TItem="DiscoveredBrowserModelDto" Title="Downloads"
-                                                  Property="Downloads" Filterable="false" Width="8rem"
-                                                  SortOrder="SortOrder.Descending">
-                                <Template Context="m">
-                                    <span class="catalog__num">@(m.Downloads?.ToString("N0") ?? "—")</span>
-                                </Template>
-                            </RadzenDataGridColumn>
-
-                            <RadzenDataGridColumn TItem="DiscoveredBrowserModelDto" Title="Display name"
-                                                  Sortable="false" Filterable="false" Width="14rem">
-                                <Template Context="m">
-                                    @* Virtualisation is what makes this affordable: only the rows
-                                       on screen render, so this is a dozen inputs rather than one
-                                       per build in the bundle. *@
-                                    <input class="catalog__input"
-                                           aria-label="@($"Display name for {m.WebLlmModelId}")"
-                                           value="@NameFor(m.WebLlmModelId, m.SuggestedName)"
-                                           @onchange="@(e => _names[m.WebLlmModelId] = e.Value?.ToString() ?? string.Empty)" />
-                                </Template>
-                            </RadzenDataGridColumn>
-
-                            <RadzenDataGridColumn TItem="DiscoveredBrowserModelDto" Title=""
-                                                  Sortable="false" Filterable="false" Width="6rem">
-                                <Template Context="m">
-                                    <button type="button" class="po-btn po-btn--sm po-btn--primary"
-                                            disabled="@(_adding is not null)"
-                                            @onclick="@(() => AddAsync(DiscoveredModelKind.Browser, m.WebLlmModelId, m.SuggestedName))">
-                                        @(_adding == m.WebLlmModelId ? "Adding…" : "Add")
-                                    </button>
-                                </Template>
-                            </RadzenDataGridColumn>
-                        </Columns>
-                    </RadzenDataGrid>
+                @* The longest list in the app (~150 builds, each with a live name <input>), so it
+                   is a bounded window that virtualises: Blazor's own <Virtualize> renders only the
+                   rows in view. The window needs a definite height (.catalog__grid-wrap) or the
+                   virtualiser has nothing to measure against and renders every row. Rows arrive
+                   ranked by Hub downloads, so there is no sort control. *@
+                <div class="catalog__grid-wrap po-table-wrap">
+                    <table class="po-table po-table--cards">
+                        <caption class="visually-hidden">WebLLM builds that can be added, most downloaded first</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Model</th>
+                                <th scope="col">VRAM</th>
+                                <th scope="col">Downloads</th>
+                                <th scope="col">Display name</th>
+                                <th scope="col"><span class="visually-hidden">Add</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <Virtualize Items="_browserRows" Context="m" ItemSize="48">
+                                <tr @key="m.WebLlmModelId">
+                                    <td data-label="Model">
+                                        <span class="catalog__id">@m.WebLlmModelId</span>
+                                        @if (m.HubRepo is not null)
+                                        {
+                                            <a class="catalog__hub" href="@($"https://huggingface.co/{m.HubRepo}")"
+                                               target="_blank" rel="noopener noreferrer">Hub ↗</a>
+                                        }
+                                    </td>
+                                    <td data-label="VRAM"><span class="catalog__num">@FormatVram(m.VramRequiredMb)</span></td>
+                                    <td data-label="Downloads"><span class="catalog__num">@(m.Downloads?.ToString("N0") ?? "—")</span></td>
+                                    <td data-label="Display name">
+                                        <input class="catalog__input"
+                                               aria-label="@($"Display name for {m.WebLlmModelId}")"
+                                               value="@NameFor(m.WebLlmModelId, m.SuggestedName)"
+                                               @onchange="@(e => _names[m.WebLlmModelId] = e.Value?.ToString() ?? string.Empty)" />
+                                    </td>
+                                    <td class="po-cell--bare">
+                                        <button type="button" class="po-btn po-btn--sm po-btn--primary"
+                                                disabled="@(_adding is not null)"
+                                                @onclick="@(() => AddAsync(DiscoveredModelKind.Browser, m.WebLlmModelId, m.SuggestedName))">
+                                            @(_adding == m.WebLlmModelId ? "Adding…" : "Add")
+                                        </button>
+                                    </td>
+                                </tr>
+                            </Virtualize>
+                        </tbody>
+                    </table>
                 </div>
+                @if (_browserRows.Count == 0)
+                {
+                    <p class="po-hint">No browser models match.</p>
+                }
             }
         </section>
 
@@ -159,10 +125,7 @@
                 <h2 id="catalog-ollama-heading" class="po-section-title">Ollama models</h2>
                 @if (_discovery.Ollama.Count == 0)
                 {
-                    <p class="po-hint">
-                        Nothing new — either every pulled model is already in the catalog, or Ollama isn't running.
-                        Pull one with <code>ollama pull &lt;name&gt;</code> and reload.
-                    </p>
+                    <p class="po-hint">Nothing new. <code>ollama pull &lt;name&gt;</code>, then reload.</p>
                 }
                 else
                 {
@@ -210,13 +173,9 @@
     private string? _error;
     private string? _status;
 
-    /// <summary>
-    /// The one preset kept as a chip. Free-text matching moved into the grid's own per-column
-    /// filter row, which is why <c>_filter</c> and the <c>PageSize</c>/<c>_showAll</c> pair that
-    /// used to truncate the list at 25 rows are gone: the grid virtualises, so there is nothing
-    /// left for a "Show all" button to reveal.
-    /// </summary>
+    /// <summary>The one preset kept as a chip, beside a free-text search on the build id.</summary>
     private bool _lowResourceOnly;
+    private string _search = string.Empty;
 
     /// <summary>Id of the model being added, so every Add button disables while one is in flight.</summary>
     private string? _adding;
@@ -229,6 +188,7 @@
         try
         {
             _discovery = await ApiClient.GetModelDiscoveryAsync();
+            RefreshBrowserRows();
         }
         catch (Exception ex)
         {
@@ -240,20 +200,32 @@
         }
     }
 
-private IEnumerable<DiscoveredBrowserModelDto> FilteredBrowser() =>
-        (_discovery?.Browser ?? []).Where(m => !_lowResourceOnly || m.LowResource);
+    // A materialised list, rebuilt only when its inputs change, so an _adding/_status change
+    // does not re-run the filter over ~150 rows on every render.
+    private List<DiscoveredBrowserModelDto> _browserRows = [];
+
+    private void RefreshBrowserRows() =>
+        _browserRows = (_discovery?.Browser ?? [])
+            .Where(m => !_lowResourceOnly || m.LowResource)
+            .Where(m => string.IsNullOrWhiteSpace(_search) || m.WebLlmModelId.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private void ToggleLowResource()
+    {
+        _lowResourceOnly = !_lowResourceOnly;
+        RefreshBrowserRows();
+    }
 
     /// <summary>
-    /// How many builds the chip is letting through, and out of how many — only saying "of N"
-    /// when the preset is actually hiding something, so the line counts one population at a
-    /// time. (The grid's own filter row narrows this further and reports that itself.)
+    /// How many builds the filters are letting through, and out of how many — only saying
+    /// "of N" when something is actually hidden.
     /// </summary>
     private string BrowserCountSummary
     {
         get
         {
             var total = _discovery?.Browser.Count ?? 0;
-            var shown = FilteredBrowser().Count();
+            var shown = _browserRows.Count;
             var noun = shown == 1 ? "build" : "builds";
             return shown == total ? $"{shown} {noun}" : $"{shown} of {total} {noun}";
         }
@@ -284,6 +256,7 @@ private IEnumerable<DiscoveredBrowserModelDto> FilteredBrowser() =>
                     HubReachable = _discovery.HubReachable,
                     OllamaSupported = _discovery.OllamaSupported,
                 };
+                RefreshBrowserRows();
             }
         }
         catch (Exception ex)

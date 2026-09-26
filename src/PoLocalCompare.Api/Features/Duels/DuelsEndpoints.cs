@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Azure;
 using PoLocalCompare.Api.Auth;
+using static PoLocalCompare.Api.Auth.AnonymousWrites;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -20,12 +21,6 @@ public static class DuelsEndpoints
     public static IEndpointRouteBuilder MapDuelsEndpoints(this IEndpointRouteBuilder app, bool allowAnonymousWrites = false)
     {
         var group = app.MapGroup("/api/duels").WithTags("Duels").RequireAuthorization();
-
-        // Helper: capture the RouteHandlerBuilder so the per-endpoint AllowAnonymous() override
-        // can be applied AFTER the chain that already built it. Calling AllowAnonymous() on the
-        // group itself would lose to the group's RequireAuthorization() registration order.
-        static RouteHandlerBuilder OpenIf(bool allow, RouteHandlerBuilder builder) =>
-            allow ? builder.AllowAnonymous() : builder;
 
         var commenceDuel = OpenIf(allowAnonymousWrites, group.MapPost("/", async (
             [FromBody] CommenceDuelRequest request,
@@ -277,23 +272,21 @@ public static class DuelsEndpoints
         // T077 — GET /api/duels (archive listing with pagination)
         group.MapGet("/", async (
             [FromQuery] int? limit,
-            [FromQuery] string? before,
+            [FromQuery] DuelId? before,
+            [FromQuery] DuelVerdict[]? verdict,
             [FromServices] ListDuelsHandler handler) =>
         {
             // `limit` is optional: an absent (or 0) value defaults to 20. Declaring it
             // non-nullable/required previously returned 500 when callers omitted it.
             var clampedLimit = Math.Clamp(limit is null or 0 ? 20 : limit.Value, 1, 100);
 
-            // `before` is a partition cursor, so it is only ever a yyyyMM stamp. The repository
-            // binds it as an escaped literal regardless; rejecting the wrong shape here keeps a
-            // malformed cursor from silently paging through nothing.
-            if (before is not null && !IsMonthStamp(before))
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["before"] = ["Must be a yyyyMM month stamp, e.g. 202608."]
-                });
-
-            var results = await handler.HandleAsync(clampedLimit, before);
+            // `before` is a keyset cursor — the oldest duel id the caller already holds — and
+            // only strictly older duels come back. It was a yyyyMM partition stamp, which paged
+            // with `le` and so re-served the current month on every Load More. The repository
+            // binds it as an escaped literal. `verdict` repeats (?verdict=Left&verdict=Right) and
+            // filters before the limit, so "Unjudged" pages through unjudged duels rather than
+            // filtering whichever twenty happened to load.
+            var results = await handler.HandleAsync(clampedLimit, before, verdict);
             return Results.Ok(results);
         })
         .WithName("ListDuels")
@@ -309,7 +302,7 @@ public static class DuelsEndpoints
             [FromServices] ListDuelsHandler handler) =>
         {
             // Same window the ticker used, but only the ids cross the wire.
-            var recent = await handler.HandleAsync(25, beforeMonth: null);
+            var recent = await handler.HandleAsync(25);
             var ids = recent
                 .Where(d => d.Verdict == DuelVerdict.Pending && d.CompletedAt.HasValue)
                 .Select(d => d.DuelId)
@@ -322,20 +315,6 @@ public static class DuelsEndpoints
         .Produces<IReadOnlyList<DuelId>>(StatusCodes.Status200OK);
 
         return app;
-    }
-
-    /// <summary>True for a bare <c>yyyyMM</c> stamp — the shape duel partition keys use.</summary>
-    private static bool IsMonthStamp(string value)
-    {
-        if (value.Length != 6) return false;
-
-        foreach (var c in value)
-        {
-            if (!char.IsAsciiDigit(c)) return false;
-        }
-
-        var month = int.Parse(value.AsSpan(4, 2));
-        return month is >= 1 and <= 12;
     }
 }
 

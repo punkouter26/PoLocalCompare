@@ -8,9 +8,14 @@ public sealed class ListDuelsHandler(
     IModelRepository modelRepository,
     IDuelResultRepository duelResultRepository)
 {
-    public async Task<IReadOnlyList<DuelSummaryDto>> HandleAsync(int limit = 20, string? beforeMonth = null)
+    /// <param name="before">Keyset cursor: the oldest duel id the caller already has. Only strictly older duels come back.</param>
+    /// <param name="verdicts">When non-empty, only duels with one of these verdicts — applied before the limit, not after.</param>
+    public async Task<IReadOnlyList<DuelSummaryDto>> HandleAsync(
+        int limit = 20,
+        DuelId? before = null,
+        IReadOnlyCollection<DuelVerdict>? verdicts = null)
     {
-        var duels = (await duelRepository.ListAsync(limit, beforeMonth)).ToList();
+        var duels = (await duelRepository.ListAsync(limit, beforeMonth: null, before, verdicts)).ToList();
 
         // The roster is small and every page re-references the same handful of models, so one
         // GetAllAsync beats two GetByIdAsync per duel. Results live in per-duel partitions and
@@ -36,6 +41,9 @@ public sealed class ListDuelsHandler(
             result.Add(new DuelSummaryDto
             {
                 DuelId = duel.DuelId,
+                // The whole prompt, so the Archive's re-run starts the same duel rather than one
+                // prompted with the 80-character summary below.
+                PromptText = duel.PromptText,
                 PromptSummary = duel.PromptText.Length > 80
                     ? duel.PromptText[..80] + "…"
                     : duel.PromptText,

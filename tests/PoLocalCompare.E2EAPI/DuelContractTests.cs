@@ -12,37 +12,16 @@ namespace PoLocalCompare.E2EAPI;
 [Collection(DuelCollection.Name)]
 public sealed class DuelContractTests(DuelApiFixture app)
 {
-    private static async Task<string> RegisterModelAsync(HttpClient client, string prefix)
-    {
-        var response = await client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = $"{prefix} {Guid.NewGuid():N}",
-            ModelType = "Remote",
-            ApiEndpointRef = "contract-deployment",
-            InputTokenPricePerMillion = 0.10m,
-            OutputTokenPricePerMillion = 0.30m,
-        });
-        response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
-    }
+    private Task<string> RegisterModelAsync(string prefix) =>
+        TestModels.RemoteAsync(app.Services, $"{prefix} {Guid.NewGuid():N}");
 
     /// <summary>
     /// A browser (WebLLM) model — the only kind allowed to post its own result, since it is the
     /// only kind that runs in the client. <c>/local-result</c> checks the type, so the local-result
     /// tests need one of these rather than the Remote default above.
     /// </summary>
-    private static async Task<string> RegisterLocalModelAsync(HttpClient client, string prefix)
-    {
-        var response = await client.PostAsJsonAsync("/api/models", new
-        {
-            DisplayName = $"{prefix} {Guid.NewGuid():N}",
-            ModelType = "Local",
-            TdpWatts = 45.0,
-            WebLlmModelId = "contract-webllm-model",
-        });
-        response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("modelId").GetString()!;
-    }
+    private Task<string> RegisterLocalModelAsync(string prefix) =>
+        TestModels.LocalAsync(app.Services, $"{prefix} {Guid.NewGuid():N}");
 
     /// <summary>
     /// Waits until both models have reported, which is what a verdict requires.
@@ -81,7 +60,7 @@ public sealed class DuelContractTests(DuelApiFixture app)
         }
     }
 
-    private static async Task<(string DuelId, string Left, string Right)> CommenceAsync(HttpClient client)
+    private async Task<(string DuelId, string Left, string Right)> CommenceAsync(HttpClient client)
         => await CommenceAsync(client, leftIsLocal: false);
 
     /// <summary>
@@ -104,14 +83,14 @@ public sealed class DuelContractTests(DuelApiFixture app)
         response.EnsureSuccessStatusCode();
     }
 
-    private static async Task<(string DuelId, string Left, string Right)> CommenceAsync(
+    private async Task<(string DuelId, string Left, string Right)> CommenceAsync(
         HttpClient client,
         bool leftIsLocal)
     {
         var left = leftIsLocal
-            ? await RegisterLocalModelAsync(client, "Left")
-            : await RegisterModelAsync(client, "Left");
-        var right = await RegisterModelAsync(client, "Right");
+            ? await RegisterLocalModelAsync("Left")
+            : await RegisterModelAsync("Left");
+        var right = await RegisterModelAsync("Right");
 
         var response = await client.PostAsJsonAsync("/api/duels", new
         {
@@ -145,8 +124,8 @@ public sealed class DuelContractTests(DuelApiFixture app)
     public async Task Commence_Returns202WithALocationHeader()
     {
         using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "Loc Left");
-        var right = await RegisterModelAsync(client, "Loc Right");
+        var left = await RegisterModelAsync("Loc Left");
+        var right = await RegisterModelAsync("Loc Right");
 
         var response = await client.PostAsJsonAsync("/api/duels", new
         {
@@ -166,8 +145,8 @@ public sealed class DuelContractTests(DuelApiFixture app)
         string promptText, HttpStatusCode expectedStatus)
     {
         using var client = app.CreateAuthenticatedClient();
-        var left = await RegisterModelAsync(client, "Left For Reject");
-        var right = await RegisterModelAsync(client, "Right For Reject");
+        var left = await RegisterModelAsync("Left For Reject");
+        var right = await RegisterModelAsync("Right For Reject");
 
         var response = await client.PostAsJsonAsync("/api/duels", new
         {
@@ -183,7 +162,7 @@ public sealed class DuelContractTests(DuelApiFixture app)
     public async Task Commence_SameModelBothSides_IsRejected()
     {
         using var client = app.CreateAuthenticatedClient();
-        var only = await RegisterModelAsync(client, "Solo");
+        var only = await RegisterModelAsync("Solo");
 
         var response = await client.PostAsJsonAsync("/api/duels", new
         {
@@ -330,7 +309,7 @@ public sealed class DuelContractTests(DuelApiFixture app)
         // in the client, so only they may report their own output).
         using var client = app.CreateAuthenticatedClient();
         var (duelId, left, right) = await CommenceAsync(client, leftIsLocal: true);
-        var outsider = await RegisterLocalModelAsync(client, "Outsider");
+        var outsider = await RegisterLocalModelAsync("Outsider");
 
         var forOutsider = await PostLocalResultAsync(client, duelId, outsider);
         var forRemoteSide = await PostLocalResultAsync(client, duelId, right);
@@ -363,7 +342,7 @@ public sealed class DuelContractTests(DuelApiFixture app)
         // It carried an unconditional AllowAnonymous() and never loaded the duel at all, so any
         // caller could mint rows under a duel id of their choosing.
         using var client = app.CreateAuthenticatedClient();
-        var model = await RegisterLocalModelAsync(client, "Orphan");
+        var model = await RegisterLocalModelAsync("Orphan");
 
         var response = await PostLocalResultAsync(client, "01AAAAAAAAAAAAAAAAAAAAAAAA", model);
 

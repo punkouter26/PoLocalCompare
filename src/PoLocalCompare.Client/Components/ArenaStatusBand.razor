@@ -25,7 +25,13 @@
         @switch (Phase)
         {
             case ArenaPhase.Running:
-                <span><span aria-hidden="true">⚡</span> Duel in progress — previewing output as it streams…</span>
+                @* The race ticker (who is ahead, who finished). It was TokenRace's own
+                   role="status" in a panel above this one — two live regions narrating the
+                   same race. The visible ticker re-words itself on every streamed batch, so it
+                   is aria-hidden and the region speaks RaceAnnouncement instead, which changes
+                   only on warm-up, a lead change or a finish. *@
+                <span aria-hidden="true">⚡ @(RaceTicker ?? InProgress)</span>
+                <span class="visually-hidden">@(RaceAnnouncement ?? InProgress)</span>
                 break;
 
             case ArenaPhase.WaitingForOtherModel:
@@ -44,11 +50,14 @@
                 break;
 
             case ArenaPhase.JudgeCountdown:
-                <span>
-                    <span aria-hidden="true">⚖</span>
+                @* The visible clock ticks every second; the spoken one says it once at the start
+                   and once more at FinalCall, rather than re-reading the sentence each tick. *@
+                <span aria-hidden="true">
+                    ⚖
                     Pick the winner below — otherwise the AI judge decides in
-                    <strong>@AutoJudgeRemaining</strong> @(AutoJudgeRemaining == 1 ? "second" : "seconds").
+                    <strong>@AutoJudgeRemaining</strong> @Seconds(AutoJudgeRemaining).
                 </span>
+                <span class="visually-hidden">Pick the winner below — otherwise the AI judge decides in @_spokenRemaining @Seconds(_spokenRemaining).</span>
                 break;
 
             case ArenaPhase.AwaitingHumanPick:
@@ -101,9 +110,9 @@
            was actually reading the outputs and is being paraphrased; unquoted for a walkover
            and a void, where the sentence is a statement of fact about the duel rather than a
            judgement someone made. *@
-        @if (!string.IsNullOrWhiteSpace(JudgeRationale) && ShowsRationale)
+        @if (RationaleText is { } rationale)
         {
-            <span class="arena-band__rationale">@(QuotesRationale ? $"“{JudgeRationale}”" : JudgeRationale)</span>
+            <span class="arena-band__rationale">@rationale</span>
         }
 
         @* Forensic attribution — visible to the user, but never used for authorization.
@@ -117,6 +126,14 @@
                  && !string.IsNullOrWhiteSpace(JudgeModel))
         {
             <span class="arena-band__by">Judge: <strong>@JudgeModel</strong></span>
+        }
+
+        @* A pick that lost the race to the auto-judge, corrected visibly rather than swapped
+           silently underneath the person who made it. Inside the band so the correction and
+           the verdict it corrects are one announcement, not two competing live regions. *@
+        @if (Notice is not null)
+        {
+            <span class="arena-band__notice">@Notice</span>
         }
     </div>
 }
@@ -139,6 +156,25 @@
     /// <summary>The judge deployment name, for an AI or Constraint verdict.</summary>
     [Parameter] public string? JudgeModel { get; set; }
 
+    /// <summary>The live race summary for <see cref="ArenaPhase.Running"/> ("X is 1.4× faster right now"). Visual only.</summary>
+    [Parameter] public string? RaceTicker { get; set; }
+
+    /// <summary>What the live region says during <see cref="ArenaPhase.Running"/> — changes only when the race's story does.</summary>
+    [Parameter] public string? RaceAnnouncement { get; set; }
+
+    private const string InProgress = "Duel in progress — previewing output as it streams…";
+
+    /// <summary>The countdown is re-announced once more when it reaches this many seconds.</summary>
+    private const int FinalCall = 3;
+
+    /// <summary>The countdown value the live region last said; null outside the countdown.</summary>
+    private int? _spokenRemaining;
+
+    private static string Seconds(int? n) => n == 1 ? "second" : "seconds";
+
+    /// <summary>A correction of the verdict shown (the user's pick lost the race to the judge).</summary>
+    [Parameter] public string? Notice { get; set; }
+
     private bool ShowsRationale =>
         Phase is ArenaPhase.VerdictVoided
               or ArenaPhase.VerdictTie
@@ -147,6 +183,23 @@
 
     private bool QuotesRationale =>
         Phase is ArenaPhase.VerdictTie or ArenaPhase.VerdictByAi;
+
+    private string? RationaleText =>
+        string.IsNullOrWhiteSpace(JudgeRationale) || !ShowsRationale ? null
+        : QuotesRationale ? $"“{JudgeRationale}”" : JudgeRationale;
+
+    protected override void OnParametersSet()
+    {
+        if (Phase is ArenaPhase.JudgeCountdown && AutoJudgeRemaining is { } left)
+        {
+            if (_spokenRemaining is not { } spoken || (left <= FinalCall && spoken > FinalCall))
+                _spokenRemaining = left;
+        }
+        else
+        {
+            _spokenRemaining = null;
+        }
+    }
 
     /// <summary>
     /// The band's own class. Three visual treatments, matching what the separate blocks used

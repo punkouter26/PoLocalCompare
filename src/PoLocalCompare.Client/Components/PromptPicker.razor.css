@@ -13,13 +13,6 @@
     gap: var(--space-sm);
 }
 
-.prompt-picker__section-hint {
-    font-size: var(--text-xs);
-    color: var(--text-dim);
-    display: block;
-    margin: var(--space-sm) 0;
-}
-
 /* Layout-only, alongside .po-btn: the library opens from here, so it needs to sit clear of
    the textarea above it. */
 .prompt-picker__disclosure {

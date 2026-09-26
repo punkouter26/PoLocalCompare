@@ -19,7 +19,7 @@ namespace PoLocalCompare.Api.Features.Models;
 /// "deployment exists" from "key is wrong".
 /// </remarks>
 public sealed class GetModelAvailabilityHandler(
-    ListModelsHandler listModels,
+    IModelRepository modelRepository,
     IWebHostEnvironment environment,
     IConfiguration configuration,
     IHttpClientFactory httpClientFactory)
@@ -37,12 +37,11 @@ public sealed class GetModelAvailabilityHandler(
 
     public async Task<IReadOnlyList<ModelAvailabilityDto>> HandleAsync(CancellationToken ct = default)
     {
-        var models = ModelVisibility.Filter(await listModels.HandleAsync(), environment);
+        var models = ModelVisibility.Filter((await modelRepository.GetAllAsync()).Select(m => m.ToDto()), environment);
 
         var ollama = await ProbeOllamaAsync(models, ct);
         var foundry = new FoundryProbeContext(
-            configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/'),
-            configuration["AzureAiFoundry:ApiKey"],
+            configuration,
             httpClientFactory.CreateClient("Foundry"),
             new SemaphoreSlim(MaxConcurrentProbes, MaxConcurrentProbes));
 
@@ -107,7 +106,7 @@ public sealed class GetModelAvailabilityHandler(
     // ── Foundry ───────────────────────────────────────────────────────────────
 
     /// <summary>Open connections to Foundry, throttled per probe to honour rate limits.</summary>
-    private sealed record FoundryProbeContext(string? Endpoint, string? ApiKey, HttpClient Client, SemaphoreSlim Throttle);
+    private sealed record FoundryProbeContext(IConfiguration Configuration, HttpClient Client, SemaphoreSlim Throttle);
 
     private static readonly object[] ProbeMessages = [new { role = "user", content = "Say OK." }];
 
@@ -127,6 +126,7 @@ public sealed class GetModelAvailabilityHandler(
     private static async Task<(HttpStatusCode StatusCode, string Body)> SendProbeAsync(
         HttpClient client,
         string url,
+        string modelRef,
         string apiKey,
         string body,
         SemaphoreSlim throttle,
@@ -136,7 +136,7 @@ public sealed class GetModelAvailabilityHandler(
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Add("api-key", apiKey);
+            FoundryChatRequest.AddAuth(request, modelRef, apiKey);
             request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -183,19 +183,30 @@ public sealed class GetModelAvailabilityHandler(
     private static async Task<ModelAvailabilityDto> CheckFoundryAsync(
         ModelDto model, FoundryProbeContext foundry, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(foundry.Endpoint) || string.IsNullOrWhiteSpace(foundry.ApiKey))
-            return Unavailable(model, "AzureAiFoundry endpoint or API key is missing.");
-
         if (string.IsNullOrWhiteSpace(model.ApiEndpointRef))
             return Unavailable(model, "ApiEndpointRef is empty.");
 
         var deploymentName = model.ApiEndpointRef;
+        var gemini = FoundryChatRequest.IsGemini(deploymentName);
+        var (endpoint, apiKey) = FoundryChatRequest.ResolveProvider(foundry.Configuration, deploymentName);
+        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey))
+            return Unavailable(model, gemini ? "Gemini API key is missing." : "AzureAiFoundry endpoint or API key is missing.");
 
         try
         {
+            if (gemini)
+            {
+                var (geminiStatus, _) = await SendProbeAsync(
+                    foundry.Client, FoundryChatRequest.GeminiUrl(endpoint), deploymentName,
+                    apiKey, ProbeBody(deploymentName, includeModelField: true), foundry.Throttle, ct);
+                return (int)geminiStatus is >= 200 and < 300
+                    ? Available(model)
+                    : Unavailable(model, $"Gemini endpoint unavailable (HTTP {(int)geminiStatus}).");
+            }
+
             var (deploymentStatus, _) = await SendProbeAsync(
-                foundry.Client, FoundryChatRequest.DeploymentUrl(foundry.Endpoint, deploymentName),
-                foundry.ApiKey, ProbeBody(deploymentName, includeModelField: false), foundry.Throttle, ct);
+                foundry.Client, FoundryChatRequest.DeploymentUrl(endpoint, deploymentName), deploymentName,
+                apiKey, ProbeBody(deploymentName, includeModelField: false), foundry.Throttle, ct);
 
             if ((int)deploymentStatus is >= 200 and < 300)
                 return Available(model);
@@ -205,8 +216,8 @@ public sealed class GetModelAvailabilityHandler(
             if (deploymentStatus == HttpStatusCode.NotFound)
             {
                 var (inferenceStatus, _) = await SendProbeAsync(
-                    foundry.Client, FoundryChatRequest.ModelInferenceUrl(foundry.Endpoint),
-                    foundry.ApiKey, ProbeBody(deploymentName, includeModelField: true), foundry.Throttle, ct);
+                    foundry.Client, FoundryChatRequest.ModelInferenceUrl(endpoint), deploymentName,
+                    apiKey, ProbeBody(deploymentName, includeModelField: true), foundry.Throttle, ct);
 
                 if ((int)inferenceStatus is >= 200 and < 300)
                     return Available(model);

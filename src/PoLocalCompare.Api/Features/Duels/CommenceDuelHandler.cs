@@ -66,7 +66,6 @@ public sealed class CommenceDuelHandler(
             RightModelName = rightModel.DisplayName,
             StartedAt = duel.StartedAt,
             Verdict = DuelVerdict.Pending,
-            TimeLimitSeconds = 300,
             AutoJudgeDelaySeconds = autoJudgeOptions.Value.Enabled
                 ? command.AutoJudgeDelaySecondsOverride ?? autoJudgeOptions.Value.DelaySeconds
                 : 0,

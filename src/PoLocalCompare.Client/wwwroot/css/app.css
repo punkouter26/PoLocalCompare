@@ -8,7 +8,7 @@
    The weights requested there are also narrower than they were. Space Grotesk carried 500,
    which is declared nowhere in this app (grep font-weight: the values in use are 400, 600,
    700 and, until this pass, a synthetic 800/900), and JetBrains Mono carried 400/500/600 for
-   two rules that both inherit their weight. 800 is requested now because .not-found__icon
+   two rules that both inherit their weight. 800 is requested now because .home__slot-vs
    genuinely wants it — it was asking for a face that was not being loaded, which the browser
    answers by smearing 700 into a faux bold. */
 
@@ -266,6 +266,9 @@
     --weight-medium: 500;
     --weight-semibold: 600;
     --weight-bold: 700;
+    /* Home's "vs" between the slots — the one 800 in the app, and the face index.html
+       already loads for it; it was a raw value until a token existed to point at. */
+    --weight-extrabold: 800;
 
     /* ── Breakpoints ─────────────────────────────────────────────────────
        Documented values, NOT custom properties: a custom property is illegal
@@ -682,7 +685,6 @@ a:hover {
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 
 .content {
-    padding-top: var(--space-md);
     background-color: transparent;
     color: var(--text);
     /* NO min-height here — and this is a bug fix, not a simplification. This article sits
@@ -1021,22 +1023,27 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
     pointer-events: none;
 }
 
-/* ── Bracket comet ────────────────────────────────────────────────────────
-   The point of light wow.js flies from a tournament winner to its next-round slot. Created
-   on <body>, positioned entirely by its WAAPI transform, removed when it lands. */
-.po-comet {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 9998;
-    width: 0.75rem;
-    height: 0.75rem;
-    border-radius: 50%;
-    background: var(--accent-yellow);
-    box-shadow:
-        0 0 0.5rem 0.2rem color-mix(in srgb, var(--accent-yellow) 70%, transparent),
-        0 0 1.5rem 0.6rem color-mix(in srgb, var(--accent-yellow) 30%, transparent);
-    pointer-events: none;
+/* ── Scroll-driven reveal ─────────────────────────────────────────────────
+   Rows and cards rise into place as they scroll into view, driven by the scroll position
+   itself (animation-timeline: view()) — no script, no observer, compositor-only. A view
+   timeline belongs to the NEAREST scroll container, which is why this works inside Home's
+   picker and the virtualised grids as well as on the page. Engines without scroll timelines
+   show everything in place, which is the pre-existing look; so does reduced motion. */
+@supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+        .po-reveal {
+            animation: po-reveal linear backwards;
+            animation-timeline: view();
+            animation-range: entry 0% entry 90%;
+        }
+    }
+}
+
+/* translate/scale, not transform, and fill backwards only: a card's own hover transform and
+   any opacity rule are untouched once the reveal has played. */
+@keyframes po-reveal {
+    from { opacity: 0; translate: 0 1rem; scale: 0.98; }
+    to   { opacity: 1; translate: none; scale: none; }
 }
 
 /* ── Lift ─────────────────────────────────────────────────────────────────
@@ -1093,25 +1100,14 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
    modifiers that each re-stated the same palettes — and they drifted on which token they
    read from. Centralising means a colour-token rename touches one rule, not twelve.
 
-   Only --ok and --err are declared: the --warn/--info/--met/--over/--failed aliases were
-   added speculatively and nothing ever applied them. Add a modifier back when a surface
-   needs it, rather than keeping a palette nobody reads.
+   Only --err is declared: every other palette (--ok, --warn, --info…) was added speculatively
+   and nothing applied it. Add a modifier back when a surface needs it.
 
    Usage:
-     <span class="po-fg--ok">Rating up</span>
      <div class="po-bg--err po-fg--err">Failed</div> */
-.po-bg--ok {
-    background: var(--success-surface);
-    border: 1px solid var(--success-border);
-}
-
 .po-bg--err {
     background: var(--danger-surface);
     border: 1px solid var(--danger-border);
-}
-
-.po-fg--ok {
-    color: var(--accent-green);
 }
 
 .po-fg--err {
@@ -1147,7 +1143,7 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
    locally and drifted apart, folded into .po-btn — recurring in typography instead.
 
    The rule is the same as for buttons: a surface that needs a tweak adds a LAYOUT-ONLY class
-   alongside the primitive (.arena__action-btn is the pattern). New visual variants go here as
+   alongside the primitive (.leaderboard__row-btn is the pattern). New visual variants go here as
    a modifier, never in a .razor.css. */
 
 /* ── Page shell ───────────────────────────────────────────────────────────
@@ -1169,36 +1165,19 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
     max-width: 1200px;
     margin-inline: auto;
     padding-inline: 0;
-    /* --space-md, not --space-lg: article.content already contributes --space-md above this,
-       so --space-lg put 40px between the nav and the page title on every route. */
-    padding-block: var(--space-md) var(--space-xl);
+    /* No top padding: article.content already contributes --space-md above this, and the
+       two stacked put 32px between the nav and every page title. */
+    padding-block: 0 var(--space-lg);
 }
 
 /* Data-dense surfaces: wide tables and the tournament bracket. */
 .po-page--wide { max-width: 1400px; }
 
 /* ── Page-title hooks ─────────────────────────────────────────────────────
-   .home__title, .archive__title, .arena__title and .leaderboard__title exist so the E2E-UI
-   suite can address one page's h1 without matching another's. CLAUDE.md says they carry no
-   styling, and they had each drifted back into a full ruleset anyway — measured on one
-   1440px desktop that gave the app h1s of 43px, 43px and 31px, two of them at a weight
-   (800) the @import does not load, all three layered over the .po-title the same element
-   already carries.
-
-   One shared declaration instead, and it is layout only — the pattern the app already uses
-   for .po-btn (".arena__action-btn is the pattern"): the gap under a page title, identical
-   on every route. The size, weight and colour stay with .po-title. Anything visual added
-   here is the drift starting again.
-
-   It is also a real rule rather than an empty one on purpose: check-clean.ps1 fails a class
-   that is applied in markup and defined in no stylesheet, and satisfying that check with a
-   mention inside a comment would be gaming it. */
-.home__title,
-.archive__title,
-.arena__title,
-.leaderboard__title {
-    margin-block-end: var(--space-md);
-}
+   home__title, archive__title, arena__title and leaderboard__title are E2E-UI selector
+   hooks, passed to <PageHeader TitleHook="…"> and carrying NO styling. The gap under a page
+   title belongs to .page-header (PageHeader.razor.css). They each drifted into full rulesets
+   once (43px/43px/31px h1s on one desktop, a synthesised 800 weight) — don't restart that. */
 
 /* ── Text primitives ──────────────────────────────────────────────────────*/
 
@@ -1256,17 +1235,10 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
    A dashed box with a heading, a line of guidance and a way out. Six surfaces had each
    invented their own; the shape was the same every time. */
 .po-empty {
-    padding: var(--space-xl) var(--space-md);
+    padding: var(--space-lg) var(--space-md);
     border: 1px dashed var(--border);
     border-radius: var(--radius-lg);
     text-align: center;
-}
-
-.po-empty__hint {
-    margin: 0 0 var(--space-md);
-    font-size: var(--text-sm);
-    line-height: var(--leading-normal);
-    color: var(--text-muted);
 }
 
 /* ── Page header ──────────────────────────────────────────────────────────
@@ -1285,23 +1257,7 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
 
 /* ── Section ──────────────────────────────────────────────────────────────*/
 .po-section {
-    margin-top: var(--space-lg);
-}
-
-/* ── Chip ─────────────────────────────────────────────────────────────────
-   Small uppercase label — model types, statuses, counts. Was reimplemented per surface as
-   __type-badge, __status, __entrant-type, __group-count and more. */
-.po-chip {
-    display: inline-block;
-    padding: var(--space-2xs) var(--space-sm);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-    color: var(--text-muted);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-semibold);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
+    margin-top: var(--space-md);
 }
 
 /* ── Responsive tables ────────────────────────────────────────────────────
@@ -1322,19 +1278,13 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
    old horizontal scroll rather than breaking, because the label is rendered from an
    attribute that simply is not there.
 
-   ── THE table strategy, and the one sanctioned exception ────────────────────────
+   ── THE table strategy ─────────────────────────────────────────────────────────
    There is exactly ONE responsive strategy for hand-rolled tables, and it is this one:
    `.po-table--cards` at the 640px breakpoint. Do not add a second mechanism — no
    per-surface `overflow-x: auto` wrapper, no per-page "hide a few columns on mobile"
    block, no bespoke card markup. Those were the implementations this replaced, and they
    disagreed with each other about both the breakpoint and what a phone should see.
-
-   The exception is `RadzenDataGrid` on the Archive, which stacks via its own `Responsive`
-   mode (`rz-datatable-reflow`) at Radzen's internal breakpoint rather than ours. That is
-   accepted rather than fought: `RadzenDataGrid` exposes no `Breakpoint` property to
-   retarget — verified against the package, not assumed — and overriding a third party's
-   internal media queries is a maintenance trap. So two breakpoints do exist; this comment
-   is the record of why. Everything we author uses 640px. */
+   Every table in the app, the Archive and Catalog included, uses it. */
 @media (max-width: 640px) {
     .po-table--cards thead {
         /* Not display:none — that removes it from the accessibility tree too. Clipped instead,
@@ -1354,11 +1304,10 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
         width: 100%;
     }
 
-    /* The row is a wrapping flex container, not a block. Both give one cell per line while
-       every cell is full width, but only flex lets a PAIR of cells share a line — see
-       .po-cell--half below. Two consecutive inline-flex cells at 50% do not pair: the
-       whitespace between them in the markup takes width, so 50% + 50% + a space overflows
-       and the second wraps. A flex basis has no such gap to account for. */
+    /* The row is a wrapping flex container, not a block, so two cells CAN share a line with
+       a flex basis (inline-flex at 50% does not pair — markup whitespace takes width). The
+       .po-cell--half modifier that did this went on 2026-09-26 when the leaderboard's W and
+       L merged into one Record cell; re-add it here if another pair of narrow cells appears. */
     .po-table--cards tr {
         display: flex;
         flex-wrap: wrap;
@@ -1416,25 +1365,6 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
     .po-table--cards td.po-cell--bare {
         justify-content: flex-start;
         text-align: left;
-    }
-
-    /* Two short cells sharing one row. One card row per column adds up fast, and a
-       "label  value" pair holding a single digit is the worst of it: the leaderboard spent
-       two full-width rows — 48px of a 390px screen, per model, times 26 models — on the W
-       and L counts. Pairs that are narrow BY NATURE opt in; anything that can wrap must not,
-       because two wrapped cells side by side is harder to read than two stacked rows.
-
-       inline-flex with a 50% basis rather than a grid, so it composes with the flex layout
-       the base rule already gives every cell, and the ::before label keeps working unchanged. */
-    /* Half a line each, minus half the gutter between them, so the pair still ends flush
-       with every other cell's edges: (50% - 8) + 16 + (50% - 8) = 100%. */
-    .po-table--cards td.po-cell--half {
-        flex-basis: calc(50% - var(--space-sm));
-        min-width: 0;
-    }
-
-    .po-table--cards td.po-cell--half + .po-cell--half {
-        margin-inline-start: var(--space-md);
     }
 
     /* The card is the row; the wrapper no longer needs to scroll. */
@@ -1528,7 +1458,7 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
    article.app-content's padding-inline, which every page sits inside, so restating it
    here would rebuild exactly the double gutter that rule removed. */
 .po-page {
-    padding-bottom: max(var(--space-xl), env(safe-area-inset-bottom));
+    padding-bottom: max(var(--space-lg), env(safe-area-inset-bottom));
 }
 
 /* ── SC 1.4.6 / prefers-contrast: more ───────────────────────────────────────
@@ -1566,8 +1496,7 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
     /* A border that exists to be subtle is a border that disappears first. */
     .po-glass,
     .po-table th,
-    .po-table td,
-    .po-chip {
+    .po-table td {
         border-color: var(--border-strong);
     }
 
@@ -1576,322 +1505,3 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
         outline-width: 3px;
     }
 }
-
-/* ── Radzen token bridge ─────────────────────────────────────────────────────
-   index.html loads Radzen's STRUCTURAL base stylesheet only (default-base.css) and
-   never one of its colour themes, so its components arrive unpainted. This maps them
-   onto the app's own tokens, which is what keeps the Archive grid and the profile
-   chart looking like the rest of the app in light, dark and both [data-theme] states
-   — a Radzen theme would hard-code its own palette and win, undoing the token system.
-
-   Kept in app.css rather than in Archive.razor.css because scoped CSS cannot reach a
-   child component's internals: Blazor stamps each stylesheet with its own component's
-   scope id, and every element below is rendered by Radzen, not by our .razor files. */
-.rz-datatable,
-.rz-grid-table,
-.rz-datatable-data > tr,
-.rz-datatable-header,
-.rz-datatable-footer {
-    background: transparent;
-    color: var(--text);
-    border-color: var(--border);
-    font-size: var(--text-sm);
-}
-
-/* The Archive grid's height. AllowVirtualization needs a DEFINITE height — without one
-   Radzen renders every row and the virtualiser is inert, which is the whole reason the
-   grid is here. This used to be an inline `Style="height: 32rem"`, then `min(32rem, 55dvh)`
-   here, and both were fixed sizes chosen without reference to how much page there actually
-   was. Measured, `min(32rem, 55dvh)` resolved to 495px on a 1440×900 desktop and 464px on a
-   390×844 phone, and in BOTH cases the page ended well short of the viewport: 170px of blank
-   page below the grid on the desktop, 190px on the phone, while the grid itself clipped a
-   row in half at its own bottom edge and scrolled internally. Dead space and a nested
-   scroller at the same time, which is the worst of both.
-
-   100% of a flex: 1 wrapper instead. .archive is a flex column with a
-   calc(100dvh - --nav-height - padding) floor and .archive__grid-wrap is its flexible child,
-   so the grid is handed exactly what the title, the chips and the footer leave — a definite
-   height, which is what the virtualiser needs, but a derived one. No dead band, no magic
-   number, and it follows the viewport rather than a guess about it.
-
-   Not theme-dependent, and deliberately not in Archive.razor.css: Blazor stamps a
-   scoped stylesheet with its own component's scope id, so a rule there cannot reach an
-   element Radzen renders. */
-.rz-datatable.archive__grid,
-.rz-datatable.catalog__grid,
-.rz-datatable.po-grid--bounded {
-    height: 100%;
-}
-
-/* Bounded window for a list you scan within. Same shape as .home__picker: the page
-   scrolls normally and this is the only sub-scroll. Used by /catalog's browser-models
-   list. min() so a short viewport gets a proportion and a tall one stops at 34rem. */
-.po-grid--bounded {
-    display: flex;
-    flex-direction: column;
-    height: min(34rem, 60dvh);
-}
-
-/* ── Radzen's reflow mode, given the app's card presentation ──────────────────
-   Below its internal breakpoint RadzenDataGrid stacks each cell into a block with the
-   column title above the value (`.rz-column-title` is display:block there). With six
-   columns that is twelve lines per duel: measured at ~330px per row, so nine duels came to
-   3,119px inside a 464px window on a phone — you could see one and a half of them, and the
-   second was sliced through the middle with nothing to say the box scrolled.
-
-   These rules put the label and the value on ONE line and give each row a card edge, which
-   is exactly what .po-table--cards does for every table the app writes itself. app.css
-   already records that two mobile-table breakpoints exist because RadzenDataGrid exposes no
-   Breakpoint property to retarget; that stays true, and it stays accepted. What is fixed
-   here is that the two also LOOKED nothing alike. ~330px per duel becomes ~150px. */
-@media (max-width: 640px) {
-    .rz-datatable-reflow .rz-data-row {
-        margin-bottom: var(--space-sm);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-md);
-        background: var(--surface-1);
-        overflow: hidden;
-    }
-
-    .rz-datatable-reflow .rz-data-row > td {
-        display: flex !important;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: var(--space-md);
-        padding: var(--space-2xs) var(--space-smd) !important;
-        border-bottom: 1px solid var(--border) !important;
-        line-height: var(--leading-snug);
-        text-align: right !important;
-    }
-
-    .rz-datatable-reflow .rz-data-row > td:last-child {
-        border-bottom: none !important;
-    }
-
-    /* The value half wraps rather than ellipsising. Radzen's cells truncate by default, which
-       is right in a fixed-width column and wrong in a card row where the space below is free —
-       /catalog's model ids are the identifying field and were rendering as
-       "Qwen2.5-0.5B-Instruct-q4f16_1-MLC…", and the display-name input was clipped at the
-       card's right edge. min-width: 0 is what lets a flex item shrink below its content at
-       all; without it the override has nothing to act on. */
-    .rz-datatable-reflow .rz-data-row > td > *:not(.rz-column-title) {
-        min-width: 0;
-        overflow: visible;
-        text-overflow: clip;
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }
-
-    /* Matches .po-table--cards td[data-label]::before exactly — same size, weight, casing
-       and tracking — so a Radzen row and a hand-rolled one read as the same component. */
-    .rz-datatable-reflow .rz-data-row > td .rz-column-title {
-        flex: 0 0 auto;
-        margin: 0;
-        color: var(--text-muted);
-        font-size: var(--text-2xs);
-        font-weight: var(--weight-semibold);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        text-align: left;
-    }
-}
-
-/* The model-profile rating chart. Was an inline Style="width: 100%; height: 16rem" on the
-   RadzenChart component: 256px of chart on a 390×844 phone, for a series that is usually
-   three points long. Moved here so the phone case can differ — this is also the only way to
-   honour the app's "no inline style= attributes" rule, since the height then lives in CSS
-   like every other dimension in the app.
-
-   16rem is kept for anything wider than a phone; 11rem below 640px takes ~80px off the page
-   without flattening a curve that has to show whether the line ended above its baseline. */
-.rz-chart.profile__chart {
-    width: 100%;
-    height: 16rem;
-}
-
-@media (max-width: 640px) {
-    .rz-chart.profile__chart {
-        height: 11rem;
-    }
-}
-
-.rz-datatable-header,
-.rz-grid-table thead th {
-    background: var(--surface-2);
-    color: var(--text-muted);
-    font-weight: var(--weight-semibold);
-    border-bottom: 1px solid var(--border-strong);
-}
-
-.rz-grid-table tbody td {
-    border-bottom: 1px solid var(--border);
-    padding: var(--space-sm) var(--space-smd);
-}
-
-.rz-grid-table tbody tr:hover {
-    background: var(--surface-accent);
-    cursor: pointer;
-}
-
-/* The grid's own inputs — filter boxes, the paging controls — inherit the app's
-   surfaces so a filtered column does not suddenly show a white field on a dark page. */
-.rz-inputtext,
-.rz-dropdown,
-.rz-paginator {
-    background: var(--surface-1);
-    color: var(--text);
-    border-color: var(--border);
-    border-radius: var(--radius-sm);
-    font-size: var(--text-sm);
-    min-height: var(--target-min);
-}
-
-/* Radzen draws its own focus treatment; ours is the one the rest of the app uses and
-   the one the WCAG work was verified against, so it wins. */
-.rz-datatable :focus-visible,
-.rz-chart :focus-visible {
-    outline: 2px solid var(--accent-blue);
-    outline-offset: var(--focus-ring-offset);
-}
-
-/* Chart text. Radzen paints axis labels with a fill, not a colour, so this needs the
-   fill property rather than color to follow the theme. */
-.rz-chart text {
-    fill: var(--text-muted);
-    font-size: var(--text-xs);
-}
-
-.rz-chart .rz-gridlines line {
-    stroke: var(--border);
-}
-
-/* Tooltips are absolutely positioned outside the chart's box. */
-.rz-chart-tooltip {
-    background: var(--surface-1);
-    color: var(--text);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    font-size: var(--text-xs);
-}
-
-@media (prefers-contrast: more) {
-    .rz-grid-table tbody td,
-    .rz-grid-table thead th {
-        border-color: var(--border-strong);
-    }
-}
-
-/* ── GFX & Visual Shaders Polish ─────────────────────────────────────────── */
-
-/* 1. Living Atmospheric Canvas */
-#po-living-canvas {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: none;
-    z-index: -1;
-}
-
-/* 2. Quantum Ignition: Laser Border on Compare Button */
-@property --laser-angle {
-    syntax: '<angle>';
-    initial-value: 0deg;
-    inherits: false;
-}
-
-.po-btn--laser {
-    position: relative;
-    overflow: hidden;
-    z-index: 1;
-}
-
-.po-btn--laser::before {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    background: conic-gradient(from var(--laser-angle), transparent 70%, var(--accent-cyan), var(--accent-green) 95%, transparent);
-    border-radius: inherit;
-    z-index: -1;
-    animation: laser-spin 2.5s linear infinite;
-}
-
-@keyframes laser-spin {
-    to { --laser-angle: 360deg; }
-}
-
-/* 3. Holographic Shimmer on Winner Viewport */
-.arena-panel__box--winner-holo {
-    position: relative;
-    border-color: var(--accent-green) !important;
-    box-shadow: 0 0 28px color-mix(in srgb, var(--accent-green) 35%, transparent) !important;
-}
-
-.arena-panel__box--winner-holo::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        115deg,
-        transparent 25%,
-        rgba(45, 220, 132, 0.12) 45%,
-        rgba(83, 166, 255, 0.15) 50%,
-        rgba(234, 179, 8, 0.12) 55%,
-        transparent 75%
-    );
-    background-size: 250% 250%;
-    animation: holo-sweep 3.5s ease-in-out infinite;
-    pointer-events: none;
-    border-radius: inherit;
-}
-
-@keyframes holo-sweep {
-    0% { background-position: 200% 0%; }
-    50% { background-position: 0% 100%; }
-    100% { background-position: -200% 0%; }
-}
-
-/* 4. Thermal Alert */
-.arena--thermal-alert {
-    animation: thermal-pulse 1.2s ease-in-out infinite alternate;
-}
-
-@keyframes thermal-pulse {
-    0% {
-        box-shadow: inset 0 0 40px rgba(239, 68, 68, 0.08);
-    }
-    100% {
-        box-shadow: inset 0 0 90px rgba(239, 68, 68, 0.22);
-    }
-}
-
-/* 5. Bioluminescent Eco-Pulse on Telemetry HUD */
-.telemetry-hud--eco-pulse {
-    border-color: var(--accent-green) !important;
-    animation: eco-pulse-glow 2.4s ease-in-out infinite;
-}
-
-@keyframes eco-pulse-glow {
-    0%, 100% {
-        box-shadow: 0 0 12px color-mix(in srgb, var(--accent-green) 20%, transparent);
-    }
-    50% {
-        box-shadow: 0 0 32px color-mix(in srgb, var(--accent-green) 50%, transparent);
-    }
-}
-
-/* 6. Photo-Finish Sheen on Track */
-.token-race__lane--photo-finish .token-race__track {
-    border-color: var(--accent-green);
-    box-shadow: 0 0 20px color-mix(in srgb, var(--accent-green) 40%, transparent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .po-btn--laser::before,
-    .arena-panel__box--winner-holo::after,
-    .arena--thermal-alert,
-    .telemetry-hud--eco-pulse {
-        animation: none;
-    }
-}
-

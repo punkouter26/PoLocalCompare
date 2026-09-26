@@ -139,6 +139,36 @@ public static class FoundryChatRequest
         return body;
     }
 
+    /// <summary>Google's OpenAI-compatible Gemini endpoint, used when <c>Gemini:Endpoint</c> is unset.</summary>
+    public const string GeminiDefaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/openai";
+
+    /// <summary>
+    /// A <c>gemini-*</c> model reference is served by Google's OpenAI-compatible endpoint
+    /// (<c>Gemini:Endpoint</c> / <c>Gemini:ApiKey</c>) instead of Foundry. Same SSE shape, same
+    /// body builder — only the URL and the auth header differ, so it rides the Remote proxy
+    /// rather than getting a ModelType and a proxy of its own.
+    /// </summary>
+    public static bool IsGemini(string? modelRef) =>
+        modelRef is not null && modelRef.StartsWith("gemini-", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The single Gemini chat route; the model is named in the body.</summary>
+    public static string GeminiUrl(string endpoint) => $"{endpoint}/chat/completions";
+
+    /// <summary>Foundry takes an <c>api-key</c> header; Google's endpoint takes a Bearer token.</summary>
+    public static void AddAuth(HttpRequestMessage request, string modelRef, string apiKey)
+    {
+        if (IsGemini(modelRef))
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        else
+            request.Headers.Add("api-key", apiKey);
+    }
+
+    /// <summary>Endpoint and key for a model reference, from whichever provider serves it.</summary>
+    public static (string? Endpoint, string? ApiKey) ResolveProvider(IConfiguration configuration, string? modelRef) =>
+        IsGemini(modelRef)
+            ? ((configuration["Gemini:Endpoint"] ?? GeminiDefaultEndpoint).TrimEnd('/'), configuration["Gemini:ApiKey"])
+            : (configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/'), configuration["AzureAiFoundry:ApiKey"]);
+
     public static bool IsReasoningModel(string? deploymentName)
     {
         if (string.IsNullOrWhiteSpace(deploymentName)) return false;
@@ -173,7 +203,9 @@ public static class FoundryChatRequest
             || n.StartsWith("phi-")
             || n.StartsWith("llama-")
             || n.StartsWith("llama_")
-            || n.StartsWith("grok-");
+            || n.StartsWith("grok-")
+            // Google documents stream_options.include_usage on its OpenAI-compatible endpoint.
+            || n.StartsWith("gemini-");
     }
 
     /// <summary>
@@ -234,6 +266,16 @@ public static class FoundryChatRequest
         {
             body["max_tokens"] = maxTokens;
             body["temperature"] = temperature;
+        }
+
+        if (IsGemini(deploymentName))
+        {
+            // Gemini thinks by default, for the same waste the GPT-5 note above describes.
+            // Google's compatibility layer accepts "none" on 2.5 models only; 3.x cannot turn
+            // thinking off and takes "minimal" as its floor.
+            body["reasoning_effort"] = deploymentName.StartsWith("gemini-2.5", StringComparison.OrdinalIgnoreCase)
+                ? "none"
+                : "minimal";
         }
 
         return body;

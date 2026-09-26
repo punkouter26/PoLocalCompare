@@ -35,6 +35,13 @@ public sealed record PromptTemplate(
 /// <c>allow-same-origin</c>, so anything split across files or fetched same-origin renders blank
 /// and the model looks worse than it is. Prompts also stay clear of network calls for the same
 /// reason — a duel should compare the models, not the tester's firewall.
+///
+/// <para>
+/// Sizes are written for the 320x180 frame every model is told about in its system prompt
+/// (<c>InferencePrompt.System</c>). "Full-screen canvas", "a large clock" and a 50x50 grid used to
+/// contradict it, so each model resolved the conflict its own way and the duel compared that
+/// guess rather than the page.
+/// </para>
 /// </remarks>
 public static class PromptLibrary
 {
@@ -54,8 +61,8 @@ public static class PromptLibrary
             SelfRunning: true),
 
         new("particle-field", "Particle constellation", CategoryGraphics, "✨",
-            "Build a self-contained single HTML file with a full-screen canvas animation: 120 particles " +
-            "drifting slowly, with a thin line drawn between any two that come within 120px of each other. " +
+            "Build a self-contained single HTML file with a canvas animation filling the frame: 60 particles " +
+            "drifting slowly, with a thin line drawn between any two that come within 60px of each other. " +
             "Lines fade with distance. Dark background, cyan particles, smooth 60fps requestAnimationFrame loop.",
             SelfRunning: true),
 
@@ -67,7 +74,7 @@ public static class PromptLibrary
             SelfRunning: true),
 
         new("game-of-life", "Conway's Game of Life", CategorySimulation, "🦠",
-            "Build a self-contained single HTML file running Conway's Game of Life on a 50x50 grid. Seed it " +
+            "Build a self-contained single HTML file running Conway's Game of Life on a 64x36 grid of 5px cells. Seed it " +
             "randomly, step every 120ms, and wrap at the edges. Render on a canvas with living cells in a warm " +
             "colour that fades as a cell ages. Show the generation count and population.",
             SelfRunning: true),
@@ -79,7 +86,7 @@ public static class PromptLibrary
             SelfRunning: true),
 
         new("digital-clock", "Animated digital clock", CategoryInterface, "🕐",
-            "Build a self-contained single HTML file showing a large digital clock with the current time, " +
+            "Build a self-contained single HTML file showing a digital clock that fills the frame with the current time, " +
             "updating every second. Each digit flips with a smooth CSS animation when it changes. Include the " +
             "date underneath, use a monospace display face, and centre everything on a gradient background.",
             SelfRunning: true),
@@ -87,12 +94,12 @@ public static class PromptLibrary
         new("solar-system", "Solar system orbits", CategorySimulation, "🪐",
             "Build a self-contained single HTML file animating a top-down solar system: a sun and six planets " +
             "orbiting at different speeds and radii, each leaving a faint orbital trail. Pure CSS animation or " +
-            "canvas — no libraries. Label each planet.",
+            "canvas — no libraries. Label each planet in small text.",
             SelfRunning: true),
 
         new("matrix-rain", "Matrix code rain", CategoryGraphics, "🌧",
             "Build a self-contained single HTML file with the classic falling-glyph 'code rain' effect on a " +
-            "full-screen canvas: columns of green characters falling at varying speeds, the leading character " +
+            "canvas filling the frame: columns of green characters falling at varying speeds, the leading character " +
             "brighter than the trail, with a fading motion blur behind them.",
             SelfRunning: true),
 
@@ -146,8 +153,8 @@ public static class PromptLibrary
             SelfRunning: false),
 
         new("chart-dashboard", "Analytics dashboard", CategoryDataViz, "📈",
-            "Build a self-contained single HTML file with an analytics dashboard: four KPI tiles across the " +
-            "top, then a line chart and a bar chart drawn with inline SVG from hard-coded sample data. " +
+            "Build a self-contained single HTML file with an analytics dashboard: four compact KPI tiles across " +
+            "the top, then a line chart and a bar chart side by side, drawn with inline SVG from hard-coded sample data. " +
             "Charts have axes, gridlines and hover tooltips. No charting libraries.",
             SelfRunning: false),
 

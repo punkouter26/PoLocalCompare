@@ -54,9 +54,14 @@ public static class DefaultPriceBook
         ("grok-4-1-fast",      new Rate(0.20m,   0.50m)),
         ("grok-4",             new Rate(3.00m,  15.00m)),
         ("grok-4-6",           new Rate(2.00m,  10.00m)),
+        ("grok-4.6",           new Rate(2.00m,  10.00m)), // the seeded deployment name uses a dot
 
         // Moonshot
         ("kimi-k2",            new Rate(0.60m,   2.50m)),
+
+        // Google (Gemini API paid tier, text, from ai.google.dev/gemini-api/docs/pricing, 2026-09-26)
+        ("gemini-2.5-flash-lite", new Rate(0.10m, 0.40m)),
+        ("gemini-3.5-flash-lite", new Rate(0.30m, 2.50m)),
 
         // DeepSeek
         ("deepseek-v4",        new Rate(0.14m,   0.28m)),
@@ -71,7 +76,12 @@ public static class DefaultPriceBook
     {
         if (string.IsNullOrWhiteSpace(deploymentName)) return null;
         var n = deploymentName.ToLowerInvariant();
-        foreach (var (suffix, rate) in Table)
+        // Longest key first. The match is a prefix match, and several keys are prefixes of
+        // others — "gpt-5.4" of "gpt-5.4-mini", "phi-4" of "phi-4-mini-instruct", "grok-4" of
+        // "grok-4.6" — so first-in-table order priced GPT-5.4 Mini as GPT-5.4 (3.3× too high)
+        // and Nano 12.5× too high, and Backfill then overwrote the correct seed rates with
+        // those on every startup.
+        foreach (var (suffix, rate) in Table.OrderByDescending(t => t.Suffix.Length))
         {
             if (n == suffix || n.StartsWith(suffix, StringComparison.Ordinal) || n.Contains("-" + suffix, StringComparison.Ordinal))
                 return rate;

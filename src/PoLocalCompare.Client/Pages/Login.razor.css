@@ -25,14 +25,6 @@
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
 
-.login__subtitle {
-    margin: -0.5rem 0 0;
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
 .login__divider {
     display: flex;
     align-items: center;
@@ -48,14 +40,6 @@
     flex: 1;
     height: 1px;
     background: var(--surface-2);
-}
-
-.login__guest-note {
-    margin: -0.5rem 0 0;
-    font-size: var(--text-xs);
-    color: var(--text-dim);
-    text-align: center;
-    line-height: 1.4;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────────

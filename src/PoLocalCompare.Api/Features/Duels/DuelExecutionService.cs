@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -163,7 +164,6 @@ public sealed class DuelExecutionService
                     StartedAt = duel.StartedAt,
                     CompletedAt = duel.CompletedAt,
                     Verdict = DuelVerdict.Pending,
-                    TimeLimitSeconds = watchdogSeconds,
                     OwnerId = duel.OwnerId,
                     VerdictBy = duel.VerdictBy,
                 });
@@ -171,17 +171,38 @@ public sealed class DuelExecutionService
             await lobby.DuelCompletedAsync(duel, leftModel.DisplayName, rightModel.DisplayName, cancellationToken);
 
             // Hand off to the auto-judge, which waits out the grace window before deciding.
-            // Run inline rather than as a second queued item: BackgroundTaskService awaits each
-            // work item before dequeuing the next, so a queued delay would stall the next duel.
-            // The duel is not finished until it has a verdict, so blocking here is the honest
-            // shape — and AutoJudge.RunAsync never throws.
+            //
+            // With no grace window (a tournament passes 0) the judge runs inline: the runner is
+            // waiting on this verdict and nothing else is queued behind it. With one, the wait
+            // and the judge call are DETACHED. They used to run inline too, and because
+            // BackgroundTaskService is single-consumer that meant every standalone duel held the
+            // only worker for inference + DelaySeconds + the judge call — a second user's duel
+            // could not start until the first one was decided. The rate-limit retry in AutoJudge
+            // was detached for the same reason. A host shutdown during the wait leaves the duel
+            // Pending and hand-judgeable, the same outcome that path already accepts.
+            // AutoJudge.RunAsync never throws.
             //
             // Challenge budgets used to be adjudicated here, ahead of the judge. Challenge mode
             // was removed on 2026-09-10, so the judge is now the only decider. Note that
             // VerdictSource.Constraint survives it: DuelRecoverySweeper and AutoJudge still
             // stamp it for abandoned duels and one-sided failures.
-            await services.GetRequiredService<AutoJudge>()
-                .RunAsync(duelId, cancellationToken, autoJudgeDelaySecondsOverride);
+            var graceSeconds = autoJudgeDelaySecondsOverride
+                ?? services.GetRequiredService<IOptions<AutoJudgeOptions>>().Value.DelaySeconds;
+            if (graceSeconds <= 0)
+            {
+                await services.GetRequiredService<AutoJudge>()
+                    .RunAsync(duelId, cancellationToken, autoJudgeDelaySecondsOverride);
+            }
+            else
+            {
+                // Own scope: the one this method was handed is disposed as soon as it returns.
+                _ = Task.Run(async () =>
+                {
+                    using var judgeScope = _scopeFactory.CreateScope();
+                    await judgeScope.ServiceProvider.GetRequiredService<AutoJudge>()
+                        .RunAsync(duelId, cancellationToken, autoJudgeDelaySecondsOverride);
+                }, CancellationToken.None);
+            }
         }
         catch (Exception ex)
         {

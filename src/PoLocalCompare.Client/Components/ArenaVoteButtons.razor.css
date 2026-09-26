@@ -24,10 +24,12 @@
     border-top: 1px solid var(--border);
     padding: var(--space-smd) var(--space-md);
     margin-top: var(--space-sm);
-    box-shadow: 0 -4px 12px rgb(0 0 0 / 12%);
+    /* No shadow: the raw rgb(0 0 0 / 12%) it had was one theme's value and there is no
+       upward-shadow token. The border-top and the opaque fill already separate the row. */
 }
 
 /* Layout only — the look is .po-btn's, per the app-wide rule. */
 .arena-vote__btn {
-    min-width: 180px;
+    /* ~180px, from the scale: keeps the two buttons a matched pair for short model names. */
+    min-width: calc(var(--space-2xl) * 4);
 }

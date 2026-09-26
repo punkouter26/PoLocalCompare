@@ -23,9 +23,10 @@ namespace PoLocalCompare.E2EAPI;
 /// <remarks>
 /// Not sealed: <see cref="DuelApiFixture"/> derives from it to run without the auto-judge, which
 /// this host cannot do globally. DuelExecutionService awaits AutoJudge INLINE on the
-/// single-consumer BackgroundTaskService queue, so the grace window is not just a delay before a
-/// verdict — it is time the only worker in the process spends asleep. A duel collection therefore
-/// wants the judge off, while a tournament collection cannot run without it: TournamentRunner
+/// single-consumer BackgroundTaskService queue when the grace window is 0 (it detaches the judge
+/// otherwise, since 2026-09-26), and a duel suite races its own verdicts against the judge's.
+/// A duel collection therefore wants the judge off, while a tournament collection cannot run
+/// without it: TournamentRunner
 /// passes autoJudgeDelaySeconds: 0 because the judge is the only thing that can decide a match,
 /// so with no judge a bracket's first match stays Pending and holds that same queue forever.
 /// </remarks>
@@ -110,6 +111,9 @@ public class ApiAppFixture : IAsyncLifetime
             });
         });
     }
+
+    /// <summary>Services from the running host, for seeding the registry (see TestModels).</summary>
+    public IServiceProvider Services => _factory.Services;
 
     /// <summary>Anonymous client — no auth header.</summary>
     public HttpClient CreateAnonymousClient()
