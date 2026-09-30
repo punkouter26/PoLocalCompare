@@ -20,10 +20,8 @@
     {
         <p class="po-error">@_error</p>
     }
-    else if (_duels.Count == 0 && _verdictFilter == "All")
+    else if (_duels.Count == 0)
     {
-        @* Only for "All": the verdict chips filter on the server now, so an empty filtered page
-           means "none of THAT kind" and keeps the chips on screen to switch back. *@
         @* EmptyState — Archive's "no duels yet" card. The new card shares its layout
            with Leaderboard and Model Profile so a viewer sees the same shape anywhere
            in the app a list is empty. *@
@@ -36,24 +34,11 @@
     }
     else
     {
-        @* .po-btn--chip, shared with Home and PromptPicker. These were .archive__filter-chip,
-           a fourth private implementation of the same control, and — like Home's — they carried
-           no aria-pressed, so which filter was active reached assistive tech not at all and
-           reached a colour-blind viewer only as a slightly different grey (SC 1.4.1, 4.1.2). *@
-        <div class="archive__filters" role="group" aria-label="Filter duels by verdict">
-            @foreach (var label in Filters)
-            {
-                <button type="button"
-                        class="po-btn po-btn--sm po-btn--chip"
-                        aria-pressed="@(_verdictFilter == label ? "true" : "false")"
-                        @onclick="() => SelectFilter(label)">
-                    @label
-                </button>
-            }
-        </div>
         @* One search box over the loaded rows, matching the prompt or either model's name.
            It replaced the Radzen grid's per-column filters when Radzen was removed on
-           2026-09-26; the verdict chips above still filter on the server. *@
+           2026-09-26. The verdict chips (All / Won / Tie / Unjudged) that sat above it were
+           removed on 2026-09-30 to keep the page simple: the archive always lists every duel,
+           and an unjudged one still carries its own Judge button in the Matchup cell. *@
         <input type="search" class="archive__search" placeholder="Search prompt or model…"
                aria-label="Search loaded duels by prompt or model name"
                @bind="_search" @bind:event="oninput" />
@@ -125,7 +110,7 @@
         </div>
         @if (!VisibleRows.Any())
         {
-            <p class="po-hint">No duels match — choose All, or clear the search.</p>
+            <p class="po-hint">No duels match — clear the search.</p>
         }
 
         <div class="archive__pagination">
@@ -151,20 +136,7 @@
 </div>
 
 @code {
-    /// <summary>
-    /// The one list of filter labels: the chips render from it and <see cref="VerdictQuery"/> is
-    /// validated against it, so a deep link can never select a filter the chips don't offer.
-    /// </summary>
-    private static readonly string[] Filters = ["All", "Won", "Tie", "Unjudged"];
-
-    /// <summary>
-    /// Deep-links a filter chip. The header's "N awaiting judgment" pill uses it to land on the
-    /// unjudged duels directly — it previously dropped you on "All", where the duels it was
-    /// counting were scattered through twenty rows of decided ones.
-    /// </summary>
-    [SupplyParameterFromQuery(Name = "verdict")] public string? VerdictQuery { get; set; }
-
-    /// <summary>Everything loaded for the current filter, newest first by id — the server's paging key.</summary>
+    /// <summary>Everything loaded so far, newest first by id — the server's paging key.</summary>
     private List<DuelSummaryDto> _duels = [];
 
     /// <summary>First load only; it replaces the page. Later loads keep the grid on screen.</summary>
@@ -174,8 +146,8 @@
     private bool _fetching;
 
     /// <summary>
-    /// Bumped per list request. A response whose version is stale — a chip switched while the
-    /// previous filter's page was still in flight — is dropped instead of overwriting the rows.
+    /// Bumped per list request. A response whose version is stale is dropped instead of
+    /// overwriting the rows.
     /// </summary>
     private int _loadVersion;
 
@@ -183,9 +155,6 @@
     private string? _error;
     private bool _hasMore;
     private const int PageSize = 20;
-
-    /// <summary>Null until the first OnParametersSetAsync applies the query.</summary>
-    private string? _verdictFilter;
 
     // Materialised once per change instead of per read: re-projecting on every incidental
     // re-render — a row selection, say — was pure waste.
@@ -204,49 +173,15 @@
         : _rows.Where(r => r.Matchup.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
                         || r.Duel.PromptSummary.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>
-    /// What each chip asks the server for. The filter runs server-side, before the page limit:
-    /// filtering the twenty loaded rows meant "Unjudged" — the nav pill's deep link — could show
-    /// nothing while unjudged duels sat one Load More away.
-    /// </summary>
-    private static DuelVerdict[]? VerdictsFor(string? filter) => filter switch
-    {
-        "Won" => new[] { DuelVerdict.Left, DuelVerdict.Right },
-        "Tie" => new[] { DuelVerdict.Tie },
-        "Unjudged" => new[] { DuelVerdict.Pending },
-        _ => null,
-    };
-
     /// <summary>How many rows are on screen. Load More says whether there are more.</summary>
     private string CountSummary => $"{_rows.Count} {(_rows.Count == 1 ? "duel" : "duels")}";
 
-    /// <summary>
-    /// A chip writes the query string rather than the field, so the URL is the one source of
-    /// truth: OnParametersSetAsync does the loading, and clicking the nav's "awaiting judgment"
-    /// pill after picking another chip still changes the URL and still takes effect.
-    /// </summary>
-    private void SelectFilter(string label) =>
-        Nav.NavigateTo(Nav.GetUriWithQueryParameter("verdict", label == "All" ? null : label), replace: true);
-
-    /// <summary>
-    /// Runs on every navigation to /archive, including a query-only one — the nav pill clicked
-    /// while already here. The query used to be read in OnInitializedAsync, which runs once per
-    /// component instance, so that deep link did nothing unless you arrived from another page.
-    /// Skips when the filter is unchanged, so an unrelated re-render never refetches.
-    /// </summary>
-    protected override async Task OnParametersSetAsync()
-    {
-        var requested = Filters.FirstOrDefault(f => string.Equals(f, VerdictQuery, StringComparison.OrdinalIgnoreCase)) ?? "All";
-        if (requested == _verdictFilter) return;
-
-        _verdictFilter = requested;
-        await LoadPageAsync(append: false);
-    }
+    protected override Task OnInitializedAsync() => LoadPageAsync(append: false);
 
     private Task LoadMoreAsync() => LoadPageAsync(append: true);
 
     /// <summary>
-    /// Loads the first page for the current filter, or (append) the page strictly older than
+    /// Loads the first page, or (append) the page strictly older than
     /// the oldest row held. The cursor is that row's id: ids are ULIDs, so id order is time
     /// order, and it is the key the server sorts and pages on. The old cursor was the row's
     /// yyyyMM, which the server matched with `le` — the whole current month again, every time.
@@ -258,18 +193,10 @@
         var version = ++_loadVersion;
         _fetching = true;
         _error = null;
-        if (!append)
-        {
-            // A new filter must not keep the old filter's rows: if its request fails they sat
-            // under the newly pressed chip, and Load More then paged from the wrong cursor.
-            _duels = [];
-            _rows = [];
-            _hasMore = false;
-        }
         try
         {
             DuelId? cursor = append ? _duels[^1].DuelId : null;
-            var page = await ApiClient.ListDuelsAsync(PageSize + 1, cursor, VerdictsFor(_verdictFilter));
+            var page = await ApiClient.ListDuelsAsync(PageSize + 1, cursor);
             if (version != _loadVersion || page is null) return;
 
             _hasMore = page.Count > PageSize;

@@ -8,7 +8,7 @@
 }
 
 /* PageHeader brings its own bottom margin; here the flex gap already spaces the header from
-   the chips, and the two added together doubled it. ::deep because the header's root is
+   the search box, and the two added together doubled it. ::deep because the header's root is
    PageHeader's markup, which this file's scope id never reaches. */
 .archive ::deep .page-header {
     margin-block-end: 0;
@@ -110,16 +110,10 @@
     font-variant-numeric: tabular-nums;
 }
 
-.archive__filters {
-    display: flex;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-}
-
 /* ── Responsive ──────────────────────────────────────────────────────────────
    This file had no media query at all. The table itself degraded (.po-table--cards
    in app.css turns each cell into a labelled row below 640px), but nothing around
-   it did — the filter chip row, the row-action buttons and the timestamp column all
+   it did — the row-action buttons and the timestamp column all
    kept their desktop shape inside a card that is now a third of the width. */
 
 @media (max-width: 640px) {

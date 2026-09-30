@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using PoLocalCompare.Shared.DTOs;
-using PoLocalCompare.Shared.Enums;
 
 namespace PoLocalCompare.Client.Services;
 
@@ -175,20 +174,13 @@ public sealed class DuelApiClient
     }
 
     /// <param name="before">Keyset cursor: the oldest duel id already loaded. Only strictly older duels come back.</param>
-    /// <param name="verdicts">When non-empty, only duels with one of these verdicts.</param>
     public async Task<IReadOnlyList<DuelSummaryDto>?> ListDuelsAsync(
         int limit = 20,
-        DuelId? before = null,
-        IEnumerable<DuelVerdict>? verdicts = null)
+        DuelId? before = null)
     {
         var url = $"/api/duels?limit={limit}";
         if (before is { IsEmpty: false } cursor)
             url += $"&before={Uri.EscapeDataString(cursor.Value)}";
-        if (verdicts is not null)
-        {
-            foreach (var verdict in verdicts)
-                url += $"&verdict={verdict}";
-        }
         return await _http.GetFromJsonAsync<IReadOnlyList<DuelSummaryDto>>(url, JsonOptions);
     }
 

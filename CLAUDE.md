@@ -361,14 +361,13 @@ frozen into the stylesheet, so a light-theme viewer got a dark palette's hue beh
 palette text. The tokens are opaque, so the contrast of `--accent-x` on `--x-surface` is the
 same wherever the chip lands (light 4.53–5.03, dark 4.78–9.18).
 
-**`.po-btn--chip` is the only filter chip.** Home's model-type filters, the Archive's verdict
-filters and `PromptPicker`'s categories were three private implementations of one control, and
-only `PromptPicker` set `aria-pressed` — on the other two the active filter was conveyed by
-colour alone (SC 1.4.1, SC 4.1.2). Every caller is a real `<button>` with `aria-pressed`, and
-the active state changes fill *and* border weight so it survives greyscale. Related: the
-Archive's chips and the grid's own Verdict column filter were two controls for one field forty
-pixels apart, so the column is now `Filterable="false"` — the chips own verdict, and they back
-the `?verdict=` deep link the nav's "awaiting judgment" pill uses.
+**`.po-btn--chip` is the only filter chip.** Home's model-type filters and `PromptPicker`'s
+categories were private implementations of one control, and only `PromptPicker` set
+`aria-pressed` — elsewhere the active filter was conveyed by colour alone (SC 1.4.1, SC 4.1.2).
+Every caller is a real `<button>` with `aria-pressed`, and the active state changes fill *and*
+border weight so it survives greyscale. The Archive's All/Won/Tie/Unjudged chips were removed
+on 2026-09-30 to keep that page simple — it always lists every duel, and the nav's "awaiting
+judgment" pill now links to plain `/archive`.
 
 **Every page title is `<PageHeader>`, and the four title hooks carry no styling.** `home__title`,
 `archive__title`, `arena__title` and `leaderboard__title` exist so E2E-UI can address one
@@ -417,8 +416,8 @@ once at 24,014px (28 screens) on a phone. The Archive needs no virtualiser: it p
 **The Archive pages by duel id.** Ids are ULIDs, so id order is creation order: `GET /api/duels`
 takes `before=<duelId>` and returns rows with `RowKey lt` that id, newest first. It used to send a
 `yyyyMM` month with `PartitionKey le`, which includes the current month, so Load More returned
-the same rows forever. The verdict chips are server-side and live in `?verdict=` (read in
-`OnParametersSetAsync`, so the nav pill works while already on `/archive`). Re-run starts the
+the same rows forever. The server still accepts `verdict=` filters, but the client no longer
+sends any: the page has no verdict chips (removed 2026-09-30). Re-run starts the
 duel directly with the full prompt, like the Arena's Retry — it used to pre-fill Home with the
 80-character summary through an unescaped query string.
 

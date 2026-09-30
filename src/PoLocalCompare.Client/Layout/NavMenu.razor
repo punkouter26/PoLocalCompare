@@ -54,12 +54,12 @@
             @* ── Live activity ticker ──────────────────────────────────────
                Polite, not assertive: duels finish while the user is reading, and an assertive
                region would interrupt them every time one did. One grouped chip — "N running ·
-               M awaiting" — linking to the awaiting-judgment filter, so the click is meaningful
-               whether or not M is zero. Nothing to say renders nothing at all. *@
+               M awaiting" — linking to the Archive, where an unjudged duel carries its own Judge
+               button. Nothing to say renders nothing at all. *@
             @if (Ticker.RunningCount > 0 || Ticker.AwaitingVerdictCount > 0)
             {
                 <div class="navmenu__ticker" role="status" aria-live="polite" aria-label="Live duel activity">
-                    <a href="archive?verdict=Unjudged" class="navmenu__ticker-pill navmenu__ticker-pill--combined"
+                    <a href="archive" class="navmenu__ticker-pill navmenu__ticker-pill--combined"
                        title="@TickerSummaryTitle()">
                         @if (Ticker.RunningCount > 0)
                         {
