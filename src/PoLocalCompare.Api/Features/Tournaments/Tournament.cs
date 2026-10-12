@@ -69,7 +69,7 @@ public sealed class Tournament
     /// <summary>
     /// The prompt every match in the bracket receives, as typed. Stored once rather than per
     /// match — a bracket compares models, so varying the task between rounds would make the
-    /// winner a function of the draw. The CDN suffix each duel actually sends is appended by
+    /// winner a function of the draw. The self-contained suffix each duel actually sends is appended by
     /// <see cref="CommenceDuelHandler"/>; keeping a second copy here would let the two drift.
     /// </summary>
     public string PromptText { get; init; } = string.Empty;

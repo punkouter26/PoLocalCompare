@@ -14,4 +14,5 @@ global using PoLocalCompare.Api.Features.Scoring;
 global using PoLocalCompare.Api.Features.Leaderboard;
 global using PoLocalCompare.Api.Features.Models;
 global using PoLocalCompare.Api.Features.Ollama;
+global using PoLocalCompare.Api.Features.Prompts;
 global using PoLocalCompare.Api.Features.Tournaments;

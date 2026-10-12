@@ -72,11 +72,13 @@ public sealed class GetLeaderboardHandler(
                         : null,
                     // Only runs that actually produced a token. A failure records a short duration,
                     // so counting one would make crashing look like the fastest possible start.
-                    AvgFirstTokenMs = modelResults.Any(r => !r.IsFailure && r.WarmUpDurationMs > 0)
-                        ? Math.Round(modelResults
-                            .Where(r => !r.IsFailure && r.WarmUpDurationMs > 0)
-                            .Average(r => (double)r.WarmUpDurationMs))
-                        : null,
+                    // The MEDIAN, despite the property's name. Warm-up is measured from the first
+                    // send, so one duel that sat through a 429's Retry-After counts that wait as
+                    // "time to first token": Grok 4.6 showed 147.3 s from four duels, three of
+                    // them under a second. A mean reports the rate limit; a median reports the model.
+                    AvgFirstTokenMs = Median(modelResults
+                        .Where(r => !r.IsFailure && r.WarmUpDurationMs > 0)
+                        .Select(r => (double)r.WarmUpDurationMs)),
                     EloSparkline = sparkline,
                 };
         })).ToList();
@@ -151,5 +153,14 @@ public sealed class GetLeaderboardHandler(
                 };
             })
             .ToList();
+    }
+
+    /// <summary>Middle value (mean of the middle two for an even count), or null when empty.</summary>
+    private static double? Median(IEnumerable<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToArray();
+        if (sorted.Length == 0) return null;
+        var mid = sorted.Length / 2;
+        return Math.Round(sorted.Length % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2);
     }
 }

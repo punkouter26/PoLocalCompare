@@ -319,6 +319,17 @@ public sealed class DuelExecutionService
             {
                 await SendStatusAsync(duelId, model.ModelId, side,
                     DuelStatus.Failed, result.TotalDurationMs, result.TokenCount);
+
+                // A remote model that just failed a real duel is better evidence than a probe
+                // from up to ten minutes ago: drop the cached availability so the next Home
+                // load re-probes and can hold this model back.
+                if (model.ModelType == ModelType.Remote)
+                {
+                    using var cacheScope = _scopeFactory.CreateScope();
+                    await cacheScope.ServiceProvider
+                        .GetRequiredService<Microsoft.Extensions.Caching.Hybrid.HybridCache>()
+                        .RemoveByTagAsync(CacheTags.ModelAvailability);
+                }
             }
             else
             {

@@ -20,11 +20,10 @@
             </span>
         }
 
-        <button title="Navigation menu" aria-label="Navigation menu" class="navmenu__toggler" @onclick="ToggleNavMenu" aria-expanded="@NavExpanded" aria-controls="navbarLinks">
-            <span class="navmenu__toggler-icon" aria-hidden="true"></span>
-        </button>
-
-        <div class="@NavMenuCssClass" id="navbarLinks">
+        @* No hamburger. Below 768px this wrapper is display: contents and its three children
+           lay out on the bar directly — session controls beside the brand, the four links as
+           a second row — because a drawer was hiding four destinations behind an extra tap. *@
+        <div class="navmenu__collapse">
             <ul class="navmenu__links">
                 <li>
                     <NavLink class="navmenu__link" href="" Match="NavLinkMatch.All">
@@ -198,7 +197,6 @@
     private const string MockDataText =
         "USING MOCK DATA — Features:UseRealAi is off. Remote and Ollama responses are simulated.";
 
-    private bool collapseNavMenu = true;
 
     // Bumped to recreate the <details> closed: Blazor cannot own its `open` attribute (the
     // browser toggles it), but it can replace the element.
@@ -234,12 +232,10 @@
     private bool _allowGuest;
     private AppTheme _theme = AppTheme.System;
 
-    private string NavMenuCssClass => collapseNavMenu ? "navmenu__collapse" : "navmenu__collapse navmenu__collapse--open";
 
     // Rendered as a string, not a bool: Blazor treats a bool-valued attribute as an HTML
     // boolean attribute and omits it entirely when false, which would leave the collapsed
     // menu with no aria-expanded at all.
-    private string NavExpanded => collapseNavMenu ? "false" : "true";
 
     private string ThemeGlyph => _theme switch
     {
@@ -271,7 +267,6 @@
 
     private void OnTickerChanged() => InvokeAsync(StateHasChanged);
 
-    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
 
     // ── User menu ────────────────────────────────────────────────────────────
 
@@ -287,7 +282,7 @@
     // Collapses the phone drawer too. It used to close only the user menu, and the drawer sits
     // in the page flow, so every route opened from it started pushed below an open menu.
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
-        InvokeAsync(() => { CloseMenu(); collapseNavMenu = true; StateHasChanged(); });
+        InvokeAsync(() => { CloseMenu(); StateHasChanged(); });
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

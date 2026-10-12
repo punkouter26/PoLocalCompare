@@ -115,6 +115,19 @@
             <span class="arena-band__rationale">@rationale</span>
         }
 
+        @* The judge's own element-by-element checklist, written before it picked a winner.
+           It is the evidence behind the one-line reason above and was already being paid for
+           — the server parsed it and threw it away until 2026-10-11. Closed by default: the
+           verdict is the news, this is for whoever wants to check it. Only where a model
+           actually read the outputs; a walkover has no analysis to show. *@
+        @if (QuotesRationale && !string.IsNullOrWhiteSpace(JudgeAnalysis))
+        {
+            <details class="arena-band__analysis">
+                <summary>How the judge scored it</summary>
+                <p class="arena-band__analysis-text">@JudgeAnalysis</p>
+            </details>
+        }
+
         @* Forensic attribution — visible to the user, but never used for authorization.
            For Human verdicts this is the clicker; for AI verdicts this is null and we
            fall back to the deployment name. *@
@@ -149,6 +162,9 @@
 
     /// <summary>The judge's one-line reason, when it gave one.</summary>
     [Parameter] public string? JudgeRationale { get; set; }
+
+    /// <summary>The judge's checklist behind its reason, when it gave one.</summary>
+    [Parameter] public string? JudgeAnalysis { get; set; }
 
     /// <summary>The human who clicked, for a Human verdict.</summary>
     [Parameter] public string? VerdictBy { get; set; }

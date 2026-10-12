@@ -12,8 +12,21 @@ public sealed class CommenceDuelHandler(
     IDuelRepository duelRepository,
     IOptions<AutoJudgeOptions> autoJudgeOptions)
 {
-    private const string CdnSuffix =
-        "\n\nIMPORTANT: Use public CDN links (e.g., cdnjs.cloudflare.com, unpkg.com) for all external libraries. Do not reference npm packages, local paths, or unpublished modules.";
+    /// <summary>
+    /// Appended to every duel's prompt, and so read by both contestants AND the judge.
+    /// </summary>
+    /// <remarks>
+    /// Until 2026-10-11 this said the opposite: "Use public CDN links … for all external
+    /// libraries". That worked for a person — the Arena's preview frame has network — and
+    /// against the page everywhere else: <c>HtmlScreenshotRenderer</c> blocks all network, so a
+    /// page that took the advice and loaded three.js from a CDN was screenshotted blank and
+    /// judged as not working, and the judge, which is handed this same text as "the request",
+    /// was scoring pages on whether they used CDN links (it said so in its analysis). It also
+    /// contradicted <see cref="InferencePrompt.System"/> the moment that gained its
+    /// no-external-files line. One instruction now, the same in both places.
+    /// </remarks>
+    private const string SelfContainedSuffix =
+        "\n\nIMPORTANT: The page must be fully self-contained. Write all CSS and JavaScript inline and load nothing from the network — no CDN links, external scripts, stylesheets, fonts or images.";
 
     public async Task<DuelDto> HandleAsync(CommenceDuelCommand command)
     {
@@ -35,7 +48,7 @@ public sealed class CommenceDuelHandler(
             ?? throw new KeyNotFoundException($"Model '{command.RightModelId}' not found.");
 
         var duelId = DuelId.New();
-        var promptFull = command.PromptText + CdnSuffix;
+        var promptFull = command.PromptText + SelfContainedSuffix;
 
         var duel = new Duel(
             duelId,

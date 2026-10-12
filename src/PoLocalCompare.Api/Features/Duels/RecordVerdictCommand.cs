@@ -16,4 +16,6 @@ public sealed record RecordVerdictCommand(
     VerdictSource Source = VerdictSource.Human,
     string? JudgeRationale = null,
     string? JudgeModel = null,
-    string? Actor = null);
+    string? Actor = null,
+    string? JudgeAnalysis = null,
+    double? JudgeCostUsd = null);

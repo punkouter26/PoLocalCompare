@@ -4,6 +4,8 @@
 .value-chart {
     max-inline-size: 45rem;
     margin: 0 0 var(--space-lg);
+    /* A size container, so the type below can answer the width the figure was given. */
+    container: value-chart / inline-size;
 }
 
 .value-chart__svg {
@@ -100,5 +102,24 @@
 @media (max-width: 640px) {
     .value-chart {
         display: none;
+    }
+}
+
+/* In a column narrower than the viewBox (the leaderboard's side column is ~544px) every unit
+   is about three quarters of a pixel, which took the tick labels under 9px. One step up the
+   scale each, so they render near their intended size again. Container, not media: what
+   varies is the box this figure was given. */
+@container value-chart (max-width: 38rem) {
+    .value-chart__tick {
+        font-size: var(--text-sm);
+    }
+
+    .value-chart__label {
+        font-size: var(--text-md);
+    }
+
+    /* The dot's invisible hit circle is r=12 units — 24px at full size, 18px here. */
+    .value-chart__hit {
+        r: 17px;
     }
 }

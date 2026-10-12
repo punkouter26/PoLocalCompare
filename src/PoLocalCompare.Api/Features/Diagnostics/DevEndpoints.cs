@@ -40,8 +40,16 @@ public static class DevEndpoints
 
         // Judge-vs-human agreement over the newest human-decided duels. Every sampled duel costs
         // real judge calls, so it is dev-only. Run before and after any judge change.
-        app.MapPost("/api/dev/judge-calibration", async (JudgeCalibrationHandler handler, int? take, CancellationToken ct) =>
-            Results.Ok(await handler.HandleAsync(take ?? 20, ct))).RequireAuthorization();
+        // deployment / vision replay the same sample through a different judge, so candidates
+        // can be compared on agreement before AiJudge:* is changed. Neither alters configuration.
+        app.MapPost("/api/dev/judge-calibration", async (
+            JudgeCalibrationHandler handler, int? take, string? deployment, bool? vision, CancellationToken ct) =>
+            Results.Ok(await handler.HandleAsync(take ?? 20, deployment, vision, ct))).RequireAuthorization();
+
+        // Recomputes stored ApiCostUsd from each result's token counts at today's rates. A dry
+        // run unless apply=true. See RepriceCostsHandler for what went wrong and what it leaves alone.
+        app.MapPost("/api/dev/reprice-costs", async (RepriceCostsHandler handler, bool? apply, CancellationToken ct) =>
+            Results.Ok(await handler.HandleAsync(apply ?? false, ct))).RequireAuthorization();
 
         return app;
     }

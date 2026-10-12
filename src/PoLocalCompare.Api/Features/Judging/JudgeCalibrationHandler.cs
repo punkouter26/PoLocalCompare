@@ -9,10 +9,12 @@ public sealed record JudgeCalibrationRow(string DuelId, DuelVerdict Human, DuelV
 /// <param name="AgreementRate">Agreed / Decided, or null when the judge decided nothing.</param>
 public sealed record JudgeCalibrationReport(
     string JudgeModel,
+    bool Vision,
     int Sampled,
     int Decided,
     int Agreed,
     double? AgreementRate,
+    double? JudgeCostUsd,
     IReadOnlyList<JudgeCalibrationRow> Rows);
 
 /// <summary>
@@ -34,9 +36,15 @@ public sealed class JudgeCalibrationHandler(
 {
     public const int MaxTake = 50;
 
-    public async Task<JudgeCalibrationReport> HandleAsync(int take, CancellationToken cancellationToken)
+    /// <param name="deployment">A candidate judge to replay the sample through; null uses the configured one.</param>
+    /// <param name="vision">Force screenshots on or off for this run; null uses <c>AiJudge:VisionEnabled</c>.</param>
+    public async Task<JudgeCalibrationReport> HandleAsync(
+        int take, string? deployment, bool? vision, CancellationToken cancellationToken)
     {
         take = Math.Clamp(take, 1, MaxTake);
+        var useVision = vision ?? options.Value.VisionEnabled;
+        var overriding = !string.IsNullOrWhiteSpace(deployment) || vision.HasValue;
+        double cost = 0;
 
         // Newest decided duels; the source filter is client-side because the list query only
         // filters on verdict. 500 is a scan cap, not a sample size.
@@ -59,9 +67,13 @@ public sealed class JudgeCalibrationHandler(
             JudgeDecision? decision;
             try
             {
-                decision = await judge.JudgeAsync(
-                    string.IsNullOrWhiteSpace(duel.PromptFull) ? duel.PromptText : duel.PromptFull,
-                    left.HtmlOutputRaw, right.HtmlOutputRaw, cancellationToken);
+                var prompt = string.IsNullOrWhiteSpace(duel.PromptFull) ? duel.PromptText : duel.PromptFull;
+                // The override lives on the concrete judge, not on IDuelJudge: it is a
+                // calibration tool, and a test double has no second deployment to switch to.
+                decision = overriding && judge is FoundryDuelJudge foundry
+                    ? await foundry.JudgeAsync(prompt, left.HtmlOutputRaw, right.HtmlOutputRaw, deployment, vision, cancellationToken)
+                    : await judge.JudgeAsync(prompt, left.HtmlOutputRaw, right.HtmlOutputRaw, cancellationToken);
+                cost += decision?.CostUsd ?? 0;
             }
             catch (JudgeRateLimitedException)
             {
@@ -74,9 +86,11 @@ public sealed class JudgeCalibrationHandler(
         var judged = rows.Count(r => r.Judge is not null);
         var agreed = rows.Count(r => r.Judge == r.Human);
         return new JudgeCalibrationReport(
-            options.Value.EffectiveDeployment(options.Value.VisionEnabled),
+            string.IsNullOrWhiteSpace(deployment) ? options.Value.EffectiveDeployment(useVision) : deployment.Trim(),
+            useVision,
             rows.Count, judged, agreed,
             judged == 0 ? null : Math.Round((double)agreed / judged, 3),
+            cost > 0 ? Math.Round(cost, 6) : null,
             rows);
     }
 }

@@ -25,19 +25,16 @@ public sealed class NavigationUiTests : UiTestBase
         // else in the suite looks at geometry, so this is the only place that can catch it.
         // Note the live ticker only takes part when duels are actually running.
         var page = await SignedInPageAsync(width, height);
-        await OpenNavIfCollapsedAsync(page);
 
         // Standards §4 layout contract: Left (branding) | Centre (actions) | Right (session).
-        // On a narrow viewport the bar collapses into a vertical drawer, so the contract
-        // becomes ordering rather than horizontal position — assert the axis that applies.
+        // Branding and session share the bar's first row at every width — below 768px the
+        // links drop to a second row beneath them rather than into a drawer — so the same
+        // horizontal assertion holds on a phone and on a desktop.
         var brand = await page.Locator(".navmenu__brand").BoundingBoxAsync();
         var auth = await page.Locator(".navmenu__auth").BoundingBoxAsync();
         Assert.NotNull(brand);
         Assert.NotNull(auth);
-        if (width < 768)
-            Assert.True(brand!.Y < auth!.Y, "In the drawer, branding should sit above the session controls.");
-        else
-            Assert.True(brand!.X < auth!.X, "Branding should sit left of the session controls.");
+        Assert.True(brand!.X < auth!.X, "Branding should sit left of the session controls.");
 
         // The signed-in identity is part of that right-hand cluster.
         await Assertions.Expect(page.Locator(".navmenu__user-badge")).ToBeVisibleAsync();

@@ -11,6 +11,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AddDiscoveredModelHandler>();
         services.AddScoped<CommenceDuelHandler>();
         services.AddScoped<SpendGuard>();
+        services.AddScoped<RepriceCostsHandler>();
+        services.AddScoped<RefinePromptHandler>();
         services.AddScoped<GetDuelHandler>();
         services.AddScoped<GetLeaderboardHandler>();
         services.AddScoped<GetKillListHandler>();

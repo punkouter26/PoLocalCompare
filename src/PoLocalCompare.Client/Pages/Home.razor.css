@@ -62,6 +62,8 @@
 .home__console {
     position: sticky;
     top: calc(var(--nav-height) + var(--space-md));
+    /* Home scrolls this into view when the second model is picked; clear the sticky nav. */
+    scroll-margin-block-start: var(--sticky-nav-clearance);
     /* dvh — this is the sticky console's height, so with vh the Compare button it exists
        to keep on screen was pushed below the fold by exactly the mobile toolbar height. */
     max-height: calc(100dvh - var(--nav-height) - var(--space-xl));
@@ -191,6 +193,28 @@
     }
 }
 
+/* ── Desktop: the whole workbench fits the viewport ─────────────────────────
+   Two columns, and until now only one of them was bounded: the console stuck, but the picker
+   ran the page to 1.37 screens on a 1440x900 desktop for a 27-model catalog. The picker is a
+   list you scan within — the same call already made for it below 1080px — so here the grid
+   takes exactly the height left under the nav (--space-md is the article's top padding,
+   --space-lg the page's bottom one) and the picker scrolls inside its row.
+
+   max-height, not height: a filtered list of two Ollama models should be a short box, not a
+   tall empty one. The floor keeps a very short window usable; below it the page scrolls. */
+@media (min-width: 1081px) {
+    .home__layout {
+        height: calc(100dvh - var(--nav-height) - var(--space-md) - var(--space-lg));
+        min-height: 26rem;
+    }
+
+    .home__picker {
+        max-height: 100%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+}
+
 /* ── Header ───────────────────────────────────────────────────────────
    .home__title carries NO styling — it is an E2E-UI selector hook and nothing else.
    PageHeader provides the h1 geometry. */
@@ -305,18 +329,46 @@
     color: var(--accent-yellow);
 }
 
+/* Two lines, never an ellipsis, at every width. It was nowrap + ellipsis above 640px, which
+   was fine until each filled slot gained a clear button: in the 26rem console that left
+   ~70px for the name and "DeepSeek V4 Flash" became "DeepSee…" on a 1440px desktop. */
 .home__slot-name {
     min-width: 0;
     font-size: var(--text-md);
     font-weight: var(--weight-semibold);
     color: var(--text-muted);
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: var(--leading-tight);
 }
 
 .home__slot--set .home__slot-name {
     color: var(--text);
+}
+
+/* The slot's own clear button, pushed to its far edge. Size comes from the global target
+   floor on <button> (24px, 44px on touch). */
+.home__slot-clear {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--text-sm);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.home__slot-clear:hover {
+    color: var(--text);
+    background: var(--surface-2);
 }
 
 .home__slot-vs {
@@ -383,26 +435,16 @@
     z-index: 1;
 }
 
-/* ── Replace popover (Finding #5) ───────────────────────────────────── */
-.home__popover {
-    margin-bottom: var(--space-md);
-    padding: var(--space-smd) var(--space-md);
-    background: var(--cyan-surface);
-    border: 1px solid var(--cyan-border);
-    border-radius: var(--radius-md);
-    animation: fadeIn 0.2s ease-out;
+/* ── Slots-full hint ────────────────────────────────────────────────────
+   Empty until a third model is clicked with both slots taken. Always in the DOM (it is a live
+   region), so it must cost nothing while it has nothing to say. */
+.home__full-hint {
+    margin: 0 0 var(--space-sm);
+    color: var(--accent-yellow);
 }
 
-.home__popover-text {
-    margin: 0 0 var(--space-smd);
-    font-size: var(--text-md);
-    color: var(--text);
-}
-
-.home__popover-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
+.home__full-hint:empty {
+    margin: 0;
 }
 
 /* ── Prompt (console, upper half) ───────────────────────────────────── */
@@ -553,16 +595,23 @@
         padding: var(--space-md);
     }
 
-    /* Two ~150px slots on a phone leave ~90px for the name, so even the placeholder was
-       "Not selec…" and every real model name was cut. Two lines instead of an ellipsis. */
-    .home__slot-name {
-        white-space: normal;
-        overflow-wrap: anywhere;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        line-height: var(--leading-tight);
+    /* The four type chips wrapped, leaving "Ollama" alone on a second row — 52px of a
+       bounded picker spent on one chip. One row instead; it scrolls sideways if a narrow
+       phone cannot hold all four, and the block padding keeps the focus ring unclipped. */
+    .home__filters {
+        flex-wrap: nowrap;
+        gap: var(--space-xs);
+        overflow-x: auto;
+        padding-block: var(--space-2xs);
+        scrollbar-width: none;
     }
+
+    .home__filters > .po-btn {
+        flex: 0 0 auto;
+        padding-inline: var(--space-sm);
+        white-space: nowrap;
+    }
+
 }
 
 /* ── Compare: readiness edge ─────────────────────────────────────────────────
@@ -597,4 +646,19 @@
     .home__compare::before {
         transition: none;
     }
+}
+
+/* ── Sharpen prompt ──────────────────────────────────────────────────────────
+   The button, its Undo, and one line saying what happened, under the textarea. */
+.home__sharpen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-sm);
+}
+
+.home__sharpen-note {
+    flex: 1 1 8rem;
+    min-width: 0;
+    margin: 0;
 }

@@ -130,13 +130,30 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
         _logger = logger;
     }
 
+    public Task<JudgeDecision?> JudgeAsync(
+        string promptFull,
+        string leftOutput,
+        string rightOutput,
+        CancellationToken cancellationToken) =>
+        JudgeAsync(promptFull, leftOutput, rightOutput, deploymentOverride: null, visionOverride: null, cancellationToken);
+
+    /// <summary>
+    /// The same judgment through a different deployment and/or with screenshots forced on or
+    /// off. Only <see cref="JudgeCalibrationHandler"/> calls this, to compare candidate judges
+    /// on one sample; live verdicts always use the configured judge.
+    /// </summary>
     public async Task<JudgeDecision?> JudgeAsync(
         string promptFull,
         string leftOutput,
         string rightOutput,
+        string? deploymentOverride,
+        bool? visionOverride,
         CancellationToken cancellationToken)
     {
-        var deployment = _options.EffectiveDeployment(_options.VisionEnabled);
+        var useVision = visionOverride ?? _options.VisionEnabled;
+        var deployment = string.IsNullOrWhiteSpace(deploymentOverride)
+            ? _options.EffectiveDeployment(useVision)
+            : deploymentOverride.Trim();
         // A gemini-* judge goes to Google's endpoint — see FoundryChatRequest.IsGemini.
         var (endpoint, apiKey) = FoundryChatRequest.ResolveProvider(_configuration, deployment);
 
@@ -151,7 +168,7 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
         // document by its picture and the other by its source would be an unfair comparison,
         // not a partial one — and the judge falls back to reading the full source.
         IReadOnlyList<byte[]>? leftShots = null, rightShots = null;
-        if (_options.VisionEnabled)
+        if (useVision)
         {
             var shots = await Task.WhenAll(
                 _screenshots.RenderFramesAsync(leftOutput, cancellationToken),
@@ -181,7 +198,11 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
             return null;
         }
 
-        return Reconcile(opinions[0], opinions[1]);
+        // Both calls were paid for whichever way they came out, including a disagreement.
+        var spent = opinions.Sum(o => o?.CostUsd ?? 0);
+        return Reconcile(opinions[0], opinions[1]) is { } decision
+            ? decision with { CostUsd = spent > 0 ? spent : null }
+            : null;
     }
 
     private sealed record JudgeCall(
@@ -308,8 +329,9 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
             return null;
         }
 
-        var (slot, rawReason) = parsed.Value;
+        var (slot, rawReason, rawAnalysis) = parsed.Value;
         var reason = RelabelSlots(rawReason, leftIsA);
+        var analysis = rawAnalysis is null ? null : RelabelSlots(rawAnalysis, leftIsA);
 
         // A tie is a decision the judge reached, so it travels back as one. Returning null here
         // (as this used to) threw the answer away and left the duel Pending, which the Archive
@@ -318,7 +340,27 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
             : (slot == "A") == leftIsA ? DuelVerdict.Left : DuelVerdict.Right;
         JudgeLog.Decided(_logger, verdict.ToString(), slot, reason);
 
-        return new JudgeDecision(verdict, reason);
+        return new JudgeDecision(verdict, reason, Analysis: analysis, CostUsd: CostOf(call.Deployment, payload));
+    }
+
+    /// <summary>
+    /// What one judge call cost, from the usage the provider reported and the price book's rate
+    /// for the deployment. Null when either is missing — unknown, not free.
+    /// </summary>
+    private static double? CostOf(string deployment, string payload)
+    {
+        if (DefaultPriceBook.Resolve(deployment) is not { } rate) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            if (!doc.RootElement.TryGetProperty("usage", out var usage)) return null;
+            int Read(string name) => usage.TryGetProperty(name, out var v) && v.TryGetInt32(out var n) ? n : 0;
+            return TokenCost.Compute(rate.InputPerMillion, rate.OutputPerMillion, Read("prompt_tokens"), Read("completion_tokens"));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static void AddShots(List<object> parts, string slot, IReadOnlyList<byte[]> shots)
@@ -508,7 +550,7 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
     /// <summary>
     /// Reads the schema-constrained {"analysis":"…","winner":"A|B|Tie","reason":"…"} reply.
     /// </summary>
-    private static (string Slot, string Reason)? ParseReply(string reply)
+    private static (string Slot, string Reason, string? Analysis)? ParseReply(string reply)
     {
         if (string.IsNullOrWhiteSpace(reply)) return null;
 
@@ -528,7 +570,13 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
                 ? reasonEl.GetString()?.Trim()
                 : null;
 
-            return (winner, Clip(string.IsNullOrWhiteSpace(reason) ? "No reason given." : reason, 400));
+            var analysis = doc.RootElement.TryGetProperty("analysis", out var analysisEl) && analysisEl.ValueKind == JsonValueKind.String
+                ? analysisEl.GetString()?.Trim()
+                : null;
+
+            return (winner,
+                Clip(string.IsNullOrWhiteSpace(reason) ? "No reason given." : reason, 400),
+                string.IsNullOrWhiteSpace(analysis) ? null : Clip(analysis, 1500));
         }
         catch (JsonException)
         {

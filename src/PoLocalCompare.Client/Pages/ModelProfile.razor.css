@@ -86,9 +86,27 @@
     .profile__overview--split {
         display: grid;
         grid-template-columns: minmax(16rem, 1fr) minmax(0, 2.5fr);
+        /* The chart spans both rows on the right; stats then upsets stack on the left. */
+        grid-template-areas:
+            "stats   history"
+            "upsets  history";
+        grid-template-rows: auto 1fr;
         align-items: start;
-        gap: var(--space-lg);
+        gap: var(--space-md) var(--space-lg);
         margin-top: var(--space-mlg);
+    }
+
+    .profile__overview--split .profile__stats {
+        grid-area: stats;
+    }
+
+    .profile__overview--split .profile__history {
+        grid-area: history;
+    }
+
+    .profile__overview--split .profile__upsets-block {
+        grid-area: upsets;
+        margin-top: 0;
     }
 
     .profile__overview--split .profile__stats {
@@ -122,10 +140,14 @@
     margin: var(--space-sm) 0 0;
 }
 
+.profile__upsets-block {
+    margin-top: var(--space-md);
+}
+
 .profile__upsets {
     display: grid;
     gap: var(--space-sm);
-    margin: var(--space-md) 0 0;
+    margin: var(--space-sm) 0 0;
     padding-inline-start: var(--space-lg);
 }
 

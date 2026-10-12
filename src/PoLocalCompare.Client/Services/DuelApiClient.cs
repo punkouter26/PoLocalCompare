@@ -62,6 +62,21 @@ public sealed class DuelApiClient
     }
 
     /// <summary>
+    /// Asks the server to rewrite a rough prompt into a brief with explicit requirements.
+    /// Throws <see cref="DuelStartException"/> with the server's own sentence when it declines
+    /// (mock mode, the spend cap, the rate limit) or the model does not answer.
+    /// </summary>
+    public async Task<string> RefinePromptAsync(string prompt)
+    {
+        var response = await _http.PostAsJsonAsync("/api/prompts/refine", new RefinePromptRequest(prompt), JsonOptions);
+        if (!response.IsSuccessStatusCode)
+            throw new DuelStartException(response.StatusCode, await TryReadProblemAsync(response));
+
+        var refined = await response.Content.ReadFromJsonAsync<RefinePromptResponse>(JsonOptions);
+        return refined?.Prompt ?? prompt;
+    }
+
+    /// <summary>
     /// Best-effort parse of an RFC 7807 ProblemDetails body. Returns null if the body is empty
     /// or not in the expected shape, so callers fall back to the status code's reason phrase.
     /// </summary>

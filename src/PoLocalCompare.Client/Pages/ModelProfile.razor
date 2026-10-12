@@ -139,9 +139,17 @@
                         </p>
                     }
 
-                    @if (highlights.Upsets.Count > 0)
-                    {
-                        <ol class="profile__upsets" aria-label="Upsets">
+                </section>
+
+                @* Its own grid item, not the tail of the history section: from 1024px it sits
+                   under the stat tiles, in the column that used to be ~300px of empty space
+                   beside the chart, which pulls the kill list up by the same amount. Below
+                   that it follows the chart, as it always did. *@
+                @if (highlights.Upsets.Count > 0)
+                {
+                    <section class="profile__upsets-block" aria-labelledby="profile-upsets-heading">
+                        <h2 id="profile-upsets-heading" class="po-section-title">Biggest upsets</h2>
+                        <ol class="profile__upsets">
                             @foreach (var upset in highlights.Upsets)
                             {
                                 <li @key="upset.DuelId">
@@ -155,8 +163,8 @@
                                 </li>
                             }
                         </ol>
-                    }
-                </section>
+                    </section>
+                }
             }
         </div>
 

@@ -9,6 +9,9 @@ public interface IDuelRepository
     Task SaveAsync(Duel duel);
     Task UpdateAsync(Duel duel);
 
+    /// <summary>Total <c>JudgeCostUsd</c> of duels started in [from, to).</summary>
+    Task<double> SumJudgeCostAsync(DateTimeOffset from, DateTimeOffset to);
+
     /// <summary>Newest first by duel id (a ULID, so id order is creation order).</summary>
     /// <param name="beforeMonth">Coarse window: partitions <c>le</c> this yyyyMM. Used by the recovery sweeper.</param>
     /// <param name="before">Keyset cursor: only duels whose id sorts strictly below this one — the Archive's Load More.</param>

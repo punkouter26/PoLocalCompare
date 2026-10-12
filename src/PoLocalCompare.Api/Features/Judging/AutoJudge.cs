@@ -340,7 +340,9 @@ public sealed class AutoJudge
             decision.Verdict,
             source,
             decision.Rationale,
-            judgeModel);
+            judgeModel,
+            JudgeAnalysis: decision.Analysis,
+            JudgeCostUsd: decision.CostUsd);
 
         VerdictResponseDto? response;
         try

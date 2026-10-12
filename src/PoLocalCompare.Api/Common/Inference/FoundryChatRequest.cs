@@ -169,6 +169,32 @@ public static class FoundryChatRequest
             ? ((configuration["Gemini:Endpoint"] ?? GeminiDefaultEndpoint).TrimEnd('/'), configuration["Gemini:ApiKey"])
             : (configuration["AzureAiFoundry:Endpoint"]?.TrimEnd('/'), configuration["AzureAiFoundry:ApiKey"]);
 
+    /// <summary>
+    /// xAI's reasoning Grok deployments — every <c>grok-*</c> that is not explicitly a
+    /// <c>non-reasoning</c> build. They are NOT <see cref="IsReasoningModel"/>: they take the
+    /// classic <c>max_tokens</c> and <c>temperature</c>, so they need only the effort field.
+    /// </summary>
+    /// <remarks>
+    /// Found on 2026-10-11 from the leaderboard: Grok 4.6's time to first token was 145 s as
+    /// a MEDIAN. Every stored result showed 2,700–6,400 reasoning tokens spent before the first
+    /// visible character, because this deployment was being sent no effort at all and thought
+    /// at its default — the same waste the GPT-5 note in <see cref="Build"/> describes.
+    /// </remarks>
+    public static bool IsGrokReasoning(string? deploymentName) =>
+        deploymentName is not null
+        && deploymentName.StartsWith("grok-", StringComparison.OrdinalIgnoreCase)
+        && !deploymentName.Contains("non-reasoning", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether this provider reports reasoning tokens OUTSIDE <c>completion_tokens</c>. OpenAI
+    /// counts them inside it; xAI reports them beside it — a stored Grok 4.6 result has 2,345
+    /// completion tokens and 6,417 reasoning tokens, which cannot be a subset. Both bill them
+    /// at the output rate, so for these deployments cost has to add them back
+    /// (see <see cref="TokenCost"/>).
+    /// </summary>
+    public static bool ReportsReasoningSeparately(string? deploymentName) =>
+        deploymentName is not null && deploymentName.StartsWith("grok-", StringComparison.OrdinalIgnoreCase);
+
     public static bool IsReasoningModel(string? deploymentName)
     {
         if (string.IsNullOrWhiteSpace(deploymentName)) return false;
@@ -266,6 +292,12 @@ public static class FoundryChatRequest
         {
             body["max_tokens"] = maxTokens;
             body["temperature"] = temperature;
+        }
+
+        if (IsGrokReasoning(deploymentName))
+        {
+            // The lowest effort xAI's reasoning models accept. See IsGrokReasoning.
+            body["reasoning_effort"] = "low";
         }
 
         if (IsGemini(deploymentName))

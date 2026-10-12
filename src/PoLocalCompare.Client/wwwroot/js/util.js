@@ -68,12 +68,18 @@ window.openHtmlSource = function (html, modelName) {
  * defeats the entire point of SC 2.4.1 Bypass Blocks for a keyboard user.
  *
  * @param {string} id - Target element id. The element needs tabindex="-1" to accept focus.
+ * @param {string} [scrollId] - Scroll this element to the top instead of the focused one — for
+ *   a field whose surrounding block (its heading, the controls above it) should come into view
+ *   with it. Home passes its console so the two model slots arrive along with the prompt.
  */
-window.focusElement = function (id) {
+window.focusElement = function (id, scrollId) {
     const el = document.getElementById(id);
     if (el) {
-        el.focus();
-        el.scrollIntoView({ block: 'start' });
+        const frame = (scrollId && document.getElementById(scrollId)) || el;
+        el.focus({ preventScroll: true });
+        // Glide only for the framed case, and never under reduced motion; the skip link jumps.
+        const glide = frame !== el && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        frame.scrollIntoView({ block: 'start', behavior: glide ? 'smooth' : 'auto' });
     }
 };
 

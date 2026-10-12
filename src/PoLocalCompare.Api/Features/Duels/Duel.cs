@@ -41,6 +41,16 @@ public sealed class Duel
     /// <summary>Deployment name of the model that judged, when <see cref="VerdictSource"/> is Ai.</summary>
     public string? JudgeModel { get; set; }
 
+    /// <summary>The judge's element-by-element checklist behind <see cref="JudgeRationale"/>, when it gave one.</summary>
+    public string? JudgeAnalysis { get; set; }
+
+    /// <summary>
+    /// What the judge's own calls for this duel cost. Kept on the duel rather than on a result
+    /// row because it belongs to neither model; <see cref="SpendGuard"/> counts it toward the
+    /// daily cap, which until 2026-10-11 saw only the contestants' spend.
+    /// </summary>
+    public double? JudgeCostUsd { get; set; }
+
     /// <summary>
     /// Last standing-down reason recorded while the duel was still <see cref="DuelVerdict.Pending"/>.
     /// Set when <see cref="AutoJudge"/> cannot decide (rate-limit, both sides failed, etc.) and

@@ -25,6 +25,17 @@ namespace PoLocalCompare.Api.Common.Inference;
 /// </para>
 ///
 /// <para>
+/// The behaviour half was added on 2026-10-11. The brief said "HTML/CSS coder… inline CSS"
+/// and never mentioned script, while most of the prompt library asks for motion (a spinning
+/// cube, Game of Life, a sorting race) and the judge marks a page that does not move as not
+/// having done what was asked. It also states the two things the renderer enforces that a
+/// model cannot guess: <c>HtmlScreenshotRenderer</c> blocks all network, so a CDN reference
+/// is a dead reference, and it screenshots without clicking, so a page that waits for input
+/// is judged on its idle frame. <b>Ratings from before this date were earned under the
+/// shorter brief</b> and are not strictly comparable with ones earned after it.
+/// </para>
+///
+/// <para>
 /// <b>This string is <c>const</c> so there is exactly one copy</b> — the fairness argument above
 /// is the reason, and <c>const</c>-folding guarantees no code path can emit a divergent one.
 /// It is NOT a prompt-caching win, although an earlier version of this comment said so: Azure
@@ -59,5 +70,12 @@ public static class InferencePrompt
           widths or heights, and no min-width or min-height that exceeds the frame.
         - Prefer a single screen of content. Drop anything that will not fit rather than
           letting it spill.
+
+        Behaviour belongs in the page too:
+        - Use an inline <script> for anything the request needs to move, update or respond.
+        - No external files of any kind (scripts, stylesheets, fonts, images, CDNs). The page
+          runs with no network, so anything it has to fetch will be missing.
+        - Anything that moves must start by itself when the page loads; do not wait for a
+          click or a key press to begin.
         """;
 }

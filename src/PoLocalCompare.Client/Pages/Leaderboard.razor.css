@@ -262,3 +262,30 @@
         animation: none;
     }
 }
+
+/* ── Table beside the chart ──────────────────────────────────────────────────
+   Stacked, the value chart used 720 of 1,392px and put the first ranked row at y=569 on a
+   1440x900 desktop: the page is called Leaderboard and the board started below the fold.
+   From 1400px the table (798px at its natural width) takes the left column and the chart a
+   sticky right one. Both are placed explicitly so the DOM order — chart, then table — is
+   still the stacked order below this width. */
+@media (min-width: 1400px) {
+    .leaderboard__layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 34rem);
+        align-items: start;
+        gap: var(--space-lg);
+    }
+
+    .leaderboard__layout > .po-table-wrap {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .leaderboard__chart {
+        grid-column: 2;
+        grid-row: 1;
+        position: sticky;
+        top: calc(var(--nav-height) + var(--space-md));
+    }
+}

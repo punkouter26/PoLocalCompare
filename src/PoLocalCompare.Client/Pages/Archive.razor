@@ -46,7 +46,7 @@
         @* A plain .po-table: it becomes labelled cards below 640px via data-label, and the
            prompt cell's link opens the duel in the Arena. *@
         <div class="po-table-wrap">
-            <table class="po-table po-table--cards">
+            <table class="po-table po-table--cards archive__grid">
                 <caption class="visually-hidden">Duels, newest first — open a prompt to see both outputs</caption>
                 <thead>
                     <tr>
@@ -62,8 +62,8 @@
                         var d = r.Duel;
                         <tr @key="d.DuelId">
                             <td data-label="Date" class="archive__date">@d.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                            <td data-label="Prompt"><a href="@($"/arena/{d.DuelId}")">@d.PromptSummary</a></td>
-                            <td data-label="Matchup">
+                            <td data-label="Prompt" class="archive__prompt-cell"><a class="archive__prompt" href="@($"/arena/{d.DuelId}")">@d.PromptSummary</a></td>
+                            <td data-label="Matchup" class="archive__matchup-cell">
                                 <span class="archive__matchup">
                                     @Side(d.LeftModelName, d.LeftModelId, d.Verdict == DuelVerdict.Left)
                                     <span class="archive__vs">vs</span>
@@ -254,7 +254,7 @@
     /// Arena's Retry does. This used to pre-fill Home from <c>PromptSummary</c>, which the list
     /// truncates to 80 characters, so every re-run of a longer prompt ran a different one; and
     /// a prompt of up to 10,000 characters does not belong on a query string anyway.
-    /// PromptText, not PromptFull: the server appends its CDN instruction itself.
+    /// PromptText, not PromptFull: the server appends its self-contained instruction itself.
     /// </summary>
     private async Task RerunAsync(DuelSummaryDto d)
     {

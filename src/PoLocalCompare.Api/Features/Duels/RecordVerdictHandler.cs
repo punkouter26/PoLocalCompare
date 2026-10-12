@@ -108,6 +108,7 @@ public sealed class RecordVerdictHandler
         EloShiftLoser = duel.EloShiftLoser,
         Source = duel.VerdictSource,
         JudgeRationale = duel.JudgeRationale,
+        JudgeAnalysis = duel.JudgeAnalysis,
     };
 
     /// <summary>
@@ -191,6 +192,8 @@ public sealed class RecordVerdictHandler
         duel.Verdict = command.Verdict;
         duel.VerdictSource = command.Source;
         duel.JudgeRationale = command.JudgeRationale;
+        duel.JudgeAnalysis = command.JudgeAnalysis;
+        duel.JudgeCostUsd = command.JudgeCostUsd;
         duel.JudgeModel = command.JudgeModel;
         duel.WinnerModelId = winner.ModelId;
         duel.LoserModelId = loser.ModelId;
@@ -252,6 +255,7 @@ public sealed class RecordVerdictHandler
             LoserEloAfter = newLoserElo,
             Source = command.Source,
             JudgeRationale = command.JudgeRationale,
+            JudgeAnalysis = command.JudgeAnalysis,
         };
 
         // Announced last, after everything durable has landed. LobbyNotifier swallows its own
@@ -296,6 +300,8 @@ public sealed class RecordVerdictHandler
         duel.Verdict = DuelVerdict.Tie;
         duel.VerdictSource = command.Source;
         duel.JudgeRationale = command.JudgeRationale;
+        duel.JudgeAnalysis = command.JudgeAnalysis;
+        duel.JudgeCostUsd = command.JudgeCostUsd;
         duel.JudgeModel = command.JudgeModel;
         duel.WinnerModelId = null;
         duel.LoserModelId = null;
@@ -346,6 +352,7 @@ public sealed class RecordVerdictHandler
             LoserEloAfter = null,
             Source = command.Source,
             JudgeRationale = command.JudgeRationale,
+            JudgeAnalysis = command.JudgeAnalysis,
         };
 
         if (_lobby is not null)
@@ -410,6 +417,8 @@ public sealed class RecordVerdictHandler
         duel.Verdict = DuelVerdict.Voided;
         duel.VerdictSource = command.Source;
         duel.JudgeRationale = command.JudgeRationale;
+        duel.JudgeAnalysis = command.JudgeAnalysis;
+        duel.JudgeCostUsd = command.JudgeCostUsd;
         duel.JudgeModel = null;
         duel.WinnerModelId = null;
         duel.LoserModelId = null;
@@ -428,6 +437,7 @@ public sealed class RecordVerdictHandler
             EloShiftLoser = 0,
             Source = command.Source,
             JudgeRationale = command.JudgeRationale,
+            JudgeAnalysis = command.JudgeAnalysis,
         };
     }
 }

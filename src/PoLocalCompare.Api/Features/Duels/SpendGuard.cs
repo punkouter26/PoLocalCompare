@@ -20,6 +20,7 @@ namespace PoLocalCompare.Api.Features.Duels;
 /// </remarks>
 public sealed class SpendGuard(
     IDuelResultRepository results,
+    IDuelRepository duels,
     IModelRepository models,
     HybridCache cache,
     IConfiguration configuration)
@@ -35,7 +36,10 @@ public sealed class SpendGuard(
         var day = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
         var spent = await cache.GetOrCreateAsync(
             $"spend:{day:yyyyMMdd}",
-            async _ => await results.SumApiCostAsync(day, day.AddDays(1)),
+            // Contestants and the judge. The judge's calls were not counted until
+            // 2026-10-11 — two per duel, on the vision deployment when screenshots are on.
+            async _ => await results.SumApiCostAsync(day, day.AddDays(1))
+                + await duels.SumJudgeCostAsync(day, day.AddDays(1)),
             cancellationToken: cancellationToken);
 
         return spent >= cap;

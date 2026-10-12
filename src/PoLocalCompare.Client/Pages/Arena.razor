@@ -86,6 +86,7 @@
                          AutoJudgeRemaining="@_autoJudgeRemaining"
                          WinnerDisplayName="@ResolveDisplayName(_winnerModelId)"
                          JudgeRationale="@_judgeRationale"
+                         JudgeAnalysis="@_judgeAnalysis"
                          VerdictBy="@_duel.VerdictBy"
                          JudgeModel="@_duel.JudgeModel"
                          RaceTicker="@(_duelStillRunning ? RaceTicker : null)"
@@ -377,6 +378,7 @@
     /// </summary>
     private DuelVerdict _verdictValue = DuelVerdict.Pending;
     private string? _judgeRationale;
+    private string? _judgeAnalysis;
     private int? _autoJudgeRemaining;
     private bool _autoJudgeDeciding;
     private CancellationTokenSource? _autoJudgeCts;
@@ -715,6 +717,7 @@
         _verdictSource = VerdictSource.Human;
         _verdictValue = DuelVerdict.Pending;
         _judgeRationale = null;
+        _judgeAnalysis = null;
         _winnerModelId = null;
         _loserModelId = null;
         _eloShiftLeft = null;
@@ -881,7 +884,7 @@
 
         try
         {
-            // PromptText is what the user typed; PromptFull is that plus the CDN instruction
+            // PromptText is what the user typed; PromptFull is that plus the self-contained instruction
             // CommenceDuelHandler appends to every duel. Re-sending PromptFull appended it again
             // on each retry, and could push a long prompt past the 10,000-character limit.
             var prompt = string.IsNullOrWhiteSpace(_duel.PromptText) ? _duel.PromptFull : _duel.PromptText;
@@ -926,6 +929,7 @@
         _optimistic = true;
         _verdictSource = VerdictSource.Human;
         _judgeRationale = null;
+        _judgeAnalysis = null;
         _winnerModelId = verdict == DuelVerdict.Left ? _duel.LeftModelId : _duel.RightModelId;
         _loserModelId = verdict == DuelVerdict.Left ? _duel.RightModelId : _duel.LeftModelId;
         _revealVerdict = true;
@@ -937,7 +941,7 @@
             var response = await ApiClient.RecordVerdictAsync(_duelId, new VerdictRequestDto { Verdict = verdict });
             if (response is not null)
             {
-                AdoptVerdict(response.Verdict, response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
+                AdoptVerdict(response.Verdict, response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale, response.JudgeAnalysis);
                 ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
                 await AnimateEloAsync();
             }
@@ -1001,7 +1005,7 @@
         StartAutoJudgeCountdown();
     }
 
-    private void AdoptVerdict(DuelVerdict verdict, ModelId? winner, ModelId? loser, VerdictSource source, string? rationale)
+    private void AdoptVerdict(DuelVerdict verdict, ModelId? winner, ModelId? loser, VerdictSource source, string? rationale, string? analysis = null)
     {
         var wasAlreadyFinal = _verdictRecorded && !_optimistic;
 
@@ -1012,6 +1016,7 @@
         _loserModelId = loser;
         _verdictSource = source;
         _judgeRationale = rationale;
+        _judgeAnalysis = analysis;
 
         // Only on the transition into a settled verdict. Re-adopting the same verdict happens
         // on every reconcile and poll, and replaying the celebration each time would turn the
@@ -1218,7 +1223,7 @@
             return false;
 
         _duel = fresh;
-        AdoptVerdict(fresh.Verdict, fresh.WinnerModelId, fresh.LoserModelId, fresh.VerdictSource, fresh.JudgeRationale);
+        AdoptVerdict(fresh.Verdict, fresh.WinnerModelId, fresh.LoserModelId, fresh.VerdictSource, fresh.JudgeRationale, fresh.JudgeAnalysis);
         _autoJudgeRemaining = null;
         _autoJudgeDeciding = false;
         ApplyEloShifts(fresh);
@@ -1232,7 +1237,7 @@
         // its ELO animation; adopting the broadcast too would restart that mid-flight.
         if (_verdictRecorded && !_optimistic) return;
 
-        AdoptVerdict(response.Verdict, response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale);
+        AdoptVerdict(response.Verdict, response.WinnerModelId, response.LoserModelId, response.Source, response.JudgeRationale, response.JudgeAnalysis);
         ApplyEloShifts(response.WinnerModelId, response.EloShiftWinner, response.EloShiftLoser);
 
         StopAutoJudgeCountdown();
@@ -1359,6 +1364,7 @@
         _loserModelId = duel.LoserModelId;
         _verdictSource = duel.VerdictSource;
         _judgeRationale = duel.JudgeRationale;
+        _judgeAnalysis = duel.JudgeAnalysis;
         ApplyEloShifts(duel);
         SettleEloDisplay();
         return true;

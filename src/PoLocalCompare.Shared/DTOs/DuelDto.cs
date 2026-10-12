@@ -42,6 +42,9 @@ public sealed class DuelDto
     /// <summary>Deployment name of the model that judged, when <see cref="VerdictSource"/> is Ai.</summary>
     public string? JudgeModel { get; init; }
 
+    /// <summary>The judge's checklist behind <see cref="JudgeRationale"/>: each requested element and which page delivered it.</summary>
+    public string? JudgeAnalysis { get; init; }
+
     /// <summary>
     /// Seconds the Arena waits for a human pick before the auto-judge decides; 0 means the
     /// auto-judge is off. The window is measured from <see cref="CompletedAt"/>, not from when

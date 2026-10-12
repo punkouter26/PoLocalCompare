@@ -240,11 +240,11 @@ public sealed class FoundryInferenceProxy(
 
         // Estimate API cost from provider-reported usage. TokenCount falls back to stream chunks
         // only for providers that do not send usage, so cost remains explicitly approximate there.
-        if (model.InputTokenPricePerMillion.HasValue || model.OutputTokenPricePerMillion.HasValue)
+        if (TokenCost.Compute(model.InputTokenPricePerMillion, model.OutputTokenPricePerMillion,
+                result.PromptTokenCount, result.TokenCount,
+                FoundryChatRequest.ReportsReasoningSeparately(deploymentName) ? result.ReasoningTokenCount : null) is { } cost)
         {
-            var inputCost = ((result.PromptTokenCount ?? 0) / 1_000_000.0) * (double)(model.InputTokenPricePerMillion ?? 0);
-            var outputCost = (result.TokenCount / 1_000_000.0) * (double)(model.OutputTokenPricePerMillion ?? 0);
-            result.ApiCostUsd = inputCost + outputCost;
+            result.ApiCostUsd = cost;
         }
 
         _logger.LogInformation(

@@ -93,6 +93,7 @@ public sealed class GetDuelHandler
             VerdictSource = duel.VerdictSource,
             JudgeRationale = duel.JudgeRationale,
             JudgeModel = duel.JudgeModel,
+            JudgeAnalysis = duel.JudgeAnalysis,
             JudgeStoodDownReason = duel.Verdict == DuelVerdict.Pending
                 ? duel.JudgeStoodDownReason
                 : null,

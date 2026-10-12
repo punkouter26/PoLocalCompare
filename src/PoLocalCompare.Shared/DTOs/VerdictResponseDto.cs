@@ -19,4 +19,7 @@ public sealed class VerdictResponseDto
 
     /// <summary>The auto-judge's stated reason, when <see cref="Source"/> is Ai.</summary>
     public string? JudgeRationale { get; init; }
+
+    /// <summary>The judge's checklist behind the reason, when it gave one.</summary>
+    public string? JudgeAnalysis { get; init; }
 }

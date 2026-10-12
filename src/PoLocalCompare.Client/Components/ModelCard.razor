@@ -59,7 +59,7 @@
     [Parameter] public bool IsDisabled { get; set; }
     [Parameter] public EventCallback<ModelDto> OnSelected { get; set; }
 
-    /// <summary>The card's DOM id, so a caller can hand focus back to it (Home's replace popover).</summary>
+    /// <summary>The card's DOM id.</summary>
     public static string ElementId(ModelId id) => $"model-card-{id.Value}";
 
     // Rendered as strings, not bools. Blazor treats a bool-valued attribute as an HTML boolean

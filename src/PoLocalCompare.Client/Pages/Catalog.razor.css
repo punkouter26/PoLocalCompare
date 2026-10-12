@@ -4,11 +4,20 @@
    has two independent lists and the Ollama one must stay reachable.
 
    The height must be DEFINITE, not a max: <Virtualize> measures against this box, and with
-   only a max-height it sees no bound and renders all ~150 builds. min() so a short viewport
-   gets a proportion and a tall one stops at 34rem. */
+   only a max-height it sees no bound and renders all ~150 builds. It is the one list on
+   screen now (the others are behind the switch), so it takes what is left of the viewport
+   under the header, bar and hint (~16rem with the nav) rather than stopping at 34rem with
+   empty page beneath it; the floor keeps a short window usable. */
 .catalog__grid-wrap {
-    height: min(34rem, 60dvh);
+    height: max(16rem, calc(100dvh - var(--nav-height) - 16rem));
     overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+    /* In card rows the actions read left to right under the values, like every other card. */
+    .catalog__row-actions {
+        justify-content: flex-start;
+    }
 }
 
 .catalog__input.catalog__search {
@@ -16,12 +25,35 @@
     min-inline-size: 14rem;
 }
 
-.catalog__filters {
+/* The page's one toolbar: the list switch, then the active list's own filters. */
+.catalog__bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-sm) var(--space-md);
-    margin-block: var(--space-md);
+    margin-block: var(--space-sm) var(--space-md);
+}
+
+.catalog__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
+/* The bar above already spaces the list; .po-section's own top margin doubled it. */
+.catalog__section {
+    margin-top: 0;
+}
+
+/* Add and Rename, side by side at the row's end. */
+.catalog__row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-xs);
+}
+
+.catalog__name {
+    font-size: var(--text-sm);
 }
 
 /* Sits opposite the Low-VRAM chip and reports what the chip is hiding. */
@@ -51,6 +83,11 @@
 }
 
 .catalog__hub {
+    /* inline-flex + a floor: as bare 12px text this link was 15px tall, under the 24px
+       SC 2.5.8 asks of a target outside a sentence, once per row. */
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
     margin-inline-start: var(--space-sm);
     font-size: var(--text-xs);
 }

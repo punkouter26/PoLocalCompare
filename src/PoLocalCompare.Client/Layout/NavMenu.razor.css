@@ -56,32 +56,6 @@
     color: var(--accent-green);
 }
 
-.navmenu__toggler {
-    background-color: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    width: 2.25rem;
-    height: 2.25rem;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-}
-
-/* Three bars drawn as a gradient. Previously white bars flipped by filter: invert(1),
-   which resolved to black — visible on a light nav, invisible on a dark one. Painting
-   them in --text drops the filter and works in both. */
-.navmenu__toggler-icon {
-    display: inline-block;
-    width: 1rem;
-    height: 1rem;
-    background-image: linear-gradient(to bottom,
-        var(--text) 0, var(--text) 18%,
-        transparent 18%, transparent 41%,
-        var(--text) 41%, var(--text) 59%,
-        transparent 59%, transparent 82%,
-        var(--text) 82%, var(--text) 100%);
-}
 
 .navmenu__collapse {
     display: flex;
@@ -152,44 +126,67 @@
    wrong width), and that pass had no way to verify the result in a browser. Fix it with the
    E2E-UI suite open. */
 @media (max-width: 767.98px) {
+    /* ── Two rows, no drawer ─────────────────────────────────────────────────
+       The bar used to be brand + hamburger, with the four destinations, the ticker and the
+       session menu all inside a collapsed drawer: every navigation on a phone cost two taps
+       for a list of four. Now the wrapper dissolves (display: contents) and its children sit
+       on the bar themselves — ticker and session menu on the brand's row, the links as a
+       second row underneath. app.css raises --nav-height to match at this width. */
     .navmenu__inner {
         flex-wrap: wrap;
         align-items: center;
-    }
-
-    .navmenu__toggler {
-        display: inline-flex;
-        margin-inline-start: auto;
+        row-gap: 0;
     }
 
     .navmenu__collapse {
-        display: none;
-        width: 100%;
-        order: 3;
-        border-top: 1px solid var(--border);
-        padding: var(--space-sm) 0;
+        display: contents;
     }
 
-    .navmenu__collapse--open {
-        display: block;
-    }
-
-    .navmenu__links {
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0;
-    }
-
-    ::deep .navmenu__link {
-        padding: var(--space-smd) var(--space-sm);
-        border-radius: 0;
+    .navmenu__ticker {
+        order: 1;
+        margin: 0 0 0 auto;
     }
 
     .navmenu__auth {
-        width: 100%;
-        justify-content: flex-start;
-        padding: var(--space-sm) 0;
+        order: 2;
+    }
+
+    /* With no ticker showing, the session controls take the push to the right edge. */
+    .navmenu__links + .navmenu__auth {
+        margin-inline-start: auto;
+    }
+
+    .navmenu__links {
+        order: 3;
+        flex: 1 0 100%;
+        justify-content: space-between;
+        gap: 0;
+        border-top: 1px solid var(--border);
+        /* A phone too narrow for all four scrolls the row rather than clipping a link. */
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .navmenu__links > li {
+        flex: 1 0 auto;
+    }
+
+    ::deep .navmenu__link {
+        justify-content: center;
+        /* 44px: a touch target, and the second row's height in --nav-height. */
+        min-block-size: 2.75rem;
+        padding: 0 var(--space-sm);
+        border-radius: 0;
+        font-size: var(--text-sm);
+    }
+
+    .navmenu__link-text {
+        font-size: var(--text-sm);
+    }
+
+    /* Signed out, the brand's row also holds Sign in and Guest; the wordmark gives way. */
+    .navmenu__inner:has(.navmenu__auth > :not(.navmenu__menu)) ::deep .brand-mark__label {
+        display: none;
     }
 }
 
@@ -385,13 +382,6 @@
 .navmenu__theme-toggle {
 }
 
-/* In the phone drawer the panel expands in place rather than floating over the page. */
-@media (max-width: 767.98px) {
-    .navmenu__menu-panel {
-        position: static;
-        margin-block-start: var(--space-xs);
-    }
-}
 
 /* ── Live activity ticker ─────────────────────────────────────────────────── */
 
@@ -481,12 +471,6 @@
     }
 }
 
-/* Below the nav breakpoint the ticker sits inside the collapsed menu. */
-@media (max-width: 767.98px) {
-    .navmenu__ticker {
-        margin: var(--space-sm) 0 0;
-    }
-}
 
 @media (prefers-reduced-motion: reduce) {
     .navmenu__ticker-pulse {

@@ -44,7 +44,13 @@
            model count is the row count and the top ELO is row one. *@
         <p class="po-hint">@judged duel@(judged == 1 ? "" : "s") judged</p>
 
-        <ValueChart Entries="_displayedEntries" />
+        @* Chart then table in the DOM (and stacked, below 1400px); from 1400px the table takes
+           the left column and the chart a sticky right one, so the ranking starts at the top
+           of the page instead of under a 400px figure. *@
+        <div class="leaderboard__layout">
+        <div class="leaderboard__chart">
+            <ValueChart Entries="_displayedEntries" />
+        </div>
 
         @* Plain .po-table-wrap. This used to also carry a local `leaderboard__grid--scrollable`
            class whose only rule was another `overflow-x: auto` — a second horizontal-scroll
@@ -60,7 +66,7 @@
                         <th scope="col">ELO</th>
                         <th scope="col" title="Wins–losses. Losses are total duels minus wins minus draws; a model that failed to produce output lost that duel.">Record</th>
                         <th scope="col" title="Mean API cost per duel across every priced result this model has. Local and Ollama models run on your own hardware and show &mdash;.">💰 Avg $/duel</th>
-                        <th scope="col" title="Mean time to first token across this model's duels. Lower is better; local models with no measured run show &mdash;.">⚡ First token</th>
+                        <th scope="col" title="Median time to first token across this model's duels. Lower is better; local models with no measured run show &mdash;.">⚡ First token</th>
                         <th scope="col" title="ELO earned per dollar of API spend (CurrentElo / AvgApiCostPerDuel, divisor floored at $0.0001). Higher = more bang per buck. Local/Ollama and unpriced remotes show &mdash;.">💎 Value</th>
                     </tr>
                 </thead>
@@ -181,6 +187,7 @@
                     }
                 </tbody>
             </table>
+        </div>
         </div>
         }
     }

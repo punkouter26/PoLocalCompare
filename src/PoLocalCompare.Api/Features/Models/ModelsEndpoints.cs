@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Hybrid;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Enums;
 
@@ -18,9 +19,25 @@ public static class ModelsEndpoints
         .WithSummary("Returns all registered models with current ELO and duel counts.")
         .Produces<IEnumerable<ModelDto>>();
 
+        // Cached for ten minutes. The probe sends a real completion to every remote
+        // deployment — seventeen of them, 4.85 s measured — and until 2026-10-11 it did that
+        // on every Home load, because nothing here cached it (the default 30 s entry never
+        // applied: the handler was called directly). A deployment that goes down inside the
+        // window is caught where it matters: DuelExecutionService drops this tag when a
+        // remote side fails, so the next Home load re-probes.
         group.MapGet("/availability", async (
             [FromServices] GetModelAvailabilityHandler handler,
-            CancellationToken ct) => Results.Ok(await handler.HandleAsync(ct)))
+            [FromServices] HybridCache cache,
+            CancellationToken ct) => Results.Ok(await cache.GetOrCreateAsync(
+                "model-availability",
+                async token => await handler.HandleAsync(token),
+                new HybridCacheEntryOptions
+                {
+                    Expiration = TimeSpan.FromMinutes(10),
+                    LocalCacheExpiration = TimeSpan.FromMinutes(10),
+                },
+                tags: [CacheTags.ModelAvailability],
+                cancellationToken: ct)))
         .WithName("GetModelAvailability")
         .WithSummary("Returns per-model runtime availability so only confirmed working models can be selected.")
         .Produces<IEnumerable<ModelAvailabilityDto>>();

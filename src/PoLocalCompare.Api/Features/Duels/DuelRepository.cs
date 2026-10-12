@@ -97,6 +97,29 @@ public sealed class DuelRepository : IDuelRepository
             .Take(limit);
     }
 
+    /// <remarks>
+    /// Same shape as <c>DuelResultRepository.SumApiCostAsync</c>: a duel id is a ULID, so a time
+    /// window is a row-key range, here inside the one or two yyyyMM partitions it can touch.
+    /// Only the cost column crosses the wire.
+    /// </remarks>
+    public async Task<double> SumJudgeCostAsync(DateTimeOffset from, DateTimeOffset to)
+    {
+        var lower = Ulid.NewUlid(from).ToString()[..10];
+        var upper = Ulid.NewUlid(to).ToString()[..10];
+        var firstMonth = from.ToString("yyyyMM");
+        var lastMonth = to.ToString("yyyyMM");
+
+        var total = 0.0;
+        await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
+            filter: TableClient.CreateQueryFilter(
+                $"PartitionKey ge {firstMonth} and PartitionKey le {lastMonth} and RowKey ge {lower} and RowKey lt {upper}"),
+            select: ["JudgeCostUsd"]))
+        {
+            total += entity.GetDouble("JudgeCostUsd") ?? 0;
+        }
+        return total;
+    }
+
     private static string GetPartitionKey(DuelId duelId)
     {
         try
@@ -132,6 +155,8 @@ public sealed class DuelRepository : IDuelRepository
             ["VerdictSource"] = duel.VerdictSource.ToString(),
             ["JudgeRationale"] = duel.JudgeRationale,
             ["JudgeModel"] = duel.JudgeModel,
+            ["JudgeAnalysis"] = duel.JudgeAnalysis,
+            ["JudgeCostUsd"] = duel.JudgeCostUsd,
             ["JudgeStoodDownReason"] = duel.JudgeStoodDownReason,
             ["OwnerId"] = duel.OwnerId,
             ["VerdictBy"] = duel.VerdictBy,
@@ -167,6 +192,8 @@ public sealed class DuelRepository : IDuelRepository
                 : VerdictSource.Human,
             JudgeRationale = entity.GetString("JudgeRationale"),
             JudgeModel = entity.GetString("JudgeModel"),
+            JudgeAnalysis = entity.GetString("JudgeAnalysis"),
+            JudgeCostUsd = entity.GetDouble("JudgeCostUsd"),
             JudgeStoodDownReason = entity.GetString("JudgeStoodDownReason"),
             // Both nullable so rows written before the schema addition still deserialise.
             OwnerId = entity.GetString("OwnerId"),

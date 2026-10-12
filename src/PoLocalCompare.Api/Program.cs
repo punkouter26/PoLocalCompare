@@ -362,6 +362,7 @@ try
     app.MapArchiveEndpoints();
     app.MapLeaderboardEndpoints();
     app.MapOllamaEndpoints();
+    app.MapPromptsEndpoints();
     app.MapTournamentsEndpoints(allowAnonymousWrites: allowAnonymousWrites);
 
     if (app.Environment.IsDevelopment())

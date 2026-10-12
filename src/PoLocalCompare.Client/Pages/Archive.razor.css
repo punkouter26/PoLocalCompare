@@ -110,6 +110,14 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* The prompt is the row's link to the duel. As bare inline text it was 17px tall, under the
+   24px SC 2.5.8 asks of a target that is not inside a sentence — twenty of them a page. */
+.archive__prompt {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────────
    This file had no media query at all. The table itself degraded (.po-table--cards
    in app.css turns each cell into a labelled row below 640px), but nothing around
@@ -117,14 +125,58 @@
    kept their desktop shape inside a card that is now a third of the width. */
 
 @media (max-width: 640px) {
-    /* Inside a card row, right-aligning the actions strands them against an edge with
-       the label on the far side. Left-align so they read as part of their own row, and
-       wrap rather than overflow. --target-min is already 44px here (pointer: coarse), so
-       they are finger-sized without any per-file sizing. */
-    .archive__row-actions {
+    /* ── Two-line card ───────────────────────────────────────────────────────
+       .po-table--cards gives one labelled line per cell, plus a button row: four lines and
+       ~140px a duel, so a page of twenty ran to 3.9 phone screens. Every value here is
+       self-evident without its label (a prompt, a date, "A vs B", two buttons), so the
+       labels go and the card is a two-row grid: prompt + date, then matchup + actions.
+       Still a real table underneath — same reasoning as the profile's kill list. */
+    .archive__grid tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--space-2xs) var(--space-sm);
+    }
+
+    .archive__grid td {
+        width: auto;
+        padding-block: 0;
+        border-bottom: none;
         justify-content: flex-start;
-        flex-wrap: wrap;
-        gap: var(--space-sm);
+        text-align: left;
+    }
+
+    .archive__grid td[data-label]::before {
+        content: none;
+    }
+
+    /* Placed explicitly. The DOM order is date, prompt, matchup, actions (the desktop column
+       order), and auto-placement followed it: the date took the wide column and the prompt
+       the `auto` one, which then grew to the prompt's full width and crushed the matchup. */
+    td.archive__prompt-cell {
+        grid-area: 1 / 1;
+        min-width: 0;
+        font-weight: var(--weight-semibold);
+    }
+
+    td.archive__date {
+        grid-area: 1 / 2;
+        color: var(--text-muted);
+        font-size: var(--text-xs);
+    }
+
+    td.archive__matchup-cell {
+        grid-area: 2 / 1;
+        min-width: 0;
+    }
+
+    .archive__grid td.po-cell--bare {
+        grid-area: 2 / 2;
+    }
+
+    /* --target-min is 44px here (pointer: coarse), so the pair is finger-sized. */
+    .archive__row-actions {
+        flex-wrap: nowrap;
     }
 
     /* "Judge" is two syllables; letting it wrap mid-word to save 8px is the trade

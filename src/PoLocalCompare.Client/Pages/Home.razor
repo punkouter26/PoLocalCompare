@@ -69,26 +69,12 @@
                 }
             </div>
 
-            @* Replace-popover: both slots full and the user clicks a third model. *@
-            @if (_replacePopoverModel is not null && _leftModel is not null && _rightModel is not null)
-            {
-                @* Focus moves in when it opens (the first button), Escape cancels, and focus goes
-                   back to the card that opened it on close — a role="dialog" that did none of
-                   this left a keyboard user on a card that no longer mattered. *@
-                <div class="home__popover" role="dialog" aria-label="Choose which slot to replace"
-                     @onkeydown="OnPopoverKeyDown">
-                    <p class="home__popover-text">Replace which slot with <strong>@_replacePopoverModel.DisplayName</strong>?</p>
-                    <div class="home__popover-actions">
-                        <button type="button" class="po-btn po-btn--sm po-btn--secondary" @ref="_popoverFirstButton" @onclick="CancelReplace">Cancel</button>
-                        <button type="button" class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("left"))">
-                            ← Replace Left (@_leftModel.DisplayName)
-                        </button>
-                        <button type="button" class="po-btn po-btn--sm po-btn--secondary" @onclick="@(() => ConfirmReplace("right"))">
-                            Replace Right (@_rightModel.DisplayName) →
-                        </button>
-                    </div>
-                </div>
-            }
+            @* Both slots full and a third model clicked: say how to swap, do not guess which
+               side was meant. This was a role="dialog" popover with its own focus handling and
+               three buttons; each slot in the console now carries its own clear button, so the
+               question the popover asked ("replace which?") is answered by clearing one.
+               Always mounted — a live region inserted already filled is not announced. *@
+            <p class="po-hint home__full-hint" role="status">@_slotsFullHint</p>
 
             @if (_loading)
             {
@@ -182,19 +168,33 @@
            A plain div rather than an <aside>: it carries the primary action, so it is not
            complementary content. Sticky, with only the top half scrolling, so Compare never
            leaves the viewport however long the catalog gets. *@
-        <div class="home__console po-glass">
+        <div id="@ConsoleId" class="home__console po-glass">
             <div class="home__console-scroll">
                 <div class="home__slots">
                     <div class="home__slot home__slot--left @(_leftModel is not null ? "home__slot--set" : "")">
                         <span class="home__slot-tag home__slot-tag--left" aria-hidden="true">L</span>
                         <span class="visually-hidden">Left:</span>
-                        <span class="home__slot-name">@(_leftModel?.DisplayName ?? "Not selected")</span>
+                        <span class="home__slot-name">@(_leftModel?.DisplayName ?? "Empty")</span>
+                        @if (_leftModel is not null)
+                        {
+                            <button type="button" class="home__slot-clear"
+                                    aria-label="@($"Clear left slot ({_leftModel.DisplayName})")"
+                                    title="Clear this slot"
+                                    @onclick="@(() => ClearSlot(left: true))"><span aria-hidden="true">✕</span></button>
+                        }
                     </div>
                     <span class="home__slot-vs" aria-hidden="true">vs</span>
                     <div class="home__slot home__slot--right @(_rightModel is not null ? "home__slot--set" : "")">
                         <span class="home__slot-tag home__slot-tag--right" aria-hidden="true">R</span>
                         <span class="visually-hidden">Right:</span>
-                        <span class="home__slot-name">@(_rightModel?.DisplayName ?? "Not selected")</span>
+                        <span class="home__slot-name">@(_rightModel?.DisplayName ?? "Empty")</span>
+                        @if (_rightModel is not null)
+                        {
+                            <button type="button" class="home__slot-clear"
+                                    aria-label="@($"Clear right slot ({_rightModel.DisplayName})")"
+                                    title="Clear this slot"
+                                    @onclick="@(() => ClearSlot(left: false))"><span aria-hidden="true">✕</span></button>
+                        }
                     </div>
                 </div>
 
@@ -203,7 +203,8 @@
                         <h2 id="home-prompt-heading" class="po-section-title">Write your prompt</h2>
                     </div>
 
-                    <textarea class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
+                    <textarea id="@PromptId"
+                              class="home__textarea @(_promptLongWarning ? "home__textarea--warn" : "")"
                               aria-labelledby="home-prompt-heading"
                               aria-describedby="home-prompt-counter"
                               placeholder="e.g. Build a single-page HTML app that shows today's weather for any city the user types."
@@ -220,6 +221,25 @@
                         {
                             <span class="home__textarea-hint">Long prompts may be truncated or cost more.</span>
                         }
+                    </div>
+
+                    @* One cheap model call that rewrites a rough prompt ("spinning bipeds") into a
+                       brief with explicit, checkable requirements. The result lands in the box
+                       above — both contestants and the judge then read the same target — and
+                       Undo puts the original back. Never automatic: it changes what is asked. *@
+                    <div class="home__sharpen">
+                        <button type="button" class="po-btn po-btn--sm po-btn--secondary"
+                                title="Rewrites your prompt into a short brief with explicit requirements, so both models and the judge aim at the same thing"
+                                disabled="@(_sharpening || _prompt.Trim().Length < 3)"
+                                @onclick="SharpenPromptAsync">
+                            <span aria-hidden="true">✨</span> @(_sharpening ? "Sharpening…" : "Sharpen prompt")
+                        </button>
+                        @if (_promptBeforeSharpen is not null)
+                        {
+                            <button type="button" class="po-btn po-btn--sm po-btn--ghost" @onclick="UndoSharpen">Undo</button>
+                        }
+                        @* Always mounted — a live region inserted already filled is not announced. *@
+                        <span class="po-hint home__sharpen-note" role="status">@_sharpenNote</span>
                     </div>
 
                     <PromptPicker CurrentPrompt="@_prompt"
@@ -268,9 +288,18 @@
     private DuelApiClient.SmokeSnapshotDto? _health;
     private IReadOnlyList<ModelAvailabilityDto>? _availability;
     private bool _healthHasRemotes;
-    private ModelDto? _replacePopoverModel;
-    private ElementReference _popoverFirstButton;
-    private bool _focusPopover;
+
+    /// <summary>Set when a third model is clicked with both slots full; cleared by the next pick.</summary>
+    private string? _slotsFullHint;
+
+    // ── Models → prompt ───────────────────────────────────────────────────────
+    // Completing the pair moves you on to the prompt: the textarea takes focus and the console
+    // (slots + prompt) scrolls into view. Below 1080px the page is one column and the prompt
+    // sits under the picker, behind the fixed Compare bar on a short window — picking the
+    // second model left you looking at a list with no visible next step.
+    private const string ConsoleId = "home-console";
+    private const string PromptId = "home-prompt";
+    private bool _focusPrompt;
 
     // Held for the whole CommenceDuel round-trip. Without it the button stayed enabled until
     // the Arena navigation landed, so a double-click started two duels.
@@ -359,14 +388,61 @@
 
     // ── Prompt sourcing ──────────────────────────────────────────────────────
 
-    private void ApplyPromptAsync(string text) => _prompt = text;
+    private void ApplyPromptAsync(string text)
+    {
+        _prompt = text;
+        _promptBeforeSharpen = null;
+        _sharpenNote = null;
+    }
+
+    // ── Sharpen ──────────────────────────────────────────────────────────────
+    private bool _sharpening;
+    private string? _promptBeforeSharpen;
+    private string? _sharpenNote;
+
+    private async Task SharpenPromptAsync()
+    {
+        if (_sharpening) return;
+        _sharpening = true;
+        _sharpenNote = null;
+        _ = AudioService.PlayTickAsync();
+
+        var original = _prompt;
+        try
+        {
+            var brief = await ApiClient.RefinePromptAsync(original.Trim());
+            // Typed over while the call was out: the newer text wins, the brief is dropped.
+            if (!string.Equals(_prompt, original, StringComparison.Ordinal)) return;
+
+            _promptBeforeSharpen = original;
+            _prompt = brief;
+            _sharpenNote = "Rewritten as a brief — edit it, or undo.";
+        }
+        catch (Exception ex) when (ex is DuelApiClient.DuelStartException or HttpRequestException or TaskCanceledException)
+        {
+            _sharpenNote = ex is DuelApiClient.DuelStartException ? ex.Message : "Could not reach the server. Your prompt is unchanged.";
+        }
+        finally
+        {
+            _sharpening = false;
+        }
+    }
+
+    private void UndoSharpen()
+    {
+        if (_promptBeforeSharpen is null) return;
+        _ = AudioService.PlayTickAsync();
+        _prompt = _promptBeforeSharpen;
+        _promptBeforeSharpen = null;
+        _sharpenNote = null;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_focusPopover)
+        if (_focusPrompt)
         {
-            _focusPopover = false;
-            await _popoverFirstButton.FocusAsync();
+            _focusPrompt = false;
+            await JS.InvokeVoidAsync("focusElement", PromptId, ConsoleId);
         }
         if (!firstRender) return;
         // Probe real WebGPU capability so Browser models can be gated when they can't run.
@@ -471,13 +547,15 @@
         // Tactile mechanical switch click confirmation.
         _ = AudioService.PlayTickAsync();
 
-        // Both slots full + clicking a 3rd → show replace popover instead of silently overwriting.
+        _slotsFullHint = null;
+
+        // Both slots full + clicking a 3rd → never overwrite silently, and never guess which
+        // side was meant. Each slot has its own clear button; say so.
         if (_leftModel is not null && _rightModel is not null
             && model.ModelId != _leftModel.ModelId
             && model.ModelId != _rightModel.ModelId)
         {
-            _replacePopoverModel = model;
-            _focusPopover = true;
+            _slotsFullHint = $"Both slots are full — clear one (✕ beside its name) to swap in {model.DisplayName}.";
             return;
         }
 
@@ -486,36 +564,20 @@
         if (_rightModel?.ModelId == model.ModelId) { _rightModel = null; return; }
 
         // Fill empty slot first.
-        if (_leftModel is null) { _leftModel = model; return; }
+        if (_leftModel is null) { _leftModel = model; _focusPrompt = _rightModel is not null; return; }
         _rightModel = model;
+        // The pair is complete — on to the prompt. Not on any later edit:
+        // this runs only when the second slot is filled.
+        _focusPrompt = true;
     }
 
-    private void ConfirmReplace(string slot)
+    /// <summary>The slot's own ✕. Focus stays on the page; the next card picked fills the gap.</summary>
+    private void ClearSlot(bool left)
     {
         _ = AudioService.PlayTickAsync();
-        if (_replacePopoverModel is null) return;
-        if (slot == "left") _leftModel = _replacePopoverModel;
-        else _rightModel = _replacePopoverModel;
-        CloseReplacePopover();
-    }
-
-    private void CancelReplace()
-    {
-        _ = AudioService.PlayTickAsync();
-        CloseReplacePopover();
-    }
-
-    private void OnPopoverKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") CancelReplace();
-    }
-
-    /// <summary>Closes the popover and hands focus back to the card that opened it.</summary>
-    private void CloseReplacePopover()
-    {
-        if (_replacePopoverModel is { } opener)
-            _ = JS.InvokeVoidAsync("focusElement", ModelCard.ElementId(opener.ModelId)).AsTask();
-        _replacePopoverModel = null;
+        _slotsFullHint = null;
+        if (left) _leftModel = null;
+        else _rightModel = null;
     }
 
     private void LoadStarterDuel()

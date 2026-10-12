@@ -810,6 +810,18 @@ code {
     --focus-ring-offset: 2px;
     /* Sticky topnav is 3.5rem tall; keep focused targets clear of it (SC 2.4.11). */
     --sticky-nav-clearance: 4.5rem;
+}
+
+/* Below 768px the nav is two rows — the brand's (3.5rem) and the four links (2.75rem) — so
+   everything that clears it reads a taller token. Same breakpoint as NavMenu.razor.css. */
+@media (max-width: 767.98px) {
+    :root {
+        --nav-height: 6.25rem;
+        --sticky-nav-clearance: 7.25rem;
+    }
+}
+
+:root {
     /* SC 2.5.8 Target Size (Minimum) — 24px is the AA requirement, and it is a FLOOR,
        not a target. It is the right value for a mouse, which is a pixel-accurate
        pointing device; it is much too small for a fingertip, which is roughly 9mm of

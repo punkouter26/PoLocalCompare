@@ -518,3 +518,18 @@
         direction: ltr;
     }
 }
+
+/* ── Phone: no ellipsis ──────────────────────────────────────────────────────
+   Three names were cut mid-word at 390px. A model name is the one thing a bracket cannot
+   abbreviate — "GPT-5.4 M…" and "GPT-5.4 N…" are different entrants — so below 640px the
+   names (and the recent list's prompts) wrap onto a second line instead. */
+@media (max-width: 640px) {
+    .tourney__slot-name,
+    .tourney__draw-name,
+    .tourney__recent-prompt {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+}
