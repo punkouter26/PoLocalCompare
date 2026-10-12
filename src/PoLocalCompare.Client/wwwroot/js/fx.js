@@ -1,7 +1,10 @@
 /**
- * fx.js — the app's one canvas effect: a one-shot confetti burst for a verdict or a champion.
- * (The photo-finish strip, shard/mote/pyrotechnic effects and the WebGL backdrop were cut on
- * 2026-09-26 as decoration.)
+ * fx.js — the one-shot confetti burst for a verdict or a champion, with rigid-body collisions:
+ * pieces land on, bounce off and come to rest on the elements the caller names (the Arena's
+ * two panels, the bracket's match cards). Hand-rolled — a few dozen axis-aligned boxes do not
+ * need a physics library, and Rapier would be a WASM download for one effect.
+ * (The photo-finish strip and shard/mote/pyrotechnic effects were cut on 2026-09-26 as
+ * decoration. The continuous backdrop lives in backdrop.js, not here.)
  *
  * Browser models run WebLLM inference over WebGPU in this same tab, and the tok/s the race
  * reports is measured while that is happening. A render loop stealing GPU would not merely
@@ -10,8 +13,30 @@
  *
  *   1. Every effect here checks the GPU lease (window.poGpuLease, util.js) and does nothing
  *      while it is held. webllm-interop.js holds it for exactly the life of a WebLLM worker.
- *   2. The burst is Canvas2D, runs for well under three seconds and removes its canvas.
+ *   2. The burst is Canvas2D, runs for under three seconds and removes its canvas.
  */
+
+/** How much speed a piece keeps when it hits something. Paper, not rubber. */
+const RESTITUTION = 0.42;
+/** Below this downward speed (px/s) a landing piece stays down instead of bouncing again. */
+const REST_SPEED = 70;
+
+/**
+ * The boxes pieces collide with, as viewport rectangles measured once at burst time. A page
+ * scrolled during the two seconds a burst lasts leaves them slightly stale, which reads as
+ * confetti settling a little off an edge — not worth a per-frame layout read to correct.
+ */
+function collidersFrom(selector) {
+    if (!selector) return [];
+    try {
+        return Array.from(document.querySelectorAll(selector))
+            .slice(0, 24)
+            .map(el => el.getBoundingClientRect())
+            .filter(r => r.width > 0 && r.height > 0);
+    } catch {
+        return [];
+    }
+}
 
 /** Hard ceiling on concurrent bursts, so a fast click-through cannot stack canvases. */
 const MAX_ACTIVE = 2;
@@ -77,6 +102,7 @@ function createOverlay() {
  * @param {number} options.spread   initial speed, px/s
  * @param {string[]} options.colors palette; defaults to the theme's accent
  * @param {number} options.durationMs
+ * @param {string} options.colliders selector for elements the pieces land on and bounce off
  */
 export function burst(options = {}) {
     if (gpuBusy()) return;
@@ -91,8 +117,13 @@ export function burst(options = {}) {
         y = window.innerHeight / 3,
         count = 90,
         spread = 520,
-        durationMs = 1400,
     } = options;
+
+    const boxes = collidersFrom(options.colliders);
+    // Longer when there is something to land on: the bounce and the settle are the effect.
+    const durationMs = options.durationMs ?? (boxes.length ? 2600 : 1400);
+    const floor = window.innerHeight;
+    const right = window.innerWidth;
 
     const colors = options.colors && options.colors.length
         ? options.colors
@@ -129,6 +160,7 @@ export function burst(options = {}) {
             size: 3 + Math.random() * 5,
             spin: (Math.random() - 0.5) * 12,
             rot: Math.random() * Math.PI,
+            resting: false,
             color: colors[i % colors.length],
         });
     }
@@ -158,11 +190,43 @@ export function burst(options = {}) {
         const decay = Math.pow(drag, dt);
 
         for (const p of particles) {
-            p.vx *= decay;
-            p.vy = p.vy * decay + gravity * dt;
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            p.rot += p.spin * dt;
+            if (!p.resting) {
+                const prevY = p.y;
+                p.vx *= decay;
+                p.vy = p.vy * decay + gravity * dt;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.rot += p.spin * dt;
+
+                // Side walls: reflect, so a burst near an edge stays on screen.
+                if (p.x < 0 || p.x > right) {
+                    p.x = Math.min(Math.max(p.x, 0), right);
+                    p.vx = -p.vx * RESTITUTION;
+                }
+
+                // Landing surfaces: the top edge of each box, and the bottom of the viewport.
+                // Only a falling piece that crossed the edge this step collides — one moving
+                // up passes through, which is what lets the burst rise from behind a panel.
+                if (p.vy > 0) {
+                    let surface = p.y >= floor ? floor : null;
+                    for (const box of boxes) {
+                        if (prevY <= box.top && p.y >= box.top && p.x >= box.left && p.x <= box.right) {
+                            surface = box.top;
+                            break;
+                        }
+                    }
+                    if (surface !== null) {
+                        p.y = surface;
+                        if (p.vy < REST_SPEED) {
+                            p.resting = true;
+                        } else {
+                            p.vy = -p.vy * RESTITUTION;
+                            p.vx *= 0.7;      // friction on contact
+                            p.spin *= 0.5;
+                        }
+                    }
+                }
+            }
 
             ctx.save();
             ctx.translate(p.x, p.y);

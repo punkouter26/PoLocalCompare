@@ -547,7 +547,9 @@
             + (lost ? " tourney__slot--lost" : "")
             + (modelId.IsEmpty ? " tourney__slot--empty" : "");
 
-        return @<div class="@css">
+        @* data-slot is the hook wow.js advance() uses to fly a winner from the slot it won
+           in to the slot it advances into; an empty slot carries none. *@
+        return @<div class="@css" data-slot="@(modelId.IsEmpty ? null : modelId.Value)">
             @if (modelId.IsEmpty)
             {
                 <span class="tourney__slot-name">—</span>
@@ -784,9 +786,20 @@
                 if (fresh is null) continue;
 
                 var wasComplete = _tournament?.Status == TournamentStatus.Complete;
+                var advanced = NewlyAdvanced(_tournament, fresh);
                 _tournament = fresh;
                 await EnsureHubForRunningMatchAsync();
                 await InvokeAsync(StateHasChanged);
+
+                // After the render, so the slot being animated INTO exists: each winner flies
+                // from the match it just won to its place in the next round. Decoration — the
+                // bracket is already correct on screen without it.
+                if (advanced.Count > 0)
+                {
+                    _ = AudioService.PlayTickAsync();
+                    try { await JS.InvokeVoidAsync("poWow.advance", cancellationToken, advanced); }
+                    catch (Exception ex) when (ex is JSException or JSDisconnectedException) { }
+                }
 
                 if (fresh.Status is TournamentStatus.Complete or TournamentStatus.Abandoned)
                 {
@@ -798,7 +811,8 @@
                         if (fresh.Status == TournamentStatus.Complete)
                         {
                             _ = AudioService.PlaySuccessAsync();
-                            _ = Fx.ChampionBurstAsync(".tourney__champion");
+                            // The bracket's cards are what the confetti lands on.
+                            _ = Fx.ChampionBurstAsync(".tourney__champion", colliders: ".tourney__match");
                             await JS.InvokeVoidAsync("poNotify.notify", "Tournament complete", $"{fresh.ChampionName} wins the {SizeLabel(fresh.Size)}.");
                         }
                         else
@@ -823,6 +837,28 @@
             // stop refreshing rather than replacing what is on screen with an error about it.
             StopPolling();
         }
+    }
+
+    /// <summary>
+    /// The models that appeared in a later-round slot between two reads of the bracket — the
+    /// winners that have just advanced. Keyed on the slot being filled rather than on the match
+    /// being decided, so it is right whether the runner writes both in one step or two.
+    /// </summary>
+    private static List<string> NewlyAdvanced(TournamentDto? before, TournamentDto after)
+    {
+        if (before is null || after.Matches.Count == 0) return [];
+
+        var firstRound = after.Matches.Min(m => m.Round);
+        var filled = before.Matches
+            .SelectMany(m => new[] { (m.Round, m.Index, Model: m.SlotAModelId), (m.Round, m.Index, Model: m.SlotBModelId) })
+            .ToHashSet();
+
+        return after.Matches
+            .Where(m => m.Round > firstRound)
+            .SelectMany(m => new[] { (m.Round, m.Index, Model: m.SlotAModelId), (m.Round, m.Index, Model: m.SlotBModelId) })
+            .Where(slot => !slot.Model.IsEmpty && !filled.Contains(slot))
+            .Select(slot => slot.Model.Value)
+            .ToList();
     }
 
     private void StopPolling()

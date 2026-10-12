@@ -105,3 +105,58 @@
     border: 1px solid var(--warn-border);
     border-radius: var(--radius-sm);
 }
+
+/* ── Phase edge ──────────────────────────────────────────────────────────────
+   A hairline under the band whose two colours belong to the phase. --po-edge-a/-b are
+   registered as <color> in app.css (@property), which is what lets a gradient's stops
+   TRANSITION when the phase class changes — an unregistered custom property flips instantly.
+   One transition per phase change, not a loop. The band is the same element across phases
+   (only its class changes), so the colours travel rather than restarting. */
+/* The settled verdict is already positioned (sticky), which anchors the edge just as well —
+   and restating position here would outrank it and unstick the band. */
+.arena-band__box:not(.arena-band__box--verdict) {
+    position: relative;
+}
+
+.arena-band__box::before {
+    content: "";
+    position: absolute;
+    inset-inline: var(--space-sm);
+    bottom: -1px;
+    height: 2px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(90deg, transparent, var(--po-edge-a), var(--po-edge-b), var(--po-edge-a), transparent);
+    transition: --po-edge-a 700ms ease, --po-edge-b 700ms ease;
+    pointer-events: none;
+}
+
+.arena-band__box--live::before {
+    --po-edge-a: var(--accent-blue);
+    --po-edge-b: var(--accent-cyan);
+}
+
+.arena-band__box--judging::before {
+    --po-edge-a: var(--accent-yellow);
+    --po-edge-b: var(--accent-cyan);
+}
+
+.arena-band__box--verdict::before {
+    --po-edge-a: var(--accent-green);
+    --po-edge-b: var(--accent-cyan);
+}
+
+.arena-band__box--pending::before {
+    --po-edge-a: var(--border-strong);
+    --po-edge-b: var(--border-strong);
+}
+
+.arena-band__box--error::before {
+    --po-edge-a: var(--accent-red);
+    --po-edge-b: var(--accent-red);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .arena-band__box::before {
+        transition: none;
+    }
+}

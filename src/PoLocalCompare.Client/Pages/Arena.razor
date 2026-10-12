@@ -147,6 +147,7 @@
                     LoserModelId="@_loserModelId"
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
+                    Reveal="@_revealVerdict"
                     EloShiftDisplay="@(_eloShiftLeft.HasValue ? _eloDisplayLeft : null)"
                     Live="@(_duelStillRunning ? _sides[(int)Side.Left] : null)"
                     Progress="@RaceProgress(Side.Left)"
@@ -162,6 +163,7 @@
                     LoserModelId="@_loserModelId"
                     WinnerModelId="@_winnerModelId"
                     IsVerdictRecorded="@_verdictRecorded"
+                    Reveal="@_revealVerdict"
                     EloShiftDisplay="@(_eloShiftRight.HasValue ? _eloDisplayRight : null)"
                     Live="@(_duelStillRunning ? _sides[(int)Side.Right] : null)"
                     Progress="@RaceProgress(Side.Right)"
@@ -348,6 +350,15 @@
     private bool _optimistic;
     private string? _overriddenNotice;
 
+    /// <summary>
+    /// The verdict landed while this page was watching, so the panels play their one-shot
+    /// reveal. False for a duel opened already decided: that is a record, not a moment.
+    /// </summary>
+    private bool _revealVerdict;
+
+    /// <summary>When the audible race was last fed, so it is pushed a few times a second, not per batch.</summary>
+    private DateTimeOffset _raceAudioAt;
+
     // Animated ELO readouts. The badge counts up to the real shift instead of snapping.
     private double _eloDisplayLeft;
     private double _eloDisplayRight;
@@ -407,6 +418,12 @@
     /// rename has one place to land — fx.js silently does nothing when a selector misses.
     /// </summary>
     private const string VerdictBandSelector = ".arena-band__box--verdict";
+
+    /// <summary>
+    /// What the verdict confetti lands on and bounces off — the two panels. The same trap as
+    /// the selector above: fx.js treats a selector that matches nothing as "no surfaces".
+    /// </summary>
+    private const string VerdictColliderSelector = ".arena-panel__box";
 
     /// <summary>The grace window is running or the AI judge is deciding: the reticle is up.</summary>
     private bool JudgeIsLooking => ArenaPhaseResolver.JudgeIsLooking(Phase);
@@ -657,6 +674,7 @@
         _eloAnimationCts?.Dispose();
         _eloAnimationCts = null;
         StopStallTimer();
+        _ = AudioService.RaceStopAsync();
         _streamRender?.Dispose();
         _streamRender = null;
         WebLlm.OnStatusUpdate -= OnLocalStatusUpdate;
@@ -692,6 +710,7 @@
 
         _verdictRecorded = false;
         _optimistic = false;
+        _revealVerdict = false;
         _overriddenNotice = null;
         _verdictSource = VerdictSource.Human;
         _verdictValue = DuelVerdict.Pending;
@@ -909,6 +928,7 @@
         _judgeRationale = null;
         _winnerModelId = verdict == DuelVerdict.Left ? _duel.LeftModelId : _duel.RightModelId;
         _loserModelId = verdict == DuelVerdict.Left ? _duel.RightModelId : _duel.LeftModelId;
+        _revealVerdict = true;
         StateHasChanged();
         _ = AudioService.PlayTickAsync();
 
@@ -975,6 +995,7 @@
         _verdictValue = DuelVerdict.Pending;
         _winnerModelId = null;
         _loserModelId = null;
+        _revealVerdict = false;
         _eloShiftLeft = null;
         _eloShiftRight = null;
         StartAutoJudgeCountdown();
@@ -996,7 +1017,10 @@
         // on every reconcile and poll, and replaying the celebration each time would turn the
         // payoff moment into a stutter.
         if (!wasAlreadyFinal)
+        {
+            _revealVerdict = true;
             _ = CelebrateVerdictAsync(verdict);
+        }
     }
 
     /// <summary>
@@ -1013,10 +1037,14 @@
                 return;
             }
 
-            _ = AudioService.PlaySuccessAsync();
+            // The arpeggio comes from the winner's side of the stereo field. A voided duel or
+            // one with no winner id stays centred.
+            var pan = _duel is null || _winnerModelId is null ? 0
+                : _winnerModelId == _duel.LeftModelId ? -0.6 : 0.6;
+            _ = AudioService.PlaySuccessAsync(pan);
             // A CSS class used as a JS selector: fx.js answers a selector that matches nothing
             // by doing nothing at all, so a rename of the band's class silently kills this.
-            await Fx.BurstFromAsync(VerdictBandSelector);
+            await Fx.BurstFromAsync(VerdictBandSelector, colliders: VerdictColliderSelector);
         }
         catch (Exception ex) when (ex is JSException or TaskCanceledException or ObjectDisposedException)
         {
@@ -1138,6 +1166,8 @@
             {
                 _autoJudgeRemaining = remaining;
                 await InvokeAsync(StateHasChanged);
+                // The window closing, audibly: one rising note for each of the last three seconds.
+                if (remaining <= 3) _ = AudioService.PlayCountdownAsync(remaining);
                 await Task.Delay(1000, cancellationToken);
             }
 
@@ -1272,7 +1302,25 @@
         // Coalesced, not immediate: this fires once per token batch on both sides at once.
         _streamRender?.Request();
         NoteLead();
+        PushRaceAudio();
     }
+
+    /// <summary>
+    /// Feeds the opt-in audible race (audio.js) each side's tok/s, at most every 400 ms — the
+    /// handlers above fire per token batch and the ear cannot follow a rate that changes faster.
+    /// A side that is not generating is silent. audio.js ignores this when race sounds are off.
+    /// </summary>
+    private void PushRaceAudio()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (now - _raceAudioAt < TimeSpan.FromMilliseconds(400)) return;
+        _raceAudioAt = now;
+
+        _ = AudioService.RaceUpdateAsync(RaceRate(Side.Left), RaceRate(Side.Right));
+    }
+
+    private double RaceRate(Side side) =>
+        _sides[(int)side] is { Status: DuelStatus.Generating, TokenVelocity: { } tps } ? tps : 0;
 
     /// <summary>
     /// Tracks who is ahead on tok/s for <see cref="RaceAnnouncement"/>. A lead must be clear
@@ -1380,6 +1428,7 @@
         // Same reasoning as the hub handler: the WebLLM worker reports per token batch.
         _streamRender?.Request();
         NoteLead();
+        PushRaceAudio();
     }
 
     /// <summary>Tokens per second excluding warm-up, so a slow model load does not read as slow generation.</summary>
@@ -1453,6 +1502,7 @@
         var wasRunning = _duelStillRunning;
         _duelStillRunning = false;
         StopStallTimer();
+        _ = AudioService.RaceStopAsync();
         var duelId = _duelId;
         InvokeAsync((Func<Task>)(async () =>
         {

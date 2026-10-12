@@ -3,9 +3,11 @@ using Microsoft.JSInterop;
 namespace PoLocalCompare.Client.Services;
 
 /// <summary>
-/// JS interop wrapper for the three synthesised Web Audio cues in <c>wwwroot/js/audio.js</c>:
-/// a click tick, a verdict, and a tie. The rest of the sound design (drone, token melodies,
-/// heartbeat, crowd roar, fanfares…) was cut on 2026-09-26 as decoration nobody asked for.
+/// JS interop wrapper for the synthesised Web Audio cues in <c>wwwroot/js/audio.js</c>:
+/// a click tick, a verdict, a tie, the judge window's closing seconds, and an opt-in audible
+/// token race. The rest of the old sound design (drone, heartbeat, crowd roar, fanfares…) was
+/// cut on 2026-09-26 as decoration nobody asked for; the race and countdown came back on
+/// 2026-10-11 on request, the race off by default.
 /// </summary>
 /// <remarks>
 /// Every cue is synthesised at play time — there are no audio assets. The previous version
@@ -29,12 +31,53 @@ namespace PoLocalCompare.Client.Services;
 /// </remarks>
 public sealed class AudioService(IJSRuntime js) : IAsyncDisposable
 {
-    private const string ModulePath = "/js/audio.js?v=7";
+    private const string ModulePath = "/js/audio.js?v=8";
 
     private Task<IJSObjectReference>? _module;
 
     /// <summary>Verdict recorded — a bright major arpeggio.</summary>
-    public Task PlaySuccessAsync() => CallAsync("playSuccess");
+    /// <param name="pan">-1 (left) to 1 (right): the cue comes from the side that won.</param>
+    public Task PlaySuccessAsync(double pan = 0) => CallAsync("playSuccess", pan);
+
+    /// <summary>One rising note for each of the judge window's last three seconds.</summary>
+    public Task PlayCountdownAsync(int remaining) => CallAsync("playCountdown", remaining);
+
+    /// <summary>
+    /// Feeds the audible race each side's current tok/s (0 silences a side). Does nothing
+    /// unless the listener has switched race sounds on — the default is off.
+    /// </summary>
+    public Task RaceUpdateAsync(double leftTps, double rightTps) => CallAsync("raceUpdate", leftTps, rightTps);
+
+    /// <summary>Stops the audible race. It also stops itself two seconds after the last update.</summary>
+    public Task RaceStopAsync() => CallAsync("raceStop");
+
+    /// <summary>Whether the opt-in audible race is switched on.</summary>
+    public async Task<bool> IsRaceOnAsync()
+    {
+        try
+        {
+            return await (await ModuleAsync()).InvokeAsync<bool>("isRaceOn");
+        }
+        catch (Exception ex) when (IsBenign(ex))
+        {
+            ResetIfFaulted();
+            return false;
+        }
+    }
+
+    /// <summary>Sets and persists the audible-race preference. Returns the value applied.</summary>
+    public async Task<bool> SetRaceOnAsync(bool on)
+    {
+        try
+        {
+            return await (await ModuleAsync()).InvokeAsync<bool>("setRaceOn", on);
+        }
+        catch (Exception ex) when (IsBenign(ex))
+        {
+            ResetIfFaulted();
+            return on;
+        }
+    }
 
     /// <summary>A judged draw — deliberately unresolved, neither up nor down.</summary>
     public Task PlayTieAsync() => CallAsync("playTie");

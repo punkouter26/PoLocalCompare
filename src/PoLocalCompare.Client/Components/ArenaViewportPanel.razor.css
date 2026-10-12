@@ -52,3 +52,21 @@
     border-color: var(--accent-green);
     box-shadow: 0 0 28px color-mix(in srgb, var(--accent-green) 35%, transparent);
 }
+
+/* The moment the verdict lands (only then — see the Reveal parameter): the winning panel
+   dips and springs forward once. Transform only, and one-shot: inference is over. */
+.arena-panel__box--reveal {
+    animation: arena-panel-win 640ms cubic-bezier(.2, .9, .25, 1.2) both;
+}
+
+@keyframes arena-panel-win {
+    from { transform: scale(0.97); }
+    55%  { transform: scale(1.03); }
+    to   { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .arena-panel__box--reveal {
+        animation: none;
+    }
+}

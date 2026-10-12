@@ -952,8 +952,9 @@ p a, li a, td a {
    models run WebLLM inference over WebGPU in this same tab, and the tok/s the race reports is
    measured while that happens. A render loop competing for the GPU would not merely drop
    frames, it would make the number the app exists to report wrong. Continuous motion therefore
-   stays on the compositor, and the only canvas work in the app (fx.js) is one-shot and fires
-   when inference has already finished.
+   stays on the compositor; the confetti in fx.js is one-shot and fires when inference has
+   already finished; and the one render loop in the app (backdrop.js) stops outright on the
+   routes that measure and while the GPU lease is held.
 
    Every effect here is off under prefers-reduced-motion. */
 
@@ -979,6 +980,41 @@ body::before {
 @keyframes aurora-drift {
     from { transform: translate3d(-2%, -1%, 0) scale(1.00) rotate(0deg); }
     to   { transform: translate3d(2%, 1.5%, 0) scale(1.06) rotate(2deg); }
+}
+
+/* ── Shader backdrop ──────────────────────────────────────────────────────
+   backdrop.js mounts this canvas (WebGL2) and sets html.po-shader while it is live; the CSS
+   aurora above is then not drawn underneath it. The canvas holds a still frame — no frame
+   loop at all — on /arena and /tournament and whenever the GPU lease is held, so it never
+   runs beside a measurement. See backdrop.js for the conditions. */
+#po-living-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+html.po-shader body::before {
+    display: none;
+}
+
+/* ── Registered colours ───────────────────────────────────────────────────
+   @property gives these a type, and a typed custom property can be TRANSITIONED — which is
+   the only way a gradient's stops animate (an untyped one flips between values). Used for
+   the phase edge on the Arena's status band and the readiness edge on Home's Compare panel.
+   inherits: false, so each is set on the pseudo-element that paints with it. */
+@property --po-edge-a {
+    syntax: "<color>";
+    inherits: false;
+    initial-value: transparent;
+}
+
+@property --po-edge-b {
+    syntax: "<color>";
+    inherits: false;
+    initial-value: transparent;
 }
 
 /* ── Glass ────────────────────────────────────────────────────────────────
@@ -1440,7 +1476,8 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
         animation: none;
     }
 
-    /* The shader stands down in fx.js too; this keeps a stale frame from lingering. */
+    /* backdrop.js does not mount under reduced motion; this covers a preference that
+       changes while the page is open. */
     #po-living-canvas {
         display: none;
     }

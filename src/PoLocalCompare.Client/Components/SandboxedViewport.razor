@@ -5,7 +5,7 @@
    sandbox="allow-scripts" permits JS execution required by generated HTML apps.
    allow-same-origin is deliberately omitted so scripts cannot access parent frame, cookies, or localStorage. *@
 
-<div class="sandboxed-viewport @(IsLoser ? "sandboxed-viewport--loser" : "")">
+<div class="sandboxed-viewport @(IsLoser ? "sandboxed-viewport--loser" : "") @(Reveal ? "sandboxed-viewport--reveal" : "")">
     <div class="sandboxed-viewport__header">
         <span class="sandboxed-viewport__model-name">@ModelName</span>
         @* A score for an empty document is a fabricated number: empty HTML scored 20/100
@@ -100,6 +100,12 @@
     [Parameter] public bool ShowWinner { get; set; }
 
     /// <summary>
+    /// The verdict landed while the page was watching: the badge and the card play their
+    /// one-shot reveal. Off for a duel opened already decided, so a record does not animate.
+    /// </summary>
+    [Parameter] public bool Reveal { get; set; }
+
+    /// <summary>
     /// True while the run is still in flight (no streaming preview and no result row yet).
     /// Drives the neutral placeholder — the failure placeholder is reserved for a run that
     /// finished empty.
@@ -125,7 +131,7 @@
     // parameter set can only produce an identical frame. The sentinel makes the first pass
     // always process (a genuinely empty HtmlContent must still be analysed once).
     private string? _lastRaw;
-    private (string Name, bool Loser, bool Winner, bool Awaiting, bool Streaming, double? Elo) _lastChrome;
+    private (string Name, bool Loser, bool Winner, bool Awaiting, bool Streaming, bool Reveal, double? Elo) _lastChrome;
     private bool _renderDirty = true;
 
     /// <summary>
@@ -139,7 +145,7 @@
     protected override void OnParametersSet()
     {
         var raw = HtmlContent ?? string.Empty;
-        var chrome = (ModelName, IsLoser, ShowWinner, IsAwaitingResult, IsStreaming, EloShift);
+        var chrome = (ModelName, IsLoser, ShowWinner, IsAwaitingResult, IsStreaming, Reveal, EloShift);
         var sameDocument = _lastRaw is not null && string.Equals(raw, _lastRaw, StringComparison.Ordinal);
 
         // Cheap ordinal gate before the four regex passes below: while a duel streams, most

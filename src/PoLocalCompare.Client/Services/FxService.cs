@@ -22,7 +22,7 @@ namespace PoLocalCompare.Client.Services;
 /// </remarks>
 public sealed class FxService(IJSRuntime js) : IAsyncDisposable
 {
-    private const string ModulePath = "/js/fx.js?v=7";
+    private const string ModulePath = "/js/fx.js?v=8";
 
     private Task<IJSObjectReference>? _module;
 
@@ -31,11 +31,16 @@ public sealed class FxService(IJSRuntime js) : IAsyncDisposable
     /// back to the viewport centre when nothing matches.
     /// </summary>
     /// <param name="count">Particle count. The default suits a duel verdict.</param>
-    public Task BurstFromAsync(string selector, int count = 90) =>
-        CallAsync("burstFrom", selector, new { count });
+    /// <param name="colliders">
+    /// Selector for the elements the pieces land on and bounce off. Like <paramref name="selector"/>
+    /// it is a CSS class used from JS: one that matches nothing just means nothing to land on.
+    /// </param>
+    public Task BurstFromAsync(string selector, int count = 90, string? colliders = null) =>
+        CallAsync("burstFrom", selector, new { count, colliders });
 
     /// <summary>A larger burst for a tournament champion — the final should outweigh a duel.</summary>
-    public Task ChampionBurstAsync(string selector) => BurstFromAsync(selector, count: 160);
+    public Task ChampionBurstAsync(string selector, string? colliders = null) =>
+        BurstFromAsync(selector, count: 160, colliders);
 
     private async Task CallAsync(string identifier, params object?[] args)
     {

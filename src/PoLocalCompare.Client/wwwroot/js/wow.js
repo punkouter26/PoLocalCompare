@@ -1,5 +1,6 @@
 /**
- * wow.js — DOM-level motion: route morphs, the leaderboard reshuffle and liquid glass.
+ * wow.js — DOM-level motion: route morphs, the leaderboard reshuffle, the bracket advance
+ * and liquid glass.
  *
  * Everything here animates transform and opacity (or hands the work to the browser's own
  * View Transitions machinery), so it runs on the compositor and never contends with the WebGPU
@@ -168,7 +169,39 @@ window.poWow = (() => {
         }
     }
 
-    // ── 3. Liquid glass ──────────────────────────────────────────────────────
+    // ── 3. Bracket advance ───────────────────────────────────────────────────
+
+    /**
+     * A winner moving on: its slot in the next round plays in from the slot it won in. Both
+     * carry data-slot="<modelId>" (Tournament.razor); rounds are columns in DOM order, so the
+     * last two matches for a model are where it was and where it is now. FLIP again — the new
+     * slot is already in place, and only its transform animates.
+     *
+     * @param {string[]} modelIds models that just appeared in a later-round slot
+     */
+    function advance(modelIds) {
+        if (reduced()) return;
+
+        let delay = 0;
+        for (const id of modelIds ?? []) {
+            const slots = Array.from(document.querySelectorAll(`[data-slot="${CSS.escape(id)}"]`));
+            if (slots.length < 2) continue;
+
+            const target = slots[slots.length - 1];
+            const from = slots[slots.length - 2].getBoundingClientRect();
+            const to = target.getBoundingClientRect();
+
+            target.animate(
+                [
+                    { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)`, opacity: 0.5 },
+                    { transform: 'translate(0, 0)', opacity: 1 },
+                ],
+                { duration: 680, delay, easing: 'cubic-bezier(.2,.9,.25,1.1)', fill: 'backwards' });
+            delay += 90;
+        }
+    }
+
+    // ── 4. Liquid glass ──────────────────────────────────────────────────────
 
     /**
      * backdrop-filter: url(#svg) is Chromium-only, and @supports cannot be trusted to say so —
@@ -201,5 +234,5 @@ window.poWow = (() => {
 
     initGlass();
 
-    return { navigate, rankDiff, flipRows };
+    return { navigate, rankDiff, flipRows, advance };
 })();

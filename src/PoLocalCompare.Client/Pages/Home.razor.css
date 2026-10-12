@@ -564,3 +564,37 @@
         line-height: var(--leading-tight);
     }
 }
+
+/* ── Compare: readiness edge ─────────────────────────────────────────────────
+   The same registered-colour hairline as the Arena's status band (--po-edge-a/-b, @property
+   in app.css): it warms from the border colour to green/cyan as the Compare button becomes
+   pressable, so "ready" is visible on the panel and not only on the button's disabled state.
+   One transition per change of readiness. */
+.home__compare {
+    position: relative;
+}
+
+.home__compare::before {
+    content: "";
+    position: absolute;
+    inset-inline: var(--space-md);
+    top: -1px;
+    height: 2px;
+    border-radius: var(--radius-full);
+    --po-edge-a: var(--success-border);
+    --po-edge-b: var(--success-border);
+    background: linear-gradient(90deg, transparent, var(--po-edge-a), var(--po-edge-b), var(--po-edge-a), transparent);
+    transition: --po-edge-a 600ms ease, --po-edge-b 600ms ease;
+    pointer-events: none;
+}
+
+.home__compare:has(.po-btn:not(:disabled))::before {
+    --po-edge-a: var(--accent-green);
+    --po-edge-b: var(--accent-cyan);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home__compare::before {
+        transition: none;
+    }
+}

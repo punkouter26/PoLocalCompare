@@ -252,7 +252,7 @@ which a filtered network can block. `download-models.py` vendors both (weights p
 `new Worker('/js/webllm-worker.js?v=N')` from `webllm-interop.js`; without incrementing `N` the browser
 serves the old worker and your change appears to do nothing. The same trap applies to every
 `<script src="/js/*.js?v=N">` in [index.html](src/PoLocalCompare.Client/wwwroot/index.html) —
-`theme.js`, `util.js`, `diag-interop.js` and `compare.js` all carry their own `v=`.
+`theme.js`, `util.js`, `wow.js` and `backdrop.js` all carry their own `v=`.
 
 **Browser-side logic belongs in `PoLocalCompare.Shared`, not in the Client project.**
 `PoLocalCompare.Unit` references only the Api project, so anything pure that lives under
@@ -548,7 +548,7 @@ remote-vs-remote duels that persisted and moved ELO. It was deleted on 2026-08-2
 implementation of the Arena's streaming UI whose only distinguishing feature was that it died with
 the tab, and it wrote real duels into the leaderboard while pretending to be a demo.)
 
-**Motion is compositor-only, and that is a correctness constraint, not a style rule.** Browser
+**Motion never runs beside a measurement, and that is a correctness constraint, not a style rule.** Browser
 models run WebLLM inference over **WebGPU in this same tab**, and the tok/s the Arena reports
 is measured while that is happening. A render loop competing for the GPU would not merely drop
 frames, it would **make the number the app exists to report wrong** and slow a browser model's own
@@ -558,13 +558,45 @@ generation while it is being timed. So continuous motion is CSS transform/opacit
 not the 3D pipeline); and the only canvas work in the app — the confetti burst in
 [fx.js](src/PoLocalCompare.Client/wwwroot/js/fx.js) — is one-shot, fires only after inference has
 finished (verdict landed, champion crowned) and stands down while the GPU lease
-(`window.poGpuLease`) is held. **Do not add Three.js, PixiJS, Rapier or a WebGL/WebGPU render loop**
-without re-deciding this trade-off — the WebGL backdrop that was the one exception went in the
-2026-09-26 prune, along with infinite `box-shadow`/`background-position` animations that were not
-compositor-only either.
+(`window.poGpuLease`) is held. **Do not add Three.js, PixiJS, Rapier or a second WebGL/WebGPU
+render loop** without re-deciding this trade-off; infinite `box-shadow`/`background-position`
+animations went in the 2026-09-26 prune because they were not compositor-only either.
 
-**Audio is three synthesised cues, never a file.** [audio.js](src/PoLocalCompare.Client/wwwroot/js/audio.js)
-builds a click tick, a verdict arpeggio and a tie from oscillators at play time. An earlier version
+**There is one render loop, [backdrop.js](src/PoLocalCompare.Client/wwwroot/js/backdrop.js), and
+it is the exception that had to be argued for.** A WebGL backdrop was cut in the 2026-09-26
+prune and came back on 2026-10-11 on an explicit request (the "GFX & sound" pass). What makes it
+tolerable is that it **cancels its frame loop — holds a still, does not throttle** — in every
+situation where something is being timed: while the GPU lease is held, on `/arena` and
+`/tournament` whatever the lease says (a remote-vs-remote duel holds no lease but its streaming
+rate is still measured in this tab), when the tab is hidden, and under reduced motion (where it
+never mounts). Verified by counting `drawArrays` calls: 33 in 1.5 s on `/leaderboard`, **0** on
+`/arena`. It renders at a third of the viewport, 30 fps, on the low-power adapter, and sets
+`html.po-shader` so the CSS aurora is not drawn underneath it. Adding a route that measures
+anything means adding it to `MEASURING` in that file. Its tint is 0.20 in the dark theme and 0.07
+in light, because in light it darkens the page under muted text.
+
+**The same pass added five one-shot or opt-in effects; none of them loops.** The verdict reveal
+(`arena-panel__box--reveal`, `sandboxed-viewport--reveal`) plays only when a verdict lands while
+the page is watching — `_revealVerdict` in `Arena.razor`, false for a duel opened already
+decided — and **the loser returns to full opacity**: it is the output a person reads to check the
+verdict, which is why it was never left dimmed (see `.sandboxed-viewport--loser`). The confetti
+is rigid-body now: pieces land on and bounce off the elements named by `colliders`
+(`.arena-panel__box`, `.tourney__match`), hand-rolled against axis-aligned boxes rather than
+through Rapier. A bracket winner flies from the slot it won in to the slot it advances into
+(`poWow.advance`, keyed on `data-slot`). And `--po-edge-a`/`--po-edge-b` are `@property`-registered
+colours, which is the only way a gradient's stops transition: the hairline under the Arena's
+status band and over Home's Compare panel changes colour once per phase. `.arena-band__box--verdict`
+is `position: sticky`; the edge's `position: relative` is deliberately `:not()` that modifier,
+because restating position on the base would outrank it and unstick the band.
+
+**Audio is synthesised cues, never a file.** [audio.js](src/PoLocalCompare.Client/wwwroot/js/audio.js)
+builds a click tick, a verdict arpeggio (panned to the winner's side), a tie and the judge
+window's last three seconds from oscillators at play time. It also carries the **audible token
+race** — each side ticking in its own ear at a rate and pitch that follow its tok/s — which is
+**off by default** behind its own "Race sounds" toggle in the nav menu (`polocalcompare.raceAudio`),
+because it is continuous sound for as long as a duel streams. The Arena feeds it at most every
+400 ms and it stops itself two seconds after the last update, so a missed stop cannot leave it
+ticking. An earlier version
 fetched two WAVs that were **44-byte stubs**, so every "sound" was silence, invisibly; synthesis
 removes the class of failure. It runs on the audio thread and never touches the GPU. Note `audio.js`
 and `fx.js` are `import()`ed with their own `?v=` cache-buster, the same trap as the `<script src>`

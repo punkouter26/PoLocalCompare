@@ -215,3 +215,63 @@
         margin-left: 0;
     }
 }
+
+/* ── Verdict reveal ──────────────────────────────────────────────────────────
+   One-shot, and only when the verdict lands while the page is watching (--reveal; a duel
+   opened already decided renders its badges still). Transform and opacity only, and by the
+   time a verdict exists inference has finished.
+
+   The loser dips and comes back to FULL opacity. It is never left dimmed or desaturated: the
+   losing output is what a person reads to check the verdict (see .sandboxed-viewport--loser). */
+.sandboxed-viewport--reveal.sandboxed-viewport--loser {
+    animation: sandboxed-viewport-concede 620ms ease-out both;
+}
+
+.sandboxed-viewport--reveal .sandboxed-viewport__badge {
+    animation: sandboxed-viewport-stamp 420ms cubic-bezier(.2, .9, .25, 1.4) 120ms both;
+}
+
+/* A band of light crossing the WINNER badge once. Clipped to the badge by overflow. */
+.sandboxed-viewport--reveal .sandboxed-viewport__badge--winner {
+    position: relative;
+    overflow: hidden;
+}
+
+.sandboxed-viewport--reveal .sandboxed-viewport__badge--winner::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 45%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+    transform: translateX(-130%);
+    animation: sandboxed-viewport-sweep 760ms ease-out 460ms both;
+    pointer-events: none;
+}
+
+@keyframes sandboxed-viewport-concede {
+    from { opacity: 1; transform: none; }
+    35%  { opacity: 0.55; transform: translateY(3px) scale(0.985); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes sandboxed-viewport-stamp {
+    from { opacity: 0; transform: scale(1.8); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes sandboxed-viewport-sweep {
+    from { transform: translateX(-130%); }
+    to   { transform: translateX(330%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sandboxed-viewport--reveal.sandboxed-viewport--loser,
+    .sandboxed-viewport--reveal .sandboxed-viewport__badge {
+        animation: none;
+    }
+
+    .sandboxed-viewport--reveal .sandboxed-viewport__badge--winner::after {
+        display: none;
+    }
+}

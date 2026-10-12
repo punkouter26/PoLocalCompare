@@ -10,7 +10,7 @@
    viewport. The ELO shift rides on the viewport's WINNER/LOSER badge. The page passes the
    panel a single `Result` row; nothing on this component reads sibling state. *@
 
-<div class="arena-panel__box @((Result?.IsFailure == true) ? "arena-panel__box--failed po-bg--err" : "") @(IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena-panel__box--winner" : "")">
+<div class="arena-panel__box @((Result?.IsFailure == true) ? "arena-panel__box--failed po-bg--err" : "") @(IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena-panel__box--winner" : "") @(Reveal && IsVerdictRecorded && WinnerModelId == PanelModelId ? "arena-panel__box--reveal" : "")">
     @if (Result?.IsFailure == true)
     {
         <ArenaFailureCard DisplayName="@DisplayName"
@@ -26,6 +26,7 @@
             ShowWinner="@(IsVerdictRecorded && WinnerModelId == PanelModelId)"
             IsAwaitingResult="@(StreamingHtml is null && Result is null)"
             IsStreaming="@(Result is null)"
+            Reveal="@Reveal"
             EloShift="@EloShiftDisplay"
             />
 
@@ -66,7 +67,9 @@
     /// <summary>True once a verdict has been recorded — drives the winner / loser treatments.</summary>
     [Parameter] public bool IsVerdictRecorded { get; set; }
 
-
+    /// <summary>The verdict landed while the page was watching — play the one-shot reveal.
+    /// False for a duel opened already decided.</summary>
+    [Parameter] public bool Reveal { get; set; }
 
     /// <summary>The id of the model that occupies this side — supplied by the page so the panel
     /// can compare it to the loser / winner ids without holding its own copy.</summary>

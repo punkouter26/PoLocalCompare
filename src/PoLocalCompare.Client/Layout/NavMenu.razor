@@ -151,6 +151,19 @@
                             <span class="navmenu__menu-state" aria-hidden="true">@(_soundOn ? "On" : "Off")</span>
                         </button>
 
+                        @* The audible token race: each side ticks in its own ear at its tok/s
+                           while a duel streams. Off by default — it is continuous sound, so it
+                           is something to opt into. Mute silences it along with everything else. *@
+                        <button type="button"
+                                class="navmenu__menu-item"
+                                @onclick="ToggleRaceSoundAsync"
+                                title="Hear the token race: each model ticks in its own ear at its speed"
+                                aria-pressed="@(_raceSoundOn ? "true" : "false")">
+                            <span class="navmenu__menu-glyph" aria-hidden="true">🎧</span>
+                            <span>Race sounds</span>
+                            <span class="navmenu__menu-state" aria-hidden="true">@(_raceSoundOn ? "On" : "Off")</span>
+                        </button>
+
                         @if (_identity is not null)
                         {
                             <NavLink class="navmenu__menu-item" href="catalog"
@@ -193,6 +206,7 @@
     private bool _refocusTrigger;
     private ElementReference _menuTrigger;
     private bool _soundOn = true;
+    private bool _raceSoundOn;
 
     private string MenuLabel => _identity is null ? "Settings" : $"Account menu for {_identity}";
     private string? _identity;
@@ -284,6 +298,8 @@
 
     private async Task ToggleSoundAsync() => _soundOn = !await Audio.SetMutedAsync(_soundOn);
 
+    private async Task ToggleRaceSoundAsync() => _raceSoundOn = await Audio.SetRaceOnAsync(!_raceSoundOn);
+
     private async Task CycleThemeAsync()
     {
         _theme = _theme switch
@@ -309,6 +325,7 @@
         // to what it chose, so the two cannot disagree.
         _theme = await Theme.GetAsync();
         _soundOn = !await Audio.IsMutedAsync();
+        _raceSoundOn = await Audio.IsRaceOnAsync();
         Nav.LocationChanged += OnLocationChanged;
 
         var useRealAi = Config["Features:UseRealAi"];

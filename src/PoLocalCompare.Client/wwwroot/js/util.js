@@ -105,8 +105,8 @@ window.poNotify = {
  *
  * Browser models run WebLLM over WebGPU in this tab, and the tok/s the race reports is measured
  * while that happens. Any render loop that competes for the GPU makes that number wrong, so
- * every canvas effect in the app (fx.js's confetti burst) asks this first and does nothing
- * while it is held.
+ * everything that draws (fx.js's confetti burst, backdrop.js's shader) asks this first and
+ * does nothing while it is held.
  *
  * webllm-interop.js acquires it when a worker starts and releases it when that worker completes,
  * errors or is terminated, so the Arena and the Tournament page (the two places a browser model
