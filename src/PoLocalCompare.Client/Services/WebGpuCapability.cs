@@ -34,7 +34,7 @@ public sealed class WebGpuCapability
             // Blazor caller. It is a classic script that assigns window globals, which is also
             // valid as a module, so importing it defines checkWebGpu exactly as the tag did.
             // The ?v= must match /diag's tag in Diag.cshtml — bump both together.
-            await _js.InvokeAsync<IJSObjectReference>("import", "/js/diag-interop.js?v=6");
+            await _js.InvokeAsync<IJSObjectReference>("import", "/js/diag-interop.js?v=7");
             return await _js.InvokeAsync<WebGpuInfo>("checkWebGpu");
         }
         catch (JSException)
@@ -57,5 +57,16 @@ public sealed class WebGpuCapability
         public string Architecture { get; set; } = "";
         public string Device { get; set; } = "";
         public string Reason { get; set; } = "";
+
+        /// <summary>The adapter's <c>maxStorageBufferBindingSize</c>, in MB. 0 when not reported.</summary>
+        public double MaxStorageBufferBindingMb { get; set; }
+
+        /// <summary>
+        /// True when the adapter cannot give WebLLM the 1 GB binding it asks for, so the runtime
+        /// falls back to 128 MB and only builds marked <c>low_resource_required</c> load. This is
+        /// a hard limit the adapter states, not an estimate — browsers do not expose VRAM, so
+        /// "is there enough memory" cannot be answered ahead of time and is not attempted.
+        /// </summary>
+        public bool LowResourceOnly => Supported && MaxStorageBufferBindingMb is > 0 and < 1024;
     }
 }

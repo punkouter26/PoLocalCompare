@@ -23,8 +23,13 @@ public static class TournamentsEndpoints
             [FromServices] CreateTournamentHandler handler,
             [FromServices] TournamentRepository repository,
             [FromServices] TournamentRunner runner,
+            [FromServices] SpendGuard spendGuard,
             [FromServices] IBackgroundTaskQueue taskQueue) =>
         {
+            // Whatever the field: a bracket cannot run without the judge, and the judge bills.
+            if (await spendGuard.IsOverBudgetAsync())
+                return SpendGuard.Refusal();
+
             try
             {
                 var actor = IdentityResolver.ResolveActor(httpContext.User);
@@ -70,6 +75,7 @@ public static class TournamentsEndpoints
                 });
             }
         }))
+        .RequireRateLimiting(DuelsEndpoints.StartRateLimitPolicy)
         .WithName("CreateTournament")
         .WithSummary("Draws a seeded bracket and starts running it.")
         .Produces<TournamentDto>(StatusCodes.Status201Created)

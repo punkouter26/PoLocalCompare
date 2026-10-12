@@ -88,7 +88,7 @@ AGENT.MD §8 fixes a **ratio contract of 100 / 50 / 25 / 25** — integration �
 tier ≈ a quarter. Counts are test *cases*, so a `[Theory]` contributes one per `InlineData` and each
 UI method counts twice (two viewports). Keep new tests inside those proportions rather than piling
 onto whichever tier is easiest to write. **Unit and E2EAPI sit exactly at the cap**
-(100/38/25/23 as of 2026-09-26) and `SCRIPTS/check-clean.ps1` fails when a tier exceeds its
+(100/40/25/23 as of 2026-10-11) and `SCRIPTS/check-clean.ps1` fails when a tier exceeds its
 budget, so the contract is enforced rather than remembered. A new Unit test has to displace a
 weaker one — that is how `ArenaPhaseResolverTests` got in on 2026-09-26 (six trivial id/label
 cases made way). Say so rather than quietly raising the cap.
@@ -654,6 +654,41 @@ to `/api/ollama/benchmark`; **browser** runs `runModelDiag` in the tab, strictly
 because they share one GPU and two at once produces "Device was lost" instead of a result. Note
 `/diag` is anonymous but `/api/models` is not — the table says "not signed in" rather than
 rendering empty.
+
+**Starting paid inference has two guards, both on the endpoint and not in the handler.**
+`POST /api/duels` and `POST /api/tournaments` carry the `duel-start` rate-limit policy
+(`Limits:DuelStartsPerMinute`, a fixed window per signed-in user, defined in `Program.cs`) and ask
+`SpendGuard` whether `Limits:DailySpendCapUsd` is spent. Three things about that are deliberate.
+The spend check is **not** inside `CommenceDuelHandler`, because `TournamentRunner` calls that too
+and a bracket refused mid-run is Abandoned — a running bracket finishes, which bounds the
+overshoot at seven duels. Today's total is **read from storage** (`SumApiCostAsync`, a
+partition-key range, since a ULID duel id starts with its timestamp), not counted in memory:
+the Free-tier App Service unloads when idle and a counter that resets on a cold start is not a
+cap. And an over-budget duel is refused only when one side is `Remote` — browser and Ollama
+models keep working. Known gaps: the judge's own Foundry calls are not recorded as `ApiCostUsd`
+so they are not counted, and the total is cached 30 s. **Both test hosts set
+`Limits:DuelStartsPerMinute` to 0** — a suite starts more duels a minute than a person may — and
+`IntegrationHost` also zeroes the cap, since the Azurite is shared and one test's recorded spend
+is every host's.
+
+**The leaderboard's value chart is `ValueChart` over `ValueChartLayout`.** Inline SVG, ELO
+against average cost per duel on a **log** axis (cost spans three decades), with the frontier —
+models no cheaper model out-rates — filled and joined, everything else hollow. Models with no
+cost or a zero one (browser, Ollama, mock inference) cannot sit on a log axis and get a lane to
+its left instead of being dropped. The figure is capped at the viewBox's 720 units so its text
+renders at token size, and it is hidden below 640px along with the table's cost columns. Every
+SVG `<text>` is wrapped in a `<g>`: at the top level of a Razor code block `<text>` is Razor's
+own pseudo-tag.
+
+**`/catalog` knows two things about this browser, and both load after first render.** The GPU
+probe now reports `maxStorageBufferBindingSize`: under 1 GB, WebLLM falls back to a 128 MB
+binding that only `low_resource_required` builds fit, so those rows are the only ones not
+flagged. That is a limit the adapter states — browsers do not expose VRAM, so "is there enough
+memory" is not guessed at. And [weights.js](src/PoLocalCompare.Client/wwwroot/js/weights.js)
+lists what WebLLM has cached (Cache API scopes `webllm/model` and `webllm/config`) with a
+Delete per model; the section is absent until something has been downloaded in that browser.
+`weights.js` and `diag-interop.js` are `import()`ed with a `?v=` — bump it on edit, and
+`diag-interop.js`'s must match the tag in `Diag.cshtml`.
 
 **Persistence details that bite.** Table Storage writes are idempotent and ETag-safe: creates swallow
 409, updates are If-Match conditional, and duel writers re-read and reapply on 412. `HybridCache`

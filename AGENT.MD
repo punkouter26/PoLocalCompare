@@ -114,7 +114,7 @@ PoLocalCompare.slnx
 │       │                                 (Arena both streams a running duel and judges it)
 │       ├── Components/                 ← incl. PromptPicker, SandboxedViewport, ModelCard,
 │       │                                 ArenaViewportPanel, ArenaVoteButtons, ArenaStatusBand,
-│       │                                 ArenaFailureCard, TelemetryHud
+│       │                                 ArenaFailureCard, TelemetryHud, ValueChart
 │       ├── Services/                   ← DuelApiClient, BffAuthenticationStateProvider,
 │       │                                 WebLlmService, SignalRDuelClient, LobbyTickerService,
 │       │                                 LocalInferenceDriver, AudioService, FxService,
@@ -234,6 +234,8 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-mini`; must accept image input when vision judging is on) |
 | `AiJudge:VisionEnabled` | `appsettings.json` | — (false; true in Development — needs headless Chromium) |
 | `AiJudge:TextOnlyDeployment` | `appsettings.json` | — (`gpt-4.1-nano`; used, and stamped as `JudgeModel`, whenever vision is off) |
+| `Limits:DuelStartsPerMinute` | `appsettings.json` | — (**10**; 120 in Development, 0 in the test hosts; 0 = off). Fixed window per signed-in user on `POST /api/duels` and `POST /api/tournaments` |
+| `Limits:DailySpendCapUsd` | `appsettings.json` | — (**5**; 0 = off). Compared with today's (UTC) summed `ApiCostUsd`; once reached, Remote duels and all tournaments get a 429 |
 | `Gemini:ApiKey` | Key Vault | `Gemini__ApiKey` env var. Optional — without it no Gemini models are seeded |
 | `Gemini:Endpoint` | `appsettings.json` | — (`https://generativelanguage.googleapis.com/v1beta/openai`) |
 
@@ -302,7 +304,7 @@ app purely over HTTP.
 | E2E UI | `tests/PoLocalCompare.E2EUI` | Playwright, headed Chrome, mobile + desktop viewports |
 
 **Ratio contract (100 / 50 / 25 / 25).** Unit is the baseline; integration ≈ 50% of unit, each
-E2E tier ≈ 25%. Current (2026-09-26): **100 unit / 38 integration / 25 E2E-API / 23 E2E-UI**,
+E2E tier ≈ 25%. Current (2026-10-11): **100 unit / 40 integration / 25 E2E-API / 23 E2E-UI**,
 all passing, and `SCRIPTS/check-clean.ps1` fails the build if a tier goes over. Counts are test *cases*, so a `[Theory]`
 contributes one per `InlineData`, and E2E-UI counts methods × 2 viewports.
 
@@ -413,3 +415,16 @@ When asked to make changes to this codebase:
     for the project overview before making changes — it outranks inference from the code.
 11. **No `dotnet user-secrets`:** Local config lives in `appsettings.Development.json` or environment
     variables; real secrets live in Azure Key Vault (`KeyVault:Uri`).
+12. **Git sync:** When a git sync happens, commit with a short message in casual American slang —
+    not technical, so it reads like a human wrote it — and push.
+13. **TLDR:** Any answer longer than 100 words ends with a 20-word TLDR summary.
+14. **Targeted tests only:** Do not run every suite after a code change. Run only the tests related
+    to the change, or none at all if the change is simple.
+15. **Do it, don't delegate it:** Avoid making the user type CLI commands or click through a web GUI
+    when the agent can do it automatically.
+16. **Warnings are errors:** Treat compile warnings as errors and fix them (`TreatWarningsAsErrors`
+    is global).
+17. **Report big deletions:** If a prompt removes more than 100 lines of code overall, mention it.
+18. **UI changes get a before/after screenshot:** Take an annotated screenshot showing the old and
+    new UI with the changes marked up, place the image in the `SCREENSHOTS/` folder inside an HTML
+    file, and give the valid full path.

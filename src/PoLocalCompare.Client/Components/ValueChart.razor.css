@@ -1,0 +1,104 @@
+/* The viewBox is 720 units wide and the figure is capped at 720px, so one unit is at most one
+   pixel and the type tokens below render at their real size — an SVG that scaled up with a
+   wide page would scale its text with it. */
+.value-chart {
+    max-inline-size: 45rem;
+    margin: 0 0 var(--space-lg);
+}
+
+.value-chart__svg {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+}
+
+.value-chart__legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-md);
+}
+
+.value-chart__key {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+/* Filled against hollow, not one colour against another: the distinction survives greyscale. */
+.value-chart__swatch {
+    inline-size: var(--space-smd);
+    block-size: var(--space-smd);
+    border: 2px solid var(--text-muted);
+    border-radius: 50%;
+    background: var(--surface-1);
+}
+
+.value-chart__swatch--frontier {
+    border-color: var(--accent-cyan);
+    background: var(--accent-cyan);
+}
+
+.value-chart__grid {
+    stroke: var(--border);
+    stroke-width: 1;
+}
+
+.value-chart__divider {
+    stroke: var(--border-strong);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+.value-chart__tick {
+    fill: var(--text-muted);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.value-chart__label {
+    fill: var(--text);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    /* A surface-coloured halo, so a name crossing a gridline or the frontier stays legible. */
+    paint-order: stroke;
+    stroke: var(--surface-base);
+    stroke-width: 3;
+    stroke-linejoin: round;
+}
+
+.value-chart__frontier {
+    fill: none;
+    stroke: var(--accent-cyan);
+    stroke-width: 2;
+    stroke-linejoin: round;
+}
+
+.value-chart__hit {
+    fill: transparent;
+}
+
+.value-chart__dot {
+    fill: var(--surface-1);
+    stroke: var(--text-muted);
+    stroke-width: 2;
+}
+
+.value-chart__dot--frontier {
+    fill: var(--accent-cyan);
+    stroke: var(--surface-base);
+}
+
+.value-chart__link:hover .value-chart__dot,
+.value-chart__link:focus-visible .value-chart__dot {
+    stroke: var(--text);
+    stroke-width: 3;
+}
+
+/* Phones drop the cost and value columns from the table (see Leaderboard.razor.css); the chart
+   of those same numbers goes with them rather than shrinking its labels past reading. */
+@media (max-width: 640px) {
+    .value-chart {
+        display: none;
+    }
+}

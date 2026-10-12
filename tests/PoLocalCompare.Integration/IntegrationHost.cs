@@ -30,7 +30,8 @@ public sealed class IntegrationHost : IAsyncDisposable
     /// <summary>Services from the running host, for tests that drive repositories directly.</summary>
     public IServiceProvider Services => _factory.Services;
 
-    public IntegrationHost(string connectionString, string user = "integration-test", string? roles = null)
+    public IntegrationHost(string connectionString, string user = "integration-test", string? roles = null,
+        IReadOnlyDictionary<string, string>? settings = null)
     {
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -43,6 +44,13 @@ public sealed class IntegrationHost : IAsyncDisposable
                 builder.UseSetting("Testing:SkipSeeding", "true");  // suppress ModelSeeder noise
                 // The auto-judge would otherwise fire mid-test and race the assertions.
                 builder.UseSetting("AiJudge:Enabled", "false");
+                // A suite starts more duels a minute than the per-user limit allows a person.
+                builder.UseSetting("Limits:DuelStartsPerMinute", "0");
+                // Off too: the Azurite is shared, so one test's recorded spend is every host's.
+                builder.UseSetting("Limits:DailySpendCapUsd", "0");
+                if (settings is not null)
+                    foreach (var (key, value) in settings)
+                        builder.UseSetting(key, value);
 
                 builder.ConfigureServices(services =>
                 {

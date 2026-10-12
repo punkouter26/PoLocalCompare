@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using Azure.Data.Tables;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
@@ -139,6 +140,41 @@ try
     // request id so a user-reported error can be found in the log.
     builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = c =>
         c.ProblemDetails.Extensions["correlationId"] = c.HttpContext.TraceIdentifier);
+
+    // ─── Rate limit on starting paid inference ───────────────────────────────
+    // One fixed window per signed-in user (per IP when the anonymous-writes gate is open),
+    // applied only to POST /api/duels and POST /api/tournaments. 0 switches it off, which is
+    // what the test hosts do — a suite starts far more duels a minute than a person can.
+    var duelStartsPerMinute = builder.Configuration.GetValue("Limits:DuelStartsPerMinute", 10);
+    builder.Services.AddRateLimiter(limiter =>
+    {
+        limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        limiter.OnRejected = async (rejected, ct) =>
+        {
+            rejected.HttpContext.Response.Headers.RetryAfter = "60";
+            await rejected.HttpContext.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Too many duels",
+                Detail = $"You can start {duelStartsPerMinute} duels a minute. Give it a moment and try again.",
+                Status = StatusCodes.Status429TooManyRequests,
+            }, ct);
+        };
+        limiter.AddPolicy(DuelsEndpoints.StartRateLimitPolicy, http =>
+        {
+            if (duelStartsPerMinute <= 0)
+                return RateLimitPartition.GetNoLimiter(string.Empty);
+
+            var actor = IdentityResolver.ResolveActor(http.User);
+            var key = actor == IdentityResolver.AnonymousActor
+                ? http.Connection.RemoteIpAddress?.ToString() ?? actor
+                : actor;
+            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = duelStartsPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+            });
+        });
+    });
 
     // ─── JSON serialization — string enum values for API consumers ───────────
     builder.Services.ConfigureHttpJsonOptions(opts =>
@@ -295,6 +331,8 @@ try
 
     app.UseAuthentication();
     app.UseAuthorization();
+    // After authentication: the policy partitions on the signed-in user.
+    app.UseRateLimiter();
 
     // ─── BFF auth routes (/auth/login/microsoft, /auth/login/fake, /auth/logout, /auth/me) ──
     app.MapAuthEndpoints();

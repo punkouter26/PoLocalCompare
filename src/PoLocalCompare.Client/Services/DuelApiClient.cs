@@ -234,7 +234,8 @@ public sealed class DuelApiClient
         var body = new { modelIds, promptText };
         var response = await _http.PostAsJsonAsync("/api/tournaments", body, JsonOptions);
 
-        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        // 429 is the per-minute limit or the daily spend cap; both carry a sentence to show.
+        if (response.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.TooManyRequests)
         {
             var problem = await TryReadProblemAsync(response);
             throw new InvalidOperationException(problem?.FirstMessage() ?? "That bracket could not be drawn.");

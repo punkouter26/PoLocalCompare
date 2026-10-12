@@ -1,6 +1,7 @@
 using PoLocalCompare.Api.Features.Duels;
 using PoLocalCompare.Api.Features.Leaderboard;
 
+using Microsoft.Extensions.DependencyInjection;
 using PoLocalCompare.Shared.DTOs;
 using PoLocalCompare.Shared.Ids;
 using System.Net;
@@ -62,6 +63,49 @@ public sealed class DuelsEndpointTests : IAsyncLifetime
         var duelId = body.GetProperty("duelId").GetString();
         Assert.NotNull(duelId);
         Assert.NotEmpty(duelId);
+    }
+
+    // ── POST /api/duels → 429 from the two guards on paid inference ───────
+
+    private async Task<HttpResponseMessage> StartDuelAsync(IntegrationHost host)
+    {
+        var left = await TestModels.RemoteAsync(host.Services, "Guard Left");
+        var right = await TestModels.RemoteAsync(host.Services, "Guard Right");
+        return await host.Client.PostAsJsonAsync("/api/duels", new
+        {
+            LeftModelId = left,
+            RightModelId = right,
+            PromptText = "Build a simple HTML counter app.",
+        });
+    }
+
+    [Fact]
+    public async Task PostDuel_DailySpendCapReached_Returns429ForRemoteModels()
+    {
+        await using var host = new IntegrationHost(_connectionString,
+            settings: new Dictionary<string, string> { ["Limits:DailySpendCapUsd"] = "0.5" });
+
+        using (var scope = host.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<IDuelResultRepository>().SaveAsync(
+                new DuelResult(DuelId.New(), ModelId.New()) { ApiCostUsd = 1.0 });
+        }
+
+        var response = await StartDuelAsync(host);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("budget", body.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task PostDuel_OverThePerMinuteLimit_Returns429()
+    {
+        await using var host = new IntegrationHost(_connectionString,
+            settings: new Dictionary<string, string> { ["Limits:DuelStartsPerMinute"] = "1" });
+
+        Assert.Equal(HttpStatusCode.Accepted, (await StartDuelAsync(host)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await StartDuelAsync(host)).StatusCode);
     }
 
     // ── POST /api/duels → 400 when PromptText is empty ────────────────────

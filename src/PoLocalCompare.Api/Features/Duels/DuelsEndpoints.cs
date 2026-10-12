@@ -12,6 +12,12 @@ namespace PoLocalCompare.Api.Features.Duels;
 public static class DuelsEndpoints
 {
     /// <summary>
+    /// Rate-limit policy on the two endpoints that start paid inference (this one and
+    /// <c>POST /api/tournaments</c>). Defined in Program.cs from <c>Limits:DuelStartsPerMinute</c>.
+    /// </summary>
+    public const string StartRateLimitPolicy = "duel-start";
+
+    /// <summary>
     /// Reads (GET /api/duels, GET /api/duels/{id}) stay authenticated
     /// so the leaderboard and archive can't be scraped anonymously. Writes — including
     /// <c>local-result</c>, which used to opt out entirely — are opened only when
@@ -26,6 +32,7 @@ public static class DuelsEndpoints
             [FromBody] CommenceDuelRequest request,
             HttpContext httpContext,
             [FromServices] CommenceDuelHandler handler,
+            [FromServices] SpendGuard spendGuard,
             [FromServices] DuelExecutionService executionService) =>
         {
             if (string.IsNullOrWhiteSpace(request.PromptText))
@@ -33,6 +40,9 @@ public static class DuelsEndpoints
                 {
                     ["PromptText"] = ["PromptText is required."]
                 });
+
+            if (await spendGuard.BlocksAsync(request.LeftModelId, request.RightModelId))
+                return SpendGuard.Refusal();
 
             try
             {
@@ -76,11 +86,13 @@ public static class DuelsEndpoints
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
         })
+        .RequireRateLimiting(StartRateLimitPolicy)
         .WithName("CommenceDuel")
         .WithSummary("Starts a new duel between two models.")
         .Produces<DuelDto>(StatusCodes.Status202Accepted)
         .ProducesValidationProblem()
-        .Produces(StatusCodes.Status404NotFound));
+        .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status429TooManyRequests));
 
         group.MapGet("/{duelId}", async (
             DuelId duelId,

@@ -60,3 +60,15 @@
     white-space: nowrap;
 }
 
+/* A build this device's GPU will refuse. Text plus the warn tint pair, never colour alone. */
+.catalog__unfit {
+    display: inline-block;
+    margin-inline-start: var(--space-sm);
+    padding: 0 var(--space-xs);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-sm);
+    background: var(--warn-surface);
+    color: var(--accent-yellow);
+    font-size: var(--text-2xs);
+    white-space: nowrap;
+}

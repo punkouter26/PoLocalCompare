@@ -3,6 +3,8 @@
 @using Microsoft.AspNetCore.Components.Web.Virtualization
 
 @inject DuelApiClient ApiClient
+@inject WebGpuCapability WebGpu
+@inject IJSRuntime JS
 
 <PageTitle>Catalog — PoLocalCompare</PageTitle>
 
@@ -50,6 +52,19 @@
                         <span> Hub unreachable, so the list isn't sorted by popularity.</span>
                     }
                 </p>
+                @* The catalog is shared, so a build this device cannot run can still be added
+                   for one that can — the note explains the row flags, it does not block. *@
+                @if (_gpu is { Supported: false })
+                {
+                    <p class="po-hint">This browser can't run browser models: @_gpu.Reason</p>
+                }
+                else if (_gpu is { LowResourceOnly: true })
+                {
+                    <p class="po-hint">
+                        This GPU allows @($"{_gpu.MaxStorageBufferBindingMb:F0}") MB per buffer, so only
+                        low-VRAM builds will load here. The rest are marked.
+                    </p>
+                }
 
                 <div class="catalog__filters" role="group" aria-label="Filter browser models">
                     <input type="search" class="catalog__input catalog__search" placeholder="Search builds…"
@@ -92,7 +107,13 @@
                                                target="_blank" rel="noopener noreferrer">Hub ↗</a>
                                         }
                                     </td>
-                                    <td data-label="VRAM"><span class="catalog__num">@FormatVram(m.VramRequiredMb)</span></td>
+                                    <td data-label="VRAM">
+                                        <span class="catalog__num">@FormatVram(m.VramRequiredMb)</span>
+                                        @if (_gpu is { LowResourceOnly: true } && !m.LowResource)
+                                        {
+                                            <span class="catalog__unfit">won't load on this GPU</span>
+                                        }
+                                    </td>
                                     <td data-label="Downloads"><span class="catalog__num">@(m.Downloads?.ToString("N0") ?? "—")</span></td>
                                     <td data-label="Display name">
                                         <input class="catalog__input"
@@ -118,6 +139,46 @@
                 }
             }
         </section>
+
+        @* Weights WebLLM has already cached in this browser. Per browser, not per catalog:
+           the list comes from the Cache API (weights.js), so it is absent until something
+           has actually been downloaded here. *@
+        @if (_weights is { Models.Count: > 0 })
+        {
+            <section class="po-section" aria-labelledby="catalog-weights-heading">
+                <h2 id="catalog-weights-heading" class="po-section-title">Downloaded in this browser</h2>
+                <p class="po-hint">@WeightsSummary(_weights) A deleted model downloads again the next time it runs.</p>
+                <div class="po-table-wrap">
+                    <table class="po-table po-table--cards">
+                        <caption class="visually-hidden">Browser model weights cached in this browser</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Model</th>
+                                <th scope="col">Size</th>
+                                <th scope="col"><span class="visually-hidden">Delete</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cached in _weights.Models)
+                            {
+                                <tr @key="cached.Id">
+                                    <td data-label="Model"><span class="catalog__id">@cached.Id</span></td>
+                                    <td data-label="Size"><span class="catalog__num">@FormatMb(cached.Mb)</span></td>
+                                    <td class="po-cell--bare">
+                                        <button type="button" class="po-btn po-btn--sm po-btn--warn"
+                                                aria-label="@($"Delete cached weights for {cached.Id}")"
+                                                disabled="@(_deleting is not null)"
+                                                @onclick="@(() => DeleteWeightsAsync(cached))">
+                                            @(_deleting == cached.Id ? "Deleting…" : "Delete")
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
 
         @if (_discovery.OllamaSupported)
         {
@@ -199,6 +260,75 @@
             _loading = false;
         }
     }
+
+    /// <summary>This device's GPU, for the "won't load here" flags. Null until probed.</summary>
+    private WebGpuCapability.WebGpuInfo? _gpu;
+
+    private IJSObjectReference? _weightsModule;
+    private CachedWeights? _weights;
+    private string? _deleting;
+
+    /// <summary>Mirrors what weights.js <c>list()</c> returns.</summary>
+    private sealed class CachedWeights
+    {
+        public List<CachedModel> Models { get; set; } = [];
+        public double? UsageMb { get; set; }
+        public double? QuotaMb { get; set; }
+    }
+
+    private sealed class CachedModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public double Mb { get; set; }
+    }
+
+    // Both are this browser's own state and neither is needed to add a model, so they load
+    // after first render, and a failure leaves the page exactly as it is without them.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _gpu = await WebGpu.GetAsync();
+            _weightsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/weights.js?v=1");
+            _weights = await _weightsModule.InvokeAsync<CachedWeights>("list");
+        }
+        catch (JSException)
+        {
+        }
+        StateHasChanged();
+    }
+
+    private async Task DeleteWeightsAsync(CachedModel cached)
+    {
+        if (_weightsModule is null) return;
+        _deleting = cached.Id;
+        try
+        {
+            await _weightsModule.InvokeVoidAsync("remove", cached.Id);
+            _weights = await _weightsModule.InvokeAsync<CachedWeights>("list");
+            _status = $"Deleted {cached.Id} ({FormatMb(cached.Mb)} freed).";
+        }
+        catch (JSException ex)
+        {
+            _status = $"Could not delete {cached.Id}: {ex.Message}";
+        }
+        finally
+        {
+            _deleting = null;
+        }
+    }
+
+    private static string WeightsSummary(CachedWeights weights)
+    {
+        var cached = $"{FormatMb(weights.Models.Sum(m => m.Mb))} of weights cached";
+        return weights is { UsageMb: { } usage, QuotaMb: { } quota }
+            ? $"{cached}; this site is using {FormatMb(usage)} of the {FormatMb(quota)} the browser allows it."
+            : $"{cached}.";
+    }
+
+    private static string FormatMb(double mb) =>
+        mb >= 1024 ? $"{mb / 1024:F1} GB" : $"{mb:F0} MB";
 
     // A materialised list, rebuilt only when its inputs change, so an _adding/_status change
     // does not re-run the filter over ~150 rows on every render.

@@ -103,6 +103,27 @@ public sealed class DuelResultRepository : IDuelResultRepository
         return results;
     }
 
+    /// <remarks>
+    /// The partition key is the duel id, a ULID, whose first ten characters are its creation
+    /// time — so a time window is a key range and this never scans the table. Bounded above as
+    /// well as below: legacy non-ULID ids sort after every ULID and would otherwise be counted
+    /// into every day forever. Only the cost column crosses the wire.
+    /// </remarks>
+    public async Task<double> SumApiCostAsync(DateTimeOffset from, DateTimeOffset to)
+    {
+        var lower = NUlid.Ulid.NewUlid(from).ToString()[..10];
+        var upper = NUlid.Ulid.NewUlid(to).ToString()[..10];
+
+        var total = 0.0;
+        await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
+            filter: TableClient.CreateQueryFilter($"PartitionKey ge {lower} and PartitionKey lt {upper}"),
+            select: ["ApiCostUsd"]))
+        {
+            total += entity.GetDouble("ApiCostUsd") ?? 0;
+        }
+        return total;
+    }
+
     private static TableEntity MapToEntity(DuelResult result, string htmlOutput, string? blobPath)
     {
         return new TableEntity(result.DuelId, result.ModelId)

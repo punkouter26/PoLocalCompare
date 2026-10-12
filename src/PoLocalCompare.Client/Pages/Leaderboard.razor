@@ -44,6 +44,8 @@
            model count is the row count and the top ELO is row one. *@
         <p class="po-hint">@judged duel@(judged == 1 ? "" : "s") judged</p>
 
+        <ValueChart Entries="_displayedEntries" />
+
         @* Plain .po-table-wrap. This used to also carry a local `leaderboard__grid--scrollable`
            class whose only rule was another `overflow-x: auto` — a second horizontal-scroll
            mechanism competing with the one .po-table-wrap already provides, and with the one

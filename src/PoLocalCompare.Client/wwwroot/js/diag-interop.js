@@ -50,7 +50,11 @@ window.checkWebGpu = async function () {
         } catch (e) {
             return { supported: false, vendor, architecture, device, reason: 'WebGPU device (shader-f16) could not be created: ' + (e.message || '') };
         }
-        return { supported: true, vendor, architecture, device, reason: '' };
+        // WebLLM asks for a 1 GB storage-buffer binding and, on an adapter that cannot give
+        // one, falls back to 128 MB — which only the low-resource builds fit in. Reported so
+        // /catalog can say which builds this GPU will refuse before anyone downloads them.
+        const maxStorageBufferBindingMb = (adapter.limits?.maxStorageBufferBindingSize ?? 0) / 1048576;
+        return { supported: true, vendor, architecture, device, reason: '', maxStorageBufferBindingMb };
     } catch (e) {
         return { supported: false, vendor: '', architecture: '', device: '', reason: e.message };
     }

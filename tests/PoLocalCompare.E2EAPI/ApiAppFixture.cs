@@ -57,6 +57,8 @@ public class ApiAppFixture : IAsyncLifetime
             builder.UseSetting("KeyVault:Uri", "");
             builder.UseSetting("Testing:SkipSeeding", "true");
             builder.UseSetting("AiJudge:Enabled", EnableAutoJudge ? "true" : "false");
+            // A suite starts more duels a minute than the per-user limit allows a person.
+            builder.UseSetting("Limits:DuelStartsPerMinute", "0");
             // Safety net for the same class of problem: a duel left waiting on a browser result
             // blocks the single-consumer queue until its watchdog fires, and the app default is
             // 900 s. Clamped to the 30 s floor the execution service enforces. Tests should
