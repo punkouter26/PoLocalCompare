@@ -245,6 +245,7 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 | `AiJudge:Enabled` | `appsettings.json` | — (default `false` in code, `true` in appsettings) |
 | `AiJudge:DelaySeconds` | `appsettings.json` | — (**10**; code default also 10) |
 | `AiJudge:Deployment` | `appsettings.json` | — (`gpt-5.4-mini`; must accept image input when vision judging is on) |
+| `AiJudge:TiebreakDeployment` | `appsettings.json` | — (`gpt-5.4`; re-judges a split in both orders at medium effort; empty = off; must accept images when vision is on) |
 | `AiJudge:VisionEnabled` | `appsettings.json` | — (false; true in Development — needs headless Chromium) |
 | `AiJudge:TextOnlyDeployment` | `appsettings.json` | — (`gpt-4.1-nano`; used, and stamped as `JudgeModel`, whenever vision is off) |
 | `Limits:DuelStartsPerMinute` | `appsettings.json` | — (**10**; 120 in Development, 0 in the test hosts; 0 = off). Fixed window per signed-in user on `POST /api/duels` and `POST /api/tournaments` |

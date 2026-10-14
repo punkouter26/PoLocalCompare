@@ -30,7 +30,8 @@ internal static partial class JudgeLog
 /// evenly over Left and Right; every individual verdict still carried it. So the judge is now
 /// asked twice, in parallel, once in each order, and a verdict only stands when both orderings
 /// agree — a pick that flips with the presentation order is recorded as a Tie. On the text-only
-/// judge that doubles a cost of well under a tenth of a cent and adds no latency.
+/// judge that doubles a cost of well under a tenth of a cent and adds no latency. A split first
+/// gets one closer look from a stronger deployment (see <see cref="TiebreakAsync"/>).
 /// Length and self-preference bias are not corrected for; the prompt below at least tells the
 /// judge not to reward length for its own sake.
 /// </remarks>
@@ -50,7 +51,11 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
         "Then pick the winner, which must follow from that analysis. Then give " +
         "the reason: one sentence, under 30 words, that a viewer will read, naming the documents as " +
         "\"Document A\" and \"Document B\". " +
-        "Choose Tie when the evidence is insufficient or the documents are materially equivalent.";
+        "Choose Tie when the evidence is insufficient or the documents are materially equivalent. " +
+        "When the request is open-ended or artistic — a drawing, an illustration, a portrait, a scene — " +
+        "the depiction itself is what was asked for: judge which page more recognisably and skilfully " +
+        "depicts the subject, and do not count a caption, label or supporting detail that serves the " +
+        "depiction as something invented that was not asked for.";
 
     /// <summary>
     /// Appended when screenshots are attached. The instruction to trust the image over the
@@ -114,6 +119,16 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
     /// would read as "the judge could not decide" and silently leave every duel Pending.
     /// </summary>
     private const int ReplyTokenBudget = 2000;
+
+    /// <summary>
+    /// The tie-break pass runs above the reasoning floor, and every reasoning token comes out
+    /// of this budget first — at <see cref="ReplyTokenBudget"/> a medium-effort vision call can
+    /// spend it all thinking and return empty content, which would read as "no decision".
+    /// </summary>
+    private const int TiebreakTokenBudget = 8000;
+
+    /// <summary>The effort the tie-break pass asks for. Accepted by the GPT-5 family and the o-series.</summary>
+    private const string TiebreakEffort = "medium";
 
     private readonly HttpClient _http;
     private readonly IConfiguration _configuration;
@@ -185,29 +200,79 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
         }
 
         var call = new JudgeCall(endpoint, apiKey, deployment, promptFull, leftOutput, rightOutput,
-            leftEvidence, rightEvidence, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
+            leftEvidence, rightEvidence, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)), IsTiebreak: false);
 
+        var opinions = await AskBothOrdersAsync(call, _options.TimeoutSeconds, cancellationToken);
+        if (opinions is null) return null;
+
+        // Every call was paid for whichever way it came out, including a disagreement.
+        var spent = opinions.Sum(o => o?.CostUsd ?? 0);
+        var decision = Reconcile(opinions[0], opinions[1]);
+
+        // Calibration names its own deployment to measure that judge alone; a tie-break by a
+        // different model would blur exactly what it is measuring.
+        if (IsSplit(opinions[0], opinions[1]) && deploymentOverride is null
+            && await TiebreakAsync(call, cancellationToken) is { } tiebreak)
+        {
+            spent += tiebreak.Sum(o => o?.CostUsd ?? 0);
+            decision = Reconcile(tiebreak[0], tiebreak[1], afterTiebreak: true) ?? decision;
+        }
+
+        return decision is null ? null : decision with { CostUsd = spent > 0 ? spent : null };
+    }
+
+    /// <summary>
+    /// Asks the judge in both orders at once. Null when the pair timed out; a single failed call
+    /// comes back as a null element, which <see cref="Reconcile"/> handles.
+    /// </summary>
+    private async Task<JudgeDecision?[]?> AskBothOrdersAsync(JudgeCall call, int timeoutSeconds, CancellationToken cancellationToken)
+    {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_options.TimeoutSeconds, 5, 300)));
+        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 5, 300)));
 
-        JudgeDecision?[] opinions;
         try
         {
-            opinions = await Task.WhenAll(
+            return await Task.WhenAll(
                 AskAsync(call, leftIsA: true, timeout.Token),
                 AskAsync(call, leftIsA: false, timeout.Token));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            JudgeLog.CallFailed(_logger, $"timed out after {_options.TimeoutSeconds}s");
+            JudgeLog.CallFailed(_logger, $"{call.Deployment} timed out after {timeoutSeconds}s");
             return null;
         }
+    }
 
-        // Both calls were paid for whichever way they came out, including a disagreement.
-        var spent = opinions.Sum(o => o?.CostUsd ?? 0);
-        return Reconcile(opinions[0], opinions[1]) is { } decision
-            ? decision with { CostUsd = spent > 0 ? spent : null }
-            : null;
+    /// <summary>Both orderings answered, and they answered differently.</summary>
+    private static bool IsSplit(JudgeDecision? leftFirst, JudgeDecision? rightFirst) =>
+        leftFirst is not null && rightFirst is not null && leftFirst.Verdict != rightFirst.Verdict;
+
+    /// <summary>
+    /// A second, closer look at a split: both orderings again, by
+    /// <see cref="AutoJudgeOptions.TiebreakDeployment"/> at a higher reasoning effort.
+    /// </summary>
+    /// <remarks>
+    /// A split means the first judge could not tell the pages apart beyond which one it saw
+    /// first. Recording that as a Tie was honest, but it also tied duels a person could call at a
+    /// glance — a recognisable portrait against a bald head scored as "equivalent". The
+    /// invariant is unchanged: a verdict still needs two opposite-order calls that agree, and
+    /// a tie-break that splits again is still a Tie. Only splits pay for it, so the common case
+    /// costs what it did. Null (keep the first pass's Tie) when it is switched off or fails.
+    /// </remarks>
+    private async Task<JudgeDecision?[]?> TiebreakAsync(JudgeCall firstPass, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.TiebreakDeployment)) return null;
+
+        var deployment = _options.TiebreakDeployment.Trim();
+        var (endpoint, apiKey) = FoundryChatRequest.ResolveProvider(_configuration, deployment);
+        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey)) return null;
+
+        _logger.LogInformation("Judge split; asking {Deployment} for a tie-break.", deployment);
+        var call = firstPass with { Endpoint = endpoint, ApiKey = apiKey, Deployment = deployment, IsTiebreak = true };
+
+        // Thinking at a higher effort takes longer than the floor the main timeout is sized for.
+        var opinions = await AskBothOrdersAsync(call, _options.TimeoutSeconds * 2, cancellationToken);
+        return opinions is null || opinions.All(o => o is null) ? null : opinions;
     }
 
     private sealed record JudgeCall(
@@ -219,14 +284,20 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
         string RightOutput,
         HtmlRenderEvidence? LeftEvidence,
         HtmlRenderEvidence? RightEvidence,
-        string Delimiter);
+        string Delimiter,
+        bool IsTiebreak);
 
     /// <summary>
     /// Combines the two orderings. One that failed (null) defers to the other, which is what a
     /// single call used to return; two that disagree are a Tie, because a verdict that flips
     /// with the presentation order is the position bias talking, not the documents.
     /// </summary>
-    internal static JudgeDecision? Reconcile(JudgeDecision? leftFirst, JudgeDecision? rightFirst)
+    /// <remarks>
+    /// A split Tie keeps both analyses, each labelled with the order it was written in. They
+    /// argue for different pages, which is the point: on a Tie they are the only explanation
+    /// of why, and discarding them left the Arena with nothing but the generic sentence.
+    /// </remarks>
+    internal static JudgeDecision? Reconcile(JudgeDecision? leftFirst, JudgeDecision? rightFirst, bool afterTiebreak = false)
     {
         if (leftFirst is null || rightFirst is null) return leftFirst ?? rightFirst;
         if (leftFirst.Verdict == rightFirst.Verdict) return leftFirst;
@@ -237,7 +308,13 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
             (DuelVerdict.Right, DuelVerdict.Left) => "the judge preferred whichever page it was shown second",
             _ => "the judge called it a tie in one order and not in the other",
         };
-        return new JudgeDecision(DuelVerdict.Tie, $"Too close to call: {why}, so neither page earned the win.");
+        var when = afterTiebreak ? ", even on a closer second look" : "";
+        var analysis = leftFirst.Analysis is null && rightFirst.Analysis is null
+            ? null
+            : $"Left page shown first: {leftFirst.Analysis ?? "(no analysis)"}\n\n" +
+              $"Right page shown first: {rightFirst.Analysis ?? "(no analysis)"}";
+        return new JudgeDecision(DuelVerdict.Tie, $"Too close to call: {why}{when}, so neither page earned the win.",
+            Analysis: analysis, Model: leftFirst.Model);
     }
 
     /// <summary>
@@ -289,7 +366,7 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
         try
         {
             response = await FoundryChatClient.PostAsync(_http, call.Endpoint, call.Deployment, call.ApiKey,
-                includeModelField => JsonSerializer.Serialize(BuildJudgeRequest(call.Deployment, messages, includeModelField)),
+                includeModelField => JsonSerializer.Serialize(BuildJudgeRequest(call.Deployment, messages, includeModelField, call.IsTiebreak)),
                 cancellationToken);
         }
         catch (OperationCanceledException)
@@ -335,7 +412,8 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
             : (slot == "A") == leftIsA ? DuelVerdict.Left : DuelVerdict.Right;
         JudgeLog.Decided(_logger, verdict.ToString(), slot, reason);
 
-        return new JudgeDecision(verdict, reason, Analysis: analysis, CostUsd: CostOf(call.Deployment, payload));
+        return new JudgeDecision(verdict, reason, Analysis: analysis, CostUsd: CostOf(call.Deployment, payload),
+            Model: call.Deployment);
     }
 
     /// <summary>
@@ -485,11 +563,17 @@ public sealed partial class FoundryDuelJudge : IDuelJudge
     private static Dictionary<string, object?> BuildJudgeRequest(
         string deployment,
         object messages,
-        bool includeModelField)
+        bool includeModelField,
+        bool isTiebreak)
     {
         var body = FoundryChatRequest.Build(
-            deployment, messages, ReplyTokenBudget, 0.0, stream: false, includeModelField);
+            deployment, messages, isTiebreak ? TiebreakTokenBudget : ReplyTokenBudget, 0.0, stream: false, includeModelField);
         body["response_format"] = JudgeResponseFormat;
+        // Build pins every reasoning model to its floor. A tie-break exists to look harder, so it
+        // lifts that — but only for families known to accept the value (not xAI or Gemini).
+        if (isTiebreak && body.ContainsKey("reasoning_effort")
+            && !FoundryChatRequest.IsGrokReasoning(deployment) && !FoundryChatRequest.IsGemini(deployment))
+            body["reasoning_effort"] = TiebreakEffort;
         return body;
     }
 

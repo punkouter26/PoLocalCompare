@@ -161,7 +161,9 @@ protects. A rule with no obvious reason usually has an expensive one.
   the duel `Pending`; `AiJudge:Enabled=false` is genuinely human-only.
 - **The verdict write order is load-bearing:** duel, then model aggregates, then ELO history.
 - **Every verdict is two judge calls in opposite orders, and they must agree** or it is a Tie. The
-  schema is `analysis` → `winner` → `reason`, in that order, on purpose.
+  schema is `analysis` → `winner` → `reason`, in that order, on purpose. A split is asked again,
+  both orders, by `AiJudge:TiebreakDeployment` (`gpt-5.4`, medium effort); a second split is the
+  Tie, and it keeps both analyses. Calibration with a `deployment` override skips the tie-break.
 - **The judge looks at rendered screenshots and bounded interaction evidence** when
   `AiJudge:VisionEnabled` (Development only). The renderer blocks all network, captures motion,
   activates up to three visible enabled buttons, and records text/pixel changes. Either side

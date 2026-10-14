@@ -332,8 +332,9 @@ public sealed class AutoJudge
         var (source, judgeModel) = decision.IsWalkover
             ? (VerdictSource.Constraint, null)
             // The model that actually judged: with vision off that is TextOnlyDeployment, and
-            // stamping Deployment credited gpt-5.4-mini with every gpt-4.1-nano verdict.
-            : (VerdictSource.Ai, _options.EffectiveDeployment(_options.VisionEnabled));
+            // stamping Deployment credited gpt-5.4-mini with every gpt-4.1-nano verdict. A split
+            // settled by the tie-break judge names that model instead.
+            : (VerdictSource.Ai, decision.Model ?? _options.EffectiveDeployment(_options.VisionEnabled));
 
         var command = new RecordVerdictCommand(
             duelId,

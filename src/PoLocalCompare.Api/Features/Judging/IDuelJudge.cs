@@ -15,16 +15,21 @@ namespace PoLocalCompare.Api.Features.Judging;
 /// The judge's own checklist — each requested element and which page delivered it — written
 /// before it picked a winner. It was scratch work, parsed and thrown away, until 2026-10-11;
 /// it is the evidence behind <paramref name="Rationale"/> and already paid for, so it is kept
-/// and shown. Null for a walkover, and for a tie called because the two orderings disagreed
-/// (each analysis there argues for a different page).
+/// and shown. Null for a walkover. A tie called because the two orderings disagreed carries
+/// both, each labelled with its order — they argue for different pages, and that is the why.
 /// </param>
 /// <param name="CostUsd">What the judge calls behind this decision cost, when the deployment is in the price book.</param>
+/// <param name="Model">
+/// The deployment that made the deciding call. Differs from the configured judge when a split
+/// went to <see cref="AutoJudgeOptions.TiebreakDeployment"/>; null when no model was involved.
+/// </param>
 public sealed record JudgeDecision(
     DuelVerdict Verdict,
     string Rationale,
     bool IsWalkover = false,
     string? Analysis = null,
-    double? CostUsd = null);
+    double? CostUsd = null,
+    string? Model = null);
 
 /// <summary>
 /// Raised when a judge call hit a recoverable upstream failure — the most common case is an

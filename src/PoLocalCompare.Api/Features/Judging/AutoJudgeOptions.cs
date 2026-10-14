@@ -54,6 +54,19 @@ public sealed class AutoJudgeOptions
     /// </summary>
     public string? TextOnlyDeployment { get; set; }
 
+    /// <summary>
+    /// The judge asked for a second, closer look when the first one splits — picks a different
+    /// page depending on which it was shown first. Empty switches the tie-break off, and a split
+    /// is then recorded as a Tie straight away.
+    /// </summary>
+    /// <remarks>
+    /// Added 2026-10-13, after a recognisable cartoon portrait and a featureless bald head drew
+    /// a Tie: gpt-5.4-mini at its lowest effort preferred whichever page came first, both times.
+    /// The tie-break runs both orders again on this deployment at medium effort, and still needs
+    /// them to agree. It must accept image input when <see cref="VisionEnabled"/> is on.
+    /// </remarks>
+    public string? TiebreakDeployment { get; set; } = "gpt-5.4";
+
     /// <summary>Effective deployment given the current vision flag.</summary>
     public string EffectiveDeployment(bool visionEnabled) =>
         visionEnabled || string.IsNullOrWhiteSpace(TextOnlyDeployment) ? Deployment : TextOnlyDeployment!;
