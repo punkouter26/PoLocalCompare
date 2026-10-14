@@ -84,8 +84,28 @@ public partial class Tournament
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
-    private bool CanStart => _selected.Count == FieldSize
-        && _prompt.Trim().Length >= 10
+    private const int MinPromptLength = 10;
+
+    private ElementReference _promptBox;
+
+    // Set by a Start click that had no usable prompt; PromptFlagged drops on its own once the
+    // prompt is long enough, so nothing has to remember to clear it.
+    private bool _promptNudged;
+
+    private bool PromptReady => _prompt.Trim().Length >= MinPromptLength;
+
+    private bool PromptFlagged => _promptNudged && !PromptReady;
+
+    /// <summary>
+    /// Whether the Start button is pressable. A missing prompt is deliberately NOT part of this.
+    /// </summary>
+    /// <remarks>
+    /// The button used to be disabled for an empty prompt too, with the reason in a muted hint
+    /// beside it — and a disabled button cannot be clicked to find out why. The things the user
+    /// cannot fix from the button (field not full, a bracket already running) still disable it;
+    /// a missing prompt is fixed one field up, so the click goes there instead.
+    /// </remarks>
+    private bool CanAttemptStart => _selected.Count == FieldSize
         && _inFlight is null
         && !_starting;
 
@@ -96,11 +116,12 @@ public partial class Tournament
             if (_inFlight is { } live)
                 return $"A tournament is already running — finish or abandon it before starting a new one.";
 
-            return (_selected.Count == FieldSize, _prompt.Trim().Length >= 10) switch
+            return (_selected.Count == FieldSize, PromptReady) switch
             {
                 (false, _) when _entrants.Count < FieldSize => "Not enough models registered to fill a bracket.",
                 (false, _) => $"Choose exactly {FieldSize} entrants ({_selected.Count} selected).",
-                (true, false) => "Write a prompt for the bracket.",
+                (true, false) when _prompt.Trim().Length == 0 => "Write a prompt above to start the bracket.",
+                (true, false) => $"The prompt needs at least {MinPromptLength} characters.",
                 _ => $"{FieldSize} models · {FieldSize - 1} duels · judged automatically.",
             };
         }
@@ -309,7 +330,14 @@ public partial class Tournament
 
     private async Task StartAsync()
     {
-        if (!CanStart) return;
+        if (!CanAttemptStart) return;
+
+        if (!PromptReady)
+        {
+            _promptNudged = true;
+            await _promptBox.FocusAsync();
+            return;
+        }
 
         _starting = true;
         _error = null;

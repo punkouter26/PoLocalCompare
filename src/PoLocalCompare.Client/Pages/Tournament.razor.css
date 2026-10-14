@@ -315,9 +315,23 @@
 
 /* ── Actions and history ────────────────────────────────────────────── */
 
+/* Its own line under the button. Beside it, the hint read as a caption for whatever was to its
+   right, and the one sentence explaining the button was the easiest thing on the page to miss. */
 .tourney__start-hint {
+    flex-basis: 100%;
     color: var(--text-muted);
     font-size: var(--text-sm);
+    text-align: center;
+}
+
+/* Start was pressed with no usable prompt: the hint and the box it points at both say so. */
+.tourney__start-hint--blocked {
+    color: var(--accent-red);
+    font-weight: var(--weight-semibold);
+}
+
+.tourney__textarea[aria-invalid="true"] {
+    border-color: var(--accent-red);
 }
 
 .tourney__recent {

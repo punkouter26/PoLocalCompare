@@ -551,7 +551,13 @@ a:hover {
     color: var(--on-accent-green);
 }
 
+/* The filled and tinted variants restate their own background on hover. The base hover rule
+   above swaps in --surface-accent at the same specificity, so a variant that only set
+   `filter` and `color` kept its text colour and lost its fill — white on near-white for
+   --success, which is a button that goes blank the moment the pointer reaches it. */
 .po-btn--success:hover:not(:disabled) {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
     filter: brightness(1.12);
     color: var(--on-accent-green);
 }
@@ -575,6 +581,8 @@ a:hover {
 }
 
 .po-btn--ghost:hover:not(:disabled) {
+    background: var(--success-surface);
+    border-color: var(--success-border);
     filter: brightness(1.08);
     color: var(--accent-green);
 }
@@ -586,6 +594,8 @@ a:hover {
 }
 
 .po-btn--warn:hover:not(:disabled) {
+    background: var(--warn-surface);
+    border-color: var(--warn-border);
     filter: brightness(1.08);
     color: var(--accent-yellow);
 }
