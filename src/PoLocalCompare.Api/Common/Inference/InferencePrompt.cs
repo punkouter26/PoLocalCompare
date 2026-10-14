@@ -30,8 +30,9 @@ namespace PoLocalCompare.Api.Common.Inference;
 /// cube, Game of Life, a sorting race) and the judge marks a page that does not move as not
 /// having done what was asked. It also states the two things the renderer enforces that a
 /// model cannot guess: <c>HtmlScreenshotRenderer</c> blocks all network, so a CDN reference
-/// is a dead reference, and it screenshots without clicking, so a page that waits for input
-/// is judged on its idle frame. <b>Ratings from before this date were earned under the
+/// is a dead reference. The renderer also activates a bounded sample of visible buttons and
+/// records whether text or pixels changed, so requested controls are judged on observed
+/// behaviour rather than source claims alone. <b>Ratings from before this date were earned under the
 /// shorter brief</b> and are not strictly comparable with ones earned after it.
 /// </para>
 ///
@@ -77,5 +78,7 @@ public static class InferencePrompt
           runs with no network, so anything it has to fetch will be missing.
         - Anything that moves must start by itself when the page loads; do not wait for a
           click or a key press to begin.
+        - Visible controls may be activated during judging. Requested interactions must work
+          immediately and provide a visible result.
         """;
 }

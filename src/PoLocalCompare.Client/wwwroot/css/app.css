@@ -964,9 +964,8 @@ p a, li a, td a {
    models run WebLLM inference over WebGPU in this same tab, and the tok/s the race reports is
    measured while that happens. A render loop competing for the GPU would not merely drop
    frames, it would make the number the app exists to report wrong. Continuous motion therefore
-   stays on the compositor; the confetti in fx.js is one-shot and fires when inference has
-   already finished; and the one render loop in the app (backdrop.js) stops outright on the
-   routes that measure and while the GPU lease is held.
+   stays on the compositor, and the only canvas work in the app (fx.js) is one-shot and fires
+   when inference has already finished.
 
    Every effect here is off under prefers-reduced-motion. */
 
@@ -992,24 +991,6 @@ body::before {
 @keyframes aurora-drift {
     from { transform: translate3d(-2%, -1%, 0) scale(1.00) rotate(0deg); }
     to   { transform: translate3d(2%, 1.5%, 0) scale(1.06) rotate(2deg); }
-}
-
-/* ── Shader backdrop ──────────────────────────────────────────────────────
-   backdrop.js mounts this canvas (WebGL2) and sets html.po-shader while it is live; the CSS
-   aurora above is then not drawn underneath it. The canvas holds a still frame — no frame
-   loop at all — on /arena and /tournament and whenever the GPU lease is held, so it never
-   runs beside a measurement. See backdrop.js for the conditions. */
-#po-living-canvas {
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-}
-
-html.po-shader body::before {
-    display: none;
 }
 
 /* ── Registered colours ───────────────────────────────────────────────────
@@ -1488,11 +1469,6 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
         animation: none;
     }
 
-    /* backdrop.js does not mount under reduced motion; this covers a preference that
-       changes while the page is open. */
-    #po-living-canvas {
-        display: none;
-    }
 }
 
 /* ── Safe-area insets (notches, home indicators, curved corners) ──────────────
@@ -1532,8 +1508,7 @@ html.po-liquid:not([data-gpu="busy"]) .po-glass {
     }
 
     /* Decorative only, and the single largest source of low-contrast area in the app. */
-    body::before,
-    #po-living-canvas {
+    body::before {
         display: none;
     }
 

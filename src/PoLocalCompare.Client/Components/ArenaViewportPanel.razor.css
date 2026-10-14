@@ -46,6 +46,48 @@
     container: telemetry / inline-size;
 }
 
+.arena-panel__source {
+    max-width: 100%;
+}
+
+.arena-panel__source > summary {
+    width: fit-content;
+    min-height: var(--target-min);
+    padding: var(--space-xs) var(--space-sm);
+    color: var(--text);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    list-style: none;
+}
+
+.arena-panel__source > summary::-webkit-details-marker {
+    display: none;
+}
+
+.arena-panel__source > summary:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+}
+
+.arena-panel__source pre {
+    max-height: 20rem;
+    margin: var(--space-xs) 0 0;
+    padding: var(--space-sm);
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+}
+
 /* The side that won. Static on purpose — a looping shimmer here was a non-compositor animation
    (background-position) running beside a WebGPU tab. */
 .arena-panel__box--winner {

@@ -3,8 +3,8 @@
  * pieces land on, bounce off and come to rest on the elements the caller names (the Arena's
  * two panels, the bracket's match cards). Hand-rolled — a few dozen axis-aligned boxes do not
  * need a physics library, and Rapier would be a WASM download for one effect.
- * (The photo-finish strip and shard/mote/pyrotechnic effects were cut on 2026-09-26 as
- * decoration. The continuous backdrop lives in backdrop.js, not here.)
+ * (The photo-finish strip, shard/mote/pyrotechnic effects and the WebGL backdrop were cut on
+ * 2026-09-26 as decoration; a second WebGL backdrop was added and removed again on 2026-10-11.)
  *
  * Browser models run WebLLM inference over WebGPU in this same tab, and the tok/s the race
  * reports is measured while that is happening. A render loop stealing GPU would not merely
@@ -104,7 +104,7 @@ function createOverlay() {
  * @param {number} options.durationMs
  * @param {string} options.colliders selector for elements the pieces land on and bounce off
  */
-export function burst(options = {}) {
+function burst(options = {}) {
     if (gpuBusy()) return;
     // Respecting reduced-motion by not animating at all, rather than by animating faster.
     // A confetti burst has no non-moving equivalent worth substituting.

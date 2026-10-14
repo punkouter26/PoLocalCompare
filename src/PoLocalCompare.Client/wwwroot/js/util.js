@@ -1,65 +1,6 @@
 // Utility helpers used by Blazor JS interop
 
 /**
- * Escapes a string for interpolation into HTML markup.
- *
- * Everything that reaches the source viewer below is untrusted: the model output by definition,
- * and the model name too — it is Model.DisplayName, which any signed-in user can set through
- * POST /api/models with no character restrictions. The viewer builds a document that
- * window.open()s from a blob: URL, and a blob: URL inherits this app's origin, so an unescaped
- * name would run script with the victim's BFF session (the app's only CSP directive is
- * frame-ancestors, which does not restrict script). modelName went unescaped until 2026-09-02.
- *
- * @param {string} value
- * @returns {string}
- */
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-/**
- * Opens the given HTML string in a new browser tab so the user can inspect the source.
- * @param {string} html - The raw HTML output from the model.
- * @param {string} modelName - Used as the page title and tab label.
- */
-window.openHtmlSource = function (html, modelName) {
-    const escaped = escapeHtml(html);
-    const escapedName = escapeHtml(modelName);
-    const page = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Source — ${escapedName}</title>
-  <style>
-    body { background: #0d1117; color: #e6edf3; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; margin: 0; }
-    header { background: #161b22; padding: 10px 18px; border-bottom: 1px solid #30363d; display:flex; align-items:center; gap:12px; position:sticky; top:0; }
-    header h1 { margin:0; font-size:14px; color:#58a6ff; }
-    header span { color:#8b949e; font-size:12px; }
-    pre { margin: 0; padding: 18px; white-space: pre-wrap; word-break: break-all; line-height:1.6; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>&#60;/&#62; HTML Source</h1>
-    <span>${escapedName} • ${html.length.toLocaleString()} chars</span>
-  </header>
-  <pre>${escaped}</pre>
-</body>
-</html>`;
-    const blob = new Blob([page], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const tab = window.open(url, '_blank');
-    // Revoke after the tab has had time to read the blob
-    if (tab) setTimeout(() => URL.revokeObjectURL(url), 60000);
-};
-
-
-/**
  * Moves keyboard focus to an element by id.
  *
  * Needed for the skip link: Blazor intercepts same-document anchor clicks and handles them as
@@ -111,8 +52,8 @@ window.poNotify = {
  *
  * Browser models run WebLLM over WebGPU in this tab, and the tok/s the race reports is measured
  * while that happens. Any render loop that competes for the GPU makes that number wrong, so
- * everything that draws (fx.js's confetti burst, backdrop.js's shader) asks this first and
- * does nothing while it is held.
+ * every canvas effect in the app (fx.js's confetti burst) asks this first and does nothing
+ * while it is held.
  *
  * webllm-interop.js acquires it when a worker starts and releases it when that worker completes,
  * errors or is terminated, so the Arena and the Tournament page (the two places a browser model

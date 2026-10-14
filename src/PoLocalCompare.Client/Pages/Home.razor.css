@@ -595,21 +595,43 @@
         padding: var(--space-md);
     }
 
-    /* The four type chips wrapped, leaving "Ollama" alone on a second row — 52px of a
-       bounded picker spent on one chip. One row instead; it scrolls sideways if a narrow
-       phone cannot hold all four, and the block padding keeps the focus ring unclipped. */
-    .home__filters {
-        flex-wrap: nowrap;
+    /* A 2×2 grid keeps all four filters fully visible. The former single horizontal row
+       clipped the last label to "Ollam" with no visual cue that the row could scroll. */
+    /* One slot per row. Side by side, each was ~150px holding a tag, a 44px clear button and
+       the name — which left about 60px, and "GPT-4.1 Nano" rendered as "GP T…". Stacked, the
+       name gets the whole row and the "vs" between them says nothing the order does not. */
+    .home__slots {
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--space-xs);
-        overflow-x: auto;
+    }
+
+    .home__slot-vs {
+        display: none;
+    }
+
+    .home__filters {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-xs);
         padding-block: var(--space-2xs);
-        scrollbar-width: none;
     }
 
     .home__filters > .po-btn {
-        flex: 0 0 auto;
-        padding-inline: var(--space-sm);
+        min-width: 0;
+        padding-inline: var(--space-xs);
         white-space: nowrap;
+    }
+
+    .home__console-foot {
+        padding:
+            var(--space-xs)
+            max(var(--space-sm), env(safe-area-inset-right))
+            max(var(--space-xs), env(safe-area-inset-bottom))
+            max(var(--space-sm), env(safe-area-inset-left));
+    }
+
+    .home__compare-row {
+        gap: var(--space-xs);
     }
 
 }

@@ -278,6 +278,8 @@ self.onmessage = async (event) => {
                     '  runs with no network, so anything it has to fetch will be missing.',
                     '- Anything that moves must start by itself when the page loads; do not wait for a',
                     '  click or a key press to begin.',
+                    '- Visible controls may be activated during judging. Requested interactions must work',
+                    '  immediately and provide a visible result.',
                 ].join('\n') },
                 { role: 'user', content: prompt },
             ],

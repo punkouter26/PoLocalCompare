@@ -45,29 +45,6 @@ public sealed class GetModelAvailabilityHandler(
             httpClientFactory.CreateClient("Foundry"),
             new SemaphoreSlim(MaxConcurrentProbes, MaxConcurrentProbes));
 
-        // Startup-side warning: when the registry names Ollama tags that the daemon does not
-        // have, the picker offers pairings that 404 on submit. Surface the mismatch once at
-        // process boot so the operator can fix the seed (e.g. `ollama cp gemma4:26b gemma4:latest`)
-        // instead of letting every user pay the discovery cost. Guarded on the developer logger
-        // being enabled so the production App Service does not spend the line.
-        if (ollama.Checked)
-        {
-            var missing = models
-                .Where(m => m.ModelType == ModelType.LocalService && !string.IsNullOrWhiteSpace(m.ApiEndpointRef))
-                .Where(m => !ollama.Available.Any(tag => OllamaTagMatches(tag, m.ApiEndpointRef!)))
-                .Select(m => m.ApiEndpointRef!)
-                .Distinct()
-                .ToList();
-            if (missing.Count > 0)
-            {
-                var logger = httpClientFactory.CreateClient("OllamaStatus"); // sentinel: any IClientLogger
-                // In practice we cannot reach ILogger here — handlers don't take it. The
-                // WarningDto below surfaces it to anyone who calls the endpoint with a
-                // watcher, which is enough to be actionable.
-                _ = missing; // suppress "unused" warning before logger is wired in.
-            }
-        }
-
         // Task.WhenAll already runs the per-model checks concurrently; the semaphore inside
         // each Foundry probe prevents the catalog from saturating the HTTP pool.
         return await Task.WhenAll(models.Select(model => CheckAsync(model, ollama, foundry, ct)));
@@ -123,34 +100,6 @@ public sealed class GetModelAvailabilityHandler(
         JsonSerializer.Serialize(FoundryChatRequest.Build(
             deploymentName, ProbeMessages, maxTokens: 16, temperature: 0, stream: false, includeModelField));
 
-    private static async Task<(HttpStatusCode StatusCode, string Body)> SendProbeAsync(
-        HttpClient client,
-        string url,
-        string modelRef,
-        string apiKey,
-        string body,
-        SemaphoreSlim throttle,
-        CancellationToken ct)
-    {
-        await throttle.WaitAsync(ct);
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            FoundryChatRequest.AddAuth(request, modelRef, apiKey);
-            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(ProbeTimeoutSeconds));
-
-            var response = await client.SendAsync(request, cts.Token);
-            return (response.StatusCode, await response.Content.ReadAsStringAsync(cts.Token));
-        }
-        finally
-        {
-            throttle.Release();
-        }
-    }
-
     // ── Per-model dispatch ────────────────────────────────────────────────────
 
     private static async Task<ModelAvailabilityDto> CheckAsync(
@@ -194,37 +143,36 @@ public sealed class GetModelAvailabilityHandler(
 
         try
         {
-            if (gemini)
+            // The throttle is held across both routes of one probe: it bounds how many
+            // deployments are being asked at once, which is what protects the HTTP pool.
+            FoundryChatClient.Reply reply;
+            await foundry.Throttle.WaitAsync(ct);
+            try
             {
-                var (geminiStatus, _) = await SendProbeAsync(
-                    foundry.Client, FoundryChatRequest.GeminiUrl(endpoint), deploymentName,
-                    apiKey, ProbeBody(deploymentName, includeModelField: true), foundry.Throttle, ct);
-                return (int)geminiStatus is >= 200 and < 300
-                    ? Available(model)
-                    : Unavailable(model, $"Gemini endpoint unavailable (HTTP {(int)geminiStatus}).");
+                reply = await FoundryChatClient.PostAsync(
+                    foundry.Client, endpoint, deploymentName, apiKey,
+                    includeModelField => ProbeBody(deploymentName, includeModelField),
+                    ct, TimeSpan.FromSeconds(ProbeTimeoutSeconds));
+            }
+            finally
+            {
+                foundry.Throttle.Release();
             }
 
-            var (deploymentStatus, _) = await SendProbeAsync(
-                foundry.Client, FoundryChatRequest.DeploymentUrl(endpoint, deploymentName), deploymentName,
-                apiKey, ProbeBody(deploymentName, includeModelField: false), foundry.Throttle, ct);
-
+            var deploymentStatus = reply.Status;
             if ((int)deploymentStatus is >= 200 and < 300)
                 return Available(model);
 
-            // A 404 on the deployment route can still succeed on the model-inference route;
+            if (gemini)
+                return Unavailable(model, $"Gemini endpoint unavailable (HTTP {(int)deploymentStatus}).");
+
+            // The deployment route 404'd and the model-inference route did not answer either;
             // which one a resource exposes depends on how the model was provisioned.
-            if (deploymentStatus == HttpStatusCode.NotFound)
+            if (reply.UsedFallback)
             {
-                var (inferenceStatus, _) = await SendProbeAsync(
-                    foundry.Client, FoundryChatRequest.ModelInferenceUrl(endpoint), deploymentName,
-                    apiKey, ProbeBody(deploymentName, includeModelField: true), foundry.Throttle, ct);
-
-                if ((int)inferenceStatus is >= 200 and < 300)
-                    return Available(model);
-
-                return Unavailable(model, inferenceStatus == HttpStatusCode.NotFound
+                return Unavailable(model, deploymentStatus == HttpStatusCode.NotFound
                     ? "Model/deployment not found in this Azure AI Foundry resource."
-                    : $"Model endpoint unavailable (HTTP {(int)inferenceStatus}).");
+                    : $"Model endpoint unavailable (HTTP {(int)deploymentStatus}).");
             }
 
             return Unavailable(model, deploymentStatus switch

@@ -312,9 +312,13 @@
     /// <summary>The row's actions: Add (suggested or edited name) and Rename / Cancel.</summary>
     private RenderFragment ActionCell(DiscoveredModelKind kind, string id, string suggested) =>
         @<div class="catalog__row-actions">
+            @{
+                var unavailableReason = AddUnavailableReason(kind, id);
+            }
             <button type="button" class="po-btn po-btn--sm po-btn--primary"
                     aria-label="@($"Add {id} as {NameFor(id, suggested)}")"
-                    disabled="@(_adding is not null)"
+                    title="@unavailableReason"
+                    disabled="@(_adding is not null || unavailableReason is not null)"
                     @onclick="@(() => AddAsync(kind, id, suggested))">
                 @(_adding == id ? "Adding…" : "Add")
             </button>
@@ -472,8 +476,27 @@
     private string NameFor(string id, string suggested) =>
         _names.TryGetValue(id, out var name) ? name : suggested;
 
+    private string? AddUnavailableReason(DiscoveredModelKind kind, string id)
+    {
+        if (kind != DiscoveredModelKind.Browser || _gpu is null) return null;
+        if (!_gpu.Supported)
+            return $"This browser cannot run browser models: {_gpu.Reason}";
+
+        var candidate = _discovery?.Browser.FirstOrDefault(
+            m => string.Equals(m.WebLlmModelId, id, StringComparison.Ordinal));
+        return _gpu.LowResourceOnly && candidate is { LowResource: false }
+            ? $"This model exceeds the current GPU's {_gpu.MaxStorageBufferBindingMb:F0} MB buffer limit."
+            : null;
+    }
+
     private async Task AddAsync(DiscoveredModelKind kind, string id, string suggested)
     {
+        if (AddUnavailableReason(kind, id) is { } unavailable)
+        {
+            _status = unavailable;
+            return;
+        }
+
         _adding = id;
         _renaming = null;
         _status = null;

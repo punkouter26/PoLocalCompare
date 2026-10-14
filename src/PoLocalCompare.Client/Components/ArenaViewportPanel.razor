@@ -36,14 +36,15 @@
 
         @if (!string.IsNullOrEmpty(Result?.HtmlOutputRaw))
         {
-            <div>
-                @* Two of these on the page, so the side goes in the accessible name. *@
-                <button type="button" class="po-btn po-btn--sm"
-                        aria-label="@($"View source of {DisplayName}")"
-                        @onclick="() => OnViewSourceAsync(Result!.HtmlOutputRaw)">
+            @* Native disclosure instead of window.open: popup blockers could discard the old
+               async JS-interoped tab with no feedback. This stays in the duel and works without
+               a popup permission or a second browsing context. *@
+            <details class="arena-panel__source">
+                <summary aria-label="@($"View source of {DisplayName}")">
                     <span aria-hidden="true">&lt;/&gt;</span> View Source
-                </button>
-            </div>
+                </summary>
+                <pre><code>@Result.HtmlOutputRaw</code></pre>
+            </details>
         }
     }
 </div>
@@ -85,8 +86,4 @@
     [Parameter] public double Progress { get; set; }
 
 
-    /// <summary>View-source click handler. The page opens the raw HTML in a new tab.</summary>
-    [Parameter] public EventCallback<string> OnViewSource { get; set; }
-
-    private Task OnViewSourceAsync(string html) => OnViewSource.InvokeAsync(html);
 }

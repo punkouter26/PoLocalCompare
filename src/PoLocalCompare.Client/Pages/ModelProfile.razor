@@ -29,7 +29,11 @@
         <EmptyState Icon="❓"
                     IsPageHeading="true"
                     Title="Model not found"
-                    Hint="No model with that id — it may have been retired from the catalog since the link was made." />
+                    Hint="No model with that id — it may have been retired from the catalog since the link was made."
+                    Actions="@(new[] {
+                        new EmptyStateAction("View leaderboard", "/leaderboard", EmptyStateActionVariant.Primary),
+                        new EmptyStateAction("Open catalog", "/catalog", EmptyStateActionVariant.Ghost)
+                    })" />
     }
     else
     {

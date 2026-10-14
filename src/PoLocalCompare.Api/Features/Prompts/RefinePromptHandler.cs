@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using PoLocalCompare.Shared.Prompts;
@@ -72,21 +71,13 @@ public sealed class RefinePromptHandler(
             new { role = "user", content = prompt },
         ];
 
-        var client = httpClientFactory.CreateClient("Foundry");
-        var gemini = FoundryChatRequest.IsGemini(deployment);
-
         try
         {
-            // Same two-route dance as every other Foundry caller — see FoundryChatRequest.DeploymentUrl.
-            var (status, body) = await PostAsync(client,
-                gemini ? FoundryChatRequest.GeminiUrl(endpoint) : FoundryChatRequest.DeploymentUrl(endpoint, deployment),
-                deployment, apiKey, messages, includeModelField: gemini, cancellationToken);
-
-            if (!gemini && status == System.Net.HttpStatusCode.NotFound)
-            {
-                (status, body) = await PostAsync(client, FoundryChatRequest.ModelInferenceUrl(endpoint),
-                    deployment, apiKey, messages, includeModelField: true, cancellationToken);
-            }
+            var (status, body, _, _) = await FoundryChatClient.PostAsync(
+                httpClientFactory.CreateClient("Foundry"), endpoint, deployment, apiKey,
+                includeModelField => JsonSerializer.Serialize(FoundryChatRequest.Build(
+                    deployment, messages, ReplyTokenBudget, temperature: 0.2, stream: false, includeModelField)),
+                cancellationToken);
 
             if (status != System.Net.HttpStatusCode.OK)
             {
@@ -109,18 +100,4 @@ public sealed class RefinePromptHandler(
         }
     }
 
-    private static async Task<(System.Net.HttpStatusCode Status, string Body)> PostAsync(
-        HttpClient client, string url, string deployment, string apiKey, object messages,
-        bool includeModelField, CancellationToken cancellationToken)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        FoundryChatRequest.AddAuth(request, deployment, apiKey);
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(FoundryChatRequest.Build(
-                deployment, messages, ReplyTokenBudget, temperature: 0.2, stream: false, includeModelField)),
-            Encoding.UTF8, "application/json");
-
-        using var response = await client.SendAsync(request, cancellationToken);
-        return (response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
-    }
 }

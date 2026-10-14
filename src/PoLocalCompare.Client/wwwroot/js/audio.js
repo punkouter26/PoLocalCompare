@@ -1,6 +1,6 @@
 /**
  * audio.js — synthesised Web Audio cues: a UI tick, a verdict (panned to the winner's side), a
- * tie, the closing seconds of the judge's window, and an opt-in audible token race.
+ * tie, and the closing seconds of the judge's window.
  *
  * Every sound is SYNTHESISED at play time. There are no audio assets, deliberately: an earlier
  * version fetched two WAV files that were 44-byte stubs and played silence for as long as they
@@ -135,96 +135,4 @@ export function playTie() {
 /** UI tick for a click. Very short and quiet — it fires often. */
 export function playTick() {
     tone({ freq: 1320, type: 'square', at: 0, dur: 0.035, gain: 0.07 });
-}
-
-// ── The audible race ─────────────────────────────────────────────────────────
-//
-// While a duel streams, each side ticks in its own ear at a rate and pitch that follow its
-// tok/s, so which model is ahead is something you can hear. OFF by default and stored
-// separately from mute: it is continuous sound for as long as a duel runs, which is a thing to
-// opt into rather than to discover.
-//
-// Scheduling is a 50 ms timer that only decides WHEN to call tone(); the notes themselves are
-// rendered on the audio thread like every other cue. Nothing here draws, so nothing here can
-// touch the GPU a browser model is generating on or skew the figure being sonified.
-
-const RACE_KEY = 'polocalcompare.raceAudio';
-/** One tick per this many tokens — per token would be a buzz at any real generation speed. */
-const TOKENS_PER_TICK = 4;
-/** Ceiling per side, ticks/s. Above this the rate stops reading as a rhythm. */
-const MAX_TICKS = 9;
-/** The Arena pushes rates a few times a second; this long without one means it has gone away. */
-const RACE_SILENCE_MS = 2000;
-
-let raceOn = false;
-try {
-    raceOn = window.localStorage.getItem(RACE_KEY) === 'true';
-} catch {
-    // Storage blocked: stays off.
-}
-
-const race = { timer: 0, lastPush: 0, lastStep: 0, rate: [0, 0], phase: [0, 0] };
-
-export function isRaceOn() {
-    return raceOn;
-}
-
-export function setRaceOn(value) {
-    raceOn = !!value;
-    try {
-        window.localStorage.setItem(RACE_KEY, raceOn ? 'true' : 'false');
-    } catch {
-        // Non-fatal: the setting simply will not survive a reload.
-    }
-    if (!raceOn) raceStop();
-    return raceOn;
-}
-
-function raceStep() {
-    const now = performance.now();
-    if (now - race.lastPush > RACE_SILENCE_MS) {
-        raceStop();
-        return;
-    }
-    const dt = Math.min((now - race.lastStep) / 1000, 0.2);
-    race.lastStep = now;
-
-    for (let side = 0; side < 2; side++) {
-        const tps = race.rate[side];
-        if (tps <= 0) continue;
-        race.phase[side] += Math.min(tps / TOKENS_PER_TICK, MAX_TICKS) * dt;
-        if (race.phase[side] < 1) continue;
-        race.phase[side] = 0;
-        tone({
-            // Faster reads as higher. The sides sit a fourth apart so that two models at the
-            // same speed are still two voices rather than one louder one.
-            freq: (side === 0 ? 330 : 440) + Math.min(tps, 150) * 3,
-            type: 'sine',
-            dur: 0.05,
-            gain: 0.05,
-            pan: side === 0 ? -0.75 : 0.75,
-        });
-    }
-}
-
-/**
- * Sets each side's current tok/s; 0 silences a side (not started, or finished). Starts the
- * race voice if it is not running. A no-op unless the listener has switched race sounds on.
- */
-export function raceUpdate(leftTps, rightTps) {
-    if (!raceOn || muted) return;
-    race.rate[0] = Number(leftTps) || 0;
-    race.rate[1] = Number(rightTps) || 0;
-    race.lastPush = performance.now();
-    if (!race.timer) {
-        race.lastStep = race.lastPush;
-        race.timer = window.setInterval(raceStep, 50);
-    }
-}
-
-export function raceStop() {
-    if (race.timer) window.clearInterval(race.timer);
-    race.timer = 0;
-    race.rate = [0, 0];
-    race.phase = [0, 0];
 }

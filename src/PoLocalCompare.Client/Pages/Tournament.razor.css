@@ -506,6 +506,77 @@
     letter-spacing: 0.08em;
 }
 
+.tourney__field-actions,
+.tourney__entrant-picker-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.tourney__entrant-picker {
+    margin-top: var(--space-sm);
+    padding: var(--space-md);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.tourney__entrant-picker-head {
+    justify-content: space-between;
+    margin-bottom: var(--space-sm);
+}
+
+.tourney__entrant-picker-head p {
+    margin: 0;
+}
+
+.tourney__entrant-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-xs);
+    max-height: 22rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.tourney__entrant-option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--space-xs);
+    min-height: var(--target-min);
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.tourney__entrant-option--selected {
+    border-color: var(--accent-green);
+    background: var(--success-surface);
+}
+
+.tourney__entrant-option:has(input:focus-visible) {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+}
+
+.tourney__entrant-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--weight-semibold);
+}
+
+.tourney__entrant-elo {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+}
+
 /* Below the small breakpoint the mirror stops helping — two columns of four are wider than
    the screen — so the halves stack and read top to bottom. */
 @media (max-width: 640px) {
@@ -516,6 +587,10 @@
 
     .tourney__draw-half--right {
         direction: ltr;
+    }
+
+    .tourney__entrant-options {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 

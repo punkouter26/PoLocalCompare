@@ -148,6 +148,10 @@ public sealed class DiscoverModelsHandler(
             }
             return stats;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
             logger.LogInformation(ex, "Hugging Face Hub unreachable; listing browser models without popularity.");

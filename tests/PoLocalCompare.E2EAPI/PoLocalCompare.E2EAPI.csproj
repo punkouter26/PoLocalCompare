@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="PoLocalCompare.TestSupport" />
+    <Compile Include="..\Shared\TestModels.cs" Link="TestModels.cs" />
   </ItemGroup>
 
   <ItemGroup>

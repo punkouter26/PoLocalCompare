@@ -8,7 +8,7 @@ namespace PoLocalCompare.Integration;
 /// cannot run without, so its round-trip fidelity is worth pinning against Azurite rather than a mock.
 /// </summary>
 [Collection("Integration")]
-public sealed class ModelRegistryCrudTests(AzuriteFixture azurite) : IAsyncLifetime
+public sealed class ModelRegistryTests(AzuriteFixture azurite) : IAsyncLifetime
 {
     private IntegrationHost _host = null!;
 

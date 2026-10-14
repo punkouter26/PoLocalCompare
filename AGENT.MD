@@ -2,7 +2,7 @@
 
 > **Read this first.** This file is the primary context document for any AI coding agent working in this repository. Start here before touching any code.
 >
-> Then check for a **`DOCS/`** folder in the repository root — if one exists, read it for the project overview before making changes. (Today the project docs live at [docs/PRD_Master.md](docs/PRD_Master.md), which is **not currently checked in**; if neither folder is present, say so rather than inferring the overview from code.)
+> Then check for a **`DOCS/`** folder in the repository root — if one exists, read it for the project overview before making changes. (There is none today: `docs/PRD_Master.md` was deleted from the repository on 2026-09-02 (commit `54036ec`). If no such folder is present, say so rather than inferring the overview from code. [CLAUDE.md](CLAUDE.md) holds the cross-file rules and [HISTORY.md](HISTORY.md) the reasoning behind them.)
 
 ---
 
@@ -21,9 +21,10 @@
 1. User selects two models (Local WebLLM / Remote Azure Foundry / Ollama)
 2. User enters a prompt — models race to generate HTML
 3. Both outputs stream live via SignalR
-4. A human picks the winner in the Arena. If nobody picks within `AiJudge:DelaySeconds`, `AutoJudge`
-   asks a Foundry model which output implements the prompt better and records that verdict instead —
-   a human who picks inside the window always wins the race (PRD §9 item 9)
+4. `AutoJudge` is the default: after `AiJudge:DelaySeconds` it asks a Foundry model which output
+   implements the prompt better. The Arena offers a quick human override while that ten-second
+   window is open; the controls disappear when the judge starts, and a pick inside the window wins
+   the race (PRD §9 item 9).
 5. Elo ratings update, stored in Azure Table Storage. Every verdict carries a `VerdictSource`
    (`Human`/`Ai`) so the two rankings stay separable
 
@@ -57,8 +58,8 @@
 
 > **Architecture note:** This solution uses **Vertical Slice Architecture (VSA)** per the global
 > `Po*` mandate (§2.1). The former Clean/Onion layout (Domain/Application/Infrastructure projects)
-> was collapsed into `PoLocalCompare.Api` on 2026-07-06 — see the decision log in
-> [docs/PRD_Master.md](docs/PRD_Master.md) §9.
+> was collapsed into `PoLocalCompare.Api` on 2026-07-06 (recorded in the since-removed PRD's
+> decision log, §9).
 > New server code goes in `src/PoLocalCompare.Api/Features/<Feature>/` (flat: endpoint + handlers +
 > entities + repository together); only genuinely cross-slice code goes in `Common/`.
 
@@ -125,7 +126,6 @@ PoLocalCompare.slnx
 │   ├── PoLocalCompare.Integration/     ← Testcontainers Azurite behind WebApplicationFactory
 │   ├── PoLocalCompare.E2EAPI/          ← Black-box HTTP journeys over Testcontainers + fake auth
 │   └── PoLocalCompare.E2EUI/           ← Playwright, headed Chrome, mobile + desktop viewports
-├── docs/                               ← PRD_Master.md (the source of truth; nothing else)
 ├── SCRIPTS/                            ← setup.ps1, download-models.py, plan-webllm-artifacts.py
 ├── infra/                              ← Bicep (main.bicep / keyvault-access.bicep)
 ├── Directory.Build.props               ← Global: TreatWarningsAsErrors, Nullable, LangVersion=latest
@@ -211,8 +211,21 @@ client holds **no tokens** — the session lives in an encrypted `HttpOnly`, `Sa
 - Lobby events are published by `LobbyNotifier`. The verdict event is raised from inside
   `RecordVerdictHandler` — the single path by which ELO moves — so the feed is complete by
   construction. The notifier swallows its own failures: the ticker must never fail a duel.
+- The lobby ticker starts only after `/auth/me` resolves an authenticated session. Login pages do
+  not probe protected duel or hub endpoints.
 
-### 4.6 Elo System
+### 4.6 Judge and tournament UX
+- Vision judging renders both outputs with network blocked, captures motion frames, then activates
+  up to three visible enabled buttons and records text/pixel changes. Both opposite-order judge
+  calls receive the same evidence; they still must agree or the verdict is a Tie.
+- Arena source inspection is an inline native disclosure. It never opens a popup or gives model
+  output an app-origin browsing context.
+- Tournament draws remain automatic by default, but the draw page can optionally select exactly
+  eight entrants before the server seeds them by ELO.
+- Catalog browser models that the current GPU cannot run remain visible for discovery, but cannot
+  be registered from that device.
+
+### 4.7 Elo System
 - K-factor: 32, Starting rating: 1200
 - Updated after each completed duel (verdict recorded)
 
@@ -270,7 +283,8 @@ dotnet run --project src/PoLocalCompare.Api --launch-profile https
 
 ## 7. Development Standards (Quick Reference)
 
-> Full standards, endpoint map, schema, and decision log are in [docs/PRD_Master.md](docs/PRD_Master.md).
+> The cross-file rules are in [CLAUDE.md](CLAUDE.md); the reasoning and dated decisions behind
+> them are in [HISTORY.md](HISTORY.md).
 
 - **No AOT.** `RunAOTCompilation=false` — keeps dev builds fast.
 - **Master only.** All work lands on `master`. Do not create, switch to, or push a feature branch unless the request explicitly asks for one.
@@ -391,7 +405,8 @@ These skills are installed globally (`~/AppData/Roaming/Code/User/prompts/skills
 | [BffAuthenticationStateProvider.cs](src/PoLocalCompare.Client/Services/BffAuthenticationStateProvider.cs) | Client auth state from `/auth/me` |
 | [WebLlmService.cs](src/PoLocalCompare.Client/Services/WebLlmService.cs) | WebGPU browser inference |
 | `DOCS/` (repo root) | Project overview — read it before changing anything, when present |
-| [docs/PRD_Master.md](docs/PRD_Master.md) | Project source of truth — slices, endpoints, schema, ADR log (**missing from the working tree**) |
+| [CLAUDE.md](CLAUDE.md) | The rules that span several files, one line each |
+| [HISTORY.md](HISTORY.md) | Why each rule exists; record new decisions here |
 | [SCRIPTS/setup.ps1](SCRIPTS/setup.ps1) | First-run machine setup |
 | [SCRIPTS/plan-webllm-artifacts.py](SCRIPTS/plan-webllm-artifacts.py) | Single source of the browser-model list for local fetch and the catalog check |
 

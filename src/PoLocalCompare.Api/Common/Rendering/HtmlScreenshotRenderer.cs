@@ -3,6 +3,11 @@ using PoLocalCompare.Api.Common.Inference;
 
 namespace PoLocalCompare.Api.Common.Rendering;
 
+public sealed record HtmlRenderEvidence(
+    IReadOnlyList<byte[]> Frames,
+    string InteractionSummary,
+    byte[]? InteractionScreenshot);
+
 /// <summary>
 /// Renders a model's HTML output to a PNG, so the judge can look at the page instead of
 /// reading its source.
@@ -84,7 +89,7 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
     /// rendered for any reason.
     /// </summary>
     public async Task<byte[]?> RenderAsync(string? html, CancellationToken cancellationToken) =>
-        (await RenderCoreAsync(html, motion: false, cancellationToken))?[0];
+        (await RenderCoreAsync(html, motion: false, cancellationToken))?.Frames[0];
 
     /// <summary>
     /// Like <see cref="RenderAsync"/>, but a page that looks animated is shot twice,
@@ -92,13 +97,13 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
     /// for it ("rotating continuously") — two identical frames are how the judge can tell a
     /// cube that spins from one that was merely drawn. A static page still returns one frame.
     /// </summary>
-    public Task<IReadOnlyList<byte[]>?> RenderFramesAsync(string? html, CancellationToken cancellationToken) =>
+    public Task<HtmlRenderEvidence?> RenderFramesAsync(string? html, CancellationToken cancellationToken) =>
         RenderCoreAsync(html, motion: true, cancellationToken);
 
     /// <summary>Gap between the two frames of an animated page.</summary>
     public static readonly TimeSpan FrameGap = TimeSpan.FromMilliseconds(800);
 
-    private async Task<IReadOnlyList<byte[]>?> RenderCoreAsync(string? html, bool motion, CancellationToken cancellationToken)
+    private async Task<HtmlRenderEvidence?> RenderCoreAsync(string? html, bool motion, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(html)) return null;
 
@@ -127,6 +132,7 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
 
             // Static HTML is fully painted the moment the DOM loads; only wait for animations.
             var interactive = LooksInteractive(html);
+            IReadOnlyList<byte[]> frames;
             if (motion && interactive)
             {
                 // Same total budget as one long settle, split around the two shots.
@@ -134,17 +140,24 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
                 var first = await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png });
                 await page.WaitForTimeoutAsync((float)FrameGap.TotalMilliseconds);
                 var second = await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png });
-                return [first, second];
+                frames = [first, second];
+            }
+            else
+            {
+                var settle = interactive ? SettleDelay : StaticSettleDelay;
+                await page.WaitForTimeoutAsync((float)settle.TotalMilliseconds);
+                frames = [await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png })];
             }
 
-            var settle = interactive ? SettleDelay : StaticSettleDelay;
-            await page.WaitForTimeoutAsync((float)settle.TotalMilliseconds);
-
-            return [await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png })];
+            var interaction = await ProbeInteractionsAsync(page, frames[^1]);
+            return new HtmlRenderEvidence(frames, interaction.Summary, interaction.Screenshot);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
         }
         catch (Exception ex)
         {
-            // Includes the cancellation case: a judge that ran out of time judges the source.
             _logger.LogWarning(ex, "Judge screenshot failed; falling back to source-only judging.");
             return null;
         }
@@ -155,6 +168,63 @@ public sealed class HtmlScreenshotRenderer : IAsyncDisposable
                 try { await context.CloseAsync(); } catch { /* the context is being torn down anyway */ }
             }
         }
+    }
+
+    private static async Task<(string Summary, byte[]? Screenshot)> ProbeInteractionsAsync(
+        IPage page,
+        byte[] initialScreenshot)
+    {
+        var controls = page.Locator(
+            "button:visible:not([disabled]), input[type=button]:visible:not([disabled]), input[type=submit]:visible:not([disabled])");
+        var count = Math.Min(await controls.CountAsync(), 3);
+        if (count == 0)
+            return ("No visible enabled button was available for the runtime interaction probe.", null);
+
+        var observations = new List<string>(count);
+        var previousScreenshot = initialScreenshot;
+        byte[]? changedScreenshot = null;
+
+        for (var i = 0; i < count; i++)
+        {
+            var control = controls.Nth(i);
+            var label = await control.GetAttributeAsync("aria-label");
+            if (string.IsNullOrWhiteSpace(label))
+                label = await control.InnerTextAsync();
+            label = ClipProbeText(label);
+
+            var beforeText = ClipProbeText(await page.Locator("body").InnerTextAsync());
+            try
+            {
+                await control.ClickAsync(new LocatorClickOptions { Timeout = 1_500 });
+                await page.WaitForTimeoutAsync(150);
+                var afterText = ClipProbeText(await page.Locator("body").InnerTextAsync());
+                var afterScreenshot = await page.ScreenshotAsync(new PageScreenshotOptions { Type = ScreenshotType.Png });
+                var textChanged = !string.Equals(beforeText, afterText, StringComparison.Ordinal);
+                var pixelsChanged = !previousScreenshot.AsSpan().SequenceEqual(afterScreenshot);
+
+                observations.Add(
+                    $"Activated button \"{label}\": visible text {(textChanged ? "changed" : "did not change")}" +
+                    $"{(textChanged ? $" from \"{beforeText}\" to \"{afterText}\"" : string.Empty)}; " +
+                    $"rendered pixels {(pixelsChanged ? "changed" : "did not change")}.");
+
+                if (textChanged || pixelsChanged)
+                    changedScreenshot = afterScreenshot;
+                previousScreenshot = afterScreenshot;
+            }
+            catch (Exception ex) when (ex is PlaywrightException or TimeoutException)
+            {
+                observations.Add($"Could not activate button \"{label}\" during the bounded runtime probe.");
+            }
+        }
+
+        return (string.Join(" ", observations), changedScreenshot);
+    }
+
+    private static string ClipProbeText(string? value)
+    {
+        var normalized = string.Join(' ', (value ?? string.Empty)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return normalized.Length <= 140 ? normalized : normalized[..137] + "...";
     }
 
     /// <summary>

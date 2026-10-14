@@ -150,19 +150,6 @@
                             <span class="navmenu__menu-state" aria-hidden="true">@(_soundOn ? "On" : "Off")</span>
                         </button>
 
-                        @* The audible token race: each side ticks in its own ear at its tok/s
-                           while a duel streams. Off by default — it is continuous sound, so it
-                           is something to opt into. Mute silences it along with everything else. *@
-                        <button type="button"
-                                class="navmenu__menu-item"
-                                @onclick="ToggleRaceSoundAsync"
-                                title="Hear the token race: each model ticks in its own ear at its speed"
-                                aria-pressed="@(_raceSoundOn ? "true" : "false")">
-                            <span class="navmenu__menu-glyph" aria-hidden="true">🎧</span>
-                            <span>Race sounds</span>
-                            <span class="navmenu__menu-state" aria-hidden="true">@(_raceSoundOn ? "On" : "Off")</span>
-                        </button>
-
                         @if (_identity is not null)
                         {
                             <NavLink class="navmenu__menu-item" href="catalog"
@@ -204,7 +191,6 @@
     private bool _refocusTrigger;
     private ElementReference _menuTrigger;
     private bool _soundOn = true;
-    private bool _raceSoundOn;
 
     private string MenuLabel => _identity is null ? "Settings" : $"Account menu for {_identity}";
     private string? _identity;
@@ -293,8 +279,6 @@
 
     private async Task ToggleSoundAsync() => _soundOn = !await Audio.SetMutedAsync(_soundOn);
 
-    private async Task ToggleRaceSoundAsync() => _raceSoundOn = await Audio.SetRaceOnAsync(!_raceSoundOn);
-
     private async Task CycleThemeAsync()
     {
         _theme = _theme switch
@@ -320,16 +304,17 @@
         // to what it chose, so the two cannot disagree.
         _theme = await Theme.GetAsync();
         _soundOn = !await Audio.IsMutedAsync();
-        _raceSoundOn = await Audio.IsRaceOnAsync();
         Nav.LocationChanged += OnLocationChanged;
 
         var useRealAi = Config["Features:UseRealAi"];
         _usingMockData = !bool.TryParse(useRealAi, out var flag) || !flag;
 
         // Not awaited: connecting the hub and seeding the pending count must not hold up the
-        // nav bar, which is the first thing rendered on every page.
+        // nav bar, which is the first thing rendered on every page. It starts only after the
+        // BFF identity resolves; anonymous startup previously emitted an expected 401 for both
+        // the seed request and SignalR negotiation on every visit to the login page.
         Ticker.OnChanged += OnTickerChanged;
-        _ = Ticker.EnsureStartedAsync(Nav.BaseUri);
+        StartTickerWhenAuthenticated();
     }
 
     /// <summary>Resolves the current identity from the BFF session (/auth/me via the state provider).</summary>
@@ -365,6 +350,12 @@
     private void LoginAsGuestAsync()
         => Nav.NavigateTo($"auth/login/fake?returnUrl={Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery)}", forceLoad: true);
 
+    private void StartTickerWhenAuthenticated()
+    {
+        if (_identity is not null)
+            _ = Ticker.EnsureStartedAsync(Nav.BaseUri);
+    }
+
     private async Task LogoutAsync()
     {
         try { await Http.PostAsync("auth/logout", null); }
@@ -377,6 +368,7 @@
         => InvokeAsync(async () =>
         {
             await RefreshIdentityAsync();
+            StartTickerWhenAuthenticated();
             StateHasChanged();
         });
 

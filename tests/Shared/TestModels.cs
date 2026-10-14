@@ -3,13 +3,17 @@ using PoLocalCompare.Api.Features.Models;
 using PoLocalCompare.Shared.Enums;
 using PoLocalCompare.Shared.Ids;
 
-namespace PoLocalCompare.Integration;
+namespace PoLocalCompare.TestSupport;
 
 /// <summary>
 /// Seeds the registry through the repository. There is no public "register any model" endpoint —
 /// the UI only adds models via /api/models/discovered, which re-checks them against the WebLLM
 /// bundle or the Ollama daemon — so tests write the row directly.
 /// </summary>
+/// <remarks>
+/// One file, compiled into both the Integration and the E2E-API projects (a linked
+/// <c>Compile</c> item in each csproj). It was two byte-identical copies, one per project.
+/// </remarks>
 internal static class TestModels
 {
     public static Task<string> RemoteAsync(IServiceProvider services, string name) =>
